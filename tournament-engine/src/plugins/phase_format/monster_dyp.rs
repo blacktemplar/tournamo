@@ -37,7 +37,8 @@ use crate::{
     recommends = Self::recommends
 )]
 pub struct MonsterDyp {
-    #[plugin(label = "rounds", min = 1, default = 5)]
+    // all rounds are scheduled at once, so far more than a day's play would hold the page up
+    #[plugin(label = "rounds", min = 1, max = 100, default = 5)]
     rounds: u32,
 }
 
@@ -73,6 +74,10 @@ impl MonsterDyp {
 
 #[register]
 impl PhaseFormat for MonsterDyp {
+    fn min_entrants(&self) -> usize {
+        4
+    }
+
     fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
         // all rounds are scheduled at once
         if phase_data.has_schedule() || phase_data.rankings().len() < 4 {

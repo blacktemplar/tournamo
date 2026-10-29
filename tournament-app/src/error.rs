@@ -94,6 +94,9 @@ pub enum StartError {
     NoPhase(#[from] NoPhase),
     #[error("a competition needs at least two entrants")]
     TooFewEntrants,
+    /// The format of the phase needs at least this many entrants, as its `min_entrants` says.
+    #[error("the format needs at least {0} entrants")]
+    TooFewForFormat(usize),
     /// The engine refused the start for a reason this crate does not know.
     #[error("{0}")]
     Rejected(TransitionError),
@@ -280,6 +283,9 @@ impl Message for StartError {
             Self::Started => Text::new("error-started-already"),
             Self::NoPhase(no_phase) => no_phase.text(),
             Self::TooFewEntrants => Text::new("error-too-few-entrants"),
+            Self::TooFewForFormat(needed) => {
+                Text::new("error-too-few-for-format").with("count", *needed)
+            }
             Self::Rejected(error) => rejected(error),
         }
     }

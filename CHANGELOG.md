@@ -17,7 +17,16 @@ a file whose `"format"` changes is migrated, not refused.
   under the old name are not carried over; export them there and import them
   here.
 
+- A Monster DYP takes at most 100 rounds, all of which it schedules at once; a
+  phase saved with more still loads, and editing it asks for fewer.
+- A Monster DYP starts with four entrants at least, rather than finishing at
+  once with fewer.
+
 ### Fixed
+
+- An imported file naming its competition by nothing but spaces is named after
+  the file, or else "Competition", rather than shown as an empty entry of the
+  list.
 
 - A number a field of the phase does not take keeps the phase from being added
   or saved, rather than the number before it being kept unnoticed; why shows

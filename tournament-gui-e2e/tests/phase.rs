@@ -41,7 +41,7 @@ async fn enter_in_a_number_takes_it_without_adding_the_phase() {
         gui.type_into("format.rounds", "0").await?;
         gui.press(Key::Enter).await?;
 
-        gui.expect_issues(&["This takes a whole number of at least 1."])
+        gui.expect_issues(&["This takes a whole number from 1 to 100."])
             .await?;
         gui.type_into("format.rounds", "7").await?;
         gui.press(Key::Enter).await?;
@@ -86,7 +86,7 @@ async fn a_number_not_taken_is_shown_with_why() {
 
         gui.enter("format.rounds", "0").await?;
 
-        gui.expect_issues(&["This takes a whole number of at least 1."])
+        gui.expect_issues(&["This takes a whole number from 1 to 100."])
             .await?;
         gui.enter("format.rounds", "7").await?;
         gui.expect_issues(&[]).await
@@ -137,7 +137,7 @@ async fn what_is_said_about_the_next_field_leaves_the_issue_in_sight() {
 
         gui.enter("format.rounds", "0").await?;
 
-        gui.expect_issues(&["This takes a whole number of at least 1."])
+        gui.expect_issues(&["This takes a whole number from 1 to 100."])
             .await?;
         gui.expect_toggletip_clear_of_issues().await
     })

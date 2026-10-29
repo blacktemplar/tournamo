@@ -52,6 +52,10 @@ use crate::{
     },
 };
 
+/// The name of a competition imported from a file that names it by nothing but spaces, and whose
+/// own name is blank as well, see [`Session::import`].
+pub const UNNAMED: &str = "Competition";
+
 /// A competition being run by an operator.
 ///
 /// The first entry of the log of every competition is the [`SetCompetitionSeed`] it was created
@@ -289,7 +293,8 @@ impl Session {
     }
 
     /// A new competition with what the file `file` holds, e.g. one [`Self::export`] or the CLI
-    /// wrote, named as in the file or else `name`, followed by the first number from 2 on in
+    /// wrote, named as in the file or else `name`, or else [`UNNAMED`] where both are blank, and
+    /// without the spaces around it, followed by the first number from 2 on in
     /// parentheses that makes it a name none of `stored` has, if one has it, e.g. `"Cup (2)"`. It
     /// is stored under a key of its own, so that importing a file twice makes two competitions;
     /// nothing of it is saved yet.
@@ -304,7 +309,14 @@ impl Session {
             people,
         } = serde_json::from_str::<File<CompetitionStateMachine, People>>(file)
             .map_err(ImportError)?;
-        let name = named.unwrap_or_else(|| name.to_owned());
+        // a blank name, which the list could not show, is no name; nor is a blank file name
+        let name = [named.as_deref(), Some(name)]
+            .into_iter()
+            .flatten()
+            .map(str::trim)
+            .find(|name| !name.is_empty())
+            .unwrap_or(UNNAMED)
+            .to_owned();
         let taken = |name: &str| stored.iter().any(|listing| listing.name == name);
         let name = if taken(&name) {
             (2..)
@@ -362,7 +374,10 @@ impl Session {
         } else if competition.entrants().len() < 2 {
             Some(StartError::TooFewEntrants)
         } else {
-            None
+            self.phase()
+                .map(|phase| phase.format().min_entrants())
+                .filter(|needed| competition.entrants().len() < *needed)
+                .map(StartError::TooFewForFormat)
         }
     }
 
@@ -584,8 +599,11 @@ impl Session {
     ///
     /// # Errors
     /// Returns an error if the competition has started already, has no phase, or fewer than two
-    /// entrants.
+    /// entrants, or fewer than the format of the phase needs.
     pub fn start(&mut self) -> Result<(), StartError> {
+        if let Some(needed @ StartError::TooFewForFormat(_)) = self.start_refusal() {
+            return Err(needed);
+        }
         self.act(Action::Start, |machine, history| {
             machine.apply_in(history, StartCompetition)
         })

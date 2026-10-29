@@ -45,6 +45,13 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
     /// [`Annotated::with_annotation`]: crate::entities::competition::Annotated::with_annotation
     fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule;
 
+    /// The fewest entrants this format schedules matches for, 2 unless it says otherwise; with
+    /// fewer, it schedules none. The start is not refused for it, so that a log started with fewer
+    /// still replays; a consumer may refuse to start such a phase.
+    fn min_entrants(&self) -> usize {
+        2
+    }
+
     /// Whether a match of this format may end in a [`MatchResult::Draw`].
     ///
     /// A draw reported for a format that returns `false` is rejected, so

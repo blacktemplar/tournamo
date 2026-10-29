@@ -300,7 +300,7 @@ fn a_number_not_taken_is_shown_with_why() {
     ));
     assert_eq!(
         english_all(&rounds.issues),
-        ["this takes a whole number of at least 1"]
+        ["this takes a whole number from 1 to 100"]
     );
     assert_eq!(
         english_all(&field(&view, "metrics[1].points_for_win").issues),
@@ -357,10 +357,11 @@ fn a_number_not_taken_says_what_the_field_takes() {
         english_all(&field(&form.view(), path_).issues)
     };
 
-    for entered in ["2.5", "", "  ", "99999999999999999999", "1e400"] {
+    // a Monster DYP of a million rounds would take the page long to schedule
+    for entered in ["2.5", "", "  ", "1000000", "99999999999999999999", "1e400"] {
         assert_eq!(
             issues("format.rounds", entered),
-            ["this takes a whole number of at least 1"],
+            ["this takes a whole number from 1 to 100"],
             "{entered:?}"
         );
     }

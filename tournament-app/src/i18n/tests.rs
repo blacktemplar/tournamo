@@ -143,6 +143,7 @@ fn an_error_says_in_english_what_its_display_says() {
         both(NoPhase),
         both(AddPhaseError::Invalid(Vec::new())),
         both(StartError::TooFewEntrants),
+        both(StartError::TooFewForFormat(4)),
         both(ReportError::NotStarted),
         both(ReportEnteredError::Unreadable),
         both(ReportEnteredError::NoMatch(3)),

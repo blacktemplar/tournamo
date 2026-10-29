@@ -17,6 +17,7 @@ error-no-phase = the competition has no phase yet
 error-phase-change-does-not-fit = the phase cannot be changed this way, since a later change no longer fits it: { $reason }
 error-started-already = the competition has started already
 error-too-few-entrants = a competition needs at least two entrants
+error-too-few-for-format = the format needs at least { $count } entrants
 error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already

@@ -277,6 +277,45 @@ fn the_start_needs_a_phase_and_two_entrants() {
     assert!(matches!(session.start(), Err(StartError::Started)));
 }
 
+/// A Monster DYP pairs teams of two, so it needs four entrants; with fewer it would schedule
+/// nothing and be finished at once.
+#[test]
+fn the_start_needs_as_many_entrants_as_the_format_does() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol"])
+        .format(MonsterDyp::ID)
+        .added();
+
+    assert!(matches!(
+        session.start_refusal(),
+        Some(StartError::TooFewForFormat(4))
+    ));
+    assert!(matches!(
+        session.start(),
+        Err(StartError::TooFewForFormat(4))
+    ));
+    session.add_entrant("Dave").unwrap();
+    session.start().unwrap();
+}
+
+/// A file without a name, or with a blank one, is named after the file, or else by a name of its
+/// own, never by nothing, which the list could not show.
+#[test]
+fn an_imported_competition_is_never_nameless() {
+    let file = Given::new().added().export();
+    let blank = file.replacen("\"name\": \"cup\"", "\"name\": \"  \"", 1);
+    assert_ne!(blank, file, "the file names its competition");
+
+    assert_eq!(
+        Session::import(&blank, "league", &[]).unwrap().name(),
+        "league"
+    );
+    assert_eq!(
+        Session::import(&blank, " ", &[]).unwrap().name(),
+        "Competition"
+    );
+}
+
 #[test]
 fn what_can_be_done_follows_the_competition() {
     let mut session = Session::new("cup");

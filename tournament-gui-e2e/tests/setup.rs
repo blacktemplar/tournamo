@@ -109,6 +109,26 @@ async fn the_start_says_why_it_is_not_possible_yet() {
     .await;
 }
 
+/// A Monster DYP draws teams of two that play each other, so it starts with four entrants.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_start_says_how_many_entrants_the_format_needs() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Monster DYP").await?;
+        gui.click("Add phase").await?;
+
+        gui.expect_start_refusal(Some("The format needs at least 4 entrants."))
+            .await?;
+        gui.expect_disabled("Start").await?;
+        gui.add_entrant("Dave").await?;
+        gui.expect_start_refusal(None).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn undo_and_redo_walk_through_the_actions() {

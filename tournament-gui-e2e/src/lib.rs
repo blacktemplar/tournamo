@@ -674,6 +674,25 @@ impl Gui {
         Ok(())
     }
 
+    /// Double-clicks the button whose text is `text`, once it is enabled, both clicks before the
+    /// page shows what the first did.
+    pub async fn double_click(&self, text: &str) -> WebDriverResult<()> {
+        let button = self
+            .button(text)
+            .and_displayed()
+            .and_enabled()
+            .first()
+            .await?;
+        self.driver
+            .action_chain()
+            .move_to_element_center(&button)
+            .double_click()
+            .perform()
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Taps twice, 250 ms apart as in a double tap, at the middle of the button whose text is
     /// `text`, once it is enabled: the second tap lands on whatever is there after the first.
     pub async fn double_tap(&self, text: &str) -> WebDriverResult<()> {

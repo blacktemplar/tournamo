@@ -111,8 +111,11 @@ struct Page {
 }
 
 impl Page {
-    /// Says everything in `language` from now on, and remembers it as the one chosen.
+    /// Says everything in `language` from now on, and remembers it as the one chosen. Why the last
+    /// action was refused is gone.
     fn choose_language(mut self, language: Language) {
+        // which the alert would say again in the new language, as if just refused
+        self.error.set(None);
         self.translator
             .set(Translator::new(language, &[i18n::resources]));
         i18n::remember(language);

@@ -178,6 +178,44 @@ async fn a_file_that_is_no_competition_is_refused_with_its_detail_apart() {
     .await;
 }
 
+/// Why an action was refused shows until the next one is done, not past it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_refusal_is_gone_once_the_next_action_is_done() {
+    run(async |gui| {
+        gui.new_competition("Cup").await?;
+        gui.follow("All competitions").await?;
+        let file = std::env::temp_dir().join(format!("refused-{}.json", std::process::id()));
+        std::fs::write(&file, "<html>").unwrap();
+        gui.import(&file).await?;
+        gui.expect_error("The file is no competition this version can open.")
+            .await?;
+
+        gui.rename_competition("Cup", "Cup 2026").await?;
+
+        gui.expect_no_dialog().await?;
+        gui.expect_no_error().await?;
+        std::fs::remove_file(file).unwrap();
+        Ok(())
+    })
+    .await;
+}
+
+/// Choosing another language does not say again why the last action was refused.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_refusal_is_gone_once_the_language_changes() {
+    run(async |gui| {
+        gui.click("Create").await?;
+        gui.expect_error("A competition needs a name.").await?;
+
+        gui.choose_language("Deutsch").await?;
+
+        gui.expect_no_error().await
+    })
+    .await;
+}
+
 /// After an update, say, a log may hold what the page no longer knows; the operator can still keep
 /// a copy of it.
 #[tokio::test]

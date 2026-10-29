@@ -44,6 +44,9 @@ a file whose `"format"` changes is migrated, not refused.
   with each row by its name, and the switch between the matches playable now
   and those by round by its name. Buttons showing only their icon show what
   they do under the pointer.
+- Why an action was refused is gone once the next action is done, also on the
+  list of competitions and in a dialog, and no longer said again when another
+  language is chosen.
 
 ## [0.1.0] - 2026-10-28
 

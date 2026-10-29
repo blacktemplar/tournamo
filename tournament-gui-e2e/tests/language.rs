@@ -17,13 +17,10 @@ async fn the_page_speaks_the_language_the_browser_prefers() {
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn everything_is_said_in_the_language_chosen() {
     run_in_new_competition(async |gui| {
-        gui.click("Add entrant").await?;
-        gui.expect_error("An entrant name must not be empty.")
-            .await?;
-
         gui.choose_language("Deutsch").await?;
 
         gui.expect_page_language("de").await?;
+        gui.click("Teilnehmer hinzufügen").await?;
         gui.expect_error("Der Name eines Teilnehmers darf nicht leer sein.")
             .await?;
         gui.add_entrant("Alice").await?;

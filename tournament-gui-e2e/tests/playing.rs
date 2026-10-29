@@ -77,9 +77,31 @@ async fn the_controls_are_named_for_screen_readers() {
         gui.expect_titled("Undo").await?;
         gui.toggle_result_entry().await?;
         gui.expect_result_preview_live().await?;
+        gui.click_labelled("Alice wins").await?;
         gui.click("Standings").await?;
         gui.expect_standings_caption("Standings").await?;
         gui.expect_standings(&["Alice", "Bob"]).await
+    })
+    .await;
+}
+
+/// A double click does once what one click does, without a refusal saying it is done already.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_double_click_is_no_refused_repeat() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.click("Add phase").await?;
+
+        gui.double_click("Start").await?;
+
+        gui.expect_results(&[]).await?;
+        gui.expect_no_error().await?;
+        gui.double_click("Draw").await?;
+        gui.expect_results(&["Draw"]).await?;
+        gui.expect_no_error().await
     })
     .await;
 }

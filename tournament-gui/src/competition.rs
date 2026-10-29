@@ -90,10 +90,7 @@ impl Ctx {
             return None;
         }
         match self.try_act(action) {
-            Ok(done) => {
-                self.error.set(None);
-                Some(done)
-            }
+            Ok(done) => Some(done),
             Err(error) => {
                 self.announcement.set(None);
                 self.error.set(Some(error));
@@ -104,7 +101,7 @@ impl Ctx {
 
     /// Runs `action` on the session and saves what it changed, as [`Self::act`] does, but returns
     /// why it was refused rather than showing it, e.g. for a dialog to show it. If it was done,
-    /// the announcement of the action before is gone.
+    /// the announcement of the action before is gone, and so is why one before was refused.
     ///
     /// # Errors
     /// Returns what the error of `action` says, and [`READ_ONLY`] while another tab changes the
@@ -119,6 +116,7 @@ impl Ctx {
         let mut session = self.session;
         let done = action(&mut session.write()).map_err(|error| error.text())?;
         self.announcement.set(None);
+        self.error.set(None);
         self.save();
         Ok(done)
     }

@@ -69,10 +69,11 @@ pub fn Competitions() -> Element {
                     onsubmit: move |event| {
                         event.prevent_default();
                         let chosen = name.peek().trim().to_owned();
+                        let mut error = page.error;
                         if chosen.is_empty() {
-                            let mut error = page.error;
                             error.set(Some(Text::new("error-empty-competition-name")));
                         } else {
+                            error.set(None);
                             store(page, Session::new(chosen));
                         }
                     },
@@ -265,15 +266,17 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>) -> Element {
     }
 }
 
-/// Names the competition `key` `name`, and closes the dialog, or shows in it why not.
+/// Names the competition `key` `name`, and closes the dialog, or shows in it why not. Either way,
+/// why the action before was refused is gone.
 async fn rename(
-    page: Page,
+    mut page: Page,
     key: CompetitionKey,
     name: String,
     mut asked: Signal<Option<Ask>>,
     mut changed: Signal<u32>,
     mut error: Signal<Option<Text>>,
 ) {
+    page.error.set(None);
     let Some(storage) = page.storage.peek().clone() else {
         return;
     };
@@ -289,14 +292,15 @@ async fn rename(
 }
 
 /// Deletes the competition `key`, unless another tab has it open, and closes the dialog, or shows
-/// in it why not.
+/// in it why not. Either way, why the action before was refused is gone.
 async fn delete(
-    page: Page,
+    mut page: Page,
     key: CompetitionKey,
     mut asked: Signal<Option<Ask>>,
     mut changed: Signal<u32>,
     mut error: Signal<Option<Text>>,
 ) {
+    page.error.set(None);
     let Some(storage) = page.storage.peek().clone() else {
         return;
     };
@@ -334,8 +338,10 @@ fn progress_text(tr: &Translator, progress: &Progress) -> String {
     }
 }
 
-/// Imports the competition of `file`, named after the file unless it says its name, and opens it.
+/// Imports the competition of `file`, named after the file unless it says its name, and opens it;
+/// why the action before was refused is gone.
 async fn import(mut page: Page, file: FileData) {
+    page.error.set(None);
     let text = match file.read_string().await {
         Ok(text) => text,
         Err(error) => {
@@ -384,6 +390,7 @@ fn store(mut page: Page, mut session: Session) {
 /// Has the browser download the file of the competition `key`, named `name`, as it is stored,
 /// whether or not it still loads.
 fn export(mut page: Page, key: CompetitionKey, name: String) {
+    page.error.set(None);
     let Some(storage) = page.storage.peek().clone() else {
         return;
     };

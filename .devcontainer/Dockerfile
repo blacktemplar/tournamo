@@ -24,8 +24,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # without the user namespaces the container may not create, Chromium cannot start its sandbox; it
-# only opens the pages built here
-RUN echo 'export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --no-sandbox"' > /etc/chromium.d/no-sandbox
+# only opens the pages built here, which are served locally, so it ignores the proxy and stays
+# offline (rather than trying Google's services in the background)
+RUN echo 'export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --no-sandbox --no-proxy-server"' \
+    > /etc/chromium.d/no-sandbox
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules

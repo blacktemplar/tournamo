@@ -15,8 +15,7 @@ cdn.agentclientprotocol.com
 registry.npmjs.org
 
 # cargo: crates and the git dependencies
-index.crates.io
-static.crates.io
+crates.io
 github.com
 
 # prek: the Python hooks (pre-commit-hooks)
@@ -34,3 +33,6 @@ cdn.jsdelivr.net
 # documentation
 docs.rs
 doc.rust-lang.org
+
+# dioxus website
+dioxus.dev

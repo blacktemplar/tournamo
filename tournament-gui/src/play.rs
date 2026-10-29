@@ -533,14 +533,30 @@ fn ReportButtons(
     }
 }
 
+/// How long the button reopening a match takes no click once it shows, in milliseconds: longer than
+/// the taps of a double tap are apart.
+const REOPEN_DELAY_MS: u32 = 600;
+
 /// The result of the match `row`, of a round where a match may end in a draw if `draws`, and the
-/// button reopening it.
+/// button reopening it, which takes no click for [`REOPEN_DELAY_MS`] once it shows.
 #[component]
 fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
     let id = row.id;
+    // the button shows where the result was reported, on a phone where the draw was, so it takes
+    // no click at first, which would be the second of a double tap
+    let mut settled = use_signal(|| false);
+    use_hook(|| {
+        spawn(async move {
+            _ = document::eval(&format!(
+                "await new Promise((done) => setTimeout(done, {REOPEN_DELAY_MS}));"
+            ))
+            .await;
+            settled.set(true);
+        })
+    });
     // only reopened by the tab that changes the competition
-    let disabled = !ctx.changes();
+    let disabled = !ctx.changes() || !settled();
     let tr = ctx.translator.read();
     // a win is shown by the mark at the winner's name, so said only to screen readers, which may
     // not read the mark; a draw has no such mark

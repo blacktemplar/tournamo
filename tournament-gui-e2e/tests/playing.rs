@@ -43,6 +43,24 @@ async fn a_result_is_reopened() {
     .await;
 }
 
+/// On a phone, the button reopening a match shows where the draw was reported, so it takes no tap
+/// at first: a double tap reports the draw rather than reopening the match at once.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_double_tap_reporting_a_result_does_not_reopen_it() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(360, 740).await?;
+        start_round_robin(&gui, &["Alice", "Bob"]).await?;
+
+        gui.double_tap("Draw").await?;
+
+        gui.expect_results(&["Draw"]).await?;
+        gui.click_labelled("Reopen match 1").await?;
+        gui.expect_results(&[]).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn undo_takes_back_a_result_and_redo_brings_it_back() {

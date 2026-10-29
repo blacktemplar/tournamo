@@ -25,6 +25,8 @@ a file whose `"format"` changes is migrated, not refused.
 - Escape in the list of a choice closes only the list, no longer the dialog
   around it with the edits made there, and the focus is back at the choice. The
   option highlighted in such a list stands out clearly.
+- A double tap reporting a result no longer reopens the match at once: the
+  button reopening it takes no tap for a moment after it shows.
 
 ## [0.1.0] - 2026-10-28
 

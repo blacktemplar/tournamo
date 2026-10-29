@@ -651,6 +651,28 @@ impl Gui {
         Ok(())
     }
 
+    /// Taps twice, 250 ms apart as in a double tap, at the middle of the button whose text is
+    /// `text`, once it is enabled: the second tap lands on whatever is there after the first.
+    pub async fn double_tap(&self, text: &str) -> WebDriverResult<()> {
+        let button = self
+            .button(text)
+            .and_displayed()
+            .and_enabled()
+            .first()
+            .await?;
+        self.driver
+            .action_chain()
+            .move_to_element_center(&button)
+            .click()
+            .perform()
+            .await?;
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        // where the pointer is still
+        self.driver.action_chain().click().perform().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Moves the pointer onto the button whose accessible name, its `aria-label`, is `label`, e.g.
     /// `"About points"`.
     pub async fn hover_labelled(&self, label: &str) -> WebDriverResult<()> {

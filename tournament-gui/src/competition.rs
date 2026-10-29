@@ -278,6 +278,8 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                         undo(ctx);
                     }
                 },
+                // the label under the pointer as well, where only the icon shows
+                title: tr.get("undo"),
                 icons::Undo {}
                 span { class: "bar-label", {tr.get("undo")} }
             }
@@ -292,10 +294,14 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                         ctx.announce(Announcement::Redone(action));
                     }
                 },
+                title: tr.get("redo"),
                 icons::Redo {}
                 span { class: "bar-label", {tr.get("redo")} }
             }
-            button { class: "quiet", onclick: move |_| export(),
+            button {
+                class: "quiet",
+                title: tr.get("export"),
+                onclick: move |_| export(),
                 icons::Export {}
                 span { class: "bar-label", {tr.get("export")} }
             }

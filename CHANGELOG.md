@@ -39,6 +39,11 @@ a file whose `"format"` changes is migrated, not refused.
   competition at Cancel, as an alert dialog.
 - Adding or removing an entrant, adding or changing the phase and the start are
   announced, and the announcement of the last result names who won.
+- Screen readers hear a draw button by its match ("Alice – Bob: draw"), the
+  preview of a result typed in as it changes, the standings by their caption
+  with each row by its name, and the switch between the matches playable now
+  and those by round by its name. Buttons showing only their icon show what
+  they do under the pointer.
 
 ## [0.1.0] - 2026-10-28
 

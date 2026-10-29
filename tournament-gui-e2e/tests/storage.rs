@@ -48,6 +48,10 @@ async fn a_competition_is_renamed_and_deleted_from_the_list() {
         gui.new_competition("League").await?;
         gui.follow("All competitions").await?;
 
+        // buttons of an icon only, which shows what they do under the pointer
+        for action in ["Rename", "Export", "Delete"] {
+            gui.expect_titled(&format!("{action} Cup")).await?;
+        }
         gui.rename_competition("Cup", "Cup 2026").await?;
 
         gui.expect_no_dialog().await?;

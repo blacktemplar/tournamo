@@ -61,6 +61,29 @@ async fn a_double_tap_reporting_a_result_does_not_reopen_it() {
     .await;
 }
 
+/// A screen reader hears what each control is about: a draw by its match, the preview of a result
+/// typed in as it changes, the standings by their caption and each row by its name, and the
+/// switch of the matches shown by its name; the bar's buttons show their names under the pointer
+/// where only their icons show.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_controls_are_named_for_screen_readers() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(500, 900).await?;
+        start_round_robin(&gui, &["Alice", "Bob"]).await?;
+
+        gui.expect_draw_named("Alice", "Bob").await?;
+        gui.expect_group("Matches shown").await?;
+        gui.expect_titled("Undo").await?;
+        gui.toggle_result_entry().await?;
+        gui.expect_result_preview_live().await?;
+        gui.click("Standings").await?;
+        gui.expect_standings_caption("Standings").await?;
+        gui.expect_standings(&["Alice", "Bob"]).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn undo_takes_back_a_result_and_redo_brings_it_back() {
@@ -358,6 +381,8 @@ async fn results_are_reported_in_the_bracket() {
         gui.click("Add phase").await?;
         gui.click("Start").await?;
         gui.click("Bracket").await?;
+        gui.expect_bracket_hint("Choosing the name of the side that won reports the result.")
+            .await?;
 
         gui.win_in_bracket("1").await?;
 

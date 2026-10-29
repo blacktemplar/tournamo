@@ -1333,8 +1333,96 @@ impl Gui {
     /// # Panics
     /// Panics if they do not in time, with those they name instead.
     pub async fn expect_standings(&self, names: &[&str]) -> WebDriverResult<()> {
+        // the headers of the rows
         self.page
-            .expect_texts(By::Css("#standing-list tbody td:nth-child(2)"), names)
+            .expect_texts(By::Css("#standing-list tbody th[scope=row]"), names)
+            .await
+    }
+
+    /// Waits until the table of the standings is captioned `text` for screen readers.
+    ///
+    /// # Panics
+    /// Panics if it is not in time, with its caption instead.
+    pub async fn expect_standings_caption(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#standing-list > caption"), &[text])
+            .await
+    }
+
+    /// Waits until a group of controls is named `label` (`role=group`, `aria-label`), e.g. a
+    /// switch of what is shown.
+    ///
+    /// # Panics
+    /// Panics if none is in time.
+    pub async fn expect_group(&self, label: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(format!("[role=group][aria-label='{label}']")),
+                |query| query,
+                &format!("a group named {label:?}"),
+            )
+            .await
+    }
+
+    /// Waits until the button reporting a draw of the match of `a` and `b` is named by them, e.g.
+    /// "Alice – Bob: draw", in the order the match has them, whichever it is.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_draw_named(&self, a: &str, b: &str) -> WebDriverResult<()> {
+        let names = [format!("{a} – {b}: draw"), format!("{b} – {a}: draw")];
+        self.page
+            .expect(
+                By::Css("button.draw"),
+                |query| {
+                    query.with_attribute("aria-label", move |found: &str| {
+                        names.contains(&found.replace(ISOLATION_MARKS, ""))
+                    })
+                },
+                "a draw named by its match",
+            )
+            .await
+    }
+
+    /// Waits until a button shows `label` under the pointer (`title`), as one showing only its icon
+    /// does, e.g. `"Rename Cup"`.
+    ///
+    /// # Panics
+    /// Panics if none is in time.
+    pub async fn expect_titled(&self, label: &str) -> WebDriverResult<()> {
+        self.driver
+            .query(By::XPath(format!(
+                "//button[{}='{label}']",
+                without_isolation_marks("@title")
+            )))
+            .first()
+            .await?;
+        Ok(())
+    }
+
+    /// Waits until what the entry of results says it would report is a live region
+    /// (`role=status`), there before anything is typed, so that a screen reader says it as it
+    /// changes.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_result_preview_live(&self) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css("#result-entry-preview[role=status]"),
+                |query| query,
+                "the preview of the entry of results as a live region",
+            )
+            .await
+    }
+
+    /// Waits until the hint of the bracket on reporting a result says `text`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_bracket_hint(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[aria-labelledby=bracket] > .hint"), &[text])
             .await
     }
 
@@ -1346,7 +1434,7 @@ impl Gui {
     pub async fn expect_podium(&self, names: &[&str]) -> WebDriverResult<()> {
         self.page
             .expect_texts(
-                By::Css("#standing-list tbody tr.podium td:nth-child(2)"),
+                By::Css("#standing-list tbody tr.podium th[scope=row]"),
                 names,
             )
             .await

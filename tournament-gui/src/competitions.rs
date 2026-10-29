@@ -126,6 +126,8 @@ pub fn Competitions() -> Element {
                                 button {
                                     class: "small icon-only",
                                     aria_label: t!(tr, "rename-competition", name = &*listing.name),
+                                    // what the icon does, under the pointer
+                                    title: t!(tr, "rename-competition", name = &*listing.name),
                                     onclick: ask(Ask::Rename {
                                         key: listing.key,
                                         name: listing.name.clone(),
@@ -135,6 +137,7 @@ pub fn Competitions() -> Element {
                                 button {
                                     class: "small icon-only",
                                     aria_label: t!(tr, "export-competition", name = &*listing.name),
+                                    title: t!(tr, "export-competition", name = &*listing.name),
                                     onclick: {
                                         let (key, name) = (listing.key, listing.name.clone());
                                         move |_| export(page, key, name.clone())
@@ -144,6 +147,7 @@ pub fn Competitions() -> Element {
                                 button {
                                     class: "small icon-only",
                                     aria_label: t!(tr, "delete-competition", name = &*listing.name),
+                                    title: t!(tr, "delete-competition", name = &*listing.name),
                                     onclick: ask(Ask::Delete {
                                         key: listing.key,
                                         name: listing.name.clone(),

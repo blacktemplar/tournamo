@@ -1606,11 +1606,19 @@ th {
   background: var(--bronze);
 }
 
-tr.podium td {
+/* the name heading its row (play.rs) reads as a cell, not as a header of the columns */
+#standing-list tbody th {
+  color: var(--text);
+  font-size: inherit;
+  font-weight: normal;
+}
+
+tr.podium td,
+#standing-list tr.podium th {
   font-weight: 600;
 }
 
-tr.podium[data-rank="1"] td {
+tr.podium[data-rank="1"] :is(td, th) {
   background: var(--accent-subtle);
 }
 

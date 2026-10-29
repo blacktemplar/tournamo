@@ -158,6 +158,8 @@ playable-now = Playable now
 playable-now-count = Playable now ({ $count })
 # shows the matches of one round at a time
 by-round = By round
+# the group of the two buttons above, for screen readers
+matches-shown = Matches shown
 previous-round = Previous round
 next-round = Next round
 nothing-playable = No match can be played now.
@@ -169,6 +171,8 @@ wins = { $team } wins
 # what that button shows, below the side's name; it must be a part of `wins`
 wins-short = Wins
 draw = Draw
+# the button reporting a draw, for screen readers
+draw-of = { $a } – { $b }: draw
 won = { $team } won
 reopen = Reopen
 reopen-match = Reopen match { $number }
@@ -191,7 +195,7 @@ bracket-winners = Winners bracket
 bracket-losers = Losers bracket
 bracket-grand-final = Grand final
 # above the bracket, while a match in it has no result: the names of its sides are buttons
-bracket-report-hint = Click or tap the name of the side that won.
+bracket-report-hint = Choosing the name of the side that won reports the result.
 # a side of a match in the bracket that nobody takes
 bracket-bye = Bye
 # a side of a match in the bracket not decided yet, by the match or else the stage it comes from

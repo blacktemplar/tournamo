@@ -173,7 +173,10 @@ pub fn Rounds() -> Element {
                 class: "toolbar",
                 aria_label: tr.get("rounds"),
                 hidden: entered.is_some(),
-                div { class: "segmented",
+                div {
+                    class: "segmented",
+                    role: "group",
+                    aria_label: tr.get("matches-shown"),
                     button {
                         aria_pressed: shown == Shown::Playable,
                         onclick: move |_| chosen.set(Some(Shown::Playable)),
@@ -382,9 +385,15 @@ fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
                     {tr.sentence(&error)}
                 }
             }
-            // said by the alert above instead once Enter was refused
-            if let Some((class, text)) = preview.filter(|_| error.read().is_none()) {
-                p { id: "result-entry-preview", class, {text} }
+            // said by the alert above instead once Enter was refused; a live region there before
+            // anything is typed, so that a screen reader says it as it changes
+            {
+                let (class, text) = preview
+                    .filter(|_| error.read().is_none())
+                    .map_or(("preview", None), |(class, text)| (class, Some(text)));
+                rsx! {
+                    p { id: "result-entry-preview", class, role: "status", {text} }
+                }
             }
             p { id: "result-entry-hint", class: "hint",
                 {t!(tr, "enter-result-hint", draws = if draws { "yes" } else { "no" })}
@@ -522,7 +531,13 @@ fn ReportButtons(
             {tr.get("wins-short")}
         }
         if draws {
-            button { class: "draw", disabled, onclick: report(MatchResult::Draw), {tr.get("draw")} }
+            button {
+                class: "draw",
+                disabled,
+                aria_label: t!(tr, "draw-of", a = a.as_str(), b = b.as_str()),
+                onclick: report(MatchResult::Draw),
+                {tr.get("draw")}
+            }
         }
         button {
             class: "win b",
@@ -662,6 +677,8 @@ pub fn Standings() -> Element {
                 tabindex: "0",
                 aria_labelledby: "standings",
                 table { id: "standing-list",
+                    // the heading of the card shows it
+                    caption { class: "visually-hidden", {tr.get("standings")} }
                     thead {
                         tr {
                             th { scope: "col", {tr.get("rank")} }
@@ -693,7 +710,7 @@ pub fn Standings() -> Element {
                                         span { class: "place", "{row.rank}" }
                                     }
                                 }
-                                td { class: "name", {team_name(&tr, &row.entrants)} }
+                                th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
                                 td { "{row.played}" }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
                                     td { {cell.map(|cell| tr.cell(column.calculator, &cell))} }

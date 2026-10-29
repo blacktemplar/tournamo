@@ -652,6 +652,64 @@ impl Page {
         Ok(())
     }
 
+    /// Scrolls the page down by `pixels` CSS pixels, or up for a negative number, as far as it
+    /// goes.
+    pub async fn scroll_by(&self, pixels: i64) -> WebDriverResult<()> {
+        self.driver
+            .execute(
+                "window.scrollBy(0, arguments[0]);",
+                vec![serde_json::json!(pixels)],
+            )
+            .await?;
+        Self::pause().await;
+        Ok(())
+    }
+
+    /// Whether the page is higher than its window, so that it scrolls, and how wide its body is
+    /// laid out, without the room of a scroll bar, in CSS pixels.
+    pub async fn scrolling_and_width(&self) -> WebDriverResult<(bool, f64)> {
+        self.driver
+            .execute(
+                "const root = document.documentElement;
+                return [root.scrollHeight > root.clientHeight,
+                        document.body.getBoundingClientRect().width];",
+                Vec::new(),
+            )
+            .await?
+            .convert()
+    }
+
+    /// Checks that the text of each element the CSS selector `selector` finds is on one line.
+    ///
+    /// # Panics
+    /// Panics if one wraps, with its text and the number of its lines.
+    pub async fn expect_single_lines(&self, selector: &str) -> WebDriverResult<()> {
+        let wrapped = self
+            .driver
+            .execute(
+                r#"
+                return [...document.querySelectorAll(arguments[0])].flatMap((element) => {
+                    const range = document.createRange();
+                    range.selectNodeContents(element);
+                    // a line's boxes share their top, give or take rounding
+                    const tops = new Set([...range.getClientRects()]
+                        .filter((box) => box.width > 0)
+                        .map((box) => Math.round(box.top)));
+                    return tops.size > 1 ? [{ text: element.textContent, lines: tops.size }] : [];
+                });
+                "#,
+                vec![serde_json::Value::from(selector)],
+            )
+            .await?
+            .json()
+            .clone();
+        assert!(
+            wrapped.as_array().is_some_and(Vec::is_empty),
+            "{selector} must keep each text on one line, but {wrapped:#}"
+        );
+        Ok(())
+    }
+
     /// Checks that the page is no wider than its window, so that it does not scroll sideways: what
     /// is wider has to scroll inside an element of its own.
     ///

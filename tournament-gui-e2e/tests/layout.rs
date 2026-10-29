@@ -58,6 +58,79 @@ async fn the_views_of_a_knockout_fit_a_phone_in_german() {
     .await;
 }
 
+/// The view switch stays below the bar on a phone, hiding what scrolls under it, and what gets
+/// the focus is scrolled clear of both.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_view_switch_hides_what_scrolls_under_it() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(360, 740).await?;
+        for number in 1..=8 {
+            gui.add_entrant(&format!("Player {number}")).await?;
+        }
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+
+        gui.page.scroll_by(300).await?;
+
+        gui.expect_nothing_shows_around_the_view_switch().await?;
+        // the focus moves on to the next match, up to the first if the match was the last
+        gui.page.scroll_by(10_000).await?;
+        gui.click_labelled("Player 8 wins").await?;
+        gui.page.expect_in_view(":focus").await
+    })
+    .await;
+}
+
+/// At 320 px, the narrowest phone, a knockout's views fit, each on one line, in both languages.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_views_of_a_knockout_fit_the_narrowest_phone() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(320, 740).await?;
+        for name in ["Alice", "Bob"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Single elimination").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+
+        for language in ["English", "Deutsch"] {
+            gui.choose_language(language).await?;
+            gui.page
+                .expect_single_lines(".view-switch button:not(.wide-only)")
+                .await?;
+            gui.page.expect_no_sideways_scroll().await?;
+        }
+        Ok(())
+    })
+    .await;
+}
+
+/// The page keeps its width whether it scrolls or not, so the bar does not shift between views.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_page_keeps_its_width_between_views() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(1280, 1200).await?;
+        for number in 1..=16 {
+            gui.add_entrant(&format!("Player {number}")).await?;
+        }
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        let (scrolling, matches) = gui.page.scrolling_and_width().await?;
+        assert!(scrolling, "the matches of 16 scroll");
+
+        gui.click("Phase").await?;
+
+        let (scrolling, phase) = gui.page.scrolling_and_width().await?;
+        assert!(!scrolling, "the phase does not scroll");
+        assert_eq!(matches, phase, "the page must keep its width");
+        Ok(())
+    })
+    .await;
+}
+
 /// A cross table of 8 is wider than a phone, so it scrolls inside its card, not the page.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

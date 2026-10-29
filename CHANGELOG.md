@@ -27,6 +27,10 @@ a file whose `"format"` changes is migrated, not refused.
   option highlighted in such a list stands out clearly.
 - A double tap reporting a result no longer reopens the match at once: the
   button reopening it takes no tap for a moment after it shows.
+- The views (matches, standings, bracket, phase) stay right below the bar, with
+  nothing showing through between them, and fit on one line on the narrowest
+  phones; the bar no longer shifts between screens that scroll and those that
+  do not.
 
 ## [0.1.0] - 2026-10-28
 

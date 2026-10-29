@@ -94,13 +94,15 @@
 }
 
 /* what the keyboard or a script scrolls to stays clear of the bar, and of the view switch below it,
- * which stay on top */
+ * which stay on top; the room of the scroll bar is kept whether the page scrolls or not, so that
+ * the bar does not shift between screens */
 html {
   scroll-padding-top: calc(var(--bar-height) + var(--space-4));
+  scrollbar-gutter: stable;
 }
 
 html:has(.view-switch) {
-  scroll-padding-top: calc(var(--bar-height) + var(--control) + var(--space-6));
+  scroll-padding-top: calc(var(--bar-height) + var(--control) + 2 * var(--space-2) + var(--space-4));
 }
 
 body {
@@ -542,16 +544,24 @@ footer a,
 
 /* the matches, the standings or the bracket where there is room for one column only, else both
  * columns or the bracket, and only for a knockout */
+/* right below the bar, on the page's background, so that nothing shows between them while the page
+ * scrolls under both; the room above it in the page's flow is its own; each view on one line, the
+ * switch scrolling sideways rather than the page where they do not fit */
 .view-switch {
   position: sticky;
   z-index: 15;
-  top: calc(var(--bar-height) + var(--space-2));
+  top: var(--bar-height);
   display: flex;
-  margin-bottom: var(--space-4);
+  overflow-x: auto;
+  /* room for the focus ring, which the scrolling would cut off */
+  padding: var(--space-2) var(--space-1);
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-1)) var(--space-2);
+  background: var(--background);
 }
 
 .view-switch button {
-  flex: 1;
+  flex: 1 0 auto;
+  white-space: nowrap;
 }
 
 @media (width < 60rem) {
@@ -563,6 +573,18 @@ footer a,
   /* up to four views on a phone: the matches, the standings, the bracket and the phase */
   .view-switch button {
     padding: 0 var(--space-2);
+  }
+}
+
+/* the narrowest phones, where the scroll bar of the switch would cover the page */
+@media (width < 23rem) {
+  .view-switch {
+    scrollbar-width: none;
+  }
+
+  .view-switch button {
+    padding: 0 var(--space-1);
+    font-size: 0.875rem;
   }
 }
 

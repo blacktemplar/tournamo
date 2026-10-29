@@ -13,7 +13,7 @@ use std::path::Path;
 use e2e_harness::{
     ISOLATION_MARKS, Page, Site,
     thirtyfour::{
-        By, WebDriver, components::SelectElement, error::WebDriverResult,
+        By, WebDriver, WebElement, components::SelectElement, error::WebDriverResult,
         extensions::query::ElementQueryable, stringmatch::StringMatch,
     },
 };
@@ -626,27 +626,34 @@ impl Gui {
 
     /// Clicks the button whose text is `text`, once it is enabled.
     pub async fn click(&self, text: &str) -> WebDriverResult<()> {
-        self.button(text)
-            .and_enabled()
-            .first()
-            .await?
-            .click()
-            .await?;
-        Page::pause().await;
-        Ok(())
+        let button = self.button(text).and_enabled().first().await?;
+        self.click_in_sight(&button).await
     }
 
     /// Clicks the button whose accessible name, its `aria-label`, is `label`, once it is enabled,
     /// e.g. `"Alice wins"`.
     pub async fn click_labelled(&self, label: &str) -> WebDriverResult<()> {
         // e.g. a result button of the matches and one of the bracket, only one of them shown
-        self.labelled(label)
+        let button = self
+            .labelled(label)
             .and_displayed()
             .and_enabled()
             .first()
-            .await?
-            .click()
             .await?;
+        self.click_in_sight(&button).await
+    }
+
+    /// Clicks `element` once it is scrolled into the middle of the window, as an operator looks
+    /// at what they click: WebDriver would click it where it is if it is in the window at all, even
+    /// under the bar staying on top.
+    async fn click_in_sight(&self, element: &WebElement) -> WebDriverResult<()> {
+        self.driver
+            .execute(
+                "arguments[0].scrollIntoView({ block: 'center', inline: 'nearest' });",
+                vec![element.to_json()?],
+            )
+            .await?;
+        element.click().await?;
         Page::pause().await;
         Ok(())
     }
@@ -1004,6 +1011,49 @@ impl Gui {
         assert!(
             texts.iter().any(|text| text == label),
             "the view chosen must be {label:?}, but is {texts:?}"
+        );
+        Ok(())
+    }
+
+    /// Checks that nothing of the page shows between the bar on top and the bottom of the view
+    /// switch below it, which stays on top as well: every point there is the bar's, the switch's or
+    /// the bare background's beside it, and the switch is opaque.
+    ///
+    /// # Panics
+    /// Panics if something else shows there, with where and what.
+    pub async fn expect_nothing_shows_around_the_view_switch(&self) -> WebDriverResult<()> {
+        let through = self
+            .driver
+            .execute(
+                r#"
+                const bar = document.querySelector(".bar").getBoundingClientRect();
+                const view = document.querySelector(".view-switch");
+                const box = view.getBoundingClientRect();
+                const found = [];
+                const background = getComputedStyle(view).backgroundColor;
+                if (!/^rgb\(/.test(background)) {
+                    found.push(`the switch is not opaque: ${background}`);
+                }
+                const width = document.documentElement.clientWidth;
+                for (let y = Math.ceil(bar.bottom); y < box.bottom; y += 2) {
+                    for (const x of [2, width / 2, width - 2]) {
+                        const element = document.elementFromPoint(x, y);
+                        const bare = ["HTML", "BODY", "MAIN"].includes(element?.tagName)
+                            || element?.id === "main";
+                        if (!bare && !element?.closest(".bar, .view-switch")) {
+                            found.push(`at ${x}, ${y}: ${element?.outerHTML.slice(0, 80)}`);
+                        }
+                    }
+                }
+                return found.slice(0, 5);
+                "#,
+                Vec::new(),
+            )
+            .await?
+            .convert::<Vec<String>>()?;
+        assert!(
+            through.is_empty(),
+            "nothing must show between the bar and the view switch, but {through:#?}"
         );
         Ok(())
     }

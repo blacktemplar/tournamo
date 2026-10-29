@@ -1568,6 +1568,61 @@ fn an_edit_a_reported_result_does_not_fit_is_refused() {
     ));
 }
 
+/// The matches of the phase that have a result, with that result.
+fn reported(session: &Session) -> Vec<(MatchId, MatchResult)> {
+    matches(session)
+        .into_iter()
+        .filter_map(|row| Some((row.id, row.result?)))
+        .collect()
+}
+
+/// A round robin pairs its first round as a knockout does, so the results of a knockout's first
+/// round stay when it is changed to a round robin.
+#[test]
+fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+    session
+        .report(numbered(&session, 2), MatchResult::AWins)
+        .unwrap();
+    let before = reported(&session);
+
+    assert!(
+        session
+            .edit_phase(&session.phase_draft(RoundRobin::ID).unwrap())
+            .unwrap()
+    );
+
+    assert_eq!(reported(&session), before);
+}
+
+/// A round robin plays the final of a knockout in another round, if at all, so a knockout played
+/// to its end is not changed to a round robin, which keeps its results.
+#[test]
+fn a_finished_knockout_is_not_changed_to_a_round_robin() {
+    let mut session = Given::new()
+        .entrants(&["A", "B", "C", "D", "E", "F", "G", "H"])
+        .format(SingleElimination::ID)
+        .started();
+    while let Some(open) = matches(&session)
+        .into_iter()
+        .find(|row| row.result.is_none())
+    {
+        session.report(open.id, MatchResult::AWins).unwrap();
+    }
+    let before = reported(&session);
+
+    let result = session.edit_phase(&session.phase_draft(RoundRobin::ID).unwrap());
+
+    assert!(
+        matches!(result, Err(EditPhaseError::DoesNotFit(_))),
+        "{result:?}"
+    );
+    assert_eq!(reported(&session), before);
+}
+
 /// What can be undone is what a session did itself, so a loaded competition has the state it was
 /// saved with but nothing to undo.
 #[test]

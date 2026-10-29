@@ -458,3 +458,41 @@ async fn an_edit_a_result_does_not_fit_is_refused_in_the_dialog() {
     })
     .await;
 }
+
+/// A round robin pairs its first round as a knockout does, so the results of a knockout's first
+/// round stay when it is changed to a round robin.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Single elimination").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        gui.click("Bracket").await?;
+        gui.win_in_bracket("1").await?;
+        gui.win_in_bracket("2").await?;
+        gui.expect_bracket_waiting(&[]).await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+
+        gui.choose_format("Round robin").await?;
+        gui.click("Save changes").await?;
+
+        gui.expect_no_dialog().await?;
+        gui.expect_phase(&[
+            "Round robin",
+            "More points, more Sonneborn-Berger",
+            "Win-draw-loss record",
+            "Points",
+            "Sonneborn-Berger",
+        ])
+        .await?;
+        gui.click("Matches & standings").await?;
+        gui.choose_round("Round 1").await?;
+        gui.expect_finished(&["1", "2"]).await
+    })
+    .await;
+}

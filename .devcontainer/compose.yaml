@@ -1,0 +1,93 @@
+# The dev container `dev` and its proxy; see README.md for what this protects against. The variables
+# come from .env, which initialize.sh writes on the host before the containers start.
+
+# one project per checkout (worktrees share the name of their directory)
+name: ${COMPOSE_NAME}
+
+services:
+  dev:
+    build: .
+    # Zed only connects to it
+    command: sleep infinity
+    init: true
+    # nothing to gain inside: no capabilities, no setuid
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # only on the internal network, so the proxy is the only way out
+    networks: [sandbox]
+    environment:
+      HTTPS_PROXY: http://proxy:3128
+      HTTP_PROXY: http://proxy:3128
+      https_proxy: http://proxy:3128
+      http_proxy: http://proxy:3128
+      # chromedriver and the pages under test
+      NO_PROXY: localhost,127.0.0.1,::1
+      no_proxy: localhost,127.0.0.1,::1
+      NODE_USE_ENV_PROXY: "1"
+      CLAUDE_CONFIG_DIR: /home/dev/.claude
+      DISABLE_AUTOUPDATER: "1"
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      GIT_AUTHOR_NAME: ${GIT_NAME}
+      GIT_AUTHOR_EMAIL: ${GIT_EMAIL}
+      GIT_COMMITTER_NAME: ${GIT_NAME}
+      GIT_COMMITTER_EMAIL: ${GIT_EMAIL}
+      # the other worktrees are not mounted, and git must not take them for deleted
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: gc.worktreePruneExpire
+      GIT_CONFIG_VALUE_0: never
+    volumes:
+      # the checkout and the repository it belongs to, at their paths on the host, where a
+      # worktree's .git file points
+      - ${WORKSPACE}:${WORKSPACE}
+      - ${GIT_COMMON_DIR}:${GIT_COMMON_DIR}
+      # read-only, since the host runs them: the hooks, the configuration of git (which can name
+      # commands, e.g. core.fsmonitor), and this directory
+      - ${GIT_COMMON_DIR}/hooks:${GIT_COMMON_DIR}/hooks:ro
+      - ${GIT_COMMON_DIR}/config:${GIT_COMMON_DIR}/config:ro
+      - ${WORKSPACE}/.devcontainer:${WORKSPACE}/.devcontainer:ro
+      # a target directory of its own, so the host never runs what was built here
+      - target:${WORKSPACE}/target
+      - claude:/home/dev/.claude
+      - cargo:/home/dev/.cargo
+      - cache:/home/dev/.cache
+    depends_on:
+      target-owner:
+        condition: service_completed_successfully
+
+  # a new volume belongs to root, unless the image has its mount point, which can't know where the
+  # checkout is
+  target-owner:
+    build: .
+    user: root
+    command: chown ${USER_ID} /target
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    volumes:
+      - target:/target
+
+  proxy:
+    build: proxy
+    read_only: true
+    tmpfs: [/tmp, /var/cache/squid, /var/log/squid, /run]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [sandbox, egress]
+    volumes:
+      - ./proxy/allowed-domains.txt:/etc/squid/allowed-domains.txt:ro
+
+networks:
+  sandbox:
+    internal: true
+  egress:
+
+volumes:
+  target:
+  # shared by every checkout: the sign-in of Claude Code, the crates, the downloads of the tools
+  claude:
+    name: tournamo-claude
+  cargo:
+    name: tournamo-cargo
+  cache:
+    name: tournamo-cache

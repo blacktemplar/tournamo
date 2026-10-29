@@ -1,3 +1,5 @@
 /target
 # the page built by trunk
 /tournament-web/dist
+# written by the dev container's initialize.sh
+/.devcontainer/.env

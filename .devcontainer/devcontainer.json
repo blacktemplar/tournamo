@@ -1,0 +1,15 @@
+{
+  "name": "Tournamo",
+  "initializeCommand": ".devcontainer/initialize.sh",
+  "dockerComposeFile": "compose.yaml",
+  "service": "dev",
+  "runServices": ["dev", "target-owner", "proxy"],
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+  "customizations": {
+    "zed": {
+      "extensions": ["toml"]
+    }
+  }
+}

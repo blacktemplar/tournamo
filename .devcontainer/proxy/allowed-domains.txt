@@ -1,0 +1,34 @@
+# The hosts the dev container may reach (port 443 only), one per line; exact names, a leading dot
+# would admit every subdomain. Changes take effect after restarting the proxy:
+# `docker restart <project>-proxy-1`.
+
+# Claude Code: the API, sign-in, its docs
+api.anthropic.com
+claude.ai
+claude.com
+platform.claude.com
+code.claude.com
+
+# Zed's Claude Agent, which Zed starts with npx
+registry.npmjs.org
+
+# cargo: crates and the git dependencies
+index.crates.io
+static.crates.io
+github.com
+
+# prek: the Python hooks (pre-commit-hooks)
+pypi.org
+files.pythonhosted.org
+
+# the wasm-bindgen of the version Cargo.lock pins, which wasm-pack, trunk and dx download
+api.github.com
+objects.githubusercontent.com
+release-assets.githubusercontent.com
+
+# axe-core, which the end-to-end tests check the pages with
+cdn.jsdelivr.net
+
+# documentation
+docs.rs
+doc.rust-lang.org

@@ -1,0 +1,62 @@
+# The dev container
+
+A container for working on Tournamo, made for letting Claude Code work without asking
+(`bypassPermissions`), in Zed or in a terminal. It has everything the hooks need, including the
+manual ones (`prek run --all-files --stage manual`): Rust stable with the wasm target, nightly
+rustfmt, wasm-pack, trunk, dx, Chromium and chromedriver, Node.
+
+## Using it in Zed
+
+1. Open the checkout (or a worktree of it) in Zed and choose *Open in Container* (or *Project: Open
+   Remote* → *Connect Dev Container*). The first build takes a while.
+2. Add *Claude Agent* once: `agent: open settings` → *External Agents* → *Add Agent* → *Install
+   from Registry*. In a container project Zed runs it inside the container.
+3. Sign in once: start a Claude Agent thread and run `/login`, or run `claude` in Zed's terminal. The
+   sign-in is kept in the volume `tournamo-claude`, which every checkout shares.
+
+Claude starts in `bypassPermissions` there, set by `/etc/claude-code/managed-settings.json` of the
+image, so it applies only inside the container. In a terminal, `claude` does the same.
+
+Zed does not notice changes to these files: after one, remove the containers
+(`docker compose -p tournamo-<hash> down`, the name is in `.env`) and open the project again.
+
+## What it protects
+
+Claude can do anything the user `dev` can do in the container. What it cannot do:
+
+- **Reach the network freely.** The container sits on an internal Docker network without a route
+  out; the only way out is the proxy (squid), which tunnels HTTPS to the hosts in
+  `proxy/allowed-domains.txt` and refuses everything else. Neither DNS nor any other protocol gets
+  out, and since it is enforced outside the container, even root inside could not bypass it. Every
+  request is logged: `docker logs tournamo-<hash>-proxy-1`. Claude's WebSearch runs on Anthropic's
+  side and still works; WebFetch reaches the allowed hosts only.
+- **Become root or change the tools.** No sudo, no capabilities, `no-new-privileges`; the
+  toolchains and Claude Code itself are owned by root.
+- **Touch the host beyond the checkout.** Mounted are the checkout, the git repository it belongs
+  to (for a worktree, the main repository's `.git`), and volumes. No home directory, no SSH keys, no
+  git credentials (so no `git push`: push from the host), no Docker socket.
+- **Plant code the host runs by itself.** Read-only: `.git/hooks`, `.git/config` (it can name
+  commands), and `.devcontainer` (whose `initializeCommand` and mounts the host would use).
+  `target/` is a volume of the container, so the host never runs what was built inside.
+
+## What remains
+
+- **Everything in the checkout is Claude's output.** Code you build or run on the host (`build.rs`,
+  proc macros, tests, `.pre-commit-config.yaml`, which your hook runs on every commit) can do
+  anything you can. Read the diff before running anything on the host, or run it in the container
+  only. The same holds for commits Claude makes: it could commit a change to `.devcontainer` even
+  though it cannot write the files, which a later checkout on the host would bring in; look at
+  `git diff` of `.devcontainer` before reopening the container.
+- **The repository is writable.** Claude can rewrite branches and other worktrees' refs in the
+  shared `.git` (the reflog keeps the old commits) and delete files of the checkout. Keep pushed
+  backups.
+- **The allowed hosts are channels.** Data can leave to them: to the Anthropic API (inherent), or
+  to GitHub only with credentials, which the container has none of. Its own credentials are the
+  sign-in of Claude Code, readable in the container. Anything Claude reads from the allowed hosts
+  (a repository, a crate, docs) may try to instruct it (prompt injection); with no secrets and a
+  closed network, the damage is limited to the checkout.
+- **claude.ai connectors** (Gmail, Drive, ...) would be a way out the proxy cannot see, since they
+  run through Anthropic; the managed settings turn them off, and `mcp-proxy.anthropic.com` is not
+  allowed either.
+- **Containers are not VMs.** The kernel is shared; a kernel exploit escapes. For a stronger
+  boundary run Docker in a VM, or use gVisor (`runtime: runsc` in `compose.yaml`).

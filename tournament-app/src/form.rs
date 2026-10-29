@@ -47,7 +47,8 @@ pub struct FormView {
     pub fields: Vec<FormField>,
     /// What is wrong with the answers that no field in particular fixes.
     pub issues: Vec<Text>,
-    /// Whether nothing is wrong with the answers, so that a phase can be played with them.
+    /// Whether nothing is wrong with the answers, so that a phase can be played with them, and
+    /// every number entered was taken.
     pub complete: bool,
 }
 
@@ -335,7 +336,7 @@ impl PhaseForm {
         }
         FormView {
             fields,
-            complete: issues.is_empty(),
+            complete: issues.is_empty() && self.rejected.is_empty(),
             issues: unplaced,
         }
     }
@@ -351,7 +352,8 @@ impl PhaseForm {
     /// Answers the field at `path`, which takes a number, with the number `entered`, as an operator
     /// typed it: with a point or a comma before its decimals, possibly with an exponent (`1e3`).
     /// Something else, nothing, or a number the field does not take, leaves the answer as it was,
-    /// and the field shows what was entered with why it was not taken until the next change.
+    /// and the field shows what was entered with why it was not taken until the next change other
+    /// than entering a number; meanwhile the form is not [complete](FormView::complete).
     ///
     /// # Errors
     /// Returns an error if there is no such field, or it takes no number.
@@ -366,11 +368,17 @@ impl PhaseForm {
         self.rejected.retain(|rejected| rejected.path != *path);
         let out_of_range = |range| with_range(Text::new("issue-out-of-range"), range);
         let problem = match number(entered, range) {
-            Ok(number) => match self.change(path, |draft| draft.set(path, number)) {
-                Ok(()) => return Ok(()),
-                Err(ConfigError::OutOfRange { allowed, .. }) => out_of_range(allowed),
-                Err(error) => return Err(error),
-            },
+            Ok(number) => {
+                // a number moves no field, so what other number fields did not take stays
+                let others = std::mem::take(&mut self.rejected);
+                let changed = self.change(path, |draft| draft.set(path, number));
+                self.rejected = others;
+                match changed {
+                    Ok(()) => return Ok(()),
+                    Err(ConfigError::OutOfRange { allowed, .. }) => out_of_range(allowed),
+                    Err(error) => return Err(error),
+                }
+            }
             Err(NotTaken::OutOfRange) => out_of_range(range),
             Err(NotTaken::NoNumber) => {
                 Text::new("issue-not-a-number").with("entered", entered.trim())
@@ -382,6 +390,21 @@ impl PhaseForm {
             problem,
         });
         Ok(())
+    }
+
+    /// Why the field at `path`, which takes a number, would not take `entered`, as
+    /// [`Self::enter`] would show it, e.g. while it is being typed; `None` if it would take it.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, or it takes no number.
+    pub fn issue_entering(&self, path: &Path, entered: &str) -> Result<Option<Text>, ConfigError> {
+        let mut form = self.clone();
+        form.enter(path, entered)?;
+        Ok(form
+            .rejected
+            .into_iter()
+            .find(|rejected| rejected.path == *path)
+            .map(|rejected| rejected.problem))
     }
 
     /// Answers the field at `path`, which may be left without an answer, if `answered`, or else

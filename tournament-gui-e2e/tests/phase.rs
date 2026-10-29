@@ -94,6 +94,39 @@ async fn a_number_not_taken_is_shown_with_why() {
     .await;
 }
 
+/// A number the field does not take keeps the phase from being added, rather than the answer
+/// before it being kept unnoticed: why shows while it is typed, and the focus goes to the field.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_number_not_taken_keeps_the_phase_from_being_added() {
+    run_in_new_competition(async |gui| {
+        gui.type_into("metrics[1].points_for_win", "x").await?;
+        gui.expect_issues(&["“x” is no number."]).await?;
+        gui.type_into("metrics[1].points_for_win", "-1").await?;
+
+        gui.expect_issues(&["This takes a number of at least 0."])
+            .await?;
+        gui.click("Add phase").await?;
+        gui.expect_phase(&[]).await?;
+        gui.expect_focus_on_invalid("metrics[1].points_for_win")
+            .await?;
+        gui.expect_entered("metrics[1].points_for_win", "-1")
+            .await?;
+        gui.type_into("metrics[1].points_for_win", "3").await?;
+        gui.expect_issues(&[]).await?;
+        gui.click("Add phase").await?;
+        gui.expect_phase(&[
+            "Round robin",
+            "More points, more Sonneborn-Berger",
+            "Win-draw-loss record",
+            "Points",
+            "Sonneborn-Berger",
+        ])
+        .await
+    })
+    .await;
+}
+
 /// Leaving a number with Tab focuses the button of what is said about the next field, whose text
 /// shows below it rather than over why the number was not taken.
 #[tokio::test]

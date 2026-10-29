@@ -220,7 +220,8 @@ fn Field(form: Signal<PhaseForm>, field: FormField, disabled: bool) -> Element {
                     keyboard: if range.min() < 0 { "text" } else { "numeric" },
                     hint: tr.text(&hint),
                     about,
-                    {issues}
+                    issues: field.issues,
+                    warnings: field.warnings,
                 }
             }
         }
@@ -239,7 +240,8 @@ fn Field(form: Signal<PhaseForm>, field: FormField, disabled: bool) -> Element {
                     keyboard: if negative { "text" } else { "decimal" },
                     hint: tr.text(&hint),
                     about,
-                    {issues}
+                    issues: field.issues,
+                    warnings: field.warnings,
                 }
             }
         }
@@ -302,8 +304,9 @@ fn Field(form: Signal<PhaseForm>, field: FormField, disabled: bool) -> Element {
 }
 
 /// A field taking a number, entered as text and taken once the operator leaves the field, with
-/// what is said about it, `about`, next to its label. `keyboard` is the `inputmode` of the input,
-/// the keyboard a touch screen shows.
+/// what is said about it, `about`, next to its label, and its `issues` and `warnings` below it.
+/// `keyboard` is the `inputmode` of the input, the keyboard a touch screen shows. While a number is
+/// typed, the issues are why the field would not take it.
 ///
 /// The input is a text: one of the type `number` hands over nothing for what it does not read as
 /// a number, e.g. `0,5` where the browser expects a point, so that the form could not say what was
@@ -319,10 +322,23 @@ fn NumberField(
     hint: String,
     disabled: bool,
     about: Element,
-    children: Element,
+    issues: Vec<Text>,
+    warnings: Vec<Text>,
 ) -> Element {
-    // what is typed, if anything, taken on Enter as well, which does not submit the form
+    // what is typed and not taken yet, if anything, taken on Enter as well, which does not submit
+    // the form
     let mut typed = use_signal(|| None::<String>);
+    let issues = match &*typed.read() {
+        Some(typed) => form
+            .read()
+            .issue_entering(&path, typed)
+            .ok()
+            .flatten()
+            .into_iter()
+            .collect(),
+        None => issues,
+    };
+    let invalid = !issues.is_empty();
     let take = path.clone();
     rsx! {
         // on a grid of a column of labels and one of inputs, the numbers it takes below its input
@@ -337,8 +353,9 @@ fn NumberField(
                 id: "{id}",
                 inputmode: keyboard,
                 autocomplete: "off",
-                value: value.unwrap_or_default(),
+                value: typed().or(value).unwrap_or_default(),
                 disabled,
+                aria_invalid: invalid.then_some("true"),
                 aria_describedby: "{id}-hint {id}-description {id}-issues",
                 oninput: move |event| typed.set(Some(event.value())),
                 onkeydown: move |event| {
@@ -349,10 +366,14 @@ fn NumberField(
                         }
                     }
                 },
-                onchange: move |event| _ = form.write().enter(&path, &event.value()),
+                onchange: move |event| {
+                    _ = form.write().enter(&path, &event.value());
+                    typed.set(None);
+                },
             }
             span { class: "hint", id: "{id}-hint", {capitalized(&hint)} }
-            {children}
+            Issues { id: "{id}-issues", issues }
+            Warnings { id: "{id}-warnings", warnings }
         }
     }
 }
@@ -846,13 +867,13 @@ pub fn focus_later(selectors: &[&str]) {
     ));
 }
 
-/// Moves the focus to the first list of issues in the form whose element has the id `form`,
-/// scrolled into the middle of the screen, so that the operator sees and hears what keeps the
-/// phase from being played.
+/// Moves the focus to the first field marked as invalid or list of issues in the form whose element
+/// has the id `form`, whichever comes first, scrolled into the middle of the screen, so that the
+/// operator sees and hears what keeps the phase from being played.
 fn focus_first_issue(form: &str) {
     _ = document::eval(&format!(
         r##"
-        const issue = document.querySelector("#{form} .issues");
+        const issue = document.querySelector("#{form} [aria-invalid=true], #{form} .issues");
         issue?.scrollIntoView({{ block: "center" }});
         issue?.focus({{ preventScroll: true }});
         "##

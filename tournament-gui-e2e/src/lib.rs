@@ -421,6 +421,22 @@ impl Gui {
             .await
     }
 
+    /// Waits until the focus is on the field at `path` of the form of the phase, marked as invalid
+    /// (`aria-invalid`).
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_on_invalid(&self, path: &str) -> WebDriverResult<()> {
+        let id = field_id(path);
+        self.page
+            .expect(
+                By::Css(format!("#{id}:focus[aria-invalid=true]")),
+                |query| query,
+                &format!("the focus on the field {path} marked as invalid"),
+            )
+            .await
+    }
+
     /// Waits until the focus is in the item labelled `label` of the list at `path` of the form of
     /// the phase whose order matters, e.g. on a button moving it.
     ///

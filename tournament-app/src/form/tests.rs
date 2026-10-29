@@ -281,7 +281,8 @@ fn a_number_entered_is_taken_with_a_point_or_a_comma() {
 }
 
 /// What a field does not take leaves its answer as it was, and the field shows what was entered
-/// with why it was not taken.
+/// with why it was not taken; until then the form is not complete, so that the answer before is
+/// not played unnoticed.
 #[test]
 fn a_number_not_taken_is_shown_with_why() {
     let mut form = new_form();
@@ -305,7 +306,7 @@ fn a_number_not_taken_is_shown_with_why() {
         english_all(&field(&view, "metrics[1].points_for_win").issues),
         ["“many” is no number"]
     );
-    assert!(view.complete, "the answers stay as they were");
+    assert!(!view.complete);
 
     form.enter(&path("format.rounds"), "7").unwrap();
     let view = form.view();
@@ -318,6 +319,31 @@ fn a_number_not_taken_is_shown_with_why() {
             ..
         }
     ));
+    assert_eq!(
+        english_all(&field(&view, "metrics[1].points_for_win").issues),
+        ["“many” is no number"],
+        "a number taken elsewhere leaves what this field did not take"
+    );
+    assert!(!view.complete);
+    form.enter(&path("metrics[1].points_for_win"), "2").unwrap();
+    assert!(form.view().complete);
+}
+
+/// What is being typed is checked as entering it would, without taking it.
+#[test]
+fn a_number_being_typed_is_checked_without_being_taken() {
+    let form = new_form();
+    let win = path("metrics[1].points_for_win");
+
+    let issue = form.issue_entering(&win, "-1").unwrap();
+
+    assert_eq!(
+        issue.as_ref().map(english).as_deref(),
+        Some("this takes a number of at least 0")
+    );
+    assert_eq!(form.issue_entering(&win, "2").unwrap(), None);
+    let view = form.view();
+    assert!(view.complete && field(&view, "metrics[1].points_for_win").issues.is_empty());
 }
 
 /// What is not taken says why in the operator's terms: a number of another kind or size by the

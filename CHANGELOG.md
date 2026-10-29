@@ -17,6 +17,12 @@ a file whose `"format"` changes is migrated, not refused.
   under the old name are not carried over; export them there and import them
   here.
 
+### Fixed
+
+- A number a field of the phase does not take keeps the phase from being added
+  or saved, rather than the number before it being kept unnoticed; why shows
+  while it is typed, and the focus goes to the field.
+
 ## [0.1.0] - 2026-10-28
 
 The first release, hosted at <https://blacktemplar.github.io/matchwright/>.

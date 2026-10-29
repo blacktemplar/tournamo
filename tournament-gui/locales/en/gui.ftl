@@ -138,7 +138,7 @@ yes = yes
 no = no
 edit-phase = Edit phase
 edit-phase-title = Edit the phase
-edit-phase-description = The phase is played as if it had been added this way. The results reported stay as long as it still schedules their matches.
+edit-phase-description = The results reported so far stay. A change that does not fit them is refused.
 save-changes = Save changes
 cancel = Cancel
 
@@ -251,6 +251,11 @@ announce-added-entrant = Added { $name }.
 announce-removed-entrant = Removed { $name }.
 announce-added-phase = The phase is added.
 announce-edited-phase = The phase is changed.
+# $count: the matches with a result, at least one
+announce-results-stay = { $count ->
+        [one] The result reported stays.
+       *[other] The { $count } results reported stay.
+    }
 # $count: the matches without a result
 announce-started = Started: { $count ->
         [one] one match

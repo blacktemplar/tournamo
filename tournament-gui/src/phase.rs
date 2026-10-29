@@ -130,7 +130,14 @@ fn EditPhase() -> Element {
                             Ok(edited) => {
                                 editing.set(None);
                                 if edited {
-                                    ctx.announce(Announcement::EditedPhase);
+                                    let results = ctx
+                                        .session
+                                        .read()
+                                        .rounds()
+                                        .iter()
+                                        .map(|summary| summary.matches - summary.open)
+                                        .sum();
+                                    ctx.announce(Announcement::EditedPhase(results));
                                 }
                             }
                             Err(refused) => error.set(Some(refused)),

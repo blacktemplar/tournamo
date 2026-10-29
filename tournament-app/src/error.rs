@@ -79,8 +79,15 @@ pub enum EditPhaseError {
     /// No phase can be built from the draft, see [`AddPhaseError::Invalid`].
     #[error("the phase cannot be played this way; the form shows what to change")]
     Invalid(Vec<Issue>),
-    /// The edited phase does not fit a change made after the phase was added, e.g. a result
-    /// reported for a match the edited format does not schedule.
+    /// The edited phase does not play the match of this number (see
+    /// [`MatchRow::number`](crate::view::MatchRow::number)) as it was reported, e.g. since its
+    /// format does not schedule it; reopening it allows the edit.
+    #[error(
+        "the phase changed this way does not play match {0}, which has a result; reopen that match \
+         first to change the phase this way"
+    )]
+    ResultDoesNotFit(usize),
+    /// The edited phase does not fit another change made after the phase was added.
     #[error("the phase cannot be changed this way, since a later change no longer fits it: {0}")]
     DoesNotFit(TransitionError),
 }
@@ -270,6 +277,9 @@ impl Message for EditPhaseError {
         match self {
             Self::NoPhase(no_phase) => no_phase.text(),
             Self::Invalid(_) => Text::new("error-invalid-phase"),
+            Self::ResultDoesNotFit(number) => {
+                Text::new("error-result-does-not-fit").with("number", *number)
+            }
             Self::DoesNotFit(error) => {
                 Text::new("error-phase-change-does-not-fit").with("reason", error.to_string())
             }

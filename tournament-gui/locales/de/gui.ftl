@@ -111,7 +111,7 @@ yes = ja
 no = nein
 edit-phase = Phase bearbeiten
 edit-phase-title = Die Phase bearbeiten
-edit-phase-description = Die Phase wird gespielt, als wäre sie so hinzugefügt worden. Die gemeldeten Ergebnisse bleiben, solange sie deren Spiele noch ansetzt.
+edit-phase-description = Die bisher gemeldeten Ergebnisse bleiben. Eine Änderung, die nicht zu ihnen passt, wird abgelehnt.
 save-changes = Änderungen speichern
 cancel = Abbrechen
 
@@ -195,6 +195,10 @@ announce-added-entrant = { $name } hinzugefügt.
 announce-removed-entrant = { $name } entfernt.
 announce-added-phase = Die Phase ist hinzugefügt.
 announce-edited-phase = Die Phase ist geändert.
+announce-results-stay = { $count ->
+        [one] Das gemeldete Ergebnis bleibt.
+       *[other] Die { $count } gemeldeten Ergebnisse bleiben.
+    }
 announce-started = Gestartet: { $count ->
         [one] ein Spiel ist
        *[other] { $count } Spiele sind

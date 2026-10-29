@@ -69,6 +69,9 @@ a file whose `"format"` changes is migrated, not refused.
 - Why an action was refused is gone once the next action is done, also on the
   list of competitions and in a dialog, and no longer said again when another
   language is chosen.
+- A change of the phase refused for a result it does not fit names the match of
+  that result and says that reopening it allows the change. A change that keeps
+  results says how many, and the dialog says in plain words that results stay.
 
 ## [0.1.0] - 2026-10-28
 

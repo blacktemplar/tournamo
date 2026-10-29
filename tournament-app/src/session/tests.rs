@@ -1592,7 +1592,7 @@ fn rounds_are_added_to_random_rounds_after_a_result() {
 }
 
 /// The teams of a Monster DYP are pairs, so it never schedules the match of single entrants whose
-/// result was reported.
+/// result was reported, which the refusal names.
 #[test]
 fn an_edit_a_reported_result_does_not_fit_is_refused() {
     let mut session = Given::new().started();
@@ -1604,7 +1604,7 @@ fn an_edit_a_reported_result_does_not_fit_is_refused() {
     let result = session.edit_phase(&draft);
 
     assert!(
-        matches!(result, Err(EditPhaseError::DoesNotFit(_))),
+        matches!(result, Err(EditPhaseError::ResultDoesNotFit(1))),
         "{result:?}"
     );
     assert_eq!(matches(&session)[0].result, Some(MatchResult::AWins));
@@ -1663,7 +1663,7 @@ fn a_finished_knockout_is_not_changed_to_a_round_robin() {
     let result = session.edit_phase(&session.phase_draft(RoundRobin::ID).unwrap());
 
     assert!(
-        matches!(result, Err(EditPhaseError::DoesNotFit(_))),
+        matches!(result, Err(EditPhaseError::ResultDoesNotFit(_))),
         "{result:?}"
     );
     assert_eq!(reported(&session), before);

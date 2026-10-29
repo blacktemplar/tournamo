@@ -13,6 +13,7 @@ error-invalid-phase = the phase cannot be played this way; the form shows what t
 error-phase-already-added = the competition already has a phase, and only one is supported
 error-phase-added-after-start = the competition has started, so no phase can be added anymore
 error-no-phase = the competition has no phase yet
+error-result-does-not-fit = the phase changed this way does not play match { $number }, which has a result; reopen that match first to change the phase this way
 # $reason: in English, from the engine
 error-phase-change-does-not-fit = the phase cannot be changed this way, since a later change no longer fits it: { $reason }
 error-started-already = the competition has started already

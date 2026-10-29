@@ -507,7 +507,8 @@ async fn the_phase_is_edited_after_the_start_in_a_dialog() {
         gui.click("Save changes").await?;
 
         gui.expect_no_dialog().await?;
-        gui.expect_announcement("The phase is changed.").await?;
+        gui.expect_announcement("The phase is changed. The result reported stays.")
+            .await?;
         gui.expect_phase(&[
             "Round robin",
             "More Sonneborn-Berger, more points",
@@ -546,8 +547,8 @@ async fn an_edit_a_result_does_not_fit_is_refused_in_the_dialog() {
         gui.click("Save changes").await?;
 
         gui.expect_dialog_error(
-            "The phase cannot be changed this way, since a later change no longer fits it: match \
-             does not exist.",
+            "The phase changed this way does not play match 1, which has a result; reopen that \
+             match first to change the phase this way.",
         )
         .await?;
         gui.click("Cancel").await?;
@@ -587,6 +588,8 @@ async fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
         gui.click("Save changes").await?;
 
         gui.expect_no_dialog().await?;
+        gui.expect_announcement("The phase is changed. The 2 results reported stay.")
+            .await?;
         gui.expect_phase(&[
             "Round robin",
             "More points, more Sonneborn-Berger",
@@ -598,6 +601,32 @@ async fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
         gui.click("Matches & standings").await?;
         gui.choose_round("Round 1").await?;
         gui.expect_finished(&["1", "2"]).await
+    })
+    .await;
+}
+
+/// The round the operator chose stays shown while they edit the phase in its view, rather than
+/// the first open round.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_round_chosen_stays_shown_after_the_phase_is_edited() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        gui.choose_round("Round 2 (2 open)").await?;
+        gui.expect_matches(&["3", "4"]).await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+
+        gui.click_labelled("Move more Sonneborn-Berger up").await?;
+        gui.click("Save changes").await?;
+
+        gui.expect_no_dialog().await?;
+        gui.click("Matches & standings").await?;
+        gui.expect_matches(&["3", "4"]).await
     })
     .await;
 }

@@ -577,8 +577,8 @@ impl Session {
     ///
     /// # Errors
     /// Returns an error if the competition has no phase, the plugins `draft` configures do not fit
-    /// together, or a change made after the phase was added, e.g. a reported result, does not fit
-    /// the edited phase.
+    /// together, or a change made after the phase was added, e.g. a reported result
+    /// ([`EditPhaseError::ResultDoesNotFit`]), does not fit the edited phase.
     pub fn edit_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<bool, EditPhaseError> {
         let phase_id = self.phase().ok_or(NoPhase)?.id();
         let plugins = completed(draft).map_err(EditPhaseError::Invalid)?;
@@ -587,9 +587,10 @@ impl Session {
                 machine.reconfigure_phase(history, phase_id, plugins)
             })
             .map_err(|error| match error {
-                ReconfigurePhaseError::Rejected(error) => {
-                    EditPhaseError::DoesNotFit(rejection(error))
-                }
+                ReconfigurePhaseError::Rejected(error) => match self.reported_number(&error) {
+                    Some(number) => EditPhaseError::ResultDoesNotFit(number),
+                    None => EditPhaseError::DoesNotFit(rejection(error)),
+                },
                 ReconfigurePhaseError::NotAdded => {
                     unreachable!("the phase of a session is added by an `AddPhase` in effect")
                 }
@@ -1120,7 +1121,7 @@ impl Session {
 
     /// The number of the match whose result the entry of the log that `error` names reports, if it
     /// is one reporting a result of a match of the phase, e.g. the later result an undo refused
-    /// would no longer apply to.
+    /// would no longer apply to, or the one an edit of the phase refused does not fit.
     fn reported_number(&self, error: &StateMachineError) -> Option<usize> {
         let StateMachineError::Transition(id, _) = error else {
             return None;

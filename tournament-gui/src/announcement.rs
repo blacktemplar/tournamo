@@ -16,7 +16,8 @@ pub enum Announcement {
     AddedEntrant(EntrantRow),
     RemovedEntrant(EntrantRow),
     AddedPhase,
-    EditedPhase,
+    /// The phase changed, with the number of matches that have a result after the change.
+    EditedPhase(usize),
     /// The start, with the number of matches it scheduled.
     Started(usize),
     Reported(Reported),
@@ -37,7 +38,13 @@ impl Announcement {
                 t!(tr, "announce-removed-entrant", name = entrant(removed))
             }
             Self::AddedPhase => tr.get("announce-added-phase"),
-            Self::EditedPhase => tr.get("announce-edited-phase"),
+            Self::EditedPhase(results) => {
+                let mut sentences = vec![tr.get("announce-edited-phase")];
+                if *results > 0 {
+                    sentences.push(t!(tr, "announce-results-stay", count = *results));
+                }
+                sentences.join(" ")
+            }
             Self::Started(matches) => t!(tr, "announce-started", count = *matches),
             Self::Reported(reported) => {
                 let row = &reported.row;

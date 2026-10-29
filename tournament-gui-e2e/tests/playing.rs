@@ -85,6 +85,32 @@ async fn the_controls_are_named_for_screen_readers() {
     .await;
 }
 
+/// What a result did shows in a toast, and neither it nor the finish moves the matches, so that
+/// the next tap lands where it was aimed.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_and_the_finish_move_nothing() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
+        gui.click("By round").await?;
+        let top = gui.page.top_of("#match-list").await?;
+
+        gui.click("Draw").await?;
+
+        gui.expect_toast("Match 1: Draw.").await?;
+        assert_eq!(gui.page.top_of("#match-list").await?, top);
+        gui.click_labelled("Next round").await?;
+        gui.click("Draw").await?;
+        gui.click_labelled("Next round").await?;
+        gui.click("Draw").await?;
+        gui.expect_winners(Some("Tied for first: Alice, Bob, Carol"))
+            .await?;
+        assert_eq!(gui.page.top_of("#match-list").await?, top);
+        Ok(())
+    })
+    .await;
+}
+
 /// A double click does once what one click does, without a refusal saying it is done already.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

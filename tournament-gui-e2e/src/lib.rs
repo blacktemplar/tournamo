@@ -1378,6 +1378,28 @@ impl Gui {
             .await
     }
 
+    /// Waits until the page shows what the last action did, `text`, in a toast at the bottom of
+    /// the window, which takes no room of the page.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_toast(&self, text: &str) -> WebDriverResult<()> {
+        self.page.expect_texts(By::Css(".toast"), &[text]).await
+    }
+
+    /// Unfolds the warning that the browser may not keep the competitions, which is folded to its
+    /// first line until the operator unfolds it.
+    pub async fn unfold_storage_warning(&self) -> WebDriverResult<()> {
+        self.driver
+            .query(By::Css(".warning details:not([open]) summary"))
+            .first()
+            .await?
+            .click()
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Waits until the page announces that the last action did `text`.
     ///
     /// # Panics

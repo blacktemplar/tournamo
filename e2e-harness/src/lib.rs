@@ -665,6 +665,24 @@ impl Page {
         Ok(())
     }
 
+    /// Where the top of the first element the CSS selector `selector` finds is on the page, in CSS
+    /// pixels from the page's top, whatever is scrolled.
+    ///
+    /// # Panics
+    /// Panics if there is no such element.
+    pub async fn top_of(&self, selector: &str) -> WebDriverResult<f64> {
+        let top = self
+            .driver
+            .execute(
+                "const element = document.querySelector(arguments[0]);
+                return element ? element.getBoundingClientRect().top + window.scrollY : null;",
+                vec![serde_json::json!(selector)],
+            )
+            .await?
+            .convert::<Option<f64>>()?;
+        Ok(top.unwrap_or_else(|| panic!("{selector} must find an element")))
+    }
+
     /// Whether the page is higher than its window, so that it scrolls, and how wide its body is
     /// laid out, without the room of a scroll bar, in CSS pixels.
     pub async fn scrolling_and_width(&self) -> WebDriverResult<(bool, f64)> {

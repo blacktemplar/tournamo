@@ -309,11 +309,17 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
             if !changes {
                 p { class: "notice", role: "status", {tr.get(READ_ONLY)} }
             }
-            // always on the page, so that a screen reader notices when its text changes
-            p { class: "announcement", role: "status",
+            // always on the page, so that a screen reader notices when its text changes, and
+            // hidden, so that it takes no room; the eye gets it from the toast, which the screen
+            // reader does not hear a second time
+            p { class: "announcement visually-hidden", role: "status",
                 if let Some(announcement) = ctx.announcement.read().as_ref() {
                     {announcement.text(&tr)}
                 }
+            }
+            // made anew for each announcement, so that it shows again
+            for text in ctx.announcement.read().iter().map(|announcement| announcement.text(&tr)) {
+                div { key: "{text}", class: "toast", aria_hidden: "true", "{text}" }
             }
             if started {
                 Play {}
@@ -413,11 +419,7 @@ fn Play() -> Element {
         }
     };
     let columns_shown = matches!(current, Column::Matches | Column::Standings);
-    let winners = ctx.session.read().winners();
     rsx! {
-        if let Some(winners) = &winners {
-            Finished { winners: winners.clone() }
-        }
         div {
             class: "segmented view-switch",
             role: "group",
@@ -509,7 +511,7 @@ fn local_storage() -> Option<web_sys::Storage> {
 
 /// What the screen says once every match is played: who won, or who is tied for first.
 #[component]
-fn Finished(winners: Vec<Vec<EntrantRow>>) -> Element {
+pub fn Finished(winners: Vec<Vec<EntrantRow>>) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let names: Vec<Vec<Option<String>>> = winners

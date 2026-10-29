@@ -16,8 +16,14 @@ use tournament_engine::{MatchId, MatchResult};
 use wasm_bindgen::JsCast as _;
 
 use crate::{
-    announcement::Announcement, capitalized, competition::Ctx, i18n::t, icons, phase::answer,
-    result_text, team_name, toggletip::Toggletip,
+    announcement::Announcement,
+    capitalized,
+    competition::{Ctx, Finished},
+    i18n::t,
+    icons,
+    phase::answer,
+    result_text, team_name,
+    toggletip::Toggletip,
 };
 
 /// The list of matches shown.
@@ -667,7 +673,13 @@ pub fn Standings() -> Element {
             (header, about, id)
         })
         .collect();
+    // above the standings rather than above the matches, which it would push down below the tap
+    // that finished them
+    let winners = ctx.session.read().winners();
     rsx! {
+        if let Some(winners) = winners {
+            Finished { winners }
+        }
         section { class: "card", aria_labelledby: "standings",
             h2 { id: "standings", {tr.get("standings")} }
             // scrolls sideways if its columns do not fit, the names staying in sight

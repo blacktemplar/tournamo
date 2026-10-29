@@ -61,6 +61,11 @@ a file whose `"format"` changes is migrated, not refused.
   in the order of its criteria, and the matches played last; on a phone the
   rank and the name stay in sight while the rest scrolls. The metrics of an
   entrant yet to play recede.
+- The warning that the browser may not keep the competitions takes one line
+  until unfolded, with buttons big enough to tap. What an action did shows in a
+  toast at the bottom for a while, rather than in a line that pushed the page
+  down, and the banner of the winners shows above the standings, so that the
+  matches no longer move when the last result is reported.
 - Why an action was refused is gone once the next action is done, also on the
   list of competitions and in a dialog, and no longer said again when another
   language is chosen.

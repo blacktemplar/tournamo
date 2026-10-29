@@ -56,6 +56,7 @@ async fn the_page_can_be_installed() {
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_warning_that_the_browser_may_not_keep_competitions_offers_to_export() {
     run_in_new_competition(async |gui| {
+        gui.unfold_storage_warning().await?;
         gui.expect_storage_warning(&NOT_PERSISTED).await?;
 
         gui.click("Export this competition").await?;
@@ -66,10 +67,11 @@ async fn the_warning_that_the_browser_may_not_keep_competitions_offers_to_export
     .await;
 }
 
-/// Folded once read, the warning takes one line, on the next visit as well, which unfolds it again.
+/// The warning takes one line, which unfolds it, so that it leaves a phone's screen to the
+/// competition; unfolded, it stays so on the next visit, until folded again.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn the_warning_that_the_browser_may_not_keep_competitions_stays_folded() {
+async fn the_warning_that_the_browser_may_not_keep_competitions_takes_one_line() {
     run_in_new_competition(async |gui| {
         let first_line = || async {
             gui.page
@@ -80,16 +82,16 @@ async fn the_warning_that_the_browser_may_not_keep_competitions_stays_folded() {
                 .click()
                 .await
         };
-        gui.expect_storage_warning(&NOT_PERSISTED).await?;
+        gui.expect_storage_warning(&NOT_PERSISTED[..1]).await?;
 
         first_line().await?;
 
-        gui.expect_storage_warning(&NOT_PERSISTED[..1]).await?;
+        gui.expect_storage_warning(&NOT_PERSISTED).await?;
         gui.page.reload().await?;
         gui.expect_open(COMPETITION).await?;
-        gui.expect_storage_warning(&NOT_PERSISTED[..1]).await?;
+        gui.expect_storage_warning(&NOT_PERSISTED).await?;
         first_line().await?;
-        gui.expect_storage_warning(&NOT_PERSISTED).await
+        gui.expect_storage_warning(&NOT_PERSISTED[..1]).await
     })
     .await;
 }
@@ -98,7 +100,7 @@ async fn the_warning_that_the_browser_may_not_keep_competitions_stays_folded() {
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_warning_that_the_browser_may_not_keep_competitions_can_be_dismissed_for_good() {
     run_in_new_competition(async |gui| {
-        gui.expect_storage_warning(&NOT_PERSISTED).await?;
+        gui.unfold_storage_warning().await?;
 
         gui.click("Don’t show again").await?;
 

@@ -52,8 +52,8 @@ pub fn Detail(detail: String) -> Element {
 /// browser's answer, so the warning offers what helps: exporting, installing the page as an app
 /// (after which Chromium usually keeps it), and not showing it again.
 ///
-/// Its first line folds it, so that it takes little room on every screen once read, and unfolds it
-/// again; the browser remembers which.
+/// It is folded to its first line, so that it takes little room on every screen, a phone's too,
+/// which unfolds it, and folds it again; the browser remembers which.
 #[component]
 fn StorageWarning(export: Option<EventHandler>) -> Element {
     let mut page = use_context::<Page>();
@@ -103,22 +103,22 @@ fn StorageWarning(export: Option<EventHandler>) -> Element {
     }
 }
 
-/// Where the browser remembers that the operator folded the warning.
-const WARNING_FOLDED: &str = "tournamo.storage-warning-folded";
+/// Where the browser remembers that the operator unfolded the warning.
+const WARNING_UNFOLDED: &str = "tournamo.storage-warning-unfolded";
 
 fn warning_folded() -> bool {
     local_storage()
-        .and_then(|storage| storage.get_item(WARNING_FOLDED).ok().flatten())
-        .is_some()
+        .and_then(|storage| storage.get_item(WARNING_UNFOLDED).ok().flatten())
+        .is_none()
 }
 
 fn remember_folded(folded: bool) {
-    // without local storage, the warning is unfolded on the next screen
+    // without local storage, the warning is folded on the next screen
     if let Some(storage) = local_storage() {
         _ = if folded {
-            storage.set_item(WARNING_FOLDED, "true")
+            storage.remove_item(WARNING_UNFOLDED)
         } else {
-            storage.remove_item(WARNING_FOLDED)
+            storage.set_item(WARNING_UNFOLDED, "true")
         };
     }
 }

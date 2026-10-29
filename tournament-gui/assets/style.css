@@ -491,11 +491,49 @@ footer a,
   padding: 0 var(--space-3);
 }
 
-/* kept in place while empty, so that the page does not move when something is announced */
-.announcement {
-  min-height: 1.5em;
-  margin: 0 0 var(--space-3);
-  color: var(--text-muted);
+/* big enough to be tapped, as every control */
+@media (pointer: coarse) {
+  .warning-buttons button {
+    min-height: var(--control);
+  }
+}
+
+/* What was just done, over the bottom of the page, which it does not move, and gone after a while;
+ * in the colours of the page's text and surface, swapped. It takes no tap, so that it never
+ * catches one meant for what is below it. */
+.toast {
+  position: fixed;
+  z-index: 30;
+  bottom: var(--space-4);
+  left: 50%;
+  max-width: min(32rem, calc(100vw - 2 * var(--space-4)));
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  animation: toast 4s ease-in forwards;
+  background: var(--text);
+  box-shadow: var(--shadow);
+  color: var(--surface);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+@keyframes toast {
+  0%,
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation-timing-function: step-end;
+  }
 }
 
 /* Cards and columns */

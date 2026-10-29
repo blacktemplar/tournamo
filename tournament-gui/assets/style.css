@@ -1225,9 +1225,15 @@ ul.summary-items {
   content: "✓ ";
 }
 
-/* a match with a result recedes, so that those still to play stand out */
+/* the loser recedes behind the winner */
+.match:has(.winner) .side:not(.winner) {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* a match with a result recedes, so that those still to play stand out; still a card with a
+ * solid border, where a dashed one would be a placeholder, as in the bracket */
 .match:has(.result) {
-  border-style: dashed;
   background: var(--background);
 }
 
@@ -1282,17 +1288,91 @@ ul.summary-items {
   grid-row: 1;
 }
 
-/* on a phone below the pairing, which takes the whole line, so that names do not break within a
- * word */
+/* On a phone the sides are stacked, so that each name has the line beside the number to itself
+ * and breaks only between words, unless a word is wider than the line: the number, then each
+ * side's name with its button, the draw below them; once played, the button reopening it beside
+ * both names, the draw said below them. */
 @media (width < 30rem) {
+  .match,
   .match.finished {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    padding: var(--space-2);
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .match.finished .report {
-    justify-content: center;
-    grid-column: 1 / -1;
+  .match button {
+    padding-inline: var(--space-3);
+  }
+
+  .match .number {
+    min-width: 1.5rem;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .match .side {
+    overflow-wrap: break-word;
+  }
+
+  .match .side.a,
+  .match .side.b {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .match .side.b {
     grid-row: 2;
+  }
+
+  .match .meta {
+    justify-content: start;
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .match .report,
+  .match.finished .report {
+    display: contents;
+  }
+
+  .match .win,
+  .match .win.a,
+  .match .win.b {
+    width: auto;
+    grid-column: 3;
+    justify-self: stretch;
+  }
+
+  .match .win.a {
+    grid-row: 1;
+  }
+
+  .match .win.b {
+    grid-row: 2;
+  }
+
+  .match .draw {
+    grid-column: 3;
+    grid-row: 3;
+  }
+
+  /* the names on the whole line, which no button takes once the match is played */
+  .match.finished .side.a,
+  .match.finished .side.b {
+    grid-column: 2 / -1;
+  }
+
+  .match.finished .result {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .match.finished .meta {
+    grid-row: 4;
+  }
+
+  .match.finished button {
+    grid-column: 3;
+    grid-row: 3;
   }
 }
 

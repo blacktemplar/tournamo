@@ -948,6 +948,47 @@ impl Gui {
             .await
     }
 
+    /// Checks that the first match shown with a winner looks played rather than like a
+    /// placeholder, with a solid border, and that its loser's name recedes behind the winner's:
+    /// another colour, and no bolder.
+    ///
+    /// # Panics
+    /// Panics if there is no such match, or it does not look so, with how it looks.
+    pub async fn expect_finished_card_looks_played(&self) -> WebDriverResult<()> {
+        let looks = self
+            .driver
+            .execute(
+                r##"
+                const card = document.querySelector("#match-list > li:has(.winner)");
+                if (!card) return null;
+                const style = (selector) => getComputedStyle(card.querySelector(selector));
+                const [winner, loser] = [style(".side.winner"), style(".side:not(.winner)")];
+                return {
+                    border: getComputedStyle(card).borderTopStyle,
+                    winner: [winner.color, winner.fontWeight],
+                    loser: [loser.color, loser.fontWeight],
+                };
+                "##,
+                Vec::new(),
+            )
+            .await?
+            .json()
+            .clone();
+        let played = looks["border"] == "solid"
+            && looks["winner"][0] != looks["loser"][0]
+            && looks["loser"][1]
+                .as_str()
+                .and_then(|weight| weight.parse::<u32>().ok())
+                <= looks["winner"][1]
+                    .as_str()
+                    .and_then(|weight| weight.parse().ok());
+        assert!(
+            played,
+            "a match played must have a solid border and a loser receding, but has {looks:#}"
+        );
+        Ok(())
+    }
+
     /// Waits until the stages of the matches of the round shown are `stages`, in the order of the
     /// matches, e.g. `"Semifinals"`.
     ///

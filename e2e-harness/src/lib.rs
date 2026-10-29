@@ -744,7 +744,8 @@ impl Page {
     }
 
     /// Checks that each element the CSS selector `selector` finds is at least as wide as each word
-    /// of its text, so that it breaks no word.
+    /// of its text, so that it breaks no word; a hyphen ends a word, since a line may break after
+    /// it.
     ///
     /// # Panics
     /// Panics if one is narrower, with its text, its width and the words wider than it.
@@ -763,7 +764,7 @@ impl Page {
                     measure.style.letterSpacing = style.letterSpacing;
                     const width = element.clientWidth
                         - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-                    const wider = element.textContent.split(/\s+/).filter((word) => {
+                    const wider = element.textContent.split(/\s+|(?<=-)/).filter((word) => {
                         measure.textContent = word;
                         return measure.getBoundingClientRect().width > width + 0.5;
                     });

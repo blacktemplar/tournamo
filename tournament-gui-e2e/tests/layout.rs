@@ -243,6 +243,53 @@ async fn a_match_with_a_result_breaks_no_name_within_a_word_on_a_phone() {
     .await;
 }
 
+/// On the narrowest phone, a match to play stacks its sides, each name on a line of its own
+/// beside its button, so that no name breaks within a word, and every button keeps its word, in
+/// German too.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_match_to_play_breaks_no_name_within_a_word_on_the_narrowest_phone() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(320, 740).await?;
+        for name in ["Zimmermann", "Hohenzollern-Sigmaringen", "Dieter", "Bo"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+
+        gui.page.expect_room_for_words(".match .side").await?;
+        gui.page.expect_no_sideways_scroll().await?;
+        gui.choose_language("Deutsch").await?;
+        gui.page.resize(400, 740).await?;
+        gui.page.expect_room_for_words(".match button").await
+    })
+    .await;
+}
+
+/// A match played recedes behind those to play, but stays a card of its own, with a solid border,
+/// and its loser recedes behind its winner.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_winner_of_a_match_stands_out_from_its_loser() {
+    run_in_new_competition(async |gui| {
+        start_round_robin_of(&gui, &["Alice", "Bob"]).await?;
+
+        gui.click_labelled("Alice wins").await?;
+
+        gui.expect_finished_card_looks_played().await
+    })
+    .await;
+}
+
+/// Enters `names` and starts a round robin of them.
+async fn start_round_robin_of(gui: &Gui, names: &[&str]) -> WebDriverResult<()> {
+    for name in names {
+        gui.add_entrant(name).await?;
+    }
+    gui.click("Add phase").await?;
+    gui.click("Start").await
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_standings_scroll_inside_their_card_on_a_phone() {

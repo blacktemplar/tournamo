@@ -53,6 +53,10 @@ a file whose `"format"` changes is migrated, not refused.
   with each row by its name, and the switch between the matches playable now
   and those by round by its name. Buttons showing only their icon show what
   they do under the pointer.
+- On a phone, a match stacks its sides, each name on a line of its own beside
+  its button, so that names break only between words. A match played keeps a
+  solid border, the dashed one being for placeholders, and its loser recedes
+  behind its winner.
 - Why an action was refused is gone once the next action is done, also on the
   list of competitions and in a dialog, and no longer said again when another
   language is chosen.

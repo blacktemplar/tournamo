@@ -9,7 +9,9 @@ claude.com
 platform.claude.com
 code.claude.com
 
-# Zed's Claude Agent, which Zed starts with npx
+# Zed's Claude Agent: the registry of agents, which Zed's server in the container reads, and npm,
+# from which it starts the agent with npx
+cdn.agentclientprotocol.com
 registry.npmjs.org
 
 # cargo: crates and the git dependencies

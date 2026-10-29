@@ -500,11 +500,14 @@ async fn the_phase_is_edited_after_the_start_in_a_dialog() {
         gui.expect_view("Phase").await?;
 
         gui.click("Edit phase").await?;
+        // at the first field, rather than on what is said about it, which would cover the format's
+        gui.expect_focus_on_choice("format").await?;
         gui.click_labelled("Move more Sonneborn-Berger up").await?;
         gui.page.check_accessibility().await?;
         gui.click("Save changes").await?;
 
         gui.expect_no_dialog().await?;
+        gui.expect_announcement("The phase is changed.").await?;
         gui.expect_phase(&[
             "Round robin",
             "More Sonneborn-Berger, more points",

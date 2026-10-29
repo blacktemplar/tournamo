@@ -31,6 +31,14 @@ a file whose `"format"` changes is migrated, not refused.
   nothing showing through between them, and fit on one line on the narrowest
   phones; the bar no longer shifts between screens that scroll and those that
   do not.
+- The focus no longer falls to the page: a new competition opens at the field of
+  the first entrant, the start moves to the matches, removing an entrant moves
+  to the next one, and a result reported in the bracket moves to its heading
+  rather than to the next match, where one more Enter reported it. The edit of
+  the phase opens at its format, and the question whether to delete a
+  competition at Cancel, as an alert dialog.
+- Adding or removing an entrant, adding or changing the phase and the start are
+  announced, and the announcement of the last result names who won.
 
 ## [0.1.0] - 2026-10-28
 

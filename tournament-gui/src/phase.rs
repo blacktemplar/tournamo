@@ -11,6 +11,7 @@ use tournament_app::{
 };
 
 use crate::{
+    announcement::Announcement,
     capitalized,
     competition::Ctx,
     components::{
@@ -49,6 +50,7 @@ pub fn NewPhase() -> Element {
                     return;
                 }
                 if ctx.act(|session| session.add_phase(form.read().draft())).is_some() {
+                    ctx.announce(Announcement::AddedPhase);
                     // the form is gone, and with it what had the focus
                     focus_later(&["#start:enabled", "#phase"]);
                 }
@@ -97,6 +99,9 @@ fn EditPhase() -> Element {
                 if let Ok(form) = ctx.session.peek().phase_form_to_edit() {
                     error.set(None);
                     editing.set(Some(Signal::new(form)));
+                    // the first field, rather than the first button, what is said about it,
+                    // whose text would cover the field
+                    focus_later(&["#field-format"]);
                 }
             },
             {tr.get("edit-phase")}
@@ -122,7 +127,12 @@ fn EditPhase() -> Element {
                             return;
                         }
                         match ctx.try_act(|session| session.edit_phase(form.read().draft())) {
-                            Ok(_) => editing.set(None),
+                            Ok(edited) => {
+                                editing.set(None);
+                                if edited {
+                                    ctx.announce(Announcement::EditedPhase);
+                                }
+                            }
                             Err(refused) => error.set(Some(refused)),
                         }
                     },

@@ -233,6 +233,8 @@ announce-new-matches = { $count ->
        *[other] { $count } more matches are scheduled.
     }
 announce-all-finished = Every match has a result.
+# $winners: as `winners` says it, capitalized
+announce-winners = { $winners }.
 announce-reopened = Match { $number } is open again.
 announce-unscheduled = { $count ->
         [one] The match scheduled because of its result is gone.
@@ -241,6 +243,15 @@ announce-unscheduled = { $count ->
 # $action: one of the action-… messages
 announce-undone = Undone: { $action }.
 announce-redone = Redone: { $action }.
+announce-added-entrant = Added { $name }.
+announce-removed-entrant = Removed { $name }.
+announce-added-phase = The phase is added.
+announce-edited-phase = The phase is changed.
+# $count: the matches without a result
+announce-started = Started: { $count ->
+        [one] one match
+       *[other] { $count } matches
+    } to play.
 action-add-entrant = adding { $name }
 action-remove-entrant = removing { $name }
 action-add-phase = adding the phase

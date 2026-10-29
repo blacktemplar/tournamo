@@ -160,7 +160,8 @@ pub fn Rounds() -> Element {
     rsx! {
         section { class: "card", aria_labelledby: "matches",
             div { class: "card-heading",
-                h2 { id: "matches", {tr.get("matches")} }
+                // focused at the start
+                h2 { id: "matches", tabindex: "-1", {tr.get("matches")} }
                 ResultEntryToggle { open: typing }
             }
             if typing() {

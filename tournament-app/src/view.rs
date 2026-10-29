@@ -372,8 +372,9 @@ pub struct Reported {
     pub row: MatchRow,
     /// The matches the result made the format schedule.
     pub new_matches: usize,
-    /// Every match of the phase has a result now.
-    pub all_finished: bool,
+    /// Once every match of the phase has a result, who is ranked first, as
+    /// [`Session::winners`](crate::session::Session::winners) says; `None` while a match has none.
+    pub winners: Option<Vec<Vec<EntrantRow>>>,
 }
 
 /// What undoing a result led to.

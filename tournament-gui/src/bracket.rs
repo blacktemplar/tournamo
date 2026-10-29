@@ -3,17 +3,18 @@
 //! screen reader gets.
 //!
 //! The result of a match is reported by a click on the side that won, whose name is a button
-//! until then; the focus moves on to the next match without a result, as in the list of matches.
+//! until then; the focus moves to the bracket's heading, rather than to a side of the next match,
+//! which a second Enter would report without the operator having read it.
 
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::Translator,
     view::{
-        self, BracketColumn, BracketEntry, BracketLine, BracketPairing, BracketPart,
-        BracketSection, BracketSource, MatchRow, StageName, Unplayed,
+        BracketColumn, BracketEntry, BracketLine, BracketPairing, BracketPart, BracketSection,
+        BracketSource, MatchRow, StageName, Unplayed,
     },
 };
-use tournament_engine::{MatchId, MatchResult};
+use tournament_engine::MatchResult;
 
 use crate::{
     announcement::Announcement,
@@ -26,9 +27,7 @@ use crate::{
 /// What gets the focus once the page shows a result reported in the bracket.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Focus {
-    /// The side A of the match, reporting that it won.
-    Report(MatchId),
-    /// The heading of the bracket, once no match of it is left without a result.
+    /// The heading of the bracket.
     Heading,
 }
 
@@ -46,7 +45,7 @@ pub fn Bracket() -> Element {
     let reports = ctx.actions().report;
     rsx! {
         section { class: "card", aria_labelledby: "bracket",
-            // focused once no match is left without a result, so that the focus is not lost
+            // focused once a result is reported, so that the focus is not lost
             h2 { id: "bracket", tabindex: "-1", onmounted: on_heading_mounted,
                 {tr.get("bracket")}
             }
@@ -70,27 +69,6 @@ pub fn Bracket() -> Element {
             }
         }
     }
-}
-
-/// The match without a result that follows `reported` in the order of the bracket, else the
-/// first one before it, else the heading.
-fn after_report(bracket: &view::Bracket, reported: MatchId) -> Focus {
-    let rows: Vec<&MatchRow> = bracket
-        .sections
-        .iter()
-        .flat_map(|section| &section.columns)
-        .flat_map(|column| {
-            let below = column.below.iter().flat_map(|below| &below.pairings);
-            column.pairings.iter().chain(below)
-        })
-        .filter_map(|pairing| pairing.r#match.as_ref())
-        .collect();
-    let position = rows.iter().position(|row| row.id == reported).unwrap_or(0);
-    rows[position..]
-        .iter()
-        .chain(&rows[..position])
-        .find(|row| row.result.is_none())
-        .map_or(Focus::Heading, |row| Focus::Report(row.id))
 }
 
 #[component]
@@ -265,7 +243,6 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
 fn WinButtons(row: MatchRow, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
     let id = row.id;
-    let on_mounted = use_focus(focus, Focus::Report(id));
     let tr = ctx.translator.read();
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
     let (a_wins, b_wins) = (
@@ -276,13 +253,7 @@ fn WinButtons(row: MatchRow, focus: Signal<Option<Focus>>) -> Element {
         move |_| {
             if let Some(reported) = ctx.act(move |session| session.report(id, result)) {
                 ctx.announce(Announcement::Reported(reported));
-                // after the result, which may have scheduled the next match of the winner
-                let next = ctx
-                    .session
-                    .read()
-                    .bracket()
-                    .map_or(Focus::Heading, |bracket| after_report(&bracket, id));
-                move_focus(focus, next);
+                move_focus(focus, Focus::Heading);
             }
         }
     };
@@ -292,7 +263,6 @@ fn WinButtons(row: MatchRow, focus: Signal<Option<Focus>>) -> Element {
             class: "side",
             aria_label: "{a_wins}",
             title: "{a_wins}",
-            onmounted: on_mounted,
             onclick: report(MatchResult::AWins),
             "{a}"
         }

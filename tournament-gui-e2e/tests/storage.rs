@@ -1,5 +1,5 @@
 use tournament_gui_e2e::{
-    COMPETITION, Gui, run, run_in_new_competition,
+    COMPETITION, Gui, Key, run, run_in_new_competition,
     thirtyfour::{By, error::WebDriverResult, stringmatch::StringMatch},
 };
 
@@ -57,6 +57,26 @@ async fn a_competition_is_renamed_and_deleted_from_the_list() {
         gui.page.check_accessibility().await?;
         gui.open_competition("Cup 2026").await?;
         gui.expect_entrants(&["Alice"]).await
+    })
+    .await;
+}
+
+/// Deleting cannot be undone, so the dialog asking opens at Cancel, and a double Enter on the
+/// button opening it deletes nothing.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_question_whether_to_delete_opens_at_cancel() {
+    run(async |gui| {
+        gui.new_competition("Cup").await?;
+        gui.follow("All competitions").await?;
+
+        gui.click_labelled("Delete Cup").await?;
+
+        gui.expect_alert_dialog("Delete Cup?").await?;
+        gui.expect_focus("Cancel").await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_no_dialog().await?;
+        gui.expect_competitions(&["Cup"]).await
     })
     .await;
 }

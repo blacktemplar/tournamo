@@ -569,16 +569,32 @@ impl Gui {
     /// Panics if it does not in time, with what it shows instead.
     pub async fn expect_dialog_error(&self, text: &str) -> WebDriverResult<()> {
         self.page
-            .expect_texts(By::Css("[role=dialog] [role=alert]"), &[text])
+            .expect_texts(
+                By::Css("[role=dialog] [role=alert], [role=alertdialog] [role=alert]"),
+                &[text],
+            )
             .await
     }
 
-    /// Waits until no dialog is open.
+    /// Waits until no dialog is open, nor one asking to confirm (`alertdialog`).
     ///
     /// # Panics
     /// Panics if one still is in time.
     pub async fn expect_no_dialog(&self) -> WebDriverResult<()> {
-        self.page.expect_texts(By::Css("[role=dialog]"), &[]).await
+        self.page
+            .expect_texts(By::Css("[role=dialog], [role=alertdialog]"), &[])
+            .await
+    }
+
+    /// Waits until a dialog asking to confirm what may not be undone (`alertdialog`) is open,
+    /// titled `title`.
+    ///
+    /// # Panics
+    /// Panics if none is in time, with the titles of those open instead.
+    pub async fn expect_alert_dialog(&self, title: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=alertdialog] h2"), &[title])
+            .await
     }
 
     /// Chooses the language named `name` in itself, e.g. `"Deutsch"`.
@@ -1255,6 +1271,40 @@ impl Gui {
     /// Panics if it does not in time, with what the element with the focus shows instead.
     pub async fn expect_focus(&self, text: &str) -> WebDriverResult<()> {
         self.page.expect_texts(By::Css(":focus"), &[text]).await
+    }
+
+    /// Waits until the focus is on the element whose accessible name, its `aria-label`, is
+    /// `label`, e.g. the button `"Remove Carol"`.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_labelled(&self, label: &str) -> WebDriverResult<()> {
+        let expected = label.to_owned();
+        self.page
+            .expect(
+                By::Css(":focus"),
+                |query| {
+                    query.with_attribute("aria-label", move |found: &str| {
+                        found.replace(ISOLATION_MARKS, "") == expected
+                    })
+                },
+                &format!("the label {label:?}"),
+            )
+            .await
+    }
+
+    /// Waits until the focus is in the field of a new entrant's name.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_on_entrant_name(&self) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css("#entrant-name:focus"),
+                |query| query,
+                "the focus in the field of a new entrant's name",
+            )
+            .await
     }
 
     /// Waits until the focus is in the line of the match numbered `number` of the list shown, e.g.

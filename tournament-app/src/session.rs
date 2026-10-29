@@ -933,7 +933,7 @@ impl Session {
         Ok(Reported {
             row,
             new_matches: matches.len() - matches_before,
-            all_finished: matches.values().all(Match::is_finished),
+            winners: self.winners(),
         })
     }
 

@@ -124,8 +124,10 @@ async fn a_result_is_typed_in_by_the_number_of_its_match() {
 
         gui.expect_no_error().await?;
         gui.expect_results(&["Draw"]).await?;
-        gui.expect_announcement("Match 1: Draw. Every match has a result.")
-            .await
+        gui.expect_announcement(
+            "Match 1: Draw. Every match has a result. Tied for first: Alice, Bob.",
+        )
+        .await
     })
     .await;
 }
@@ -342,8 +344,9 @@ async fn the_bracket_shows_who_meets_whom() {
     .await;
 }
 
-/// A click on a side's name in the bracket reports that it won, and the focus moves on to the
-/// next match without a result, the final once both semifinals have one.
+/// A click on a side's name in the bracket reports that it won, and the focus moves to the
+/// bracket's heading, rather than to a side of the next match, where one more Enter would report
+/// it.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn results_are_reported_in_the_bracket() {
@@ -360,12 +363,15 @@ async fn results_are_reported_in_the_bracket() {
 
         gui.expect_bracket_waiting(&["Winner of 2", "Loser of 2"])
             .await?;
-        gui.expect_focus_in_bracket("2").await?;
+        gui.expect_focus("Bracket").await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_bracket_waiting(&["Winner of 2", "Loser of 2"])
+            .await?;
 
         gui.win_in_bracket("2").await?;
 
         gui.expect_bracket_waiting(&[]).await?;
-        gui.expect_focus_in_bracket("3").await?;
+        gui.expect_focus("Bracket").await?;
         gui.page.check_accessibility().await
     })
     .await;

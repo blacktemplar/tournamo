@@ -181,6 +181,7 @@ announce-new-matches = { $count ->
        *[other] { $count } weitere Spiele sind angesetzt.
     }
 announce-all-finished = Jedes Spiel hat ein Ergebnis.
+announce-winners = { $winners }.
 announce-reopened = Spiel { $number } ist wieder offen.
 announce-unscheduled = { $count ->
         [one] Das wegen seines Ergebnisses angesetzte Spiel entfällt.
@@ -188,6 +189,14 @@ announce-unscheduled = { $count ->
     }
 announce-undone = Rückgängig gemacht: { $action }.
 announce-redone = Wiederhergestellt: { $action }.
+announce-added-entrant = { $name } hinzugefügt.
+announce-removed-entrant = { $name } entfernt.
+announce-added-phase = Die Phase ist hinzugefügt.
+announce-edited-phase = Die Phase ist geändert.
+announce-started = Gestartet: { $count ->
+        [one] ein Spiel ist
+       *[other] { $count } Spiele sind
+    } zu spielen.
 action-add-entrant = Hinzufügen von { $name }
 action-remove-entrant = Entfernen von { $name }
 action-add-phase = Hinzufügen der Phase

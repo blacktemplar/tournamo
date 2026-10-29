@@ -427,10 +427,10 @@ fn a_knockout_names_the_stage_of_every_match() {
         .report(numbered(&session, 2), MatchResult::AWins)
         .unwrap();
 
-    assert_eq!((first.new_matches, first.all_finished), (0, false));
+    assert_eq!((first.new_matches, first.winners), (0, None));
     assert_eq!(
-        (second.new_matches, second.all_finished),
-        (2, false),
+        (second.new_matches, second.winners),
+        (2, None),
         "the final and the match for third place"
     );
     assert_eq!(
@@ -443,7 +443,9 @@ fn a_knockout_names_the_stage_of_every_match() {
     let last = session
         .report(numbered(&session, 4), MatchResult::BWins)
         .unwrap();
-    assert_eq!((last.new_matches, last.all_finished), (0, true));
+    assert_eq!(last.new_matches, 0);
+    assert_eq!(last.winners, session.winners());
+    assert!(last.winners.is_some_and(|winners| winners.len() == 1));
 }
 
 /// Who `entry` is, as a test reads it: the names of a team, `bye`, or where a side not decided

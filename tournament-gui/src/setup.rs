@@ -4,9 +4,10 @@ use dioxus::prelude::*;
 use tournament_app::{i18n::Message as _, session::Session};
 
 use crate::{
+    announcement::Announcement,
     competition::Ctx,
     i18n::t,
-    phase::{NewPhase, PhaseSummary},
+    phase::{NewPhase, PhaseSummary, focus_later},
     team_name,
 };
 
@@ -21,9 +22,14 @@ pub fn Entrants() -> Element {
     let tr = ctx.translator.read();
     let entrants: Vec<_> = entrants
         .into_iter()
-        .map(|entrant| (entrant.id, team_name(&tr, &[entrant])))
+        .map(|entrant| {
+            let name = team_name(&tr, std::slice::from_ref(&entrant));
+            (entrant, name)
+        })
         .collect();
     let count = entrants.len();
+    // a competition without entrants, e.g. one just created, opens at the field of the first
+    let opened_empty = use_hook(|| count == 0);
     rsx! {
         section { class: "card", aria_labelledby: "entrants",
             h2 { id: "entrants",
@@ -37,15 +43,25 @@ pub fn Entrants() -> Element {
                 p { class: "empty", {tr.get("no-entrants")} }
             }
             ol { id: "entrant-list",
-                for (id, name) in entrants {
-                    li { key: "{id:?}",
+                for (position, (row, name)) in entrants.into_iter().enumerate() {
+                    li { key: "{row.id:?}",
                         span { class: "name", "{name}" }
                         button {
                             class: "small",
                             aria_label: t!(tr, "remove-entrant", name = name.as_str()),
                             disabled: !actions.remove_entrant,
                             onclick: move |_| {
-                                _ = ctx.act(|session| session.remove_entrant(id));
+                                let id = row.id;
+                                if ctx.act(|session| session.remove_entrant(id)).is_some() {
+                                    ctx.announce(Announcement::RemovedEntrant(row.clone()));
+                                    // the button of the entrant after it, which takes its place,
+                                    // else the field adding one
+                                    let next = format!(
+                                        "#entrant-list > li:nth-child({}) button",
+                                        position + 1
+                                    );
+                                    focus_later(&[&next, "#entrant-name"]);
+                                }
                             },
                             {tr.get("remove")}
                         }
@@ -58,9 +74,13 @@ pub fn Entrants() -> Element {
                 class: "row",
                 onsubmit: move |event| {
                     event.prevent_default();
-                    if ctx.act(|session| session.add_entrant(&name.peek())).is_some() {
+                    if let Some(id) = ctx.act(|session| session.add_entrant(&name.peek())) {
                         name.set(String::new());
                         scroll_to_field();
+                        let added = ctx.session.peek().entrants().into_iter().find(|e| e.id == id);
+                        if let Some(added) = added {
+                            ctx.announce(Announcement::AddedEntrant(added));
+                        }
                     }
                 },
                 label { r#for: "entrant-name", class: "visually-hidden", {tr.get("name")} }
@@ -70,6 +90,11 @@ pub fn Entrants() -> Element {
                     autocomplete: "off",
                     placeholder: tr.get("name"),
                     aria_describedby: "entrant-like",
+                    onmounted: move |event| async move {
+                        if opened_empty {
+                            _ = event.data().set_focus(true).await;
+                        }
+                    },
                     oninput: move |event| name.set(event.value()),
                 }
                 button {
@@ -127,7 +152,15 @@ pub fn Phase() -> Element {
                     class: if has_phase { "primary" },
                     disabled: !actions.start,
                     aria_describedby: refusal.is_some().then_some("start-refusal"),
-                    onclick: move |_| _ = ctx.act(Session::start),
+                    onclick: move |_| {
+                        if ctx.act(Session::start).is_some() {
+                            let rounds = ctx.session.peek().rounds();
+                            let matches = rounds.iter().map(|round| round.open).sum();
+                            ctx.announce(Announcement::Started(matches));
+                            // the setup is gone, and the matches take its place
+                            focus_later(&["#matches"]);
+                        }
+                    },
                     {tr.get("start")}
                 }
                 if let Some(refusal) = &refusal {

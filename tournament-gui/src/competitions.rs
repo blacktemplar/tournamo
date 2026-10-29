@@ -18,7 +18,9 @@ use crate::{
     i18n::t,
     icons,
     notices::Detail,
-    open, winners_text,
+    open,
+    phase::focus_later,
+    winners_text,
 };
 
 #[component]
@@ -176,16 +178,21 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>) -> Element {
     let mut name = use_signal(String::new);
     // the name shown, from the competition asked about until the operator types
     use_effect(move || {
-        if let Some(Ask::Rename { name: current, .. }) = asked() {
-            name.set(current);
+        match asked() {
+            Some(Ask::Rename { name: current, .. }) => name.set(current),
+            // what cannot be undone is not what a second Enter does
+            Some(Ask::Delete { .. }) => focus_later(&["#delete-cancel"]),
+            None => {}
         }
         error.set(None);
     });
     let tr = page.translator.read();
     let open = asked.read().is_some();
+    let confirming = matches!(*asked.read(), Some(Ask::Delete { .. }));
     let mut close = move || asked.set(None);
     rsx! {
         Dialog {
+            role: if confirming { "alertdialog" } else { "dialog" },
             open: Some(open),
             on_open_change: move |open: bool| {
                 if !open {
@@ -240,7 +247,12 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>) -> Element {
                             onclick: move |_| _ = spawn(delete(page, key, asked, changed, error)),
                             {tr.get("delete")}
                         }
-                        button { r#type: "button", onclick: move |_| close(), {tr.get("cancel")} }
+                        button {
+                            id: "delete-cancel",
+                            r#type: "button",
+                            onclick: move |_| close(),
+                            {tr.get("cancel")}
+                        }
                     }
                 },
                 None => rsx! {},

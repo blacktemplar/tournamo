@@ -345,6 +345,86 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the checkbox labelled `label` is checked, if `ticked`, or else unchecked, as the
+    /// browser shows it.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_ticked(&self, label: &str, ticked: bool) -> WebDriverResult<()> {
+        let state = if ticked { ":checked" } else { ":not(:checked)" };
+        self.page
+            .expect(
+                By::Css(format!("label:has(> input[type=checkbox]{state})")),
+                |query| query.with_text(label.to_owned()),
+                &format!("the checkbox {label:?} ticked: {ticked}"),
+            )
+            .await
+    }
+
+    /// Waits until the list of the choice of the field at `path` of the form of the phase is
+    /// open, if `open`, or else closed, as its button says.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_choice_open(&self, path: &str, open: bool) -> WebDriverResult<()> {
+        let id = field_id(path);
+        self.page
+            .expect(
+                By::Css(format!("#{id}[aria-expanded={open}]")),
+                |query| query,
+                &format!("the list of the choice {path} open: {open}"),
+            )
+            .await
+    }
+
+    /// Checks that the option of the list of plugins open with the focus, or else the one under the
+    /// pointer, stands out from the list 3:1 (WCAG 1.4.11), by its outline, its shadow or its
+    /// background.
+    ///
+    /// # Panics
+    /// Panics if no option is highlighted, or it does not stand out enough, with the contrast.
+    pub async fn expect_highlighted_option_stands_out(&self) -> WebDriverResult<()> {
+        let contrast = self
+            .driver
+            .execute(
+                r#"
+                const option = document.querySelector("[role=option]:focus")
+                    ?? document.querySelector("[role=option]:hover");
+                if (!option) return null;
+                const list = option.closest("[role=listbox]");
+                // the channels of an opaque colour, nothing for a transparent one
+                const rgb = (colour) => {
+                    const [r, g, b, a = 1] = (colour?.match(/[\d.]+/g) ?? []).map(Number);
+                    return a > 0 && b !== undefined ? [r, g, b] : null;
+                };
+                const luminance = (colour) => colour
+                    .map((channel) => channel / 255)
+                    .map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+                    .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+                const ratio = (a, b) => {
+                    const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+                    return (light + 0.05) / (dark + 0.05);
+                };
+                const style = getComputedStyle(option);
+                const background = rgb(getComputedStyle(list).backgroundColor);
+                const outline = style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0
+                    ? style.outlineColor : null;
+                const shadow = style.boxShadow.match(/rgba?\([^)]*\)/)?.[0];
+                return Math.max(...[outline, shadow, style.backgroundColor]
+                    .map(rgb).filter(Boolean).map((colour) => ratio(colour, background)), 1);
+                "#,
+                Vec::new(),
+            )
+            .await?
+            .convert::<Option<f64>>()?;
+        let contrast = contrast.expect("an option must be highlighted");
+        assert!(
+            contrast >= 3.0,
+            "the option highlighted must stand out 3:1 from the list, but does {contrast:.2}:1"
+        );
+        Ok(())
+    }
+
     /// Waits until what is wrong with the answers of the form of the phase is `issues`, those of
     /// every field in the order of the fields.
     ///

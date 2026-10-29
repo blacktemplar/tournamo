@@ -236,6 +236,75 @@ async fn the_focus_is_back_at_the_format_once_it_is_chosen() {
     .await;
 }
 
+/// The click after choosing a format reaches what it is on, rather than the list just closed.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_click_after_choosing_a_format_is_not_lost() {
+    run_in_new_competition(async |gui| {
+        gui.choose_format("Single elimination").await?;
+        gui.expect_ticked("Match for third place", true).await?;
+
+        gui.toggle("Match for third place").await?;
+
+        gui.expect_ticked("Match for third place", false).await?;
+        gui.expect_list("ranking", &["Later first loss"]).await
+    })
+    .await;
+}
+
+/// Escape closes the list of a choice, and the focus is back at the choice.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn escape_closes_the_list_of_a_choice() {
+    run_in_new_competition(async |gui| {
+        gui.open_choice("format").await?;
+
+        gui.press(Key::Escape).await?;
+
+        gui.expect_choice_open("format", false).await?;
+        gui.expect_focus_on_choice("format").await
+    })
+    .await;
+}
+
+/// Escape in the list of a choice in the dialog closes only the list, so the edits stay.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn escape_in_a_choice_of_the_dialog_leaves_the_dialog_open() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui).await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+        gui.click_labelled("Move more Sonneborn-Berger up").await?;
+        gui.open_choice("format").await?;
+
+        gui.press(Key::Escape).await?;
+
+        gui.expect_choice_open("format", false).await?;
+        gui.expect_focus_on_choice("format").await?;
+        gui.expect_list("ranking", &["More Sonneborn-Berger", "More points"])
+            .await?;
+        gui.press(Key::Escape).await?;
+        gui.expect_no_dialog().await
+    })
+    .await;
+}
+
+/// The option under the pointer, or reached by the keyboard, stands out from the list.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_option_highlighted_stands_out() {
+    run_in_new_competition(async |gui| {
+        gui.open_choice("ranking").await?;
+
+        gui.hover_option("More wins").await?;
+        gui.expect_highlighted_option_stands_out().await?;
+        gui.press(Key::Down).await?;
+        gui.expect_highlighted_option_stands_out().await
+    })
+    .await;
+}
+
 /// A phase ranked by nothing is added, but the form says what that leads to first.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

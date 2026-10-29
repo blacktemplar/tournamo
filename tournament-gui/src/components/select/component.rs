@@ -31,6 +31,29 @@ pub fn Select(
     let base = attributes!(div {
         class: Styles::dx_select
     });
+    // changed: Escape closes only the list, before the document hears it, where a dialog around
+    // the select would close as well, and the focus is back at the trigger rather than on the
+    // list, which is gone once closed
+    let trigger = id.clone();
+    use_effect(move || {
+        _ = document::eval(&format!(
+            r#"
+            const trigger = document.getElementById({trigger:?});
+            const select = trigger?.parentElement;
+            if (select && !select.closesOnEscape) {{
+                select.closesOnEscape = true;
+                select.addEventListener("keydown", (event) => {{
+                    if (event.key === "Escape" && select.dataset.state === "open") {{
+                        event.stopPropagation();
+                        event.preventDefault();
+                        trigger.click();
+                        trigger.focus();
+                    }}
+                }});
+            }}
+            "#
+        ));
+    });
     rsx! {
         select::Select::<String> {
             value: Some(value),

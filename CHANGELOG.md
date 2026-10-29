@@ -22,6 +22,9 @@ a file whose `"format"` changes is migrated, not refused.
 - A number a field of the phase does not take keeps the phase from being added
   or saved, rather than the number before it being kept unnoticed; why shows
   while it is typed, and the focus goes to the field.
+- Escape in the list of a choice closes only the list, no longer the dialog
+  around it with the edits made there, and the focus is back at the choice. The
+  option highlighted in such a list stands out clearly.
 
 ## [0.1.0] - 2026-10-28
 

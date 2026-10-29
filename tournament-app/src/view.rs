@@ -277,7 +277,9 @@ pub enum Outcome {
 /// The standings of the phase.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Standings {
-    /// The metric columns, one per calculator of the phase that offers one, in running order.
+    /// The metric columns, one per calculator of the phase that offers one: first those of the
+    /// metrics the phase is ranked by, in the order of its criteria, then the others in running
+    /// order.
     pub columns: Vec<Column>,
     /// Best first.
     pub rows: Vec<StandingRow>,
@@ -297,6 +299,8 @@ pub struct Column {
     /// What the calculator says about its metric in English, translated as its
     /// [`PluginText::Description`](crate::i18n::PluginText::Description).
     pub description: Option<&'static str>,
+    /// Whether a criterion of the phase ranks by its metric.
+    pub ranks: bool,
 }
 
 /// One line of the standings.

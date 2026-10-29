@@ -879,6 +879,8 @@ fn a_result_a_later_one_depends_on_is_undone_after_it() {
     );
 }
 
+/// The columns of the metrics the phase is ranked by come first, in the order of the criteria,
+/// so that what decides the rank is next to the names; the others follow in running order.
 #[test]
 fn the_standings_show_the_columns_of_the_metrics() {
     let mut session = Given::new().started();
@@ -894,16 +896,11 @@ fn the_standings_show_the_columns_of_the_metrics() {
         standings.columns,
         [
             Column {
-                calculator: "tournament_engine::wins_draws_losses",
-                header: "W-D-L",
-                label: "win-draw-loss record",
-                description: Some("how many matches were won, drawn and lost"),
-            },
-            Column {
                 calculator: "tournament_engine::points",
                 header: "points",
                 label: "points",
                 description: Some("scored for every win, every draw and every bye"),
+                ranks: true,
             },
             Column {
                 calculator: "tournament_engine::sonneborn_berger",
@@ -912,13 +909,21 @@ fn the_standings_show_the_columns_of_the_metrics() {
                 description: Some(
                     "the points of the opponents that were beaten or played to a draw"
                 ),
+                ranks: true,
+            },
+            Column {
+                calculator: "tournament_engine::wins_draws_losses",
+                header: "W-D-L",
+                label: "win-draw-loss record",
+                description: Some("how many matches were won, drawn and lost"),
+                ranks: false,
             },
         ]
     );
     let points: Vec<Score> = standings
         .rows
         .iter()
-        .map(|row| match row.cells[1] {
+        .map(|row| match row.cells[0] {
             Some(MetricCell::Number(points)) => points,
             ref cell => panic!("{cell:?} is no number of points"),
         })

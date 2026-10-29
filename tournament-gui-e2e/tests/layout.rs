@@ -290,6 +290,29 @@ async fn start_round_robin_of(gui: &Gui, names: &[&str]) -> WebDriverResult<()> 
     gui.click("Start").await
 }
 
+/// On a phone the standings show what decides the rank right after the names, and what only
+/// breaks ties after it, where the table scrolls; before an entrant plays, its metrics recede.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_standings_show_what_ranks_first_on_a_phone() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(360, 740).await?;
+        start_round_robin_of(&gui, &[LONG_NAME, "Bob", "Carol", "Dave"]).await?;
+        gui.click_labelled("Bob wins").await?;
+
+        gui.click("Standings").await?;
+
+        gui.expect_standings_headers(&["Rank", "Name", "Points", "SB", "W-D-L", "Played"])
+            .await?;
+        gui.page
+            .expect_in_view("#standing-list thead th:nth-child(3)")
+            .await?;
+        gui.expect_metrics_muted_until_played().await?;
+        gui.page.expect_no_sideways_scroll().await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_standings_scroll_inside_their_card_on_a_phone() {

@@ -9,7 +9,7 @@ use uuid::{Uuid, uuid};
 use vec1::{Vec1, vec1};
 
 #[cfg(feature = "test-util")]
-use crate::plugins::{PhasePluginsBuilder, ranker::SliceRanker};
+use crate::plugins::PhasePluginsBuilder;
 use crate::{
     map::{IdAble, IdMap},
     plugins::{
@@ -17,7 +17,7 @@ use crate::{
         facts::EntrantsPerRanking,
         metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
-        ranker::HierarchicalRanker,
+        ranker::{HierarchicalRanker, SliceRanker},
     },
     type_map::{TypeMap, TypeMapValue},
 };
@@ -351,6 +351,11 @@ impl Phase {
     /// The calculators of this phase's metrics, in the order they run in.
     pub fn metrics_calculators(&self) -> &[Box<dyn MetricsCalculator>] {
         &self.metrics_calculators
+    }
+
+    /// The criteria this phase is ranked by, each breaking the ties of those before it.
+    pub fn slice_rankers(&self) -> &[Box<dyn SliceRanker>] {
+        self.ranker.slice_rankers()
     }
 
     /// The format the matches of this phase are scheduled by.

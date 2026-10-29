@@ -24,7 +24,9 @@ use tournament_engine::{
     MatchResult, Phase, PhaseData, PhaseId, PhasePlugins, RankingId, RemoveEntrant,
     ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap,
     map::IdAble as _,
-    plugins::{metrics_calculator::MetricsCalculator, phase_format::PhaseFormat},
+    plugins::{
+        metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
+    },
     transitions::{
         self as engine, CompetitionAlreadyStarted, ReconfigurePhaseError, UndoMatchResultError,
     },
@@ -993,25 +995,44 @@ impl Session {
     /// before the start.
     pub fn standings(&self) -> Option<Standings> {
         let phase = self.started_phase()?;
-        let columns: Vec<_> = phase
+        let calculators = AnyAxis::of::<dyn MetricsCalculator>();
+        // the calculators each criterion ranks by, in the order of the criteria
+        let ranked_by: Vec<&str> = phase
+            .slice_rankers()
+            .iter()
+            .filter_map(|criterion| {
+                AnyAxis::of::<dyn SliceRanker>().entry(plugin_factory::id_of(&**criterion))
+            })
+            .flat_map(|criterion| criterion.providers_in(calculators))
+            .map(PluginEntry::id)
+            .collect();
+        let mut columns: Vec<_> = phase
             .metrics_calculators()
             .iter()
             .filter_map(|calculator| {
                 Some((plugin_factory::id_of(&**calculator), calculator.column()?))
             })
             .collect();
+        // stable, so that the others stay in running order
+        columns.sort_by_key(|(calculator, _)| {
+            ranked_by
+                .iter()
+                .position(|ranked| ranked == calculator)
+                .unwrap_or(usize::MAX)
+        });
         let data = phase.data();
         let finished = data.matches().values().all(Match::is_finished);
         Some(Standings {
             columns: columns
                 .iter()
                 .map(|(calculator, column)| {
-                    let entry = AnyAxis::of::<dyn MetricsCalculator>().entry(calculator);
+                    let entry = calculators.entry(calculator);
                     Column {
                         calculator,
                         header: column.header(),
                         label: entry.map_or(column.header(), PluginEntry::label),
                         description: entry.and_then(PluginEntry::description),
+                        ranks: ranked_by.contains(calculator),
                     }
                 })
                 .collect(),

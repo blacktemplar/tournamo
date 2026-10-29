@@ -681,11 +681,11 @@ pub fn Standings() -> Element {
                     caption { class: "visually-hidden", {tr.get("standings")} }
                     thead {
                         tr {
-                            th { scope: "col", {tr.get("rank")} }
+                            th { class: "rank", scope: "col", {tr.get("rank")} }
                             th { class: "name", scope: "col", {tr.get("name")} }
-                            th { scope: "col", {tr.get("played")} }
                             // named by the header alone, which the cells are read with, rather
-                            // than with the toggletip's button too
+                            // than with the toggletip's button too; what ranks first right after
+                            // the names, the matches played last
                             for (header, about, id) in headers {
                                 th { scope: "col", aria_label: "{header}",
                                     "{header}"
@@ -695,13 +695,16 @@ pub fn Standings() -> Element {
                                     }
                                 }
                             }
+                            th { scope: "col", {tr.get("played")} }
                         }
                     }
                     tbody {
                         for row in standings.rows {
                             // the places with a medal, once every match is played, stand out
+                            // the metrics of an entrant yet to play recede, all alike
                             tr {
                                 class: if row.medal.is_some() { "podium" },
+                                class: if row.played == 0 { "unplayed" },
                                 "data-rank": row.medal.map(|_| row.rank.get()),
                                 td { class: "rank",
                                     if let Some(medal) = row.medal {
@@ -711,10 +714,12 @@ pub fn Standings() -> Element {
                                     }
                                 }
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
-                                td { "{row.played}" }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
-                                    td { {cell.map(|cell| tr.cell(column.calculator, &cell))} }
+                                    td { class: "metric",
+                                        {cell.map(|cell| tr.cell(column.calculator, &cell))}
+                                    }
                                 }
+                                td { class: "played", "{row.played}" }
                             }
                         }
                     }

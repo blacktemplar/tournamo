@@ -57,6 +57,10 @@ a file whose `"format"` changes is migrated, not refused.
   its button, so that names break only between words. A match played keeps a
   solid border, the dashed one being for placeholders, and its loser recedes
   behind its winner.
+- The standings show the metrics the phase is ranked by right after the names,
+  in the order of its criteria, and the matches played last; on a phone the
+  rank and the name stay in sight while the rest scrolls. The metrics of an
+  entrant yet to play recede.
 - Why an action was refused is gone once the next action is done, also on the
   list of competitions and in a dialog, and no longer said again when another
   language is chosen.

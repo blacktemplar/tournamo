@@ -1399,6 +1399,47 @@ impl Gui {
             .await
     }
 
+    /// Waits until the headers of the columns of the standings are `headers`, in order, e.g.
+    /// `"Rank"`.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with the headers shown instead.
+    pub async fn expect_standings_headers(&self, headers: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#standing-list thead th"), headers)
+            .await
+    }
+
+    /// Checks that the metrics of each row of the standings without a match played recede behind
+    /// its name, in another colour, and that those of a row with one do not.
+    ///
+    /// # Panics
+    /// Panics if a row is not so, with its name.
+    pub async fn expect_metrics_muted_until_played(&self) -> WebDriverResult<()> {
+        let wrong = self
+            .driver
+            .execute(
+                r##"
+                return [...document.querySelectorAll("#standing-list tbody tr")].flatMap((row) => {
+                    const name = row.querySelector("th");
+                    const played = row.querySelector("td.played").textContent.trim() !== "0";
+                    const colour = getComputedStyle(name).color;
+                    const muted = [...row.querySelectorAll("td.metric")]
+                        .some((cell) => getComputedStyle(cell).color !== colour);
+                    return muted === played ? [name.textContent] : [];
+                });
+                "##,
+                Vec::new(),
+            )
+            .await?
+            .convert::<Vec<String>>()?;
+        assert!(
+            wrong.is_empty(),
+            "the metrics must be muted until a match is played, but are not so for {wrong:?}"
+        );
+        Ok(())
+    }
+
     /// Waits until the table of the standings is captioned `text` for screen readers.
     ///
     /// # Panics

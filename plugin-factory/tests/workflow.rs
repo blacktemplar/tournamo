@@ -6,10 +6,10 @@ use plugin_factory::{
     Plugin, PluginType, axis,
     catalog::AnyAxis,
     compatibility::{Declaration, Fact, Incompatibility, check},
-    config::{Config, ConfigError, Path, PluginConfig, Value},
-    draft::{Draft, Issue, Problem},
+    config::{ConfigError, Path, PluginConfig, Value},
+    draft::{Draft, FieldNode, Issue, Problem},
     register,
-    schema::{Configurable, FieldKind, Schema},
+    schema::Configurable,
 };
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use serde_json::json;
@@ -316,50 +316,19 @@ fn accept_defaults(draft: &mut Draft<Phase>) {
     }
 }
 
-/// The fields a UI renders for `draft`, by path, each with whether it is answered: the schema of
-/// the phase walked along the answers, as documented on [`Draft`].
+/// The fields a UI renders for `draft`, depth first, each with whether it is answered.
 fn questions(draft: &Draft<Phase>) -> Vec<(String, bool)> {
     let mut questions = Vec::new();
-    fields(
-        &Phase::schema(),
-        draft.answers(),
-        &Path::ROOT,
-        &mut questions,
-    );
+    fields(&draft.fields(), &mut questions);
     questions
 }
 
-/// Every field of `schema`, the schema of the config at `at`, each followed by the fields of the
-/// plugins answering it in `config`.
-fn fields(schema: &Schema, config: &Config, at: &Path, questions: &mut Vec<(String, bool)>) {
-    for field in schema.fields() {
-        let path = at.clone().field(field.name());
-        let answer = config.get(field.name());
-        questions.push((path.to_string(), answer.is_some()));
-        if let Some(answer) = answer {
-            plugin_fields(field.kind(), answer, &path, questions);
+fn fields(nodes: &[FieldNode], questions: &mut Vec<(String, bool)>) {
+    for node in nodes {
+        questions.push((node.path.to_string(), node.answer.is_some()));
+        for plugin in &node.plugins {
+            fields(&plugin.fields, questions);
         }
-    }
-}
-
-/// The fields of the plugins in `answer`, an answer of `kind` at `at`.
-fn plugin_fields(kind: &FieldKind, answer: &Value, at: &Path, questions: &mut Vec<(String, bool)>) {
-    match (kind, answer) {
-        (FieldKind::Optional(inner), _) if !answer.is_null() => {
-            plugin_fields(inner, answer, at, questions);
-        }
-        (FieldKind::List { axis, .. }, Value::Array(answers)) => {
-            for (index, answer) in answers.iter().enumerate() {
-                let path = at.clone().index(index);
-                plugin_fields(&FieldKind::Plugin(*axis), answer, &path, questions);
-            }
-        }
-        (FieldKind::Plugin(axis), _) => {
-            let plugin = PluginConfig::deserialize(answer).unwrap();
-            let schema = axis.entry(plugin.plugin()).unwrap().schema();
-            fields(&schema, plugin.config(), at, questions);
-        }
-        _ => {}
     }
 }
 

@@ -754,6 +754,22 @@ out a `FormView` (fields by `Path`, inputs by kind, options, implied plugins,
 issues), taking changes by path. The GUI only lays it out and knows no plugin.
 It serves adding a phase and editing it at any point (`reconfigure_phase`).
 
+`Draft::fields` enumerates the schema and answers together: each field has its
+schema, current answer, and chosen plugins, and each plugin has its fields.
+Readers descend through these nodes instead of resolving each field from the
+root. The draft's compatibility tree and the app's form use this enumeration.
+It includes unanswered fields and adds neither defaults nor implied plugins.
+The form enumerates a copy with implied plugins to distinguish them from choices.
+
+The enumeration is an owned snapshot, rebuilt after edits. Nodes carry paths for
+checked edits, diagnostics, and the ordering of fields whose recommendations
+follow a change. Paths are addresses in the current structure, not stable ids
+across replacing a plugin or moving a list item. Live mutable handles would need
+invalidation and synchronization with those structural changes; snapshots keep
+one owner of the answers. The CLI already descends through the schema as it asks
+questions, discovering children after choosing their plugin; it keeps that walk
+rather than snapshotting fields before they have been chosen.
+
 - **All fields at once**, so recommendations are kept current instead of asked
   in order: **a field still answered as offered follows a change of a field
   before it** in schema order, so another format brings its ranking and

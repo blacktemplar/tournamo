@@ -208,3 +208,17 @@ Run `cargo warloc --by-file -o json`. For each file, sum `main.code` and
 `tests.code` using the source boundaries above. The detailed tables are alternate
 views of the same files and must not be added to the overview. Counts are a
 snapshot; this document is not a generated size budget or a performance audit.
+
+## Traversal experiment following this review
+
+`Draft::fields()` now enumerates fields with their schema, answer, and chosen
+plugin children. The app renders that tree directly, and the draft uses the
+same enumeration to collect compatibility information. The app no longer
+reconstructs schemas and plugin entries by interpreting paths. See
+`plugin-factory/src/draft/fields.rs` and “Configuring a phase” in `DESIGN.md`.
+
+This is a bounded change to reading the configuration. Checked edits, dependency
+scoping, recommendation following, and diagnostics still use paths. The CLI's
+existing depth-first questionnaire was left in place: replacing it with a tree
+snapshot would complicate asking for children of a plugin chosen during the walk.
+The size tables above remain the baseline before this experiment.

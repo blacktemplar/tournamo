@@ -16,9 +16,9 @@
 pub use plugin_factory::config::Path;
 use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
-    config::{Config, ConfigError, PluginConfig, Segment, Value},
-    draft::{Draft, Issue, Problem},
-    schema::{Configurable, DecimalRange, FieldKind, IntegerRange, NumberRange, Schema},
+    config::{ConfigError, PluginConfig, Segment, Value},
+    draft::{Draft, FieldNode, Issue, PluginNode, Problem},
+    schema::{Configurable, DecimalRange, FieldKind, IntegerRange, NumberRange},
 };
 use tournament_engine::PhasePlugins;
 
@@ -283,15 +283,12 @@ impl PhaseForm {
         let mut completed = self.draft.clone();
         completed.add_implied();
         let issues = completed.build().err().unwrap_or_default();
-        let mut fields = self.fields(
-            &PhasePlugins::schema(),
-            None,
-            &Path::ROOT,
-            completed.answers(),
-        );
+        let nodes = self.draft.fields();
+        let completed_nodes = completed.fields();
+        let mut fields = self.fields(&nodes, None, &completed_nodes, &completed_nodes);
         let mut unplaced = Vec::new();
         for issue in &issues {
-            let text = issue_text(issue, completed.answers());
+            let text = issue_text(issue, &completed_nodes);
             if !place(&mut fields, issue.path(), &text) {
                 unplaced.push(text);
             }
@@ -498,7 +495,8 @@ impl PhaseForm {
 
     /// The kind of answer the field at `path` takes.
     fn kind(&self, path: &Path) -> Result<FieldKind, ConfigError> {
-        kind_at(self.draft.answers(), path)
+        field_at(&self.draft.fields(), path)
+            .map(|node| node.field.kind().clone())
             .ok_or_else(|| ConfigError::UnknownField { path: path.clone() })
     }
 
@@ -515,7 +513,8 @@ impl PhaseForm {
         // those whose answers it offers what they recommend: a field before it following, e.g. the
         // ranking dropping a criterion when the metric it needs is removed, would change what the
         // operator may no longer look at, where an issue shows what is missing instead
-        let paths = field_paths(self.draft.answers());
+        let nodes = self.draft.fields();
+        let paths = field_paths(&nodes);
         let after = paths
             .iter()
             .position(|path| path == field)
@@ -555,42 +554,49 @@ impl PhaseForm {
         Ok(())
     }
 
-    /// The fields of `schema`, the schema of the config at `at`, which is that of the plugin
-    /// `plugin` unless it is the phase's own. `completed` are the answers with the plugins they
-    /// imply.
+    /// The enumerated fields, belonging to `plugin` unless they are the phase's own.
+    /// `completed` are the same fields with implied plugins appended.
     fn fields(
         &self,
-        schema: &Schema,
+        nodes: &[FieldNode],
         plugin: Option<&'static str>,
-        at: &Path,
-        completed: &Config,
+        completed: &[FieldNode],
+        all_completed: &[FieldNode],
     ) -> Vec<FormField> {
-        schema
-            .fields()
+        nodes
             .iter()
-            .map(|field| (field, at.clone().field(field.name())))
-            // e.g. the points for a draw where no match ends in a draw; one holding a number not
-            // taken stays, as what keeps the phase from being added
-            .filter(|(_, path)| {
-                self.draft.is_relevant(path).unwrap_or(true)
-                    || self.rejected.iter().any(|rejected| rejected.path == *path)
+            .zip(completed)
+            // Rejected input stays visible even when the field becomes irrelevant.
+            .filter(|(node, _)| {
+                self.draft.is_relevant(&node.path).unwrap_or(true)
+                    || self.rejected.iter().any(|rejected| rejected.path == node.path)
             })
-            .map(|(field, path)| FormField {
-                input: self.input(field.kind(), &path, completed),
-                path,
-                plugin,
-                name: field.name(),
-                label: field.label(),
-                description: field.description(),
-                issues: Vec::new(),
-                warnings: Vec::new(),
+            .map(|(node, completed)| {
+                let field = &node.field;
+                FormField {
+                    input: self.input(field.kind(), node, completed, all_completed),
+                    path: node.path.clone(),
+                    plugin,
+                    name: field.name(),
+                    label: field.label(),
+                    description: field.description(),
+                    issues: Vec::new(),
+                    warnings: Vec::new(),
+                }
             })
             .collect()
     }
 
-    /// How the field of `kind` at `path` is answered.
-    fn input(&self, kind: &FieldKind, path: &Path, completed: &Config) -> Input {
-        let answer = self.draft.answers().get_at(path);
+    /// How the enumerated field is answered, with any implied plugins.
+    fn input(
+        &self,
+        kind: &FieldKind,
+        node: &FieldNode,
+        completed: &FieldNode,
+        all_completed: &[FieldNode],
+    ) -> Input {
+        let path = &node.path;
+        let answer = node.answer.as_ref();
         let entered = || {
             self.rejected
                 .iter()
@@ -611,89 +617,100 @@ impl PhaseForm {
                 entered: entered(),
                 hint: with_range(Text::new("number-range"), NumberRange::Decimal(*range)),
             },
-            FieldKind::Plugin(axis) => Input::Plugin(self.plugin(*axis, path, false, completed)),
+            FieldKind::Plugin(axis) => {
+                Input::Plugin(self.plugin(*axis, node, false, all_completed))
+            }
             FieldKind::List { axis, ordered } => {
-                Input::List(self.list(*axis, *ordered, path, completed))
+                Input::List(self.list(*axis, *ordered, node, completed, all_completed))
             }
             FieldKind::Optional(inner) => match &**inner {
-                FieldKind::Plugin(axis) => Input::Plugin(self.plugin(*axis, path, true, completed)),
-                FieldKind::List { .. } => self.input(inner, path, completed),
+                FieldKind::Plugin(axis) => {
+                    Input::Plugin(self.plugin(*axis, node, true, all_completed))
+                }
+                FieldKind::List { .. } => self.input(inner, node, completed, all_completed),
                 _ => Input::Optional {
                     answered: answer.is_some_and(|answer| !answer.is_null()),
-                    inner: Box::new(self.input(inner, path, completed)),
+                    inner: Box::new(self.input(inner, node, completed, all_completed)),
                 },
             },
         }
     }
 
-    /// The field taking one plugin of `axis` at `path`.
+    /// The field taking one plugin of `axis`.
     fn plugin(
         &self,
         axis: AnyAxis,
-        path: &Path,
+        node: &FieldNode,
         optional: bool,
-        completed: &Config,
+        all_completed: &[FieldNode],
     ) -> PluginInput {
-        let chosen = self
-            .draft
-            .answers()
-            .get_at(path)
-            .and_then(PluginConfig::from_answer)
-            .and_then(|plugin| axis.entry(plugin.plugin()));
-        let recommended = self.recommended(path);
-        let options = self.options(path, &recommended, |id| {
-            chosen.is_some_and(|chosen| chosen.id() == id)
+        let chosen = node.plugins.first();
+        let recommended = self.recommended(axis, &node.path);
+        let options = self.options(&node.path, &recommended, |id| {
+            chosen.is_some_and(|chosen| chosen.entry.id() == id)
         });
         PluginInput {
             optional,
-            chosen: chosen.map(|entry| Chosen {
-                plugin: PluginOption::of(entry, recommended.contains(&entry.id())),
-                fields: self.fields(&entry.schema(), Some(entry.id()), path, completed),
+            chosen: chosen.map(|chosen| Chosen {
+                plugin: PluginOption::of(chosen.entry, recommended.contains(&chosen.entry.id())),
+                // implied plugins are appended only to the composite's lists
+                fields: self.fields(
+                    &chosen.fields,
+                    Some(chosen.entry.id()),
+                    &chosen.fields,
+                    all_completed,
+                ),
             }),
             options,
         }
     }
 
-    /// The field taking a list of plugins of `axis` at `path`.
-    fn list(&self, axis: AnyAxis, ordered: bool, path: &Path, completed: &Config) -> ListInput {
-        let entries = |answers: Option<&Value>| -> Vec<&'static PluginEntry> {
-            answers
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|answer| axis.entry(PluginConfig::from_answer(answer)?.plugin()))
-                .collect()
-        };
-        let chosen = entries(self.draft.answers().get_at(path));
+    /// The field taking a list of plugins of `axis`.
+    fn list(
+        &self,
+        axis: AnyAxis,
+        ordered: bool,
+        node: &FieldNode,
+        completed: &FieldNode,
+        all_completed: &[FieldNode],
+    ) -> ListInput {
+        let path = &node.path;
+        let chosen = &node.plugins;
         // implied plugins are appended to what was chosen
-        let mut implied = entries(completed.get_at(path));
-        let implied = implied.split_off(chosen.len().min(implied.len()));
-        let recommended = self.recommended(path);
+        let implied = &completed.plugins[chosen.len()..];
+        let recommended = self.recommended(axis, path);
         let options = self
             .options(&path.clone().index(chosen.len()), &recommended, |_| false)
             .into_iter()
-            .filter(|option| !implied.iter().any(|entry| entry.id() == option.id))
+            .filter(|option| !implied.iter().any(|plugin| plugin.entry.id() == option.id))
             .collect();
         ListInput {
             ordered,
             items: chosen
                 .iter()
-                .enumerate()
-                .map(|(index, entry)| {
-                    let path = path.clone().index(index);
+                .map(|chosen| {
+                    let entry = chosen.entry;
                     Item {
                         plugin: PluginOption::of(entry, recommended.contains(&entry.id())),
-                        fields: self.fields(&entry.schema(), Some(entry.id()), &path, completed),
-                        path,
+                        fields: self.fields(
+                            &chosen.fields,
+                            Some(entry.id()),
+                            &chosen.fields,
+                            all_completed,
+                        ),
+                        path: chosen.path.clone(),
                         issues: Vec::new(),
                     }
                 })
                 .collect(),
             implied: implied
-                .into_iter()
-                .map(|entry| Implied {
-                    plugin: PluginOption::of(entry, recommended.contains(&entry.id())),
-                    needed_by: needed_by(entry, axis, completed),
+                .iter()
+                .map(|plugin| Implied {
+                    plugin: PluginOption::of(
+                        plugin.entry,
+                        recommended.contains(&plugin.entry.id()),
+                    ),
+                    needed_by: needed_by(plugin.entry, axis, all_completed),
                 })
                 .collect(),
             options,
@@ -701,20 +718,16 @@ impl PhaseForm {
     }
 
     /// The ids of the plugins the field at `path` offers.
-    fn recommended(&self, path: &Path) -> Vec<&'static str> {
+    fn recommended(&self, axis: AnyAxis, path: &Path) -> Vec<&'static str> {
         let offered = self.draft.default_value(path).ok().flatten();
         let answers = match &offered {
             Some(Value::Array(answers)) => answers.iter().collect(),
             Some(answer) => vec![answer],
             None => Vec::new(),
         };
-        let axis = self
-            .kind(&list_field(path))
-            .ok()
-            .and_then(|kind| kind.axis());
         answers
             .into_iter()
-            .filter_map(|answer| axis?.entry(PluginConfig::from_answer(answer)?.plugin()))
+            .filter_map(|answer| axis.entry(PluginConfig::from_answer(answer)?.plugin()))
             .map(PluginEntry::id)
             .collect()
     }
@@ -763,9 +776,12 @@ fn keep_what_is_needed(
     draft: &mut Draft<PhasePlugins>,
     list: &Path,
 ) -> Result<(), ConfigError> {
-    let Some(FieldKind::List { axis, .. }) = kind_at(draft.answers(), list) else {
+    let nodes = draft.fields();
+    let Some(FieldKind::List { axis, .. }) = field_at(&nodes, list).map(|node| node.field.kind())
+    else {
         return Ok(());
     };
+    let axis = *axis;
     let mut chosen = Vec::new();
     let mut declined = Vec::new();
     for field in PhasePlugins::schema().fields() {
@@ -834,15 +850,11 @@ fn plugins_in(axis: AnyAxis, answer: Option<&Value>) -> Vec<&'static PluginEntry
 
 /// The plugins answering the fields of the phase in `completed` that need `entry` of `axis`, in
 /// the order of the fields, by their static declarations, see [`PluginEntry::providers_in`].
-fn needed_by(entry: &PluginEntry, axis: AnyAxis, completed: &Config) -> Vec<PluginOption> {
-    PhasePlugins::schema()
-        .fields()
+fn needed_by(entry: &PluginEntry, axis: AnyAxis, completed: &[FieldNode]) -> Vec<PluginOption> {
+    completed
         .iter()
-        .filter_map(|field| {
-            let answer = completed.get_at(&Path::ROOT.field(field.name()));
-            Some(plugins_in(field.kind().axis()?, answer))
-        })
-        .flatten()
+        .flat_map(|field| &field.plugins)
+        .map(|plugin| plugin.entry)
         .filter(|plugin| {
             plugin
                 .providers_in(axis)
@@ -930,37 +942,20 @@ fn as_offered(draft: &Draft<PhasePlugins>, path: &Path) -> bool {
         .is_some_and(|as_offered| as_offered.answers().get_at(path) == Some(answer))
 }
 
-/// The paths of the fields answered or to be answered in `answers`: those of the phase, each
+/// The paths of the enumerated fields: those of the phase, each
 /// followed by those of the plugins answering it, in schema order.
-fn field_paths(answers: &Config) -> Vec<Path> {
-    fn walk(schema: &Schema, answers: &Config, at: &Path, paths: &mut Vec<Path>) {
-        for field in schema.fields() {
-            let path = at.clone().field(field.name());
-            paths.push(path.clone());
-            let Some(axis) = field.kind().axis() else {
-                continue;
-            };
-            let plugins = match answers.get_at(&path) {
-                Some(Value::Array(answers)) => (0..answers.len())
-                    .map(|index| path.clone().index(index))
-                    .collect(),
-                Some(_) => vec![path],
-                None => Vec::new(),
-            };
-            for plugin in plugins {
-                if let Some(entry) = answers
-                    .get_at(&plugin)
-                    .and_then(PluginConfig::from_answer)
-                    .and_then(|config| axis.entry(config.plugin()))
-                {
-                    walk(&entry.schema(), answers, &plugin, paths);
-                }
+fn field_paths(fields: &[FieldNode]) -> Vec<Path> {
+    fn walk(fields: &[FieldNode], paths: &mut Vec<Path>) {
+        for field in fields {
+            paths.push(field.path.clone());
+            for plugin in &field.plugins {
+                walk(&plugin.fields, paths);
             }
         }
     }
 
     let mut paths = Vec::new();
-    walk(&PhasePlugins::schema(), answers, &Path::ROOT, &mut paths);
+    walk(fields, &mut paths);
     paths
 }
 
@@ -996,8 +991,8 @@ fn place(fields: &mut [FormField], path: &Path, text: &Text) -> bool {
     true
 }
 
-/// What `issue` of the answers `answers` says.
-fn issue_text(issue: &Issue, answers: &Config) -> Text {
+/// What `issue` of the enumerated fields says.
+fn issue_text(issue: &Issue, fields: &[FieldNode]) -> Text {
     match issue.problem() {
         Problem::Invalid(ConfigError::Unanswered { .. }) => Text::new("issue-unanswered"),
         Problem::Invalid(ConfigError::OutOfRange { allowed, .. }) => {
@@ -1016,10 +1011,11 @@ fn issue_text(issue: &Issue, answers: &Config) -> Text {
             required_by,
             providers,
         } => {
-            let plugin = entry_at(answers, required_by)
+            let plugin = plugin_at(fields, required_by)
+                .map(|plugin| plugin.entry)
                 .map_or_else(|| Arg::from(required_by.to_string()), plugin_arg);
             // the providers are of the axis of the field the issue is at
-            let axis = kind_at(answers, issue.path()).and_then(|kind| kind.axis());
+            let axis = field_at(fields, issue.path()).and_then(|node| node.field.kind().axis());
             let providers: Vec<_> = providers
                 .iter()
                 .filter_map(|id| axis?.entry(id))
@@ -1075,64 +1071,31 @@ fn plugin_arg(entry: &'static PluginEntry) -> Arg {
     }
 }
 
-/// The kind of answer the field at `path` in `answers` takes, if there is such a field.
-fn kind_at(answers: &Config, path: &Path) -> Option<FieldKind> {
-    let Some(Segment::Field(name)) = path.segments().last() else {
-        return None;
-    };
-    let schema = schema_at(answers, &parent(path))?;
-    Some(schema.field_named(name)?.kind().clone())
-}
-
-/// The schema of the config at `config` in `answers`: the phase's at the root, else that of the
-/// plugin answering the position.
-fn schema_at(answers: &Config, config: &Path) -> Option<Schema> {
-    if config.segments().is_empty() {
-        return Some(PhasePlugins::schema());
-    }
-    entry_at(answers, config).map(PluginEntry::schema)
-}
-
-/// The plugin answering the position at `path` in `answers`, if one does.
-fn entry_at(answers: &Config, path: &Path) -> Option<&'static PluginEntry> {
-    let plugin = |at: &Path, axis: AnyAxis| {
-        axis.entry(PluginConfig::from_answer(answers.get_at(at)?)?.plugin())
-    };
-    let mut schema = PhasePlugins::schema();
-    let mut axis = None;
-    let mut at = Path::ROOT;
-    for segment in path.segments() {
-        match segment {
-            Segment::Field(name) => {
-                if let Some(axis) = axis {
-                    schema = plugin(&at, axis)?.schema();
-                }
-                axis = schema.field_named(name)?.kind().axis();
-                at = at.field(name.clone());
-            }
-            Segment::Index(index) => at = at.index(*index),
+/// Finds a field in the enumerated tree, e.g. for an edit or a diagnostic.
+fn field_at<'a>(fields: &'a [FieldNode], path: &Path) -> Option<&'a FieldNode> {
+    fields.iter().find_map(|field| {
+        if field.path == *path {
+            Some(field)
+        } else {
+            field
+                .plugins
+                .iter()
+                .find_map(|plugin| field_at(&plugin.fields, path))
         }
-    }
-    plugin(&at, axis?)
+    })
 }
 
-/// The path of the config the field at `path` is in: `path` without its last field, and without
-/// a position in a list after it.
-fn parent(path: &Path) -> Path {
-    let segments = path.segments();
-    let end = segments
+fn plugin_at<'a>(fields: &'a [FieldNode], path: &Path) -> Option<&'a PluginNode> {
+    fields
         .iter()
-        .rposition(|segment| matches!(segment, Segment::Field(_)))
-        .unwrap_or(0);
-    of(&segments[..end])
-}
-
-/// The field `path` is, or the list `path` is a position of.
-fn list_field(path: &Path) -> Path {
-    match path.segments().split_last() {
-        Some((Segment::Index(_), list)) => of(list),
-        _ => path.clone(),
-    }
+        .flat_map(|field| &field.plugins)
+        .find_map(|plugin| {
+            if plugin.path == *path {
+                Some(plugin)
+            } else {
+                plugin_at(&plugin.fields, path)
+            }
+        })
 }
 
 /// The list `item` is a position of, and the position.

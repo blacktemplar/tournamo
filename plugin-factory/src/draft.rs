@@ -20,12 +20,16 @@
 //! arrive in turn, so the candidates and issues are optimistic about it; [`Draft::build`] checks
 //! with nothing open. Whether a provider fits is judged by its static declaration.
 
+mod fields;
+
 use std::{
     any::TypeId,
     fmt::{self, Display, Formatter},
     marker::PhantomData,
     sync::Arc,
 };
+
+pub use fields::{FieldNode, PluginNode};
 
 use crate::{
     Plugin,
@@ -40,17 +44,16 @@ use crate::{
 /// The answers to the schema of the composite `T` given so far, see the [module](self).
 ///
 /// # Examples
-/// A UI renders the fields by walking the schema of the composite along the answers, and the
-/// schema of each plugin answering a field along the config of that plugin, building the path of
-/// each field on the way:
+/// A UI walks the fields and their chosen plugins. Each field carries its schema, answer, and
+/// path, so the UI need not interpret plugin configs or resolve paths to render it:
 ///
 /// ```
 /// use plugin_factory::{
 ///     Plugin, axis,
-///     config::{Config, Path, PluginConfig, Value},
-///     draft::Draft,
+///     config::PluginConfig,
+///     draft::{Draft, FieldNode},
 ///     register,
-///     schema::{Configurable, FieldKind, Schema},
+///     schema::Configurable,
 /// };
 /// use serde::{Deserialize, Serialize};
 ///
@@ -77,37 +80,12 @@ use crate::{
 ///     seedings: Vec<Box<dyn Seeding>>,
 /// }
 ///
-/// /// Every field of `schema`, the schema of the config at `at`, by path and label, each followed
-/// /// by the fields of the plugins answering it in `config`.
-/// fn fields(schema: &Schema, config: &Config, at: &Path, lines: &mut Vec<String>) {
-///     for field in schema.fields() {
-///         let path = at.clone().field(field.name());
-///         lines.push(format!("{path}: {}", field.label()));
-///         if let Some(answer) = config.get(field.name()) {
-///             plugin_fields(field.kind(), answer, &path, lines);
+/// fn fields(nodes: &[FieldNode], lines: &mut Vec<String>) {
+///     for node in nodes {
+///         lines.push(format!("{}: {}", node.path, node.field.label()));
+///         for plugin in &node.plugins {
+///             fields(&plugin.fields, lines);
 ///         }
-///     }
-/// }
-///
-/// /// The fields of the plugins in `answer`, an answer of `kind` at `at`.
-/// fn plugin_fields(kind: &FieldKind, answer: &Value, at: &Path, lines: &mut Vec<String>) {
-///     match (kind, answer) {
-///         (FieldKind::Optional(inner), _) if !answer.is_null() => {
-///             plugin_fields(inner, answer, at, lines);
-///         }
-///         (FieldKind::List { axis, .. }, Value::Array(answers)) => {
-///             for (index, answer) in answers.iter().enumerate() {
-///                 let path = at.clone().index(index);
-///                 plugin_fields(&FieldKind::Plugin(*axis), answer, &path, lines);
-///             }
-///         }
-///         (FieldKind::Plugin(axis), _) => {
-///             // an answer is checked when it is set, so it names a plugin of the axis
-///             let plugin = PluginConfig::deserialize(answer).unwrap();
-///             let schema = axis.entry(plugin.plugin()).unwrap().schema();
-///             fields(&schema, plugin.config(), at, lines);
-///         }
-///         _ => {}
 ///     }
 /// }
 ///
@@ -121,7 +99,7 @@ use crate::{
 ///     .unwrap();
 ///
 /// let mut lines = Vec::new();
-/// fields(&Phase::schema(), draft.answers(), &Path::ROOT, &mut lines);
+/// fields(&draft.fields(), &mut lines);
 /// assert_eq!(
 ///     lines,
 ///     [
@@ -269,6 +247,12 @@ impl<T: Configurable> Draft<T> {
     /// The answers given so far, as the config of the composite.
     pub fn answers(&self) -> &Config {
         &self.answers
+    }
+
+    /// The fields in schema order, each with its answer and the fields of its chosen plugins.
+    /// Unanswered fields are included; defaults and implied plugins are not added.
+    pub fn fields(&self) -> Vec<FieldNode> {
+        fields::fields(&T::schema(), &self.answers, &Path::ROOT)
     }
 
     /// Answers the position at `path` with `answer`: a field, a position in a list, or the
@@ -1281,50 +1265,26 @@ impl Tree {
             questions: Vec::new(),
             plugins: Vec::new(),
         };
-        tree.add_config(schema, answers, &Path::ROOT);
+        tree.add_fields(fields::fields(schema, answers, &Path::ROOT), &Path::ROOT);
         tree
     }
 
-    fn add_config(&mut self, schema: &Schema, config: &Config, at: &Path) {
-        for field in schema.fields() {
-            let path = at.clone().field(field.name());
-            let answer = config.get(field.name()).cloned();
+    fn add_fields(&mut self, fields: Vec<FieldNode>, parent: &Path) {
+        for node in fields {
             self.questions.push(Question {
-                path: path.clone(),
-                field: field.clone(),
-                answer: answer.clone(),
+                path: node.path,
+                field: node.field,
+                answer: node.answer,
             });
-            if let Some(answer) = &answer {
-                self.add_answer(field.kind(), answer, path, at);
+            for plugin in node.plugins {
+                self.plugins.push(Placed::new(
+                    plugin.entry,
+                    &plugin.config,
+                    plugin.path.clone(),
+                    parent,
+                ));
+                self.add_fields(plugin.fields, &plugin.path);
             }
-        }
-    }
-
-    /// Adds the plugins in `answer`, an answer of `kind` at `path` in the config at `parent`.
-    ///
-    /// The answers are checked when they are set, so an answer that is not of its kind is nothing
-    /// but an answer of nothing to an optional field.
-    fn add_answer(&mut self, kind: &FieldKind, answer: &Value, path: Path, parent: &Path) {
-        match (kind, answer) {
-            (FieldKind::Optional(inner), _) => self.add_answer(inner, answer, path, parent),
-            (FieldKind::List { axis, .. }, Value::Array(answers)) => {
-                let element = FieldKind::Plugin(*axis);
-                for (index, answer) in answers.iter().enumerate() {
-                    self.add_answer(&element, answer, path.clone().index(index), parent);
-                }
-            }
-            (FieldKind::Plugin(axis), _) => {
-                let Some(plugin) = PluginConfig::from_answer(answer) else {
-                    return;
-                };
-                let Some(entry) = axis.entry(plugin.plugin()) else {
-                    return;
-                };
-                self.plugins
-                    .push(Placed::new(entry, plugin.config(), path.clone(), parent));
-                self.add_config(&entry.schema(), plugin.config(), &path);
-            }
-            _ => {}
         }
     }
 
@@ -1814,6 +1774,61 @@ mod tests {
                 ("tie_break".to_owned(), false),
             ]
         );
+    }
+
+    #[test]
+    fn enumerated_fields_carry_the_answers_and_nested_plugins() {
+        let draft = draft()
+            .with(
+                "metrics",
+                vec![plugin::<Combined>().with("parts", vec![plugin::<Wins>().with("for_win", 2)])],
+            )
+            .unwrap()
+            .with("tie_break", plugin::<Wins>())
+            .unwrap();
+
+        let fields = draft.fields();
+        assert_eq!(fields[0].field.name(), "format");
+        assert_eq!(fields[0].answer, None);
+        assert!(fields[0].plugins.is_empty());
+
+        let combined = &fields[1].plugins[0];
+        assert_eq!(combined.entry.id(), Combined::ID);
+        let wins = &combined.fields[0].plugins[0];
+        assert_eq!(wins.entry.id(), Wins::ID);
+        assert_eq!(wins.fields[0].path, path("metrics[0].parts[0].for_win"));
+        assert_eq!(wins.fields[0].answer, Some(json!(2)));
+        assert!(wins.fields[0].plugins.is_empty());
+
+        let tie_break = &fields[2].plugins[0];
+        assert_eq!(tie_break.entry.id(), Wins::ID);
+        assert_eq!(tie_break.fields[0].path, path("tie_break.for_win"));
+        assert_eq!(tie_break.fields[0].answer, None);
+    }
+
+    #[test]
+    fn enumeration_after_edits_uses_the_current_plugin_and_list_positions() {
+        let mut draft = draft()
+            .with("format", plugin::<Knockout>())
+            .unwrap()
+            .with("metrics", vec![plugin::<Wins>(), plugin::<Combined>()])
+            .unwrap();
+        let before = draft.fields();
+
+        draft.unset(&before[1].plugins[0].path).unwrap();
+        draft.set(&before[0].path, plugin::<RoundRobin>()).unwrap();
+        draft.set(&path("tie_break"), Value::Null).unwrap();
+
+        let after = draft.fields();
+        assert_eq!(after[0].plugins[0].entry.id(), RoundRobin::ID);
+        assert!(after[0].plugins[0].fields.is_empty());
+        assert_eq!(after[1].plugins.len(), 1);
+        assert_eq!(after[1].plugins[0].entry.id(), Combined::ID);
+        assert_eq!(after[1].plugins[0].fields[0].path, path("metrics[0].parts"));
+        assert_eq!(after[2].answer, Some(Value::Null));
+        assert!(after[2].plugins.is_empty());
+        // the previous enumeration remains a snapshot, not another owner of the draft's answers
+        assert_eq!(before[1].plugins[0].entry.id(), Wins::ID);
     }
 
     #[test]

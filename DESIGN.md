@@ -804,7 +804,9 @@ other changes); native selects (no descriptions where the choice is made).
   list, it answers "whom does Carol play" as well as a filter, which would have
   overlapped the typed entry. So every name shown is text on the page, and what
   is not shown is `hidden`. *Planned:* with running matches, entry belongs to
-  their list, where a name fits one match.
+  their list, where a name fits one match. Starting a match is then an action of
+  its own, perhaps following a suggestion of what to start next that the keyboard
+  can confirm; any order of rounds stays allowed.
 - **A finished competition says who won** (`Session::winners`, all tied for first
   by name); the list says it too through `Progress::Won` (older listings keep
   `Progress::Finished` until their next save).

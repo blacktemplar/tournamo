@@ -101,6 +101,8 @@ a file whose `"format"` changes is migrated, not refused.
   beside its name on a phone, and removing one is an icon. Removing an entrant
   and deleting a competition are quieter buttons.
 - The field of a new entrant keeps room for a name beside a long button.
+- On the narrowest phones, cards and the buttons of a match take less padding,
+  so that a long word of a name fits beside the buttons in wider fonts too.
 
 ## [0.1.0] - 2026-10-28
 

@@ -1522,6 +1522,18 @@ ul.summary-items {
   }
 }
 
+/* the narrowest phones, where a wide font leaves a longer word no room beside the buttons unless
+ * the card and the buttons give up some of their padding */
+@media (width < 23rem) {
+  .card {
+    padding-inline: var(--space-2);
+  }
+
+  .match button {
+    padding-inline: var(--space-2);
+  }
+}
+
 .match .result {
   color: var(--text-muted);
 }

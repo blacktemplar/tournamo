@@ -100,7 +100,7 @@ read-only = This competition is open in another tab, so it is only shown here. I
 ## Before the start
 
 entrants = Entrants
-no-entrants = No entrants yet. Each one is added by its name.
+no-entrants = No entrants yet. Each one is added by its name, or several at once by pasting a list with a name on each line.
 name = Name
 add-entrant = Add entrant
 # the name typed looks like that of an entrant, e.g. differing in case only, so that it is refused
@@ -258,6 +258,8 @@ announce-unscheduled = { $count ->
 announce-undone = Undone: { $action }.
 announce-redone = Redone: { $action }.
 announce-added-entrant = Added { $name }.
+# entrants added at once, from a list pasted with a name on each line
+announce-added-entrants = Added { $count } entrants.
 announce-removed-entrant = Removed { $name }.
 announce-renamed-entrant = Renamed { $name } to { $new_name }.
 announce-added-phase = The phase is added.

@@ -6,6 +6,7 @@ use tournament_app::{
     session::Session,
     view::EntrantRow,
 };
+use wasm_bindgen::JsCast as _;
 
 use crate::{
     announcement::Announcement,
@@ -95,6 +96,25 @@ pub fn Entrants() -> Element {
                     oninput: move |event| {
                         error.set(None);
                         name.set(event.value());
+                    },
+                    // a list pasted adds an entrant for each of its lines, which a field of one
+                    // line would join
+                    onpaste: move |event| {
+                        let Some(lines) = pasted_lines(&event) else {
+                            return;
+                        };
+                        event.prevent_default();
+                        if !ctx.changes() {
+                            return;
+                        }
+                        match ctx.try_act(|session| session.add_entrants(&lines)) {
+                            Ok(added) => {
+                                error.set(None);
+                                scroll_to_field();
+                                ctx.announce(Announcement::AddedEntrants(added.len()));
+                            }
+                            Err(refused) => error.set(Some(refused)),
+                        }
                     },
                 }
                 button {
@@ -247,6 +267,17 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize) -> Element {
             }
         }
     }
+}
+
+/// The text `event` pastes, if it has more than one line that is not blank.
+fn pasted_lines(event: &Event<ClipboardData>) -> Option<String> {
+    let data = event.data();
+    let event = data
+        .downcast::<web_sys::Event>()?
+        .dyn_ref::<web_sys::ClipboardEvent>()?;
+    let text = event.clipboard_data()?.get_data("text").ok()?;
+    let lines = text.lines().filter(|line| !line.trim().is_empty()).count();
+    (lines > 1).then_some(text)
 }
 
 /// Scrolls the field of the name into view, once the entrant just added is rendered above it, so

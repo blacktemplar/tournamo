@@ -83,7 +83,7 @@ read-only = Dieses Turnier ist in einem anderen Tab geöffnet und wird hier nur 
 ## Before the start
 
 entrants = Teilnehmer
-no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt.
+no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile.
 name = Name
 add-entrant = Teilnehmer hinzufügen
 entrant-like = „{ $name }“ ist schon eingetragen.
@@ -197,6 +197,7 @@ announce-unscheduled = { $count ->
 announce-undone = Rückgängig gemacht: { $action }.
 announce-redone = Wiederhergestellt: { $action }.
 announce-added-entrant = { $name } hinzugefügt.
+announce-added-entrants = { $count } Teilnehmer hinzugefügt.
 announce-removed-entrant = { $name } entfernt.
 announce-renamed-entrant = { $name } in { $new_name } umbenannt.
 announce-added-phase = Die Phase ist hinzugefügt.

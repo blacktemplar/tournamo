@@ -19,9 +19,12 @@ tournament-browser.workspace = true
 tournament-engine.workspace = true
 wasm-bindgen.workspace = true
 # the languages the browser prefers, the one chosen, the page's `<html lang>`, the competition
-# open, after the `#` of its URL, and the keys and pointers closing the toggletips
+# open, after the `#` of its URL, the keys and pointers closing the toggletips, and lists of
+# entrants pasted
 web-sys = { workspace = true, features = [
+    "ClipboardEvent",
     "CssStyleDeclaration",
+    "DataTransfer",
     "Document",
     "DomRect",
     "Element",

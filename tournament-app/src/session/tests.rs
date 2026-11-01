@@ -181,6 +181,44 @@ fn a_removed_entrant_comes_back_with_its_name_by_undo() {
     assert_eq!(names(&session.entrants()), ["Alice", "Bob"]);
 }
 
+/// A list adds an entrant for each line not blank, each an action of its own.
+#[test]
+fn a_list_adds_an_entrant_for_each_line() {
+    let mut session = Session::new("cup");
+    session.add_entrant("Alice").unwrap();
+
+    let added = session.add_entrants("Bob\r\n  Carol \n\n Dave\n").unwrap();
+
+    assert_eq!(added.len(), 3);
+    assert_eq!(
+        names(&session.entrants()),
+        ["Alice", "Bob", "Carol", "Dave"]
+    );
+    session.undo().unwrap();
+    assert_eq!(names(&session.entrants()), ["Alice", "Bob", "Carol"]);
+}
+
+/// A list with a name taken, by an entrant or an earlier line, adds nobody.
+#[test]
+fn a_list_with_a_name_taken_adds_nobody() {
+    let mut session = Session::new("cup");
+    session.add_entrant("Alice").unwrap();
+
+    assert!(matches!(
+        session.add_entrants("Bob\nALICE"),
+        Err(AddEntrantError::DuplicateName(name)) if name == "Alice"
+    ));
+    assert!(matches!(
+        session.add_entrants("Bob\nCarol\nbob"),
+        Err(AddEntrantError::DuplicateName(name)) if name == "Bob"
+    ));
+    assert!(matches!(
+        session.add_entrants(" \n"),
+        Err(AddEntrantError::EmptyName)
+    ));
+    assert_eq!(names(&session.entrants()), ["Alice"]);
+}
+
 /// Renaming keeps the entrant's place, also after the start, and is saved; it appends nothing to
 /// the log, so undo undoes the action before it.
 #[test]

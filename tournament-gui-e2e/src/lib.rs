@@ -198,6 +198,25 @@ impl Gui {
         self.page.expect_texts(By::Css(".notice"), notices).await
     }
 
+    /// Pastes `text` into the field of a new entrant's name, as from the clipboard.
+    pub async fn paste_entrant_names(&self, text: &str) -> WebDriverResult<()> {
+        let input = self.driver.query(By::Id("entrant-name")).first().await?;
+        // headless Chrome has no clipboard to paste from
+        self.driver
+            .execute(
+                "const data = new DataTransfer();
+                data.setData('text/plain', arguments[1]);
+                arguments[0].focus();
+                arguments[0].dispatchEvent(new ClipboardEvent('paste', {
+                    clipboardData: data, bubbles: true, cancelable: true,
+                }));",
+                vec![input.to_json()?, serde_json::Value::from(text)],
+            )
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Renames the entrant `name` in place: opens its field by its button, and types `new_name`
     /// over the name there, then presses `key`, Enter to rename it or Escape to leave it.
     pub async fn rename_entrant(

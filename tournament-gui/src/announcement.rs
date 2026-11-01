@@ -14,6 +14,8 @@ use crate::{capitalized, i18n::t, result_text, team_name, winners_text};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Announcement {
     AddedEntrant(EntrantRow),
+    /// Entrants added at once, e.g. from a list pasted, by their number.
+    AddedEntrants(usize),
     RemovedEntrant(EntrantRow),
     /// An entrant renamed, as it was and as it is.
     RenamedEntrant(EntrantRow, EntrantRow),
@@ -36,6 +38,7 @@ impl Announcement {
             Self::AddedEntrant(added) => {
                 t!(tr, "announce-added-entrant", name = entrant(added))
             }
+            Self::AddedEntrants(count) => t!(tr, "announce-added-entrants", count = *count),
             Self::RemovedEntrant(removed) => {
                 t!(tr, "announce-removed-entrant", name = entrant(removed))
             }

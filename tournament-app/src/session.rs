@@ -405,7 +405,6 @@ impl Session {
 
     /// As [`Self::entrant_like`], but never `besides`, e.g. the entrant being renamed.
     fn entrant_like_besides(&self, name: &str, besides: Option<EntrantId>) -> Option<String> {
-        let folded = |name: &str| name.trim().nfkc().collect::<String>().to_lowercase();
         let name = folded(name);
         if name.is_empty() {
             return None;
@@ -451,6 +450,42 @@ impl Session {
         self.people.add(Person::new(id, name));
         self.unsaved_people.insert(id);
         Ok(id)
+    }
+
+    /// Adds an entrant for each line of `lines` that is not blank, e.g. of a list pasted, as
+    /// [`Self::add_entrant`] adds one: all of them, in order, or none if any is refused. Each is
+    /// an action of its own.
+    ///
+    /// # Errors
+    /// Returns an error if every line is blank, a name looks like another entrant's or that of an
+    /// earlier line, see [`Self::entrant_like`], or the competition has started.
+    pub fn add_entrants(&mut self, lines: &str) -> Result<Vec<EntrantId>, AddEntrantError> {
+        let names: Vec<&str> = lines
+            .lines()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .collect();
+        if names.is_empty() {
+            return Err(AddEntrantError::EmptyName);
+        }
+        if self.competition().is_started() {
+            return Err(AddEntrantError::Started);
+        }
+        let mut earlier = HashMap::new();
+        for name in &names {
+            if let Some(entered) = self.entrant_like(name) {
+                return Err(AddEntrantError::DuplicateName(entered));
+            }
+            if let Some(earlier) = earlier.insert(folded(name), *name) {
+                return Err(AddEntrantError::DuplicateName(earlier.to_owned()));
+            }
+        }
+        // what `add_entrant` refuses is checked above, so none of them is refused after another
+        // was added
+        names
+            .into_iter()
+            .map(|name| self.add_entrant(name))
+            .collect()
     }
 
     /// Removes the entrant `id`. Its name is kept, in case the removal is undone.
@@ -1432,6 +1467,11 @@ fn people<E>(stored: &Stored) -> Result<People, LoadError<E>> {
         people.add(serde_json::from_str(person).map_err(LoadError::Person)?);
     }
     Ok(people)
+}
+
+/// `name` as it is compared to tell names that look alike, see [`Session::entrant_like`].
+fn folded(name: &str) -> String {
+    name.trim().nfkc().collect::<String>().to_lowercase()
 }
 
 /// What a person is stored as.

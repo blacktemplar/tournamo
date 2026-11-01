@@ -4374,6 +4374,7 @@ name = "tournament-gui-e2e"
 version = "0.1.0"
 dependencies = [
  "e2e-harness",
+ "serde_json",
  "tokio",
 ]
 

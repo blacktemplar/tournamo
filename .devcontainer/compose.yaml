@@ -35,6 +35,8 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: gc.worktreePruneExpire
       GIT_CONFIG_VALUE_0: never
+      # .devcontainer is read-only here, and these hooks fail on read-only files
+      SKIP: end-of-file-fixer-devcontainer,fix-byte-order-marker-devcontainer
     volumes:
       # the checkout and the repository it belongs to, at their paths on the host, where a
       # worktree's .git file points

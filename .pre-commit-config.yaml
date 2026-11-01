@@ -85,8 +85,18 @@ repos:
       - id: check-added-large-files
       - id: check-case-conflict
       - id: check-illegal-windows-names
+      # .devcontainer/ separately: the dev container, where it is read-only, skips these (SKIP in
+      # .devcontainer/compose.yaml), as the fixers fail on read-only files
       - id: end-of-file-fixer
+        exclude: ^\.devcontainer/
+      - id: end-of-file-fixer
+        alias: end-of-file-fixer-devcontainer
+        files: ^\.devcontainer/
       - id: fix-byte-order-marker
+        exclude: ^\.devcontainer/
+      - id: fix-byte-order-marker
+        alias: fix-byte-order-marker-devcontainer
+        files: ^\.devcontainer/
       - id: check-json
       - id: check-toml
       - id: check-vcs-permalinks

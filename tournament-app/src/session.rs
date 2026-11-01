@@ -51,8 +51,9 @@ use crate::{
     people::{People, Person},
     storage::{Changes, CompetitionKey, Listing, Progress, Storage, Stored},
     view::{
-        Action, Actions, ByeRow, Column, Entered, EntrantRow, Format, MatchRow, Medal, NameSearch,
-        Reopened, Reported, Round, RoundSummary, StageName, StandingCell, StandingRow, Standings,
+        Action, Actions, ByeRow, Column, Entered, EntrantRow, Glossary, MatchRow, Medal,
+        NameSearch, Plugin, Reopened, Reported, Round, RoundSummary, StageName, StandingCell,
+        StandingRow, Standings,
     },
 };
 
@@ -536,18 +537,20 @@ impl Session {
     }
 
     /// Every format a phase can be played in.
-    pub fn formats() -> Vec<Format> {
-        AnyAxis::of::<dyn PhaseFormat>()
-            .entries()
-            .map(|entry| Format {
-                id: entry.id(),
-                label: entry.label(),
-                description: entry.description(),
-            })
-            .collect()
+    pub fn formats() -> Vec<Plugin> {
+        plugins(AnyAxis::of::<dyn PhaseFormat>())
     }
 
-    /// A draft of a phase of this competition played in the format `format`, a [`Format::id`],
+    /// Every format, criterion of the standings and metric a phase can be played with.
+    pub fn glossary() -> Glossary {
+        Glossary {
+            formats: Self::formats(),
+            criteria: plugins(AnyAxis::of::<dyn SliceRanker>()),
+            metrics: plugins(AnyAxis::of::<dyn MetricsCalculator>()),
+        }
+    }
+
+    /// A draft of a phase of this competition played in the format `format`, a [`Plugin::id`],
     /// with every field answered as offered, see [`Draft::with_defaults`]. It can be changed
     /// before it is handed to [`Self::add_phase`].
     ///
@@ -1467,6 +1470,17 @@ fn people<E>(stored: &Stored) -> Result<People, LoadError<E>> {
         people.add(serde_json::from_str(person).map_err(LoadError::Person)?);
     }
     Ok(people)
+}
+
+/// Every plugin of `axis`, in the order of their ids.
+fn plugins(axis: AnyAxis) -> Vec<Plugin> {
+    axis.entries()
+        .map(|entry| Plugin {
+            id: entry.id(),
+            label: entry.label(),
+            description: entry.description(),
+        })
+        .collect()
 }
 
 /// `name` as it is compared to tell names that look alike, see [`Session::entrant_like`].

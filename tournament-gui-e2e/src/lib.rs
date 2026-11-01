@@ -1599,6 +1599,23 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the help explains the plugin labelled `label` as `description`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_explained(&self, label: &str, description: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::XPath(format!(
+                    "//dl[@class='glossary']/dt[.='{label}']\
+                     /following-sibling::dd[1][.='{description}']"
+                )),
+                |query| query,
+                &format!("{label:?} explained as {description:?}"),
+            )
+            .await
+    }
+
     /// Presses `key` where the focus is, e.g. [`Key::Enter`] on a button.
     pub async fn press(&self, key: Key) -> WebDriverResult<()> {
         self.driver.active_element().await?.send_keys(key).await?;

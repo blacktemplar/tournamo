@@ -21,6 +21,8 @@ async fn the_help_says_where_the_competitions_are_kept() {
             .expect_texts(
                 By::Css("main h2"),
                 &[
+                    "Running a competition",
+                    "Formats and standings",
                     "Your data stays on your device",
                     "Offline use and installation",
                     "Open source",
@@ -42,6 +44,36 @@ async fn the_help_says_where_the_competitions_are_kept() {
 
         gui.follow("All competitions").await?;
         gui.expect_competitions(&["Cup"]).await
+    })
+    .await;
+}
+
+/// The list of competitions says what the page is for and links to how a competition is run; the
+/// help explains every format, criterion and metric by its label and description, and a link to
+/// a section of it opens it there.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_help_explains_how_a_competition_is_run() {
+    run(async |gui| {
+        gui.follow("How it works").await?;
+
+        gui.page.expect_title("Help – Tournamo").await?;
+        gui.page.expect_in_view("#help-running").await?;
+        gui.expect_explained("Round robin", "Everyone plays everyone.")
+            .await?;
+        gui.expect_explained(
+            "More Sonneborn-Berger",
+            "A tie break favouring those who beat or drew stronger opponents.",
+        )
+        .await?;
+        gui.expect_explained(
+            "Win-draw-loss record",
+            "How many matches were won, drawn and lost.",
+        )
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.page.open_at("help-formats").await?;
+        gui.page.expect_in_view("#help-formats").await
     })
     .await;
 }

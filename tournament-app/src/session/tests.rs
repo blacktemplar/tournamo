@@ -296,6 +296,20 @@ fn every_format_adds_a_phase_with_the_answers_it_offers() {
     }
 }
 
+/// A help explains every plugin, each by its label and description.
+#[test]
+fn the_glossary_has_every_format_criterion_and_metric() {
+    let glossary = Session::glossary();
+
+    let ids =
+        |plugins: &[Plugin]| -> Vec<&str> { plugins.iter().map(|plugin| plugin.id).collect() };
+    assert!(ids(&glossary.formats).contains(&RoundRobin::ID));
+    assert!(ids(&glossary.criteria).contains(&<MoreWins as PluginType>::ID));
+    assert!(ids(&glossary.metrics).contains(&RoundOfFirstLossCalculator::ID));
+    let all = [glossary.formats, glossary.criteria, glossary.metrics].concat();
+    assert!(all.iter().all(|plugin| plugin.description.is_some()));
+}
+
 #[test]
 fn an_unknown_format_has_no_draft() {
     let session = Session::new("cup");

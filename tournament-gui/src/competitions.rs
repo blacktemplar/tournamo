@@ -14,7 +14,7 @@ use crate::{
     Notices, Page,
     competition::{SAVED, lock_name},
     components::dialog::{Dialog, DialogDescription, DialogTitle},
-    download,
+    download, help,
     i18n::t,
     icons,
     notices::{Detail, use_cleared_on_language_change},
@@ -68,6 +68,11 @@ pub fn Competitions() -> Element {
             Notices {}
             section { class: "card", aria_labelledby: "new-competition",
                 h2 { id: "new-competition", {tr.get("new-competition")} }
+                p { class: "intro",
+                    {tr.get("intro")}
+                    " "
+                    a { class: "help-link", href: "#{help::RUNNING}", {tr.get("how-it-works")} }
+                }
                 form {
                     class: "row",
                     onsubmit: move |event| {

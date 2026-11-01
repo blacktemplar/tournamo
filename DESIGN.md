@@ -773,6 +773,11 @@ It serves adding a phase and editing it at any point (`reconfigure_phase`).
   focused are `aria-disabled`.
 - **Once added, the phase is a summary** edited in a dialog starting at its
   config; a refusal shows in the dialog.
+- **The help explains every plugin** from the catalog (`Session::glossary`), by
+  its translated label and description, so it needs no text of its own per
+  plugin. The phase and the empty list of entrants link to its sections
+  (`#help-<section>`) in a tab of their own, which keeps the session open, and
+  with it what can be undone.
 - **Widgets from the Dioxus team's components** (`select`, `dialog`), copied
   into `src/components/` and changed there: a plugin's option shows its
   description, which a native `option` cannot.

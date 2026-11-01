@@ -16,6 +16,10 @@ a file whose `"format"` changes is migrated, not refused.
   rather than removed and added again. Renaming is not undone by Undo.
 - A list pasted into the name of a new entrant adds an entrant for each of its
   lines, or nobody if one of the names is taken.
+- The help explains how a competition is run, and every format, criterion of
+  the standings and metric. The list of competitions says what Tournamo is for
+  and links there, as do the empty list of entrants and the phase, in a tab of
+  its own.
 - Naming a new competition, or renaming one, as another one is named says so
   while it is typed.
 - The bracket draws no box for a pairing against nobody: the entrant moving on

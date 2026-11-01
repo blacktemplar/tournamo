@@ -20,13 +20,29 @@ pub struct EntrantRow {
     pub name: Option<String>,
 }
 
-/// A format a phase can be played in.
+/// A plugin as a list of them shows it, e.g. a format a phase can be played in; its texts are
+/// translated by its id, see [`PluginText`](crate::i18n::PluginText).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Format {
-    /// The id [`Session::phase_draft`](crate::session::Session::phase_draft) takes.
+pub struct Plugin {
+    /// Its id; that of a format is what
+    /// [`Session::phase_draft`](crate::session::Session::phase_draft) takes.
     pub id: &'static str,
+    /// The label in English.
     pub label: &'static str,
+    /// What is said about it in English.
     pub description: Option<&'static str>,
+}
+
+/// Every plugin a phase can be configured with, by what it is, e.g. for a help explaining them,
+/// see [`Session::glossary`](crate::session::Session::glossary). Each list is in the order of the
+/// ids.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Glossary {
+    pub formats: Vec<Plugin>,
+    /// The criteria the standings can be ordered by.
+    pub criteria: Vec<Plugin>,
+    /// The metrics calculated from the results.
+    pub metrics: Vec<Plugin>,
 }
 
 /// A round of the phase as a list of rounds shows it.

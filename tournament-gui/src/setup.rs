@@ -11,6 +11,7 @@ use wasm_bindgen::JsCast as _;
 use crate::{
     announcement::Announcement,
     competition::Ctx,
+    help,
     i18n::t,
     icons,
     notices::use_cleared_on_language_change,
@@ -50,7 +51,11 @@ pub fn Entrants() -> Element {
                 }
             }
             if count == 0 {
-                p { class: "empty", {tr.get("no-entrants")} }
+                p { class: "empty",
+                    {tr.get("no-entrants")}
+                    " "
+                    HelpLink { section: help::RUNNING, text: tr.get("how-it-works") }
+                }
             }
             ol { id: "entrant-list",
                 for (position, (row, name)) in entrants.into_iter().enumerate() {
@@ -269,6 +274,21 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize) -> Element {
     }
 }
 
+/// A link saying `text` to the section `section` of the help, see [`help`], in a tab of its own,
+/// so that the competition stays open here, and with it what can be undone.
+#[component]
+fn HelpLink(section: &'static str, text: String) -> Element {
+    rsx! {
+        a {
+            class: "help-link",
+            href: "#{section}",
+            target: "_blank",
+            rel: "noopener",
+            {text}
+        }
+    }
+}
+
 /// The text `event` pastes, if it has more than one line that is not blank.
 fn pasted_lines(event: &Event<ClipboardData>) -> Option<String> {
     let data = event.data();
@@ -306,6 +326,9 @@ pub fn Phase() -> Element {
         section { class: "card", aria_labelledby: "phase",
             // focused once the phase is added, unless it can start
             h2 { id: "phase", tabindex: "-1", {tr.get("phase-heading")} }
+            p {
+                HelpLink { section: help::FORMATS, text: tr.get("formats-explained") }
+            }
             if has_phase {
                 PhaseSummary {}
             } else {

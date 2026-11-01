@@ -42,6 +42,19 @@ source-code = Source code
 help = Help
 # the title of the page while the help is shown
 help-title = Help – Tournamo
+help-running = Running a competition
+help-running-steps = A competition is run in four steps:
+help-running-entrants = Enter the entrants by name, one after the other, or paste a list with a name on each line.
+help-running-phase = Choose how they play: the format, and the order of the standings. Then add the phase.
+help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on. The phase can still be changed, as long as the change fits the results reported.
+help-running-results = Report the results: choose the side that won or Draw at a match, type them in, e.g. “3 1” for a win of the left side of match 3, or choose the winner in the bracket. The standings follow every result.
+help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done.
+help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
+help-formats = Formats and standings
+help-standings = The order of the standings
+help-standings-text = The standings compare the entrants by the criteria of their order in turn: the first decides, the second only between entrants the first leaves tied, and so on. A criterion compares a metric, a number calculated for each entrant from the results, such as the points; the metrics a criterion needs are calculated with it. Further metrics can be calculated and shown without ranking by them.
+help-criteria = Criteria
+help-metrics = Metrics
 help-stored = Your data stays on your device
 help-stored-here = Tournamo stores all competitions locally in your browser (in its IndexedDB). Nothing you enter leaves your device: no data is sent to a server, there is no tracking, and no account is required.
 help-stored-hosting = The page itself is delivered by GitHub Pages, which, like any web server, receives your IP address when you load it.
@@ -85,6 +98,12 @@ delete-description = Everything stored of it in this browser is removed. Export 
 error-competition-open-elsewhere = the competition is open in another tab; close it there first
 error-not-deleted = the competition could not be deleted
 new-competition = New competition
+# what the page is for, above the new competition
+intro = Tournamo runs a tournament in your browser: enter the entrants, choose a format, start, and report the results.
+# a link to the help on running a competition
+how-it-works = How it works
+# a link to the help on the formats and the order of the standings
+formats-explained = Formats and standings explained
 create = Create
 import = Import from a file
 error-empty-competition-name = a competition needs a name

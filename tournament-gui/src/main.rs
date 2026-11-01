@@ -5,7 +5,8 @@
 //! The competitions are stored in the browser's IndexedDB, see [`tournament_browser`]. The page
 //! starts with the list of them ([`competitions`]); the one open is named after the `#` of the URL
 //! and saved after each change ([`competition`]); `#help` is the [`help`], which the footer links
-//! to beside the source code. Everything the page says goes through a
+//! to beside the source code, and `#help-<section>` a section of it. Everything the page says goes
+//! through a
 //! [`Translator`] of the language chosen, see [`i18n`].
 //!
 //! The page is an app that works offline and can be installed: `public/` holds its manifest, the
@@ -77,7 +78,8 @@ impl Screen {
             return Self::List;
         };
         let fragment = hash.strip_prefix('#').unwrap_or(&hash);
-        if fragment == HELP {
+        // or a section of it, by the id of its heading
+        if fragment == HELP || fragment.starts_with(&format!("{HELP}-")) {
             return Self::Help;
         }
         Uuid::parse_str(fragment).map_or(Self::List, |key| {

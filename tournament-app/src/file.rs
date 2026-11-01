@@ -68,15 +68,15 @@ impl<'de> Deserialize<'de> for Format {
 
 /// What a file holds: the log `L` and the people `P`, as the CLI saves them, plus the name.
 #[derive(Serialize, Deserialize)]
-pub(crate) struct File<L, P> {
+pub struct File<L, P> {
     // first, so that a file of a newer format is refused for that before its log is read
     #[serde(default)]
-    pub(crate) format: Format,
+    pub format: Format,
     /// Missing in a file of the CLI.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) name: Option<String>,
-    pub(crate) log: L,
-    pub(crate) people: P,
+    pub name: Option<String>,
+    pub log: L,
+    pub people: P,
 }
 
 impl<L: DeserializeOwned, P: DeserializeOwned> File<L, P> {

@@ -46,6 +46,10 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- The CLI uses the same competition operations as the GUI, including the
+  minimum number of entrants a format needs. Action refusals use the app's
+  wording; a refused phase edit names the reported match that prevents it.
+
 - Renamed from Matchwright to Tournamo, now hosted at
   <https://blacktemplar.github.io/tournamo/>. Competitions stored in the browser
   under the old name are not carried over; export them there and import them

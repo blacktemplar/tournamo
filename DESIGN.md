@@ -668,12 +668,28 @@ against 75–90 ms, and `view!` with memos read worse than `rsx!`. **Canvas GUIs
 
 ### The app crate
 
-**A UI-free crate between engine and GUI** (`tournament-app`) holds what is
-about an operator at a screen: the session and its undo history, actions turned
-into transitions, checks only a UI cares about, names (`People`), storage, data
-for screens and messages. It is the CLI's session with typed data instead of
-text, and builds natively and for wasm, so what a screen shows is tested
-without a browser.
+**A UI-free crate between engine and its interfaces** (`tournament-app`) owns
+the operator's session: competition operations, undo history, names (`People`),
+storage, forms, data for screens and messages. Both the GUI and the CLI use its
+`Session`, which returns typed data instead of text and builds natively and for
+wasm, so the operations and what a screen shows are tested without a browser.
+
+The CLI's session wraps it with command parsing, English tables, and explicit
+whole-file saves. It does not own another state machine, people map, or undo
+history. Action errors come from the app; errors specific to commands, match
+numbers, file I/O, and configuration questions belong to the CLI. Its tables
+keep their own layout and column order.
+
+`file::File` is the shared serialization envelope. `Session::file` borrows the
+log and people for export; a decoded file opens through `Session::from_file`
+with no undo history. The CLI omits the optional name and tracks its last saved
+log length, keeping its explicit save/exit policy independent of the app's
+incremental storage. Neither file path persists history.
+
+Adding several entrants validates the whole batch before appending any entry;
+each entrant remains a separate undoable action. The batch API keeps names as
+supplied, including spaces inside the CLI's quotes. The single-entrant API
+trims input for the GUI. Both share validation and the logged operation.
 
 - **An error type per action**, so a GUI handles exactly what its action can
   return; engine errors are recognized by downcasting, anything unknown is

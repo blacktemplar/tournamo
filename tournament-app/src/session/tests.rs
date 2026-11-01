@@ -144,6 +144,50 @@ fn an_empty_or_taken_name_adds_no_entrant() {
     assert_eq!(names(&session.entrants()), ["Alice"]);
 }
 
+#[test]
+fn a_batch_is_checked_before_any_entrant_is_added() {
+    let mut session = Session::new("cup");
+    session.add_entrant("Alice").unwrap();
+    let before = session.export();
+    let undo = session.next_undo().cloned();
+
+    for names in [["Bob", "Alice"], ["Bob", "Bob"], ["Bob", " "]] {
+        let names = names.map(str::to_owned);
+        assert!(session.add_named_entrants(&names).is_err());
+        assert_eq!(session.export(), before);
+        assert_eq!(session.next_undo(), undo.as_ref());
+    }
+}
+
+#[test]
+fn batch_names_are_kept_as_supplied_and_undone_one_at_a_time() {
+    let mut session = Session::new("cup");
+    session
+        .add_named_entrants(&[" Alice ".to_owned(), "Bob".to_owned()])
+        .unwrap();
+    assert_eq!(names(&session.entrants()), [" Alice ", "Bob"]);
+
+    session.undo().unwrap();
+    assert_eq!(names(&session.entrants()), [" Alice "]);
+    session.undo().unwrap();
+    assert!(session.entrants().is_empty());
+    session.redo().unwrap();
+    session.redo().unwrap();
+    assert_eq!(names(&session.entrants()), [" Alice ", "Bob"]);
+}
+
+#[test]
+fn a_batch_is_not_added_after_the_start() {
+    let mut session = Given::new().started();
+    let before = session.export();
+
+    assert!(matches!(
+        session.add_named_entrants(&["Eve".to_owned(), "Frank".to_owned()]),
+        Err(AddEntrantError::Started)
+    ));
+    assert_eq!(session.export(), before);
+}
+
 /// Names differing in case or in how Unicode composes their characters look alike, which the
 /// operator is told of while typing, and are refused, by the name entered.
 #[test]

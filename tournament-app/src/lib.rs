@@ -1,4 +1,4 @@
-//! What a GUI for running a tournament with [`tournament_engine`] does, without any UI.
+//! Running a tournament with [`tournament_engine`], shared by the GUI and CLI without any UI.
 //!
 //! A [`Session`](session::Session) runs one competition for an operator: it turns what they do
 //! (add an entrant, add the phase, start, report a result, undo) into transitions of the engine,

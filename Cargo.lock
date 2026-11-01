@@ -4312,7 +4312,6 @@ dependencies = [
  "getrandom 0.4.3",
  "inquire",
  "plugin-factory",
- "rand 0.10.3",
  "rustyline",
  "serde",
  "serde_json",

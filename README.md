@@ -44,10 +44,10 @@ Cargo workspace:
 |---|---|
 | [`tournament-engine`](tournament-engine) | the library: competitions, phases, matches and rankings, with pluggable formats, ranking criteria and metrics, and every change kept as a log that replays |
 | [`plugin-factory`](plugin-factory) | plugin axes, their catalog, schemas, drafts and compatibility checks, which the engine builds on |
-| [`tournament-app`](tournament-app) | what the GUI does, without any UI: sessions, forms, views, translation and storage |
+| [`tournament-app`](tournament-app) | shared sessions for the GUI and CLI, plus forms, views, translation and storage |
 | [`tournament-gui`](tournament-gui) | the page itself, in [Dioxus](https://dioxuslabs.com) |
 | [`tournament-browser`](tournament-browser) | what the GUI needs of the browser: IndexedDB, locks, channels between tabs, files |
-| [`tournament-cli`](tournament-cli) | an interactive command line on the engine |
+| [`tournament-cli`](tournament-cli) | an interactive command line on the app session |
 | [`tournament-web`](tournament-web) | that command line in the browser |
 
 `tournament-gui-e2e`, `tournament-web-e2e` and `e2e-harness` hold the

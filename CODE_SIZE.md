@@ -222,3 +222,18 @@ scoping, recommendation following, and diagnostics still use paths. The CLI's
 existing depth-first questionnaire was left in place: replacing it with a tree
 snapshot would complicate asking for children of a plugin chosen during the walk.
 The size tables above remain the baseline before this experiment.
+
+## Shared session following this review
+
+The CLI now wraps `tournament_app::session::Session` for entrant and phase
+operations, starting, reporting, reopening results, and undo/redo. One session
+implementation owns the state machine, people, and history for both interfaces.
+The CLI keeps command interpretation, text tables, explicit saves, and exit
+checks. Both interfaces use `file::File` for serialization.
+
+The main simplification is removing an independent implementation of those
+operations and their action errors. The app adds a batch entrant operation for
+the CLI, validating all names before changing anything and retaining individual
+undo actions. Action error wording is now shared, while CLI configuration
+issues and match-number errors retain their command-specific explanations.
+The baseline counts above have not been updated.

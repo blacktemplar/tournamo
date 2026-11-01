@@ -1,8 +1,8 @@
 //! A competition being run at the prompt, from the first command typed to the last.
 //!
-//! A [`Session`] owns the [`CompetitionStateMachine`] of the competition and executes every
-//! [`Command`] against it. It is saved as that machine's transition log rather than as a snapshot
-//! of the competition, next to the [`People`] the entrants are, which the log knows by id only.
+//! A [`Session`] executes every [`Command`] through the app's session. It is saved as the
+//! competition's transition log rather than as a snapshot, next to the
+//! [`People`](tournament_app::people::People) the entrants are, which the log knows by id only.
 //! What can be undone and redone is what the session did itself, which is not saved: a loaded
 //! competition starts with nothing to undo.
 
@@ -18,25 +18,16 @@ use plugin_factory::{
     config::{Config, ConfigError, Path as ConfigPath, PluginConfig, Value},
     draft::{Draft, Issue},
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tournament_app::file::Format;
+use tournament_app::{error as app_error, file::File, session::Session as AppSession};
 use tournament_engine::{
-    AddEntrant, AddPhase, Annotated as _, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt as _, Entrant, EntrantId, Match, MatchId, MatchResult, Phase,
-    PhaseData, PhaseId, PhasePlugins, RankingId, RemoveEntrant, ReportMatchResult, Seed,
-    SetCompetitionSeed, StartCompetition, TypeMap,
+    Annotated as _, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseData,
+    PhasePlugins, RankingId, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
-    transitions::{ReconfigurePhaseError, UndoMatchResultError},
-    undoable_state_machine::{
-        RedoLastError, SessionHistory, StateMachineError, TransitionError, UndoLastError,
-    },
-    uuid::Uuid,
 };
 
 use crate::{
     command::{Command, ReportedResult},
-    people::{People, Person},
     questionnaire::{self, AcceptDefaults, IssueList},
     storage::Storage,
 };
@@ -53,10 +44,18 @@ pub enum Outcome {
 /// Why a command was not executed. A command that fails leaves the session unchanged.
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("an entrant name must not be empty")]
-    EmptyName,
-    #[error("there already is an entrant named {0:?}")]
-    DuplicateName(String),
+    #[error(transparent)]
+    AddEntrant(#[from] app_error::AddEntrantError),
+    #[error(transparent)]
+    RemoveEntrant(#[from] app_error::RemoveEntrantError),
+    #[error(transparent)]
+    AddPhase(app_error::AddPhaseError),
+    #[error(transparent)]
+    EditPhase(app_error::EditPhaseError),
+    #[error(transparent)]
+    Start(#[from] app_error::StartError),
+    #[error(transparent)]
+    Report(#[from] app_error::ReportError),
     #[error("there is no entrant named {0:?}")]
     UnknownEntrant(String),
     /// A session never reads from the terminal, so a phase that is not given by its format has to
@@ -69,10 +68,6 @@ pub enum Error {
     NotEdited,
     #[error("the competition has no phase yet")]
     NoPhase,
-    /// The edited phase does not fit a change made after the phase was added, e.g. a result
-    /// reported for a match the edited format does not schedule.
-    #[error("the phase cannot be changed this way, since a later change no longer fits it: {0}")]
-    EditRejected(TransitionError),
     /// No registered phase format goes by this name.
     #[error(
         "there is no format {0:?}; the formats are: {formats}",
@@ -106,10 +101,6 @@ pub enum Error {
     NoName,
     #[error("there are unsaved changes; save them, or exit with --force to discard them")]
     UnsavedChanges,
-    /// The competition does not accept the change in its current state, e.g. an entrant added
-    /// after the start.
-    #[error("{0}")]
-    Rejected(TransitionError),
     /// A phase given by its format leaves something unanswered that offers no answer, see
     /// [`AcceptDefaults`].
     #[error("the phase cannot be added: {0}")]
@@ -121,8 +112,6 @@ pub enum Error {
     /// A plugin added to a phase does not fit its configuration.
     #[error(transparent)]
     Configuration(#[from] ConfigError),
-    #[error(transparent)]
-    StateMachine(StateMachineError),
     #[error("cannot read {name}: {source}")]
     Read { name: String, source: io::Error },
     #[error("{name} is not a competition saved by this CLI: {source}")]
@@ -136,27 +125,13 @@ pub enum Error {
     Write { name: String, source: io::Error },
 }
 
-impl From<StateMachineError> for Error {
-    fn from(error: StateMachineError) -> Self {
-        match error {
-            StateMachineError::Transition(_, error) => Self::Rejected(error),
-            error => Self::StateMachine(error),
-        }
-    }
-}
-
 /// A competition being run at the prompt, together with the storage it is saved to and the name it
 /// is saved under.
 ///
-/// The first entry of the log of every competition is the [`SetCompetitionSeed`] it was created
-/// with, which is no action of the session and so never undone.
+/// The app session owns competition operations, people, and undo history. This wrapper owns
+/// command output and the explicit whole-file save policy.
 pub struct Session {
-    machine: CompetitionStateMachine,
-    /// Everyone ever entered in the log, removed entrants included, since undoing their removal
-    /// brings them back.
-    people: People,
-    /// What this session did, which `undo` and `redo` walk through.
-    history: SessionHistory,
+    session: AppSession,
     storage: Box<dyn Storage>,
     name: Option<String>,
     /// The length of the log when it was last saved or loaded. The log is append-only, so every
@@ -168,15 +143,10 @@ impl Session {
     /// Creates a session for a new competition with a random seed, saved to `storage`. It has no
     /// name yet, see [`Session::named`].
     pub fn new(storage: impl Storage + 'static) -> Self {
-        let mut machine = CompetitionStateMachine::default();
-        machine
-            .apply_transition(SetCompetitionSeed::new(Seed::new(rand::random())))
-            .expect("a new competition must accept a seed");
+        let session = AppSession::new("");
         Self {
-            saved_log_len: machine.log().len(),
-            machine,
-            people: People::default(),
-            history: SessionHistory::new(),
+            saved_log_len: session.next_entry(),
+            session,
             storage: Box::new(storage),
             name: None,
         }
@@ -202,28 +172,21 @@ impl Session {
             Ok(bytes) => bytes,
             Err(source) => return Err(Error::Read { name, source }),
         };
-        let saved: Result<Saved<CompetitionStateMachine, People>, _> =
-            serde_json::from_slice(&bytes);
-        let Saved {
-            format: _,
-            log: machine,
-            people,
-        } = match saved {
-            Ok(saved) => saved,
-            Err(source) => return Err(Error::Load { name, source }),
-        };
+        let file: File<_, _> = serde_json::from_slice(&bytes).map_err(|source| Error::Load {
+            name: name.clone(),
+            source,
+        })?;
+        let session = AppSession::from_file(file, &name);
         Ok(Self {
-            saved_log_len: machine.log().len(),
-            machine,
-            people,
-            history: SessionHistory::new(),
+            saved_log_len: session.next_entry(),
+            session,
             storage: Box::new(storage),
             name: Some(name),
         })
     }
 
     pub fn competition(&self) -> &Competition {
-        self.machine.current()
+        self.session.competition()
     }
 
     /// The name the competition is saved under unless a save is given another one.
@@ -232,7 +195,7 @@ impl Session {
     }
 
     pub fn has_unsaved_changes(&self) -> bool {
-        self.machine.log().len() != self.saved_log_len
+        self.session.next_entry() != self.saved_log_len
     }
 
     /// Executes `command`, returning what to show and whether to go on.
@@ -288,28 +251,12 @@ impl Session {
     /// The name the entrant `id` is shown with. Every entrant this CLI adds has one, so the
     /// fallback is only for a log written by someone else.
     fn name_of(&self, id: &EntrantId) -> &str {
-        self.people.name(id).unwrap_or("<unnamed>")
+        self.session.people().name(id).unwrap_or("<unnamed>")
     }
 
     /// Adds all of `names` or, if any of them is not a valid new name, none of them.
     fn add_entrants(&mut self, names: Vec<String>) -> Result<String, Error> {
-        let mut new_names = HashSet::new();
-        for name in &names {
-            if name.trim().is_empty() {
-                return Err(Error::EmptyName);
-            }
-            if self.entrant_named(name).is_some() || !new_names.insert(name.as_str()) {
-                return Err(Error::DuplicateName(name.clone()));
-            }
-        }
-        // the first entrant is rejected exactly when every other one would be, so nothing is
-        // added partially
-        for name in &names {
-            let id = EntrantId::new(Uuid::new_v4());
-            self.machine
-                .apply_in(&mut self.history, AddEntrant::new(Entrant::new(id)))?;
-            self.people.add(Person::new(id, name.as_str()));
-        }
+        self.session.add_named_entrants(&names)?;
         Ok(format!(
             "{} entrant(s) added, {} in total",
             names.len(),
@@ -322,8 +269,7 @@ impl Session {
             .entrant_named(name)
             .ok_or_else(|| Error::UnknownEntrant(name.to_owned()))?
             .id();
-        self.machine
-            .apply_in(&mut self.history, RemoveEntrant::new(entrant_id))?;
+        self.session.remove_entrant(entrant_id)?;
         Ok(format!("{name} removed"))
     }
 
@@ -339,11 +285,11 @@ impl Session {
     /// because it has started, or if the plugins `draft` configures do not fit together, e.g.
     /// [`Error::InvalidPhase`].
     pub fn add_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<String, Error> {
-        let (plugins, summary) = completed(draft)?;
-        self.machine.apply_in(
-            &mut self.history,
-            AddPhase::new(PhaseId::new(Uuid::new_v4()), plugins),
-        )?;
+        self.session.add_phase(draft).map_err(|error| match error {
+            app_error::AddPhaseError::Invalid(issues) => Error::InvalidPhase(issues),
+            error => Error::AddPhase(error),
+        })?;
+        let summary = summary(&self.added_phase()?.config());
         Ok(format!("phase added: {summary}"))
     }
 
@@ -353,8 +299,9 @@ impl Session {
     /// # Errors
     /// Returns [`Error::NoPhase`] if the competition has no phase.
     pub fn phase_draft_to_edit(&self) -> Result<Draft<PhasePlugins>, Error> {
-        let config = self.added_phase()?.config();
-        Ok(self.competition().phase_draft().with_answers(&config)?)
+        self.session
+            .phase_draft_to_edit()
+            .map_err(|_| Error::NoPhase)
     }
 
     /// Plays the phase of the competition as `draft` configures it, as if it had been added that
@@ -365,26 +312,21 @@ impl Session {
     ///
     /// # Errors
     /// Returns [`Error::NoPhase`] if the competition has no phase, [`Error::InvalidPhase`] if the
-    /// plugins `draft` configures do not fit together, and [`Error::EditRejected`] if a change
+    /// plugins `draft` configures do not fit together, and [`Error::EditPhase`] if a change
     /// made after the phase was added, e.g. a reported result, does not fit the edited phase.
     pub fn edit_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<String, Error> {
-        let phase_id = self.added_phase()?.id();
-        let (plugins, summary) = completed(draft)?;
         let edited = self
-            .machine
-            .reconfigure_phase(&mut self.history, phase_id, plugins)
+            .session
+            .edit_phase(draft)
             .map_err(|error| match error {
-                ReconfigurePhaseError::Rejected(StateMachineError::Transition(_, error)) => {
-                    Error::EditRejected(error)
-                }
-                ReconfigurePhaseError::Rejected(error) => Error::StateMachine(error),
-                ReconfigurePhaseError::NotAdded => {
-                    unreachable!("the phase of a session is added by an `AddPhase` in effect")
-                }
+                app_error::EditPhaseError::NoPhase(_) => Error::NoPhase,
+                app_error::EditPhaseError::Invalid(issues) => Error::InvalidPhase(issues),
+                error => Error::EditPhase(error),
             })?;
-        Ok(match edited {
-            Some(_) => format!("phase changed: {summary}"),
-            None => "nothing changed".to_owned(),
+        Ok(if edited {
+            format!("phase changed: {}", summary(&self.added_phase()?.config()))
+        } else {
+            "nothing changed".to_owned()
         })
     }
 
@@ -432,7 +374,7 @@ impl Session {
     }
 
     fn start(&mut self) -> Result<String, Error> {
-        self.machine.apply_in(&mut self.history, StartCompetition)?;
+        self.session.start()?;
         Ok(format!(
             "competition started, {} match(es) scheduled",
             self.phase()?.data().matches().len()
@@ -553,7 +495,7 @@ impl Session {
     ///
     /// # Errors
     /// Returns an error if the competition has not started or has no such match.
-    fn match_numbered(&self, number: NonZeroUsize) -> Result<(PhaseId, MatchId), Error> {
+    fn match_numbered(&self, number: NonZeroUsize) -> Result<MatchId, Error> {
         let phase = self.phase()?;
         let match_id = phase
             .data()
@@ -562,31 +504,27 @@ impl Session {
             .find(|r#match| usize::try_from(r#match.number().get()) == Ok(number.get()))
             .map(Match::id)
             .ok_or(Error::UnknownMatch(number))?;
-        Ok((phase.id(), match_id))
+        Ok(match_id)
     }
 
     fn report(&mut self, number: NonZeroUsize, result: ReportedResult) -> Result<String, Error> {
-        let (phase_id, match_id) = self.match_numbered(number)?;
-        let matches_before = self.phase()?.data().matches().len();
+        let match_id = self.match_numbered(number)?;
         let result = match result {
             ReportedResult::A => MatchResult::AWins,
             ReportedResult::B => MatchResult::BWins,
             ReportedResult::Draw => MatchResult::Draw,
         };
-        self.machine.apply_in(
-            &mut self.history,
-            ReportMatchResult::new(phase_id, match_id, result),
-        )?;
+        let reported = self.session.report(match_id, result)?;
 
         let phase = self.phase()?.data();
         let mut output = format!(
             "#{number}: {}",
             self.result_text(phase, &phase.matches()[&match_id])
         );
-        let new_matches = phase.matches().len() - matches_before;
+        let new_matches = reported.new_matches;
         if new_matches > 0 {
             write!(output, "\n{new_matches} new match(es) scheduled").unwrap();
-        } else if phase.matches().values().all(Match::is_finished) {
+        } else if reported.winners.is_some() {
             output.push_str("\nall matches are finished");
         }
         Ok(output)
@@ -595,13 +533,16 @@ impl Session {
     /// Undoes the result reported for the match `number`, which may be any reported match rather
     /// than only the one reported last. Every other change stays in effect.
     fn undo_report(&mut self, number: NonZeroUsize) -> Result<String, Error> {
-        let (phase_id, match_id) = self.match_numbered(number)?;
-        let matches_before = self.phase()?.data().matches().len();
-        self.machine
-            .undo_match_result(&mut self.history, phase_id, match_id)
+        let match_id = self.match_numbered(number)?;
+        let reopened = self
+            .session
+            .undo_report(match_id)
             .map_err(|error| match error {
-                UndoMatchResultError::NotReported => Error::NotReported(number),
-                UndoMatchResultError::Rejected(_) => Error::ReportDependedOn(number),
+                app_error::UndoReportError::NotStarted => Error::NotStarted,
+                app_error::UndoReportError::UnknownMatch => Error::UnknownMatch(number),
+                app_error::UndoReportError::NotReported => Error::NotReported(number),
+                app_error::UndoReportError::DependedOn
+                | app_error::UndoReportError::DependedOnBy(_) => Error::ReportDependedOn(number),
             })?;
 
         let phase = self.phase()?.data();
@@ -612,7 +553,7 @@ impl Session {
             self.team_name(phase, r#match.team_b())
         );
         // a match that was only scheduled because of the undone result is gone with it
-        let unscheduled = matches_before.saturating_sub(phase.matches().len());
+        let unscheduled = reopened.unscheduled;
         if unscheduled > 0 {
             write!(output, "\n{unscheduled} match(es) no longer scheduled").unwrap();
         }
@@ -655,46 +596,27 @@ impl Session {
     /// Undoes the latest change of this session that is still in effect, which may be an
     /// `undo-report`, bringing the result back.
     fn undo(&mut self) -> Result<String, Error> {
-        self.history
-            .undo_last(&mut self.machine)
-            .map_err(|error| match error {
-                UndoLastError::NothingToUndo => Error::NothingToUndo,
-                UndoLastError::Rejected(error) => error.into(),
-                UndoLastError::UndoneElsewhere => {
-                    unreachable!("the session is the only one appending to its log")
-                }
-            })?;
+        self.session.undo().map_err(|_| Error::NothingToUndo)?;
         Ok("undone".to_owned())
     }
 
     /// Redoes the change this session undid last, as long as it made no other change since.
     fn redo(&mut self) -> Result<String, Error> {
-        self.history
-            .redo_last(&mut self.machine)
-            .map_err(|error| match error {
-                RedoLastError::NothingToRedo => Error::NothingToRedo,
-                RedoLastError::Rejected(error) => error.into(),
-                RedoLastError::RedoneElsewhere => {
-                    unreachable!("the session is the only one appending to its log")
-                }
-            })?;
+        self.session.redo().map_err(|_| Error::NothingToRedo)?;
         Ok("redone".to_owned())
     }
 
     fn save(&mut self, name: Option<String>) -> Result<String, Error> {
         let name = name.or_else(|| self.name.clone()).ok_or(Error::NoName)?;
-        let saved = Saved {
-            format: Format::CURRENT,
-            log: &self.machine,
-            people: &self.people,
-        };
+        let mut saved = self.session.file();
+        saved.name = None;
         let json = serde_json::to_vec_pretty(&saved).map_err(Error::Serialize)?;
         if let Err(source) = self.storage.write(&name, &json) {
             return Err(Error::Write { name, source });
         }
         let output = format!("saved to {name}");
         self.name = Some(name);
-        self.saved_log_len = self.machine.log().len();
+        self.saved_log_len = self.session.next_entry();
         Ok(output)
     }
 
@@ -717,18 +639,6 @@ impl Session {
             None => "open".to_owned(),
         }
     }
-}
-
-/// The plugins `draft`, a phase draft, configures with the plugins its answers imply added, see
-/// [`Draft::add_implied`], together with their [`summary`].
-///
-/// # Errors
-/// Returns [`Error::InvalidPhase`] if no phase can be built from them.
-fn completed(draft: &Draft<PhasePlugins>) -> Result<(PhasePlugins, String), Error> {
-    let mut draft = draft.clone();
-    draft.add_implied();
-    let plugins = draft.build().map_err(Error::InvalidPhase)?;
-    Ok((plugins, summary(draft.answers())))
 }
 
 /// The name `add-phase` takes the format of `entry` by: its label with hyphens for spaces, e.g.
@@ -766,17 +676,6 @@ fn summary(answers: &Config) -> String {
     format!("{format}, ranked by {}", ranked_by.join(", then "))
 }
 
-/// What a competition is saved as: the [`Format`] of the file, the transition log of its machine,
-/// and the people its entrants are, apart from the log.
-#[derive(Serialize, Deserialize)]
-struct Saved<L, P> {
-    // first, so that a file of a newer format is refused for that before its log is read
-    #[serde(default)]
-    format: Format,
-    log: L,
-    people: P,
-}
-
 /// Lays `header` and `rows` out as left-aligned columns, with the header underlined.
 fn table(header: &[&str], rows: &[Vec<String>]) -> String {
     let mut widths: Vec<_> = header.iter().map(|cell| cell.chars().count()).collect();
@@ -810,6 +709,7 @@ fn table(header: &[&str], rows: &[Vec<String>]) -> String {
 #[cfg(test)]
 mod tests {
     use plugin_factory::{PluginType, draft::Problem};
+    use tournament_app::error::{AddEntrantError, EditPhaseError, ReportError, StartError};
     use tournament_engine::plugins::{
         metrics_calculator::{
             FewerMatchesPlayed, MorePoints, MoreWins, PointsCalculator, SonnebornBergerCalculator,
@@ -902,13 +802,26 @@ mod tests {
     }
 
     #[test]
+    fn spaces_in_a_quoted_name_are_kept_when_removing_and_undoing() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add ' Alice ' Bob");
+
+        output(&mut session, "remove ' Alice '");
+        assert_eq!(names(&session), ["Bob"]);
+        output(&mut session, "undo");
+        assert_eq!(names(&session), [" Alice ", "Bob"]);
+    }
+
+    #[test]
     fn a_duplicate_name_adds_none_of_the_entrants() {
         let mut session = Session::new(MemoryStorage::default());
         output(&mut session, "add Alice");
 
         let result = execute(&mut session, "add Bob Alice");
 
-        assert!(matches!(result, Err(Error::DuplicateName(name)) if name == "Alice"));
+        assert!(
+            matches!(result, Err(Error::AddEntrant(AddEntrantError::DuplicateName(name))) if name == "Alice")
+        );
         assert_eq!(names(&session), ["Alice"]);
     }
 
@@ -918,7 +831,10 @@ mod tests {
 
         let result = execute(&mut session, "add Bob Bob");
 
-        assert!(matches!(result, Err(Error::DuplicateName(_))));
+        assert!(matches!(
+            result,
+            Err(Error::AddEntrant(AddEntrantError::DuplicateName(_)))
+        ));
         assert!(names(&session).is_empty());
     }
 
@@ -943,7 +859,7 @@ mod tests {
 
         let result = execute(&mut session, "add-phase single-elimination");
 
-        let Err(Error::Rejected(error)) = &result else {
+        let Err(Error::AddPhase(error)) = &result else {
             panic!("got {result:?}");
         };
         assert!(error.to_string().contains("already has a phase"), "{error}");
@@ -1094,12 +1010,12 @@ mod tests {
     #[test]
     fn a_phase_edited_without_a_change_is_left_as_it_is() {
         let mut session = started("round-robin");
-        let log_len = session.machine.log().len();
+        let log_len = session.session.next_entry();
 
         let draft = session.phase_draft_to_edit().unwrap();
 
         assert_eq!(session.edit_phase(&draft).unwrap(), "nothing changed");
-        assert_eq!(session.machine.log().len(), log_len);
+        assert_eq!(session.session.next_entry(), log_len);
     }
 
     /// The teams of a Monster DYP are pairs, so it never schedules the match of single entrants
@@ -1118,7 +1034,13 @@ mod tests {
 
         let result = session.edit_phase(&draft);
 
-        assert!(matches!(result, Err(Error::EditRejected(_))), "{result:?}");
+        assert!(
+            matches!(
+                result,
+                Err(Error::EditPhase(EditPhaseError::ResultDoesNotFit(1)))
+            ),
+            "{result:?}"
+        );
         assert_eq!(
             format!("{:?}", session.phase().unwrap().format()),
             "RoundRobin",
@@ -1396,15 +1318,15 @@ mod tests {
     }
 
     #[test]
-    fn the_engine_rejecting_a_change_is_reported() {
+    fn adding_an_entrant_after_the_start_is_refused() {
         let mut session = started("round-robin");
 
         let result = execute(&mut session, "add Eve");
 
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "competition already started"
-        );
+        assert!(matches!(
+            result,
+            Err(Error::AddEntrant(AddEntrantError::Started))
+        ));
     }
 
     #[test]
@@ -1670,7 +1592,10 @@ mod tests {
 
         let result = execute(&mut session, "report 1 a");
 
-        assert_eq!(result.unwrap_err().to_string(), "match already finished");
+        assert!(matches!(
+            result,
+            Err(Error::Report(ReportError::AlreadyFinished))
+        ));
     }
 
     #[test]
@@ -1685,15 +1610,15 @@ mod tests {
     #[test]
     fn single_elimination_schedules_the_final_and_rejects_draws() {
         let mut session = started("single-elimination");
-        let log_len = session.machine.log().len();
+        let log_len = session.session.next_entry();
 
         let draw = execute(&mut session, "report 1 draw");
 
         assert_eq!(
             draw.unwrap_err().to_string(),
-            "the phase format does not allow draws"
+            "a match of this format cannot end in a draw"
         );
-        assert_eq!(session.machine.log().len(), log_len);
+        assert_eq!(session.session.next_entry(), log_len);
         output(&mut session, "report 1 a");
         let semifinal = output(&mut session, "report 2 b");
         assert!(
@@ -1938,6 +1863,73 @@ mod tests {
             names(&Session::load(storage, "cup").unwrap()),
             ["Alice", "Bob"]
         );
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_previous_name_and_unsaved_changes() {
+        use std::{cell::Cell, rc::Rc};
+
+        struct SometimesFails {
+            storage: MemoryStorage,
+            fail: Rc<Cell<bool>>,
+        }
+
+        impl Storage for SometimesFails {
+            fn read(&self, name: &str) -> io::Result<Vec<u8>> {
+                self.storage.read(name)
+            }
+
+            fn write(&mut self, name: &str, bytes: &[u8]) -> io::Result<()> {
+                if self.fail.get() {
+                    Err(io::Error::other("write failed"))
+                } else {
+                    self.storage.write(name, bytes)
+                }
+            }
+        }
+
+        let storage = MemoryStorage::default();
+        let fail = Rc::new(Cell::new(false));
+        let mut session = Session::new(SometimesFails {
+            storage: storage.clone(),
+            fail: Rc::clone(&fail),
+        });
+        output(&mut session, "add Alice");
+        output(&mut session, "save cup");
+        output(&mut session, "add Bob");
+
+        fail.set(true);
+        assert!(matches!(
+            execute(&mut session, "save other"),
+            Err(Error::Write { .. })
+        ));
+        assert_eq!(session.name(), Some("cup"));
+        assert!(session.has_unsaved_changes());
+        assert_eq!(
+            names(&Session::load(storage.clone(), "cup").unwrap()),
+            ["Alice"]
+        );
+
+        fail.set(false);
+        output(&mut session, "save");
+        assert!(!session.has_unsaved_changes());
+        assert_eq!(
+            names(&Session::load(storage, "cup").unwrap()),
+            ["Alice", "Bob"]
+        );
+    }
+
+    #[test]
+    fn a_format_needing_more_entrants_does_not_start() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob Carol");
+        output(&mut session, "add-phase monster-dyp");
+
+        assert!(matches!(
+            execute(&mut session, "start"),
+            Err(Error::Start(StartError::TooFewForFormat(4)))
+        ));
+        assert!(!session.competition().is_started());
     }
 
     /// The log knows the entrants by id only, so that their names can be deleted without touching

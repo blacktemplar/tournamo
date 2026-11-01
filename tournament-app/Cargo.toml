@@ -1,6 +1,6 @@
 [package]
 name = "tournament-app"
-description = "What a GUI for running tournaments does, without any UI"
+description = "Shared tournament operations for the GUI and CLI, without any UI"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

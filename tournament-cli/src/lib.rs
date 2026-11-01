@@ -2,7 +2,7 @@
 //!
 //! Everything but reading lines from the terminal lives here: a line typed at the prompt is parsed
 //! into a [`Command`](command::Command), which a [`Session`](session::Session) executes against the
-//! competition it runs. The one part that asks the operator back is the [`questionnaire`], which
+//! app session it wraps. The one part that asks the operator back is the [`questionnaire`], which
 //! configures the plugins of a phase through their schemas, and which the session then adds as a
 //! phase.
 //!

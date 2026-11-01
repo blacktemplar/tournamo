@@ -17,19 +17,15 @@ required-features = ["terminal"]
 clap.workspace = true
 inquire = { workspace = true, optional = true }
 plugin-factory.workspace = true
-# the seed of a new competition is random
-rand = { workspace = true, features = ["thread_rng"] }
 rustyline = { workspace = true, optional = true }
-serde.workspace = true
 serde_json.workspace = true
 shlex.workspace = true
 thiserror.workspace = true
-# the people the entrants are
 tournament-app.workspace = true
 tournament-engine.workspace = true
-# entrant and phase ids are random, which is what keeps them independent of the name they are
-# shown with
-uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tempfile.workspace = true

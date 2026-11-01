@@ -227,6 +227,44 @@ impl Session {
         self.machine.current()
     }
 
+    /// Everyone ever entered, including removed entrants whose removal can be undone.
+    pub fn people(&self) -> &People {
+        &self.people
+    }
+
+    /// Opens the already decoded file as a competition named `name`, with no undo history.
+    /// Nothing is saved yet; the caller chooses its storage and when to save it.
+    pub fn from_file(file: File<CompetitionStateMachine, People>, name: impl Into<String>) -> Self {
+        let File {
+            log: machine,
+            people,
+            ..
+        } = file;
+        Self {
+            key: CompetitionKey::new(Uuid::new_v4()),
+            name: name.into(),
+            unsaved_people: people.iter().map(|person| person.id()).collect(),
+            machine,
+            people,
+            history: SessionHistory::new(),
+            done: Vec::new(),
+            undone: Vec::new(),
+            undone_phase: None,
+            saved_entries: 0,
+        }
+    }
+
+    /// The competition's file data, borrowing its log and people. Its optional name can be
+    /// changed or omitted before serialization, without changing the session.
+    pub fn file(&self) -> File<&CompetitionStateMachine, &People> {
+        File {
+            format: file::Format::CURRENT,
+            name: Some(self.name.clone()),
+            log: &self.machine,
+            people: &self.people,
+        }
+    }
+
     pub fn has_unsaved_changes(&self) -> bool {
         self.machine.log().len() != self.saved_entries || !self.unsaved_people.is_empty()
     }
@@ -292,12 +330,7 @@ impl Session {
 
     /// The competition as a file, with its name, log and people, see [`crate::file`].
     pub fn export(&self) -> String {
-        file::to_json(&File {
-            format: file::Format::CURRENT,
-            name: Some(self.name.clone()),
-            log: self.machine.log(),
-            people: &self.people,
-        })
+        file::to_json(&self.file())
     }
 
     /// A new competition with what the file `file` holds, e.g. one [`Self::export`] or the CLI
@@ -311,14 +344,9 @@ impl Session {
     /// Returns an error if `file` is no competition's file, one of a newer version, or one whose
     /// log does not replay, see [`ImportError`].
     pub fn import(file: &str, name: &str, stored: &[Listing]) -> Result<Self, ImportError> {
-        let File {
-            format: _,
-            name: named,
-            log: machine,
-            people,
-        } = File::<CompetitionStateMachine, People>::read(file)?;
+        let file = File::<CompetitionStateMachine, People>::read(file)?;
         // a blank name, which the list could not show, is no name; nor is a blank file name
-        let name = [named.as_deref(), Some(name)]
+        let name = [file.name.as_deref(), Some(name)]
             .into_iter()
             .flatten()
             .map(str::trim)
@@ -334,18 +362,7 @@ impl Session {
         } else {
             name
         };
-        Ok(Self {
-            key: CompetitionKey::new(Uuid::new_v4()),
-            name,
-            unsaved_people: people.iter().map(|person| person.id()).collect(),
-            machine,
-            people,
-            history: SessionHistory::new(),
-            done: Vec::new(),
-            undone: Vec::new(),
-            undone_phase: None,
-            saved_entries: 0,
-        })
+        Ok(Self::from_file(file, name))
     }
 
     /// What the operator can do now.
@@ -429,12 +446,49 @@ impl Session {
     /// [`Self::entrant_like`], or if the competition has started.
     pub fn add_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
         let name = name.trim();
-        if name.is_empty() {
-            return Err(AddEntrantError::EmptyName);
+        self.check_names(std::iter::once(name))?;
+        self.add_named_entrant(name)
+    }
+
+    /// Adds all of `names` or none if any name is empty, duplicated, or entrants cannot be added.
+    /// Names are kept as supplied; whitespace-only names are empty. Each entrant is a separate
+    /// undoable action, as when calling [`Self::add_entrant`] for each one.
+    ///
+    /// # Errors
+    /// Returns an error if a name is empty or duplicated, or the competition has started.
+    pub fn add_named_entrants(&mut self, names: &[String]) -> Result<Vec<EntrantId>, AddEntrantError> {
+        self.check_names(names.iter().map(String::as_str))?;
+        names
+            .iter()
+            .map(|name| self.add_named_entrant(name))
+            .collect()
+    }
+
+    fn check_names<'a>(
+        &self,
+        names: impl IntoIterator<Item = &'a str>,
+    ) -> Result<(), AddEntrantError> {
+        let mut taken: HashMap<_, _> = self
+            .competition()
+            .entrants()
+            .keys()
+            .filter_map(|id| self.people.name(id))
+            .map(|name| (folded(name), name))
+            .collect();
+        for name in names {
+            if name.trim().is_empty() {
+                return Err(AddEntrantError::EmptyName);
+            }
+            if let Some(entered) = taken.insert(folded(name), name) {
+                return Err(AddEntrantError::DuplicateName(entered.to_owned()));
+            }
         }
-        if let Some(entered) = self.entrant_like(name) {
-            return Err(AddEntrantError::DuplicateName(entered));
-        }
+        Ok(())
+    }
+
+    // All names in a batch are checked first. The engine accepts adding its first entrant
+    // exactly when it accepts adding every subsequent one, so a refusal adds none of them.
+    fn add_named_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
         let id = EntrantId::new(Uuid::new_v4());
         let action = Action::AddEntrant(EntrantRow {
             id,

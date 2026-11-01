@@ -13,10 +13,10 @@ async fn entrants_are_listed_in_the_order_they_were_added() {
 }
 
 /// A name differing from another only in case is said to look like it while it is typed, and is
-/// taken all the same.
+/// refused by the name entered.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_name_like_one_entered_is_pointed_out_but_taken() {
+async fn a_name_like_one_entered_is_pointed_out_and_refused() {
     run_in_new_competition(async |gui| {
         gui.add_entrant("Alice").await?;
 
@@ -25,8 +25,9 @@ async fn a_name_like_one_entered_is_pointed_out_but_taken() {
         gui.expect_entrant_like(Some("“Alice” is entered already."))
             .await?;
         gui.press(Key::Enter).await?;
-        gui.expect_entrants(&["Alice", "ALICE"]).await?;
-        gui.expect_entrant_like(None).await
+        gui.expect_field_error("entrant-name", "There already is an entrant named “Alice”.")
+            .await?;
+        gui.expect_entrants(&["Alice"]).await
     })
     .await;
 }

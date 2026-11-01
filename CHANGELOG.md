@@ -109,6 +109,8 @@ a file whose `"format"` changes is migrated, not refused.
 - Undo says under the pointer, while it has nothing to undo, that it covers
   what was done since the competition was opened, and that reopening a match
   changes a result reported before.
+- The name of an entrant differing from another one's only in case ("alice"
+  beside "Alice") is refused, rather than only pointed out.
 
 ## [0.1.0] - 2026-10-28
 

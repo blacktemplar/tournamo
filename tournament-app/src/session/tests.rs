@@ -145,9 +145,9 @@ fn an_empty_or_taken_name_adds_no_entrant() {
 }
 
 /// Names differing in case or in how Unicode composes their characters look alike, which the
-/// operator is told of, though they are taken.
+/// operator is told of while typing, and are refused, by the name entered.
 #[test]
-fn a_name_like_one_entered_is_found_but_taken() {
+fn a_name_like_one_entered_is_found_and_refused() {
     let mut session = Session::new("cup");
     // "Zoë" with its "ë" as one character
     session.add_entrant("Zo\u{eb}").unwrap();
@@ -157,8 +157,11 @@ fn a_name_like_one_entered_is_found_but_taken() {
     assert_eq!(session.entrant_like("zoe\u{308}"), Some("Zoë".to_owned()));
     assert_eq!(session.entrant_like("Zoe"), None);
     assert_eq!(session.entrant_like(""), None);
-    session.add_entrant("zoë").unwrap();
-    assert_eq!(names(&session.entrants()), ["Zoë", "zoë"]);
+    assert!(matches!(
+        session.add_entrant("zoë"),
+        Err(AddEntrantError::DuplicateName(name)) if name == "Zoë"
+    ));
+    assert_eq!(names(&session.entrants()), ["Zoë"]);
 }
 
 #[test]

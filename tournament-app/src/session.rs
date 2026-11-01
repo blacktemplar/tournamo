@@ -396,8 +396,8 @@ impl Session {
 
     /// The name of an entrant that `name` would look like, e.g. `Alice` for `alice` or for an
     /// `Alice` whose characters are composed otherwise: equal ignoring case and the way Unicode
-    /// composes them (NFKC), and leading and trailing whitespace. Adding it is not refused for
-    /// that, unless the names are equal, but an operator may want to know.
+    /// composes them (NFKC), and leading and trailing whitespace. [`Self::add_entrant`] refuses
+    /// such a name, which a screen can say while it is typed.
     pub fn entrant_like(&self, name: &str) -> Option<String> {
         let folded = |name: &str| name.trim().nfkc().collect::<String>().to_lowercase();
         let name = folded(name);
@@ -415,19 +415,15 @@ impl Session {
     /// Adds an entrant shown by `name`, with leading and trailing whitespace removed.
     ///
     /// # Errors
-    /// Returns an error if `name` is empty or another entrant's, or if the competition has started.
+    /// Returns an error if `name` is empty or looks like another entrant's, see
+    /// [`Self::entrant_like`], or if the competition has started.
     pub fn add_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
         let name = name.trim();
         if name.is_empty() {
             return Err(AddEntrantError::EmptyName);
         }
-        if self
-            .competition()
-            .entrants()
-            .keys()
-            .any(|id| self.people.name(id) == Some(name))
-        {
-            return Err(AddEntrantError::DuplicateName(name.to_owned()));
+        if let Some(entered) = self.entrant_like(name) {
+            return Err(AddEntrantError::DuplicateName(entered));
         }
         let id = EntrantId::new(Uuid::new_v4());
         let action = Action::AddEntrant(EntrantRow {

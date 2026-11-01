@@ -725,8 +725,9 @@ through a `BroadcastChannel`.
 - **The competition open is in the URL** after `#`. Renaming changes only the
   listing (the name is not in the log); deleting removes everything in one
   transaction, under the lock, so it is refused while a tab holds it open.
-- **Look-alike entrant names are pointed out, not refused** (case and NFKC,
-  `Session::entrant_like`); only the very same name is refused.
+- **Look-alike entrant names are refused** (case and NFKC,
+  `Session::entrant_like`), and pointed out while typed: two entrants a list
+  tells apart only by case are a typo far more often than two people.
 - Without the APIs (plain HTTP away from `localhost`) every tab writes and
   persistence is not asked for.
 

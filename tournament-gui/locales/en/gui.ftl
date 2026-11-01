@@ -103,7 +103,7 @@ entrants = Entrants
 no-entrants = No entrants yet. Each one is added by its name.
 name = Name
 add-entrant = Add entrant
-# the name typed looks like that of an entrant, e.g. differing in case only; it is taken all the same
+# the name typed looks like that of an entrant, e.g. differing in case only, so that it is refused
 entrant-like = “{ $name }” is entered already.
 remove = Remove
 remove-entrant = Remove { $name }

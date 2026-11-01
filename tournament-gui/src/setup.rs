@@ -128,8 +128,8 @@ pub fn Entrants() -> Element {
                         {tr.sentence(&error)}
                     }
                 }
-                // said as it is typed, without refusing the name; once refused, the refusal says
-                // it instead
+                // said as it is typed, before Enter refuses the name; once refused, the refusal
+                // says it instead
                 p { id: "entrant-like", class: "warnings", role: "status",
                     if let Some(like) = like.filter(|_| error.read().is_none()) {
                         {t!(tr, "entrant-like", name = like.as_str())}

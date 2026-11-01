@@ -188,12 +188,10 @@ impl<T: Configurable> Draft<T> {
 
     /// Returns this draft with every unanswered field answered by what it offers, see
     /// [`Self::default_value`]. The fields are answered in schema order, each followed by the
-    /// fields of the plugins answering it, so that a field offers what the answers before it
-    /// recommend. A field offering nothing stays unanswered.
+    /// fields of the plugins answering it. A field offering nothing stays unanswered.
     ///
     /// # Errors
-    /// Returns what [`Self::set`] returns for an offered answer, which only a plugin recommending
-    /// an answer its schema does not take causes.
+    /// Returns what [`Self::set`] returns for a schema default.
     pub fn with_defaults(mut self) -> Result<Self, ConfigError> {
         self.answer_defaults(&T::schema(), &Path::ROOT)?;
         Ok(self)
@@ -288,11 +286,7 @@ impl<T: Configurable> Draft<T> {
     /// position in a list rather than a field. It is never filled in: a UI offering it sets it as
     /// the answer, see [`Self::set`].
     ///
-    /// A field taking plugins offers what the plugins answering the other fields of its config
-    /// recommend, see [`Plugin::recommends`], as far as it is of its axis and compatible with the
-    /// current declarations: a field taking one plugin the first such
-    /// recommendation, a field taking a list all of them that fit together, in the order they are
-    /// recommended in. A field no recommendation fits offers the default of its schema.
+    /// Only the field's schema determines its default, independently of the other answers.
     ///
     /// # Errors
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers.
@@ -301,12 +295,7 @@ impl<T: Configurable> Draft<T> {
         let Some(field) = locate(&schema, &self.answers, path)?.field else {
             return Ok(None);
         };
-        Ok(default_in(
-            &self.context,
-            &Tree::of(&schema, &self.answers),
-            &field,
-            path,
-        ))
+        Ok(field.default_value().cloned())
     }
 
     /// Whether the field at `path` matters with the answers given: not if the composite provides
@@ -324,7 +313,7 @@ impl<T: Configurable> Draft<T> {
         };
         let provided = self.context.provides_type(fact)
             || Tree::of(&schema, &self.answers)
-                .declarations(None)
+                .declarations()
                 .iter()
                 .any(|declared| declared.declaration.provides_type(fact));
         Ok(!provided)
@@ -369,7 +358,7 @@ impl<T: Configurable> Draft<T> {
     /// could provide. No feasible future completion is predicted.
     ///
     /// An unanswered field is no issue, but still to be answered. A plugin with an unanswered field
-    /// counts with its static declaration only and recommends nothing.
+    /// counts with its static declaration only.
     pub fn issues(&self) -> Vec<Issue> {
         issues_in(&self.context, &Tree::of(&T::schema(), &self.answers), false)
     }
@@ -432,8 +421,6 @@ impl<T> Clone for Draft<T> {
     }
 }
 
-/// The plugin `entry` as a [candidate](Draft::candidates) next to the plugins `others` in a
-/// composite with `context`, with the facts of the composite found in `sources`.
 /// [`Draft::issues`] of the answers `tree` holds in a composite with `context`. If `complete`,
 /// nothing is open any more: an unanswered field is an issue and provides nothing.
 fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
@@ -474,7 +461,7 @@ fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
     } else {
         tree.slots(|question| question.answer.is_none())
     };
-    let declarations = tree.declarations(None);
+    let declarations = tree.declarations();
     let mut unprovided = Vec::new();
     for (index, placed) in tree.plugins.iter().enumerate() {
         let others = all_but(&declarations, index).copied();
@@ -563,7 +550,7 @@ fn first_chain(
 ) -> Option<Vec<(&'static str, &'static PluginEntry)>> {
     let lists = top_lists(schema);
     let tree = Tree::of(schema, answers);
-    let declarations = tree.declarations(None);
+    let declarations = tree.declarations();
     compatibility::unprovided(&declarations)
         .filter(|&fact| !context.provides_type(fact))
         .find_map(|fact| chain(context, &declarations, &lists, fact))
@@ -669,68 +656,6 @@ fn implied(
     });
     let only = providers.next()?;
     providers.next().is_none().then_some(only)
-}
-
-/// [`Draft::default_value`] of `field`, the field at `path` in the answers `tree` holds, in a
-/// composite with `context`.
-fn default_in(context: &Declaration, tree: &Tree, field: &Field, path: &Path) -> Option<Value> {
-    let Some((axis, list)) = slot(field.kind()) else {
-        return field.default_value().cloned();
-    };
-    let (_, parent) = path
-        .segments()
-        .split_last()
-        .expect("the path of a field is not the root");
-    let recommended: Vec<_> = tree
-        .plugins
-        .iter()
-        .filter(|placed| placed.parent.segments() == parent && !placed.path.starts_with(path))
-        .filter_map(|placed| placed.instance.as_ref().ok())
-        .flat_map(|instance| instance.recommends())
-        .filter_map(|recommended| Some((axis.entry(recommended.plugin())?, recommended)))
-        .collect();
-
-    let declarations = tree.declarations(Some(path));
-    let mut open = tree.open(Some(path));
-    if list {
-        open.extend(axis.facts().iter());
-    }
-    let mut added = Vec::new();
-    let mut offered = Vec::new();
-    let mut fitting = Vec::new();
-    for (entry, recommended) in recommended {
-        // a list takes each plugin once, so a plugin recommended by several siblings is offered
-        // where it is first recommended and fits
-        if offered.contains(&entry.id()) {
-            continue;
-        }
-        // a recommendation is a whole answer, so what it declares includes the plugins answering
-        // its fields
-        let declared = Declared::new(
-            entry.label(),
-            entry.declaration_or_static(recommended.config()),
-        );
-        if compatibility::check_addition(
-            context,
-            declarations.iter().copied().chain(&added),
-            &declared,
-            &open,
-        )
-        .is_ok()
-        {
-            added.push(declared);
-            offered.push(entry.id());
-            fitting.push(Value::from(recommended));
-            if !list {
-                break;
-            }
-        }
-    }
-    match (list, fitting.is_empty()) {
-        (_, true) => field.default_value().cloned(),
-        (true, false) => Some(Value::Array(fitting)),
-        (false, false) => fitting.pop(),
-    }
 }
 
 /// Something currently wrong with the answers of a [`Draft`], at the path where it is fixed, see
@@ -963,8 +888,6 @@ struct Tree {
 /// A plugin in the answers, built once with the tree.
 struct Placed {
     path: Path,
-    /// The path of the config whose field the plugin answers.
-    parent: Path,
     /// The plugin built from its config, or why it cannot be, e.g. because a field is still
     /// unanswered, see [`PluginEntry::instance`].
     instance: Result<Box<dyn Plugin>, ConfigError>,
@@ -981,11 +904,11 @@ impl Tree {
             questions: Vec::new(),
             plugins: Vec::new(),
         };
-        tree.add_fields(fields::fields(schema, answers, &Path::ROOT), &Path::ROOT);
+        tree.add_fields(fields::fields(schema, answers, &Path::ROOT));
         tree
     }
 
-    fn add_fields(&mut self, fields: Vec<FieldNode>, parent: &Path) {
+    fn add_fields(&mut self, fields: Vec<FieldNode>) {
         for node in fields {
             self.questions.push(Question {
                 path: node.path,
@@ -997,27 +920,10 @@ impl Tree {
                     plugin.entry,
                     &plugin.config,
                     plugin.path.clone(),
-                    parent,
                 ));
-                self.add_fields(plugin.fields, &plugin.path);
+                self.add_fields(plugin.fields);
             }
         }
-    }
-
-    /// The types of the facts the fields still unanswered could provide, except the fields at
-    /// and within `excluding`.
-    fn open(&self, excluding: Option<&Path>) -> OpenFacts {
-        let mut axes = Vec::new();
-        for question in &self.questions {
-            if question.answer.is_none()
-                && !is_within(&question.path, excluding)
-                && let Some((axis, _)) = slot(question.field.kind())
-                && !axes.contains(&axis)
-            {
-                axes.push(axis);
-            }
-        }
-        axes.iter().flat_map(|axis| axis.facts().iter()).collect()
     }
 
     /// The fields taking plugins among those `included` includes, each with its axis, in the order
@@ -1030,14 +936,9 @@ impl Tree {
             .collect()
     }
 
-    /// What the plugins declare, in the order of [`Self::plugins`], except the plugins at and
-    /// within `excluding`.
-    fn declarations(&self, excluding: Option<&Path>) -> Vec<&Declared> {
-        self.plugins
-            .iter()
-            .filter(|placed| !is_within(&placed.path, excluding))
-            .map(|placed| &placed.declared)
-            .collect()
+    /// What the plugins declare, in the order of [`Self::plugins`].
+    fn declarations(&self) -> Vec<&Declared> {
+        self.plugins.iter().map(|placed| &placed.declared).collect()
     }
 }
 
@@ -1057,15 +958,10 @@ fn all_but<T>(items: &[T], index: usize) -> impl Iterator<Item = &T> {
         .map(|(_, item)| item)
 }
 
-/// Whether `path` is `excluding` or within it.
-fn is_within(path: &Path, excluding: Option<&Path>) -> bool {
-    excluding.is_some_and(|excluding| path.starts_with(excluding))
-}
-
 impl Placed {
     /// The plugin `entry` configured by `config`, answering the position at `path` of the config
-    /// at `parent`.
-    fn new(entry: &'static PluginEntry, config: &Config, path: Path, parent: &Path) -> Self {
+    /// holding it.
+    fn new(entry: &'static PluginEntry, config: &Config, path: Path) -> Self {
         let instance = entry.instance(config, &path);
         let mut declaration = entry.declaration();
         if let Ok(instance) = &instance {
@@ -1074,7 +970,6 @@ impl Placed {
         let declared = Declared::new(format!("{} ({path})", entry.label()), declaration);
         Self {
             path,
-            parent: parent.clone(),
             instance,
             declared,
         }
@@ -1122,25 +1017,14 @@ mod tests {
     #[axis]
     trait Metric: Plugin {}
 
-    /// A format recommending metrics, two of which provide the same fact.
+    /// A format with no settings or declarations.
     #[derive(Debug, Serialize, Deserialize, Plugin)]
     #[plugin(
         id = "round_robin",
         label = "round_robin",
-        description = "a plugin of the draft's tests",
-        recommends = Self::recommends
+        description = "a plugin of the draft's tests"
     )]
     struct RoundRobin;
-
-    impl RoundRobin {
-        fn recommends(&self) -> Vec<PluginConfig> {
-            vec![
-                PluginConfig::of::<MatchCount>(),
-                PluginConfig::of::<Wins>(),
-                PluginConfig::of::<Score>(),
-            ]
-        }
-    }
 
     #[register]
     impl Format for RoundRobin {}
@@ -1186,14 +1070,13 @@ mod tests {
     #[register]
     impl Format for Doubles {}
 
-    /// A format with a condition on the fact the context provides, recommending a metric twice.
+    /// A format with a condition on the fact the context provides.
     #[derive(Debug, Serialize, Deserialize, Plugin)]
     #[plugin(
         id = "monster",
         label = "monster",
         description = "a plugin of the draft's tests",
-        declare_static = Self::declare_static,
-        recommends = Self::recommends
+        declare_static = Self::declare_static
     )]
     struct Monster;
 
@@ -1204,14 +1087,6 @@ mod tests {
                 "rankings of single players",
                 |entrants| entrants.0 == 1,
             );
-        }
-
-        fn recommends(&self) -> Vec<PluginConfig> {
-            vec![
-                PluginConfig::of::<Buchholz>(),
-                PluginConfig::of::<MatchCount>(),
-                PluginConfig::of::<Buchholz>(),
-            ]
         }
     }
 
@@ -1889,43 +1764,6 @@ mod tests {
         assert_eq!(draft.default_value(&path("format")), Ok(None));
     }
 
-    #[test]
-    fn a_field_taking_a_list_offers_every_recommendation_that_fits() {
-        let draft = answered(&[("format", plugin::<RoundRobin>().into())]);
-
-        assert_eq!(
-            draft.default_value(&path("metrics")),
-            Ok(Some(json!([plugin::<MatchCount>(), plugin::<Wins>()])))
-        );
-    }
-
-    #[test]
-    fn a_field_taking_a_list_offers_a_recommendation_once() {
-        let draft = answered(&[("format", plugin::<Monster>().into())]);
-
-        assert_eq!(
-            draft.default_value(&path("metrics")),
-            Ok(Some(json!([plugin::<Buchholz>(), plugin::<MatchCount>()])))
-        );
-    }
-
-    #[test]
-    fn a_field_taking_one_plugin_offers_the_first_recommendation_that_fits() {
-        let mut draft = answered(&[("format", plugin::<RoundRobin>().into())]);
-
-        assert_eq!(
-            draft.default_value(&path("tie_break")),
-            Ok(Some(plugin::<MatchCount>().into()))
-        );
-        draft
-            .set(&path("metrics"), json!([plugin::<MatchCount>()]))
-            .unwrap();
-        assert_eq!(
-            draft.default_value(&path("tie_break")),
-            Ok(Some(plugin::<Wins>().into()))
-        );
-    }
-
     /// Answers every unanswered field of `draft` that offers an answer with it, depth first in
     /// schema order, as a UI accepting every default does.
     fn accept_defaults(draft: &mut Draft<Phase>) {
@@ -1961,7 +1799,7 @@ mod tests {
                 "{:?}",
                 Phase {
                     format: Box::new(RoundRobin),
-                    metrics: vec![Box::new(MatchCount), Box::new(Wins { for_win: 1.0 })],
+                    metrics: vec![],
                     tie_break: None,
                 }
             ))
@@ -2135,10 +1973,8 @@ mod tests {
         );
     }
 
-    /// The format recommends the metrics, so they are offered only once it is answered, and the
-    /// fields of the metrics only once those are.
     #[test]
-    fn the_defaults_answer_what_the_answers_before_them_recommend() -> Result<(), ConfigError> {
+    fn the_defaults_do_not_depend_on_other_answers() -> Result<(), ConfigError> {
         let draft = draft()
             .with("format", plugin::<RoundRobin>())?
             .with_defaults()?;
@@ -2147,10 +1983,7 @@ mod tests {
             Value::from(draft.answers().clone()),
             json!({
                 "format": {"type": "round_robin", "value": {}},
-                "metrics": [
-                    {"type": "match_count", "value": {}},
-                    {"type": "wins", "value": {"for_win": 1.0}},
-                ],
+                "metrics": [],
                 "tie_break": null,
             })
         );

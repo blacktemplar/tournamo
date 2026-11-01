@@ -179,22 +179,11 @@ impl OpenFacts {
     pub(crate) fn contains(&self, type_id: TypeId) -> bool {
         self.0.contains(&type_id)
     }
-
-    /// The types of the facts that could still be provided.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = TypeId> + '_ {
-        self.0.iter().copied()
-    }
 }
 
 impl FromIterator<TypeId> for OpenFacts {
     fn from_iter<I: IntoIterator<Item = TypeId>>(types: I) -> Self {
         Self(types.into_iter().collect())
-    }
-}
-
-impl Extend<TypeId> for OpenFacts {
-    fn extend<I: IntoIterator<Item = TypeId>>(&mut self, types: I) {
-        self.0.extend(types);
     }
 }
 
@@ -390,7 +379,8 @@ pub(crate) struct Conflict {
 ///
 /// # Errors
 /// Returns the first of the [`conflicts`].
-pub(crate) fn check_addition<'a>(
+#[cfg(test)]
+fn check_addition<'a>(
     context: &'a Declaration,
     declarations: impl IntoIterator<Item = &'a Declared>,
     addition: &'a Declared,

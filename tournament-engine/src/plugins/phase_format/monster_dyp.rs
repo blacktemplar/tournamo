@@ -14,7 +14,7 @@ use crate::{
             points::{MorePoints, PointsCalculator},
             wins_draws_losses::WinsDrawsLossesCalculator,
         },
-        phase_format::{PhaseFormat, Schedule},
+        phase_format::{PhaseFormat, PhaseSuggestions, Schedule},
     },
 };
 
@@ -34,8 +34,7 @@ use crate::{
     label = "Monster DYP",
     description = "“draw your partner”, as in foosball: every round, entrants are drawn into \
                    teams of two that play each other, and each entrant is ranked on its own",
-    declare_static = Self::declare_static,
-    recommends = Self::recommends
+    declare_static = Self::declare_static
 )]
 pub struct MonsterDyp {
     // all rounds are scheduled at once, so far more than a day's play would hold the page up
@@ -67,20 +66,22 @@ impl MonsterDyp {
             |entrants| *entrants == EntrantsPerRanking::SINGLE,
         );
     }
-
-    /// Ranked by points, and showing the wins, draws and losses as well.
-    fn recommends(&self) -> Vec<PluginConfig> {
-        // sitting a round out scores like a win, so the matches played need no tie break
-        vec![
-            PluginConfig::of::<MorePoints>(),
-            PluginConfig::of::<WinsDrawsLossesCalculator>(),
-            PluginConfig::of::<PointsCalculator>(),
-        ]
-    }
 }
 
 #[register]
 impl PhaseFormat for MonsterDyp {
+    /// Ranked by points, and showing the wins, draws and losses as well.
+    fn suggestions(&self) -> PhaseSuggestions {
+        // sitting a round out scores like a win, so the matches played need no tie break
+        PhaseSuggestions {
+            ranking: vec![PluginConfig::of::<MorePoints>()],
+            metrics: vec![
+                PluginConfig::of::<WinsDrawsLossesCalculator>(),
+                PluginConfig::of::<PointsCalculator>(),
+            ],
+        }
+    }
+
     fn min_entrants(&self) -> usize {
         4
     }

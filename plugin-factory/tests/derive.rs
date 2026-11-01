@@ -70,8 +70,7 @@ impl FieldType for NonNegative {
     label = "points",
     description = "points per result",
     declare_static = Self::declare_static,
-    declare = Self::declare,
-    recommends = Self::recommends
+    declare = Self::declare
 )]
 struct Points {
     // read missing as what it offers, which are two separate things
@@ -140,10 +139,6 @@ impl Points {
         if self.counts_byes {
             declaration.provide(ByesCounted);
         }
-    }
-
-    fn recommends(&self) -> Vec<PluginConfig> {
-        vec![PluginConfig::of::<Unit>()]
     }
 }
 
@@ -571,14 +566,6 @@ fn the_plugins_in_the_fields_are_the_plugins_it_holds() {
             provider: format!("{ranker:?}"),
         })
     );
-}
-
-#[test]
-fn a_recommendation_is_forwarded_to_the_function_given() {
-    let built = points().build::<dyn Derived>().unwrap();
-
-    assert_eq!(built.recommends(), [PluginConfig::of::<Unit>()]);
-    assert!(Unit.recommends().is_empty());
 }
 
 #[test]

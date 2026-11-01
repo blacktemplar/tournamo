@@ -54,14 +54,13 @@ trait Format: Plugin {}
 #[axis]
 trait Metric: Plugin {}
 
-/// A format recommending metrics, two of which provide the same fact.
+/// A format providing byes, with a configurable number of rounds.
 #[derive(Debug, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "full::round_robin",
     label = "round robin",
     description = "everyone plays everyone",
-    declare_static = Self::declare_static,
-    recommends = Self::recommends
+    declare_static = Self::declare_static
 )]
 struct RoundRobin {
     #[plugin(label = "Rounds", default = 1)]
@@ -71,10 +70,6 @@ struct RoundRobin {
 impl RoundRobin {
     fn declare_static(declaration: &mut Declaration) {
         declaration.provide(Byes);
-    }
-
-    fn recommends(&self) -> Vec<PluginConfig> {
-        vec![plugin::<Wins>(), plugin::<MatchCount>(), plugin::<Score>()]
     }
 }
 
@@ -486,7 +481,7 @@ fn an_operator_configures_a_phase_one_answer_at_a_time() {
     );
     // the offered answer is only filled in by setting it
     draft.set(&path("format.third_place"), false).unwrap();
-    // a knockout recommends nothing, so the schema's default is offered
+    // Only the schema determines the default.
     assert_eq!(draft.default_value(&path("metrics")), Ok(Some(json!([]))));
 
     // metrics requiring facts the unanswered tie break could still provide are no issue yet
@@ -571,22 +566,17 @@ fn an_operator_configures_a_phase_one_answer_at_a_time() {
 }
 
 #[test]
-fn a_phase_left_to_its_defaults_takes_what_its_format_recommends() {
+fn schema_defaults_do_not_depend_on_the_chosen_format() {
     let mut draft = Draft::<Phase>::new(singles);
     draft.set(&path("format"), plugin::<RoundRobin>()).unwrap();
 
-    // a format with a field still unanswered recommends nothing yet
     assert_eq!(draft.default_value(&path("metrics")), Ok(Some(json!([]))));
     draft.set(&path("format.rounds"), 1).unwrap();
 
-    // the score does not fit next to the wins recommended before it
-    assert_eq!(
-        draft.default_value(&path("metrics")),
-        Ok(Some(json!([plugin::<Wins>(), plugin::<MatchCount>()])))
-    );
+    assert_eq!(draft.default_value(&path("metrics")), Ok(Some(json!([]))));
     assert_eq!(
         draft.default_value(&path("tie_break")),
-        Ok(Some(json!(plugin::<Wins>())))
+        Ok(Some(Value::Null))
     );
 
     // building fills in no default
@@ -598,18 +588,13 @@ fn a_phase_left_to_its_defaults_takes_what_its_format_recommends() {
         .collect();
     assert_eq!(unanswered, ["metrics", "tie_break"]);
 
-    // accepted in question order, the tie break no longer fits the recommended metrics once
-    // they are set
     accept_defaults(&mut draft);
     let phase = draft.build().unwrap();
     assert_eq!(
         serde_json::to_value(&phase).unwrap(),
         json!({
             "format": {"type": "full::round_robin", "value": {"rounds": 1}},
-            "metrics": [
-                {"type": "full::wins", "value": {"for_win": 1.0, "counts_byes": false}},
-                {"type": "full::match_count", "value": null},
-            ],
+            "metrics": [],
             "tie_break": null,
         })
     );
@@ -666,6 +651,9 @@ fn a_saved_phase_loads_as_it_was_built() {
             ("tie_break.parts".to_owned(), true),
         ]
     );
+    draft
+        .set(&path("metrics"), vec![wins(false), plugin::<MatchCount>()])
+        .unwrap();
     accept_defaults(&mut draft);
     let phase = draft.build().unwrap();
 

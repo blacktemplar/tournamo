@@ -139,7 +139,7 @@ fn configure_phase(
     phase: Phase,
 ) -> Result<Outcome, Error> {
     loop {
-        match questionnaire::fill(&mut draft, &mut Terminal) {
+        match questionnaire::fill_phase(&mut draft, &mut Terminal) {
             Ok(()) => {}
             Err(questionnaire::Error::Cancelled) => {
                 let cancelled = match phase {

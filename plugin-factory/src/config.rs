@@ -359,11 +359,6 @@ impl Path {
         self
     }
 
-    /// Whether this path is `prefix` or addresses something within what `prefix` addresses.
-    pub(crate) fn starts_with(&self, prefix: &Self) -> bool {
-        self.0.starts_with(&prefix.0)
-    }
-
     /// This path followed by where deserializing the config it addresses, or the plugin answer
     /// unless `is_config`, failed, where `deserialized` is where in it as a [`Value`] that is.
     fn deserialized(self, deserialized: &serde_path_to_error::Path, is_config: bool) -> Self {

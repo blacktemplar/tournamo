@@ -59,7 +59,7 @@ pub enum Error {
     #[error("there is no entrant named {0:?}")]
     UnknownEntrant(String),
     /// A session never reads from the terminal, so a phase that is not given by its format has to
-    /// be configured before it reaches one, see [`questionnaire::fill`].
+    /// be configured before it reaches one, see [`questionnaire::fill_phase`].
     #[error("configuring a phase needs a terminal to ask at; name a format, see `help add-phase`")]
     NotConfigured,
     /// A session never reads from the terminal, so the phase has to be edited before it reaches
@@ -369,7 +369,7 @@ impl Session {
         }
         let mut draft = self.competition().phase_draft();
         draft.set(&ConfigPath::ROOT.field("format"), config)?;
-        questionnaire::fill(&mut draft, &mut AcceptDefaults)?;
+        questionnaire::fill_phase(&mut draft, &mut AcceptDefaults)?;
         self.add_phase(&draft)
     }
 

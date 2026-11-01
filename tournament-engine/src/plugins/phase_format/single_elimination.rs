@@ -12,7 +12,7 @@ use crate::{
             wins_draws_losses::{FewerLosses, WinsDrawsLossesCalculator},
         },
         phase_format::{
-            PhaseFormat, Schedule, Stage,
+            PhaseFormat, PhaseSuggestions, Schedule, Stage,
             bracket::{Bracket, Source, phase_round},
         },
     },
@@ -37,8 +37,7 @@ use crate::{
     id = "tournament_engine::single_elimination",
     label = "single elimination",
     description = "the loser of a match is out, draws are not allowed",
-    declare_static = Self::declare_static,
-    recommends = Self::recommends
+    declare_static = Self::declare_static
 )]
 pub struct SingleElimination {
     #[plugin(
@@ -88,22 +87,6 @@ impl SingleElimination {
         declaration
             .provide(MatchAnnotation::<KnockoutRound>::new())
             .provide(NoDraws);
-    }
-
-    /// Ranked by the round of the first loss, then, with a match for third place, by the losses,
-    /// and showing the wins, draws and losses as well.
-    fn recommends(&self) -> Vec<PluginConfig> {
-        let mut recommended = vec![PluginConfig::of::<LaterFirstLoss>()];
-        // the round of the first loss is the semifinal for both entrants playing for third place,
-        // so the losses are what that match is decided by in the ranking
-        if self.third_place_match {
-            recommended.push(PluginConfig::of::<FewerLosses>());
-        }
-        recommended.extend([
-            PluginConfig::of::<RoundOfFirstLossCalculator>(),
-            PluginConfig::of::<WinsDrawsLossesCalculator>(),
-        ]);
-        recommended
     }
 }
 
@@ -186,6 +169,21 @@ impl From<KnockoutRound> for Stage {
 
 #[register]
 impl PhaseFormat for SingleElimination {
+    fn suggestions(&self) -> PhaseSuggestions {
+        let mut ranking = vec![PluginConfig::of::<LaterFirstLoss>()];
+        // Both semifinal losers have the same first-loss round; losses distinguish third place.
+        if self.third_place_match {
+            ranking.push(PluginConfig::of::<FewerLosses>());
+        }
+        PhaseSuggestions {
+            ranking,
+            metrics: vec![
+                PluginConfig::of::<RoundOfFirstLossCalculator>(),
+                PluginConfig::of::<WinsDrawsLossesCalculator>(),
+            ],
+        }
+    }
+
     fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
         let third_place_match = self.third_place_match;
         self.bracket

@@ -45,7 +45,7 @@
 
 use std::fmt::Debug;
 
-use crate::{compatibility::Declaration, config::PluginConfig, schema::Configurable};
+use crate::{compatibility::Declaration, schema::Configurable};
 
 // so that the code the derive generates for the crate's own tests names it as any other crate does
 extern crate self as plugin_factory;
@@ -175,7 +175,7 @@ pub mod __private {
 }
 
 /// A plugin of some axis as it is asked behind a `dyn`, see [`catalog`]: what its configuration
-/// declares and recommends. Everything about its type is in [`PluginType`].
+/// declares. Everything about its type is in [`PluginType`].
 ///
 /// Usually derived, see [`derive@Plugin`]. The [`Debug`] form is what names the plugin in an
 /// [`Incompatibility`](compatibility::Incompatibility).
@@ -187,14 +187,6 @@ pub trait Plugin: Debug + __private::Erased + 'static {
     /// The declaration must depend on the plugin's configuration alone, since it is made before
     /// the composite exists.
     fn declare(&self, _: &mut Declaration) {}
-
-    /// The plugins this configuration suggests for the composite it is part of, which is what a
-    /// field taking plugins of their axis offers as its default; nothing by default.
-    ///
-    /// A recommendation of a plugin of an axis the composite takes nowhere has no effect.
-    fn recommends(&self) -> Vec<PluginConfig> {
-        Vec::new()
-    }
 }
 
 /// What a plugin is as a type: what identifies and describes it, and what every configuration of

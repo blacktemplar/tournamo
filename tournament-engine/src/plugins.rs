@@ -41,7 +41,8 @@
 //! plugin's id and the field's name, and shows the English where it has no translation.
 
 use plugin_factory::{
-    config::Config,
+    config::{Config, ConfigError, Path, PluginConfig, Value},
+    draft::Draft,
     schema::{Configurable, DependencyOrderedSet},
 };
 use serde::{Deserialize, Serialize};
@@ -125,6 +126,50 @@ pub struct PhasePlugins {
 }
 
 impl PhasePlugins {
+    /// The suggested answer for a root ranking or metrics field, otherwise its schema default.
+    /// Suggestions come only from the configured format and are not filtered for compatibility.
+    ///
+    /// # Errors
+    /// Returns a configuration error if the path is unknown. An incomplete or rejected format
+    /// supplies no suggestions; validation reports its problems independently.
+    pub fn default_value(draft: &Draft<Self>, path: &Path) -> Result<Option<Value>, ConfigError> {
+        if (*path == Path::ROOT.field("ranking") || *path == Path::ROOT.field("metrics"))
+            && let Some(format) = draft
+                .answers()
+                .get("format")
+                .and_then(PluginConfig::from_answer)
+                .and_then(|config| config.build::<dyn PhaseFormat>().ok())
+        {
+            let suggestions = format.suggestions();
+            return Ok(Some(if *path == Path::ROOT.field("ranking") {
+                suggestions.ranking.into()
+            } else {
+                suggestions.metrics.into()
+            }));
+        }
+        draft.default_value(path)
+    }
+
+    /// Fills unanswered fields with schema defaults and the format's suggested ranking and metrics.
+    /// Existing choices are preserved. No implied plugins are added.
+    ///
+    /// # Errors
+    /// Returns a configuration error if a default or suggestion does not fit its schema.
+    pub fn with_suggestions(mut draft: Draft<Self>) -> Result<Draft<Self>, ConfigError> {
+        let unanswered: Vec<_> = ["ranking", "metrics"]
+            .into_iter()
+            .filter(|field| draft.answers().get(field).is_none())
+            .collect();
+        draft = draft.with_defaults()?;
+        for field in unanswered {
+            let path = Path::ROOT.field(field);
+            if let Some(answer) = Self::default_value(&draft, &path)? {
+                draft.set(&path, answer)?;
+            }
+        }
+        draft.with_defaults()
+    }
+
     /// The plugins of a phase played in `format`, ranked by `ranking` and calculating the metrics
     /// of `metrics`, put into the order they run in.
     pub(crate) fn from_parts(

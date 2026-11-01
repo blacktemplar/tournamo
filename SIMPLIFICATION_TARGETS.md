@@ -183,3 +183,49 @@ For every prototype, compare the final edit/read flow, deleted types and algorit
 replacement concepts, and combined implementation across consumers. Use line counts
 as supporting evidence, not the acceptance criterion. A rejected prototype is a
 useful result; do not keep a more elaborate architecture to justify the experiment.
+
+## Follow-up: explicit tournament suggestions
+
+Implemented after operator review. `PhaseFormat::suggestions` returns separate
+ranking and metrics configs. `PhasePlugins` applies them to unanswered sections,
+and supplies the phase questionnaire's offered answers. The generic draft offers
+only schema defaults; the derive no longer accepts `recommends`. This removes
+sibling recommendation collection, compatibility negotiation for defaults, and
+the tree metadata needed only by that negotiation. No new suggestion-merging or
+repair solver replaces them. Future match-type composition belongs at the
+tournament-specific boundary.
+
+A format that cannot yet be constructed supplies no suggestions. Its unanswered
+or rejected settings remain editable and are diagnosed by validation; selecting
+such a format is not refused, and unknown source values are not guessed.
+
+## Follow-up: partial evaluation and final validation
+
+Inspection after moving suggestions found that these are already largely one
+implementation, rather than two independent validators:
+
+- `Draft::issues` and `Draft::build` both call `issues_in` on the same `Tree`.
+  Its completeness flag controls whether unanswered fields are errors and whether
+  unanswered axes may postpone missing dependencies. Both use the same fact checks.
+- `Placed::new` already builds each plugin whose configuration, including required
+  children, is complete. It uses actual configured declarations when construction
+  succeeds, otherwise the static declaration. A complete child is independently
+  evaluated even when its parent remains incomplete. Neither operation fills defaults.
+- `build` additionally walks the complete schema and deserializes the composite.
+  This enforces custom composite deserialization and dependency-ordered set
+  construction, including calculator execution cycles. Those checks cannot simply
+  be discarded because plugin facts are compatible.
+
+There is repeated construction: preparing the tree builds parents and their
+children, and final deserialization builds them again. This is distinct from
+duplicated compatibility rules. Reusing the built objects would require a way
+to assemble arbitrary typed composites from erased plugin instances. The current
+`Configurable` contract supplies a schema and `Deserialize`, not such an assembler.
+Adding generated construction methods, typed conversion machinery, or an object
+cache may cost more complexity than the repeated construction saves.
+
+Keep partial evaluation and its definite-error feedback. The next useful experiment
+would share immutable schema inspection/completed serialized answers where that
+actually deletes traversal code, preserving custom deserialization and precise
+paths. Do not introduce a second validator, insert defaults to validate unknowns,
+or promise a large deletion from merely renaming the existing shared flow.

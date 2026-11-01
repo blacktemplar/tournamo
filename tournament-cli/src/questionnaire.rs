@@ -3,11 +3,12 @@
 //! [`fill`] walks the schema of a [`Configurable`] along a [`Draft`] of it, and the schema of every
 //! plugin chosen on the way, and asks one question per field through a [`Prompter`]: whether for a
 //! yes or no, a number, one plugin of an axis, or a list of answers. It knows no plugin and no
-//! composite; what it offers comes from the catalog and from the draft.
+//! composite; what it offers comes from the catalog and from the draft. [`fill_phase`] adds
+//! tournament-specific ranking and scoring suggestions from the configured format.
 //!
 //! Every question starts out at the answer the field already has in the draft, or else at the
 //! answer the draft offers for it, see [`Draft::default_value`], so accepting every question
-//! answers the composite as its plugins recommend. `Terminal` (feature `terminal`) asks at the
+//! answers the composite with schema defaults. `Terminal` (feature `terminal`) asks at the
 //! terminal, and [`AcceptDefaults`] accepts every offered answer without asking anything.
 
 use std::{
@@ -25,6 +26,7 @@ use plugin_factory::{
     schema::{Configurable, DecimalRange, Field, FieldKind, IntegerRange},
 };
 use thiserror::Error;
+use tournament_engine::PhasePlugins;
 
 /// What the option of a list of plugins that ends it is shown as.
 const NO_FURTHER_ONE: &str = "(no further one)";
@@ -300,7 +302,7 @@ impl From<InquireError> for Error {
 ///
 /// A field offers every registered plugin of its axis, see [`Draft::candidates`].
 /// The plugins a question starts out at come first, in the order
-/// they are offered in, so that what the plugins chosen before recommend leads; the others follow
+/// they are offered in; the others follow
 /// alphabetically by label.
 ///
 /// Answers a plugin rejects are handed to [`Prompter::retry`] as soon as the fields of the plugin
@@ -331,10 +333,49 @@ pub async fn fill_async<T: Configurable>(
     draft: &mut Draft<T>,
     prompter: &mut impl AsyncPrompter,
 ) -> Result<(), Error> {
+    fill_using(draft, prompter, Draft::default_value).await
+}
+
+/// Fills a phase using the configured format's suggestions for unanswered ranking and metrics.
+/// Existing answers are preserved. Retry behavior is as for [`fill`].
+///
+/// # Errors
+/// As [`fill`], and a configuration error if the format's suggestions do not fit their schema.
+pub fn fill_phase(
+    draft: &mut Draft<PhasePlugins>,
+    prompter: &mut impl Prompter,
+) -> Result<(), Error> {
+    let mut context = Context::from_waker(Waker::noop());
+    match pin!(fill_phase_async(draft, prompter)).poll(&mut context) {
+        Poll::Ready(result) => result,
+        Poll::Pending => unreachable!("a `Prompter` answers right away"),
+    }
+}
+
+/// [`fill_phase`], through a prompter that may wait for answers.
+///
+/// # Errors
+/// As [`fill_phase`].
+pub async fn fill_phase_async(
+    draft: &mut Draft<PhasePlugins>,
+    prompter: &mut impl AsyncPrompter,
+) -> Result<(), Error> {
+    fill_using(draft, prompter, PhasePlugins::default_value).await
+}
+
+async fn fill_using<T: Configurable>(
+    draft: &mut Draft<T>,
+    prompter: &mut impl AsyncPrompter,
+    default_value: fn(&Draft<T>, &Path) -> Result<Option<Value>, ConfigError>,
+) -> Result<(), Error> {
     let schema = T::schema();
     let mut asked: Vec<&Field> = schema.fields().iter().collect();
     loop {
-        let mut asker = Asker { draft, prompter };
+        let mut asker = Asker {
+            draft,
+            prompter,
+            default_value,
+        };
         for field in asked {
             asker.field(field, &Path::ROOT, None).await?;
         }
@@ -647,6 +688,7 @@ impl Prompter for AcceptDefaults {
 struct Asker<'a, T, P> {
     draft: &'a mut Draft<T>,
     prompter: &'a mut P,
+    default_value: fn(&Draft<T>, &Path) -> Result<Option<Value>, ConfigError>,
 }
 
 impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
@@ -664,7 +706,7 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
         };
         let default = match self.draft.answers().get_at(&path) {
             Some(answer) => Some(answer.clone()),
-            None => self.draft.default_value(&path)?,
+            None => (self.default_value)(self.draft, &path)?,
         };
         if !self.draft.is_relevant(&path)?
             && let Some(default) = default
@@ -959,7 +1001,7 @@ mod tests {
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::*;
+    use super::{fill_phase as fill, *};
 
     /// How a [`Script`] answers a question.
     enum Step {
@@ -1338,7 +1380,7 @@ mod tests {
             _rounds: u32,
         }
 
-        let result = fill(&mut Draft::<Rounds>::new(|_| {}), &mut AcceptDefaults);
+        let result = super::fill(&mut Draft::<Rounds>::new(|_| {}), &mut AcceptDefaults);
 
         assert!(
             matches!(&result, Err(Error::NoDefault { question }) if question == "Rounds"),

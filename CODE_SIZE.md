@@ -285,3 +285,31 @@ The remaining six main lines removed were catalog metadata used only by predicti
 The plugin framework plus app and GUI configuration now totals 4,767 main lines,
 or 5,477 with the CLI questionnaire. These counts exclude concrete tournament
 algorithms, shared widgets, CSS, and translations, as in the previous comparison.
+
+## Tournament-specific suggestions
+
+`PhaseFormat::suggestions` now supplies explicit ranking and metrics configs.
+The generic framework no longer gathers sibling recommendations or negotiates
+compatible defaults. Schema defaults, partial evaluation, compatibility validation,
+and implied dependencies remain generic. GUI, CLI and browser-terminal consumers
+use the tournament-specific offer/application helpers.
+
+| Scope | Before | After | Difference |
+| --- | ---: | ---: | ---: |
+| Generic plugin framework and derives, main code | 3,065 | 2,943 | -122 |
+| Workspace, main code | 19,958 | 19,915 | -43 |
+| Workspace, tests | 16,669 | 16,721 | +52 |
+
+The tournament-specific API and explicit CLI integration offset much of the
+framework deletion. This is a smaller net reduction than the architectural scope
+might suggest; its benefit is removing generic recommendation negotiation and
+making ownership explicit. Tests now cover a third-party format's configured
+suggestions, deferring suggestions for an incomplete format, incompatible
+suggestions reaching validation, schema-only defaults, and preservation of
+explicit empty choices. Generic recommendation tests were
+removed or changed to test schema defaults.
+
+The subsequent validation review is recorded in `SIMPLIFICATION_TARGETS.md`:
+partial issues and final build already share their fact-validation flow and
+already build complete sub-plugins. Repeated construction remains, but eliminating
+it would require an additional generic assembly mechanism.

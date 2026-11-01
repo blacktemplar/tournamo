@@ -15,7 +15,6 @@ pub fn expand_plugin(input: &DeriveInput) -> Result<TokenStream> {
         description,
         declare_static,
         declare,
-        recommends,
     } = Container::parse(input)?;
     let declare_static = declare_static.as_ref().map(|declare_static| {
         quote! {
@@ -37,18 +36,10 @@ pub fn expand_plugin(input: &DeriveInput) -> Result<TokenStream> {
                 ::std::option::Option::Some(#description);
         }
     });
-    let recommends = recommends.as_ref().map(|recommends| {
-        quote! {
-            fn recommends(&self) -> ::std::vec::Vec<::plugin_factory::config::PluginConfig> {
-                (#recommends)(self)
-            }
-        }
-    });
 
     Ok(quote! {
         impl ::plugin_factory::Plugin for #plugin {
             #declare
-            #recommends
         }
 
         #configurable
@@ -180,7 +171,6 @@ struct Container {
     description: Option<LitStr>,
     declare_static: Option<Expr>,
     declare: Option<Expr>,
-    recommends: Option<Expr>,
 }
 
 impl Container {
@@ -190,7 +180,6 @@ impl Container {
         let mut description = None;
         let mut declare_static = None;
         let mut declare = None;
-        let mut recommends = None;
         for attribute in attributes(&input.attrs, "plugin") {
             attribute.parse_nested_meta(|meta| {
                 if meta.path.is_ident("id") {
@@ -203,12 +192,9 @@ impl Container {
                     set_once(&mut declare_static, &meta, meta.value()?.parse()?)
                 } else if meta.path.is_ident("declare") {
                     set_once(&mut declare, &meta, meta.value()?.parse()?)
-                } else if meta.path.is_ident("recommends") {
-                    set_once(&mut recommends, &meta, meta.value()?.parse()?)
                 } else {
                     Err(meta.error(
-                        "expected `id`, `label`, `description`, `declare_static`, `declare` or \
-                         `recommends`",
+                        "expected `id`, `label`, `description`, `declare_static` or `declare`",
                     ))
                 }
             })?;
@@ -228,7 +214,6 @@ impl Container {
             description,
             declare_static,
             declare,
-            recommends,
         })
     }
 }

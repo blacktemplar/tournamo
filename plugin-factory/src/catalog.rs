@@ -172,7 +172,7 @@ impl PluginEntry {
     }
 
     /// The plugin built from `config`, its config at `at`, for what only a configured plugin can
-    /// say: what it declares on top of its static declaration, and what it recommends.
+    /// say: what it declares on top of its static declaration.
     ///
     /// # Errors
     /// Returns [`ConfigError::Rejected`] if the plugin's `Deserialize` impl rejects the config,

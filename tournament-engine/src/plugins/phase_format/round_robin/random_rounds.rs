@@ -15,7 +15,7 @@ use crate::{
             points::{MorePoints, PointsCalculator},
             wins_draws_losses::WinsDrawsLossesCalculator,
         },
-        phase_format::{PhaseFormat, Schedule, round_robin::circle::Circle},
+        phase_format::{PhaseFormat, PhaseSuggestions, Schedule, round_robin::circle::Circle},
     },
 };
 
@@ -28,8 +28,7 @@ use crate::{
     id = "tournament_engine::random_rounds",
     label = "random rounds",
     description = "for many entrants and little time: some rounds of a round robin, chosen at \
-                   random, so that nobody meets anyone twice",
-    recommends = Self::recommends
+                   random, so that nobody meets anyone twice"
 )]
 pub struct RandomRounds {
     #[plugin(
@@ -49,26 +48,30 @@ impl RandomRounds {
     pub const fn new(rounds: u32) -> Self {
         Self { rounds }
     }
-
-    /// Ranked by points, then Buchholz, Sonneborn-Berger and Buchholz of Buchholz, and showing the
-    /// wins, draws and losses as well.
-    fn recommends(&self) -> Vec<PluginConfig> {
-        vec![
-            PluginConfig::of::<MorePoints>(),
-            PluginConfig::of::<MoreBuchholz>(),
-            PluginConfig::of::<MoreSonnebornBerger>(),
-            PluginConfig::of::<MoreBuchholzOfBuchholz>(),
-            PluginConfig::of::<WinsDrawsLossesCalculator>(),
-            PluginConfig::of::<PointsCalculator>(),
-            PluginConfig::of::<BuchholzCalculator>(),
-            PluginConfig::of::<SonnebornBergerCalculator>(),
-            PluginConfig::of::<BuchholzOfBuchholzCalculator>(),
-        ]
-    }
 }
 
 #[register]
 impl PhaseFormat for RandomRounds {
+    /// Ranked by points, then Buchholz, Sonneborn-Berger and Buchholz of Buchholz, and showing the
+    /// wins, draws and losses as well.
+    fn suggestions(&self) -> PhaseSuggestions {
+        PhaseSuggestions {
+            ranking: vec![
+                PluginConfig::of::<MorePoints>(),
+                PluginConfig::of::<MoreBuchholz>(),
+                PluginConfig::of::<MoreSonnebornBerger>(),
+                PluginConfig::of::<MoreBuchholzOfBuchholz>(),
+            ],
+            metrics: vec![
+                PluginConfig::of::<WinsDrawsLossesCalculator>(),
+                PluginConfig::of::<PointsCalculator>(),
+                PluginConfig::of::<BuchholzCalculator>(),
+                PluginConfig::of::<SonnebornBergerCalculator>(),
+                PluginConfig::of::<BuchholzOfBuchholzCalculator>(),
+            ],
+        }
+    }
+
     fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
         // all rounds are scheduled at once
         if phase_data.has_schedule() {

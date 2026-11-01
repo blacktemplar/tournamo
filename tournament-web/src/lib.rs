@@ -219,7 +219,7 @@ impl Shell {
         let mut asking = prompter.clone();
         let filling = Box::pin(async move {
             let mut draft = draft;
-            let result = questionnaire::fill_async(&mut draft, &mut asking).await;
+            let result = questionnaire::fill_phase_async(&mut draft, &mut asking).await;
             (draft, result)
         });
         self.configuring = Some(Configuring {

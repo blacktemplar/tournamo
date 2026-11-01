@@ -11,7 +11,7 @@ use crate::{
             points::{MorePoints, PointsCalculator},
             wins_draws_losses::WinsDrawsLossesCalculator,
         },
-        phase_format::{PhaseFormat, Schedule},
+        phase_format::{PhaseFormat, PhaseSuggestions, Schedule},
     },
 };
 
@@ -28,26 +28,27 @@ use circle::Circle;
 #[plugin(
     id = "tournament_engine::round_robin",
     label = "round robin",
-    description = "everyone plays everyone",
-    recommends = Self::recommends
+    description = "everyone plays everyone"
 )]
 pub struct RoundRobin;
 
-impl RoundRobin {
-    /// Ranked by points, then Sonneborn-Berger, and showing the wins, draws and losses as well.
-    fn recommends(&self) -> Vec<PluginConfig> {
-        vec![
-            PluginConfig::of::<MorePoints>(),
-            PluginConfig::of::<MoreSonnebornBerger>(),
-            PluginConfig::of::<WinsDrawsLossesCalculator>(),
-            PluginConfig::of::<PointsCalculator>(),
-            PluginConfig::of::<SonnebornBergerCalculator>(),
-        ]
-    }
-}
-
 #[register]
 impl PhaseFormat for RoundRobin {
+    /// Ranked by points, then Sonneborn-Berger, and showing the wins, draws and losses as well.
+    fn suggestions(&self) -> PhaseSuggestions {
+        PhaseSuggestions {
+            ranking: vec![
+                PluginConfig::of::<MorePoints>(),
+                PluginConfig::of::<MoreSonnebornBerger>(),
+            ],
+            metrics: vec![
+                PluginConfig::of::<WinsDrawsLossesCalculator>(),
+                PluginConfig::of::<PointsCalculator>(),
+                PluginConfig::of::<SonnebornBergerCalculator>(),
+            ],
+        }
+    }
+
     fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
         // all rounds are scheduled at once
         if phase_data.has_schedule() {

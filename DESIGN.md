@@ -765,6 +765,21 @@ across every write); the whole log as one value (1.4 MB rewritten per result at
 
 ### Configuring a phase
 
+**Suggestions belong to the tournament layer.** `PhaseFormat::suggestions` returns
+`PhaseSuggestions`: separate lists of ranking criteria and metrics, with any
+suggested settings. `PhasePlugins::default_value` offers those answers for the
+root ranking/metrics fields; `with_suggestions` fills unanswered sections while
+preserving explicit choices and filling schema defaults. The form and the phase
+questionnaire use these operations. Third-party formats implement the same trait;
+consumers need no table of formats. A future match type can be combined at this
+boundary, without introducing cross-plugin negotiation in the generic library.
+
+`plugin-factory` offers only schema defaults. It does not collect sibling
+recommendations, select their destination by axis, or filter them for compatibility.
+Suggestions are ordinary answers: a suggested combination that is incompatible
+remains visible and must pass the same validation as an operator's choices.
+Implied fieldless dependencies remain a separate generic operation.
+
 **The form is data of the app crate**: `PhaseForm` holds the `Draft` and hands
 out a `FormView` (fields by `Path`, inputs by kind, options, implied plugins,
 issues), taking changes by path. The GUI only lays it out and knows no plugin.

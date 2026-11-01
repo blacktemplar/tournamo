@@ -662,8 +662,8 @@ impl Session {
     }
 
     /// A draft of a phase of this competition played in the format `format`, a [`Plugin::id`],
-    /// with every field answered as offered, see [`Draft::with_defaults`]. It can be changed
-    /// before it is handed to [`Self::add_phase`].
+    /// with schema defaults and format suggestions, see [`PhasePlugins::with_suggestions`].
+    /// It can be changed before it is handed to [`Self::add_phase`].
     ///
     /// # Errors
     /// Returns an error if there is no such format, or it offers an answer it does not take.
@@ -672,11 +672,11 @@ impl Session {
             .entries()
             .find(|entry| entry.id() == format)
             .ok_or_else(|| PhaseDraftError::UnknownFormat(format.to_owned()))?;
-        Ok(self
-            .competition()
-            .phase_draft()
-            .with("format", PluginConfig::new(entry.id()))?
-            .with_defaults()?)
+        Ok(PhasePlugins::with_suggestions(
+            self.competition()
+                .phase_draft()
+                .with("format", PluginConfig::new(entry.id()))?,
+        )?)
     }
 
     /// A form of a new phase of this competition, answered as the phase was played whose adding

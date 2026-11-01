@@ -15,7 +15,7 @@ use crate::{
             wins_draws_losses::{FewerLosses, WinsDrawsLossesCalculator},
         },
         phase_format::{
-            PhaseFormat, Schedule, Stage,
+            PhaseFormat, PhaseSuggestions, Schedule, Stage,
             bracket::{Bracket, Source, phase_round},
         },
     },
@@ -55,8 +55,7 @@ use crate::{
     id = "tournament_engine::double_elimination",
     label = "double elimination",
     description = "an entrant is out after its second loss, draws are not allowed",
-    declare_static = Self::declare_static,
-    recommends = Self::recommends
+    declare_static = Self::declare_static
 )]
 pub struct DoubleElimination {
     #[plugin(
@@ -107,20 +106,6 @@ impl DoubleElimination {
             .provide(MatchAnnotation::<DoubleEliminationRound>::new())
             .provide(MatchAnnotation::<Eliminates>::new())
             .provide(NoDraws);
-    }
-
-    /// Ranked by the round of elimination, then the losses, and showing the wins, draws and losses
-    /// as well.
-    fn recommends(&self) -> Vec<PluginConfig> {
-        // an entrant drops into the loser bracket with its first loss, so it is the round it was
-        // knocked out in that tells how far it got; until then, the losses tell those still in the
-        // winner bracket from those that dropped
-        vec![
-            PluginConfig::of::<LaterElimination>(),
-            PluginConfig::of::<FewerLosses>(),
-            PluginConfig::of::<RoundOfEliminationCalculator>(),
-            PluginConfig::of::<WinsDrawsLossesCalculator>(),
-        ]
     }
 }
 
@@ -203,6 +188,19 @@ impl From<DoubleEliminationRound> for Stage {
 
 #[register]
 impl PhaseFormat for DoubleElimination {
+    fn suggestions(&self) -> PhaseSuggestions {
+        PhaseSuggestions {
+            ranking: vec![
+                PluginConfig::of::<LaterElimination>(),
+                PluginConfig::of::<FewerLosses>(),
+            ],
+            metrics: vec![
+                PluginConfig::of::<RoundOfEliminationCalculator>(),
+                PluginConfig::of::<WinsDrawsLossesCalculator>(),
+            ],
+        }
+    }
+
     fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
         let reset = self.grand_final_reset;
         self.bracket

@@ -250,7 +250,7 @@ pub struct PluginOption {
     /// What is said about it in English, translated as its
     /// [`PluginText::Description`](crate::i18n::PluginText::Description).
     pub description: Option<&'static str>,
-    /// Whether the plugins chosen elsewhere recommend it here.
+    /// Whether the configured format suggests it here.
     pub recommended: bool,
 }
 
@@ -710,7 +710,9 @@ impl PhaseForm {
 
     /// The ids of the plugins the field at `path` offers.
     fn recommended(&self, axis: AnyAxis, path: &Path) -> Vec<&'static str> {
-        let offered = self.draft.default_value(path).ok().flatten();
+        let offered = PhasePlugins::default_value(&self.draft, path)
+            .ok()
+            .flatten();
         let answers = match &offered {
             Some(Value::Array(answers)) => answers.iter().collect(),
             Some(answer) => vec![answer],
@@ -774,7 +776,7 @@ fn suggested(mut draft: Draft<PhasePlugins>) -> Result<Draft<PhasePlugins>, Conf
     for field in ["ranking", "metrics"] {
         draft.unset(&Path::ROOT.field(field))?;
     }
-    draft.with_defaults()
+    PhasePlugins::with_suggestions(draft)
 }
 
 /// Why a number entered is not taken, see [`number`].

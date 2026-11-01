@@ -46,6 +46,10 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- Plugin authors provide phase ranking and scoring suggestions through
+  `PhaseFormat::suggestions`, rather than the generic `Plugin` trait and derive
+  attribute. Schema defaults and saved configurations are unchanged.
+
 - Configuration choices stay visible even when incompatible with the current
   settings. The form reports conflicts after selection; the CLI asks for corrections
   after checking the whole configuration, including unresolved dependencies.

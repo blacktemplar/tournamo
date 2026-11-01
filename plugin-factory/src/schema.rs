@@ -893,8 +893,7 @@ mod tests {
     #[plugin(
         id = "points",
         label = "points",
-        description = "a plugin with a parameter of every scalar kind",
-        recommends = Self::recommends
+        description = "a plugin with a parameter of every scalar kind"
     )]
     struct Points {
         #[serde(deserialize_with = "non_negative")]
@@ -919,12 +918,6 @@ mod tests {
             return Err(D::Error::custom("the points for a win cannot be negative"));
         }
         Ok(points)
-    }
-
-    impl Points {
-        fn recommends(&self) -> Vec<PluginConfig> {
-            vec![PluginConfig::of::<Matches>()]
-        }
     }
 
     #[register]
@@ -1475,18 +1468,5 @@ mod tests {
                 path: Path::of("tie_breakers").index(0).field("least"),
             })
         );
-    }
-
-    #[test]
-    fn a_plugin_recommends_what_a_field_of_that_axis_offers() {
-        let points = Points {
-            for_win: 1.0,
-            rounds: 3,
-            counts_byes: true,
-            for_bye: None,
-        };
-
-        assert_eq!(points.recommends(), vec![PluginConfig::of::<Matches>()]);
-        assert!(Matches.recommends().is_empty());
     }
 }

@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use dyn_clone::DynClone;
-use plugin_factory::{Plugin, axis, compatibility};
+use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
 use crate::{
     entities::competition::{Bye, NewMatch, PhaseData},
@@ -20,6 +20,12 @@ use crate::{
 /// read the [`Bracket`] of a [`SingleElimination`].
 #[axis]
 pub trait PhaseFormat: Plugin + DynClone + Any {
+    /// Suggested ranking and scoring settings for this configuration. Consumers apply these
+    /// when starting a phase or explicitly restoring suggestions; they are not compatibility rules.
+    fn suggestions(&self) -> PhaseSuggestions {
+        PhaseSuggestions::default()
+    }
+
     /// The matches and byes to schedule next, given everything the phase has played so far. Empty
     /// if there is nothing to schedule, which is how a finished phase is reported.
     ///
@@ -76,6 +82,14 @@ impl dyn PhaseFormat {
     pub fn allows_draws(&self) -> bool {
         !compatibility::provides_fact::<NoDraws>(self)
     }
+}
+
+/// The ranking criteria, in priority order, and metrics suggested for a phase.
+/// Each config must belong to the corresponding axis. Suggestions are validated like user choices.
+#[derive(Debug, Default)]
+pub struct PhaseSuggestions {
+    pub ranking: Vec<PluginConfig>,
+    pub metrics: Vec<PluginConfig>,
 }
 
 /// The name of a stage of a phase, as a [`PhaseFormat`] names a match or a bye by, see

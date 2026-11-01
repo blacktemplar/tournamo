@@ -311,5 +311,30 @@ removed or changed to test schema defaults.
 
 The subsequent validation review is recorded in `SIMPLIFICATION_TARGETS.md`:
 partial issues and final build already share their fact-validation flow and
-already build complete sub-plugins. Repeated construction remains, but eliminating
-it would require an additional generic assembly mechanism.
+already build complete sub-plugins. The later construction-reuse change below
+avoids repeated construction without adding a generic assembly mechanism.
+
+## Reusing constructed plugins during evaluation
+
+`Draft::build` now constructs the final composite first, then inspects its existing
+plugins. Partial evaluation borrows the children of complete plugins instead of
+constructing them independently. Inspection retains declarations and errors rather
+than owned plugin objects. Both flows continue to use the same compatibility check.
+
+Construction-count tests cover nested successful builds, partial evaluation,
+incomplete parents, dependency-sorted lists, and repeated types in different fields.
+Separate tests preserve child error paths, custom composite rejection, independent
+sibling diagnostics, and handwritten composites without plugin enumeration.
+
+| Scope | Before | After | Difference |
+| --- | ---: | ---: | ---: |
+| Draft core, main code | 593 | 618 | +25 |
+| Workspace, main code | 19,915 | 19,940 | +25 |
+| Workspace, tests | 16,721 | 16,972 | +251 |
+
+This removes duplicated work rather than source lines. There is no new public API,
+generic assembler, or cross-edit cache. Construction can still repeat after a
+deserialization failure, because serde supplies no partial object to inspect and
+independent sub-plugins must still be checked. Handwritten implementations that
+omit plugin enumeration keep their construction fallback. Separate calls that
+inspect different draft copies or apply implied providers are not cached.

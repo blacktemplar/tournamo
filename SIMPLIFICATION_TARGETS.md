@@ -201,7 +201,7 @@ such a format is not refused, and unknown source values are not guessed.
 
 ## Follow-up: partial evaluation and final validation
 
-Inspection after moving suggestions found that these are already largely one
+The initial inspection after moving suggestions found that these were largely one
 implementation, rather than two independent validators:
 
 - `Draft::issues` and `Draft::build` both call `issues_in` on the same `Tree`.
@@ -216,10 +216,10 @@ implementation, rather than two independent validators:
   construction, including calculator execution cycles. Those checks cannot simply
   be discarded because plugin facts are compatible.
 
-There is repeated construction: preparing the tree builds parents and their
-children, and final deserialization builds them again. This is distinct from
-duplicated compatibility rules. Reusing the built objects would require a way
-to assemble arbitrary typed composites from erased plugin instances. The current
+There was repeated construction: preparing the tree built parents and their
+children, and final deserialization built them again. This was distinct from
+duplicated compatibility rules. Assembling arbitrary typed composites from erased
+plugin instances would require a new construction mechanism. The current
 `Configurable` contract supplies a schema and `Deserialize`, not such an assembler.
 Adding generated construction methods, typed conversion machinery, or an object
 cache may cost more complexity than the repeated construction saves.
@@ -229,3 +229,18 @@ would share immutable schema inspection/completed serialized answers where that
 actually deletes traversal code, preserving custom deserialization and precise
 paths. Do not introduce a second validator, insert defaults to validate unknowns,
 or promise a large deletion from merely renaming the existing shared flow.
+
+### Construction reuse implemented
+
+The existing `Configurable::plugins` and `Plugin::sub_plugins` enumeration makes
+a generic assembler unnecessary. `Draft::build` first constructs the real composite
+and inspects those instances. During partial evaluation, a complete parent's
+children are borrowed instead of independently reconstructed. Inspection retains
+only declarations and construction errors, and consumes matching references by
+id within each parent to preserve answer paths when a dependency set is reordered.
+
+If initial deserialization fails, the diagnostic pass constructs independent
+sub-plugins as before. This preserves multiple issues, incomplete-child evaluation,
+custom deserializer errors, and dependency-cycle checks. It deliberately does not
+promise one construction on rejection: serde does not expose the partial object.
+There is no cross-edit cache, generated assembly API, or second mutable model.

@@ -399,14 +399,24 @@ impl<T: Configurable> Draft<T> {
                 problem: Problem::Invalid(error),
             }]
         };
-        let issues = issues_in(&self.context, &Tree::of(&schema, &self.answers), true);
+        let built = schema
+            .walk(&self.answers, &Path::ROOT, true)
+            .and_then(|walked| {
+                config::deserialize::<T>(&config::complete::<T>(walked), &Path::ROOT)
+            });
+        let tree = match &built {
+            Ok(built) => Tree::with_plugins(&schema, &self.answers, built.plugins()),
+            Err(_) => {
+                // Serde does not return the partially built object. Inspect complete sub-plugins
+                // independently so one rejected field does not hide the other diagnostics.
+                Tree::of(&schema, &self.answers)
+            }
+        };
+        let issues = issues_in(&self.context, &tree, true);
         if !issues.is_empty() {
             return Err(issues);
         }
-        let walked = schema
-            .walk(&self.answers, &Path::ROOT, true)
-            .map_err(invalid)?;
-        config::deserialize(&config::complete::<T>(walked), &Path::ROOT).map_err(invalid)
+        built.map_err(invalid)
     }
 }
 
@@ -440,7 +450,7 @@ fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
         }
     }
     for placed in &tree.plugins {
-        if let Err(error) = &placed.instance
+        if let Some(error) = &placed.error
             && !matches!(error, ConfigError::Unanswered { .. })
         {
             let issue = Issue {
@@ -885,12 +895,10 @@ struct Tree {
     plugins: Vec<Placed>,
 }
 
-/// A plugin in the answers, built once with the tree.
+/// A plugin's evaluated declaration and any construction error, at its answer's path.
 struct Placed {
     path: Path,
-    /// The plugin built from its config, or why it cannot be, e.g. because a field is still
-    /// unanswered, see [`PluginEntry::instance`].
-    instance: Result<Box<dyn Plugin>, ConfigError>,
+    error: Option<ConfigError>,
     /// What the plugin declares itself, without the plugins answering its fields, which are
     /// placed in the tree themselves: what its configuration declares if it is built, and its
     /// static declaration otherwise. Named by its label and path.
@@ -900,15 +908,21 @@ struct Placed {
 impl Tree {
     /// The tree of `answers`, the answers to `schema`.
     fn of(schema: &Schema, answers: &Config) -> Self {
+        Self::with_plugins(schema, answers, Vec::new())
+    }
+
+    /// Inspects existing plugins instead of constructing them again. A dependency-ordered list
+    /// can differ from answer order, so instances are matched by id within each parent's fields.
+    fn with_plugins(schema: &Schema, answers: &Config, plugins: Vec<&dyn Plugin>) -> Self {
         let mut tree = Self {
             questions: Vec::new(),
             plugins: Vec::new(),
         };
-        tree.add_fields(fields::fields(schema, answers, &Path::ROOT));
+        tree.add_fields(fields::fields(schema, answers, &Path::ROOT), plugins);
         tree
     }
 
-    fn add_fields(&mut self, fields: Vec<FieldNode>) {
+    fn add_fields(&mut self, fields: Vec<FieldNode>, mut instances: Vec<&dyn Plugin>) {
         for node in fields {
             self.questions.push(Question {
                 path: node.path,
@@ -916,12 +930,24 @@ impl Tree {
                 answer: node.answer,
             });
             for plugin in node.plugins {
-                self.plugins.push(Placed::new(
-                    plugin.entry,
-                    &plugin.config,
-                    plugin.path.clone(),
-                ));
-                self.add_fields(plugin.fields);
+                let owned;
+                let instance = match instances
+                    .iter()
+                    .position(|instance| instance.id() == plugin.entry.id())
+                {
+                    Some(index) => Ok(instances.remove(index)),
+                    None => {
+                        owned = plugin.entry.instance(&plugin.config, &plugin.path);
+                        owned.as_deref().map_err(Clone::clone)
+                    }
+                };
+                let children = instance
+                    .as_ref()
+                    .map(|instance| instance.sub_plugins())
+                    .unwrap_or_default();
+                self.plugins
+                    .push(Placed::new(plugin.entry, plugin.path.clone(), instance));
+                self.add_fields(plugin.fields, children);
             }
         }
     }
@@ -959,10 +985,11 @@ fn all_but<T>(items: &[T], index: usize) -> impl Iterator<Item = &T> {
 }
 
 impl Placed {
-    /// The plugin `entry` configured by `config`, answering the position at `path` of the config
-    /// holding it.
-    fn new(entry: &'static PluginEntry, config: &Config, path: Path) -> Self {
-        let instance = entry.instance(config, &path);
+    fn new(
+        entry: &'static PluginEntry,
+        path: Path,
+        instance: Result<&dyn Plugin, ConfigError>,
+    ) -> Self {
         let mut declaration = entry.declaration();
         if let Ok(instance) = &instance {
             instance.declare(&mut declaration);
@@ -970,7 +997,7 @@ impl Placed {
         let declared = Declared::new(format!("{} ({path})", entry.label()), declaration);
         Self {
             path,
-            instance,
+            error: instance.err(),
             declared,
         }
     }

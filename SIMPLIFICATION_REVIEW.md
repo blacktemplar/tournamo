@@ -227,9 +227,9 @@ does not by itself establish a large net simplification.
 
 ## Recommendation
 
-Under the existing behavior constraints, prototype the authoritative field model
-first. It is the clearest opportunity to remove a layer across multiple consumers
-without dropping tournament capabilities or changing the reporting engine.
+The authoritative field model has now been prototyped and rejected for adoption
+in its current form; see the experiment below. It removed JSON editing helpers,
+but did not establish a substantial simplification across the consumers.
 
 If simpler configuration behavior is acceptable, evaluate it as a separate design
 with explicit before/after examples. Removing predictive assistance may be a more
@@ -238,3 +238,56 @@ direct simplification than building a more elaborate generic solver to preserve 
 Do not start another production refactor based only on a file's size. The next
 experiment should demonstrate deletion of a named mechanism and report its net
 cost, including the replacement model, adapters, and caller changes.
+
+## Experiment: authoritative fields and stable identities
+
+Implemented on `experiments/authoritative-draft-fields`, commit `7dca743`.
+The production branch retains the previous implementation. This is a completed
+prototype evaluation, not a claim that every possible tree design is unsuitable.
+
+The prototype made the draft own typed answers and nested plugin fields.
+`Draft::fields` borrowed that tree rather than reconstructing a snapshot. Defaults
+and compatibility queries traversed it. Stable identities addressed fields and
+list items, and GUI callbacks submitted those identities through the app form.
+Moving a list item retained its identity and those of its descendants; removing
+or replacing a plugin invalidated its old descendants. JSON configs became a
+cached export, invalidated on edits, rather than the authoritative editable data.
+Existing path-based entry points remained as adapters.
+
+The old `locate`, `set_in`, `edit`, and mutable JSON navigation were removed.
+The separate compatibility `Question` representation was removed too. This was
+more than adding a new tree in front of the old editing implementation.
+
+| Rust code, excluding blanks and comments | Before | Prototype | Difference |
+| --- | ---: | ---: | ---: |
+| Main | 19,913 | 20,223 | +310 |
+| Tests | 16,054 | 16,099 | +45 |
+| Examples | 86 | 86 | 0 |
+
+Line count alone does not decide this. Borrowed reads were easier to follow, and
+the tree made the distinction between unanswered and explicit none visible in
+types. But a maintainer now had to understand identity allocation, identity
+lookup, stale identities, path maintenance after moves, typed answer conversion,
+and invalidation of the serialization cache. The app still needed its form view
+and rejected-input state. Recommendation following and predictive compatibility
+were essentially unchanged, including their path-based scoping. The CLI still
+used its existing path-based questionnaire API. Serialization and schema checking
+also remained necessary for actual plugin construction and custom serde rules.
+
+There is further work one could do, particularly sharing schema validation with
+typed-answer parsing and changing the remaining consumers. Those omissions limit
+the experiment: it does not prove a fully migrated design would be larger. But
+the vertical slice did not justify migrating more code or introducing another
+framework to manage identities. This version failed the stopping rule above.
+
+All standard `prek run --all-files` hooks passed on the prototype, including
+native tests, native and wasm Clippy, docs, formatting, and manifest checks.
+Added tests exercised identity-preserving list moves, editing a moved descendant,
+stale identities after removal, cache refresh, and transactional duplicate errors.
+Browser E2E and wasm runtime tests were not run; the prototype was not adopted.
+
+The finding narrows the next investigation: direct traversal is workable, but
+replacing addresses does not remove the expensive-to-understand policies around
+edits. A substantial reduction is more likely to require simpler recommendation
+or dependency-selection behavior. That needs concrete operator-facing examples
+and agreement on the behavior before implementation.

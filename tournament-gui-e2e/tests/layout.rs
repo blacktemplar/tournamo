@@ -1,4 +1,7 @@
-use tournament_gui_e2e::{Gui, run, run_in_new_competition, thirtyfour::error::WebDriverResult};
+use tournament_gui_e2e::{
+    Gui, run, run_in_new_competition,
+    thirtyfour::{By, error::WebDriverResult},
+};
 
 const LONG_NAME: &str = "Maximilian-Alexander Müller-Lüdenscheidt";
 
@@ -190,7 +193,72 @@ async fn a_bracket_of_sixteen_fits_on_a_tablet() {
     .await;
 }
 
-/// Two byes meeting in the loser bracket leave their place empty, and the lines still meet.
+/// Of twenty entrants, twelve move on by a bye: their pairings are left out, each tagged in the
+/// next round instead, and the round of 32 takes the eight rows of the round of 16, so the bracket
+/// fits the height of a laptop's window, the lines still meeting.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_bye_is_a_tag_rather_than_a_pairing() {
+    run_in_new_competition(async |gui| {
+        let names: Vec<String> = (1..=20).map(|number| format!("Player {number}")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        show_bracket(&gui, "Single elimination", &names).await?;
+
+        gui.expect_bracket_lines_meet().await?;
+        gui.page
+            .expect_texts(By::Css(".pairing .tag"), &["bye"; 12])
+            .await?;
+        let first_column = ".bracket-column:first-child > .bracket-slots > ol > li";
+        assert_eq!(gui.page.rects_of(first_column).await?.len(), 8);
+        let height = gui.page.rects_of(".bracket").await?[0].height();
+        assert!(
+            height < 900.0,
+            "the bracket must be lower than the window, but is {height}px high"
+        );
+        gui.page.check_accessibility().await
+    })
+    .await;
+}
+
+/// On a phone, the bracket's edge fades out where more of it is out of sight, hinting at the
+/// rounds to the right, and at the first round once scrolled to the last.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_edges_of_a_bracket_scrolling_fade_out() {
+    run_in_new_competition(async |gui| {
+        let names = [
+            "Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Heidi",
+        ];
+        gui.page.resize(390, 844).await?;
+        show_bracket(&gui, "Single elimination", &names).await?;
+        gui.expect_bracket_fades(false, true).await?;
+
+        gui.scroll_bracket_to_the_end().await?;
+
+        gui.expect_bracket_fades(true, false).await
+    })
+    .await;
+}
+
+/// A knockout of 64 is higher than the screen, so it scrolls within a box as high as the screen
+/// below the view switch, the names of its stages staying on top.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_stages_of_a_high_bracket_stay_on_top() {
+    run_in_new_competition(async |gui| {
+        let names: Vec<String> = (1..=64).map(|number| format!("Player {number}")).collect();
+        gui.paste_entrant_names(&names.join("\n")).await?;
+        show_bracket(&gui, "Single elimination", &[]).await?;
+
+        gui.expect_bracket_stages_stay_on_top().await?;
+        gui.expect_bracket_lines_meet().await?;
+        gui.page.check_accessibility().await
+    })
+    .await;
+}
+
+/// The pairings of byes in the first rounds of a double elimination are left out, their places
+/// kept, and the lines still meet.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_pairing_never_played_keeps_its_place() {

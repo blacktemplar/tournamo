@@ -169,9 +169,18 @@ pub enum BracketPart {
 }
 
 /// The pairings of a stage of a [`BracketSection`].
+///
+/// A column is drawn as `rows` rows of the same height. Usually each pairing has a row of its own.
+/// A column where some pairings are decided by a bye is folded, to take less room: those pairings
+/// are left out, the side they decide being marked in the next column (see
+/// [`BracketPairing::after_bye`]), and the others are drawn in the rows of the pairings of the next
+/// column their winners play in, two pairings sharing a row where their winners meet.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BracketColumn {
     pub stage: Option<StageName>,
+    /// The number of rows the column is drawn in: the number of its pairings, or of those of the
+    /// next column where it is folded.
+    pub rows: usize,
     /// Top to bottom, so that the winners of two neighbours that meet next are drawn either side
     /// of the pairing they meet in.
     pub pairings: Vec<BracketPairing>,
@@ -189,8 +198,13 @@ pub struct BracketPairing {
     pub number: Option<usize>,
     /// Its match, once scheduled.
     pub r#match: Option<MatchRow>,
+    /// The row of its column it is drawn in, see [`BracketColumn::rows`].
+    pub row: usize,
     /// Sides A and B.
     pub sides: [BracketEntry; 2],
+    /// Whether each side moved on from a pairing decided by a bye, which the folded column before
+    /// leaves out, see [`BracketColumn`].
+    pub after_bye: [bool; 2],
     /// The line from it to the pairing its winner plays next, if that is in the next column.
     pub line_out: Option<BracketLine>,
     /// Whether a line comes in from the previous column.

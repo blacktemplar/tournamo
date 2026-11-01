@@ -208,6 +208,8 @@ bracket-grand-final = Grand final
 bracket-report-hint = Choosing the name of the side that won reports the result.
 # a side of a match in the bracket that nobody takes
 bracket-bye = Bye
+# the tag of a side that moved on without a match, in place of a pairing against nobody
+bracket-after-bye = bye
 # a side of a match in the bracket not decided yet, by the match or else the stage it comes from
 winner-of-match = Winner of { $number }
 loser-of-match = Loser of { $number }

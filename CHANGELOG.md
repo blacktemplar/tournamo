@@ -18,6 +18,11 @@ a file whose `"format"` changes is migrated, not refused.
   lines, or nobody if one of the names is taken.
 - Naming a new competition, or renaming one, as another one is named says so
   while it is typed.
+- The bracket draws no box for a pairing against nobody: the entrant moving on
+  shows in the next round, tagged "bye", so that a knockout of 20 is half as
+  high. A bracket higher than the screen scrolls within it, the names of the
+  rounds staying on top, and its edges fade out where more of it is out of
+  sight.
 
 ### Changed
 

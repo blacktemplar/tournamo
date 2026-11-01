@@ -831,7 +831,8 @@ winners (old listings would not read).
   and columns by stage (third place `below` the final), and works out the lines
   and how an undecided side is named (by match number, else stage and place).
 - **What can only be a bye is worked out from the tree**: a pairing of two byes
-  keeps its slot, empty (`Unplayed::Byes`), so the geometry holds; a side
+  not left out (below) keeps its slot, empty (`Unplayed::Byes`), so the
+  geometry holds; a side
   waiting on a pairing against a bye names who plays the bye; a reset says "if
   needed", then "not needed" (`Unplayed::NotNeeded`).
 - **Drawn as columns of equal slots**: each column a grid of `1fr` rows, so a
@@ -839,6 +840,18 @@ winners (old listings would not read).
   without measuring; lines are pseudo-element borders; long names wrap within
   the narrowest column (`7rem`); all sections scroll sideways together. Read in
   order it is the list of matches by stage, so no text alternative is needed.
+- **Byes take no box**: a column with pairings decided by a bye is folded into
+  the rows of the next one (`BracketColumn::rows`, `BracketPairing::row`),
+  leaving them out and tagging the side they decide (`after_bye`), two
+  pairings sharing a row where their winners meet; a column of byes only is
+  left out. Twenty entrants take eight rows rather than sixteen. Only a column
+  nothing leads into is folded, since the lines into it expect a row per
+  pairing.
+- **A bracket higher than the screen scrolls within a box as high as it**, the
+  stages sticky on top, which they could not be with the page scrolling (the
+  box scrolls sideways, so it is their scroll container either way). Its
+  edges fade out where more is out of sight, over the pairings, measured on
+  scroll and resize, since a shadow behind them is covered.
 - **Shown in place of the columns** by the view switch, the rest kept `hidden`
   so state survives; local storage remembers the choice.
 - **A result is a click on the winner's name** (a button "Alice wins", styled as

@@ -319,9 +319,8 @@ impl Gui {
             Ok(add) => add,
             Err(_) => self.driver.query(By::Id(id)).first().await?,
         };
-        trigger.click().await?;
-        Page::pause().await;
-        Ok(())
+        // in sight, as below a long list of entrants it may be under the bar
+        self.click_in_sight(&trigger).await
     }
 
     /// Moves the pointer onto the option labelled `label` of the list of plugins open.
@@ -1176,26 +1175,40 @@ impl Gui {
                     const columns = [...bracket.querySelectorAll(":scope > .bracket-column")]
                         .map((column) =>
                             [...column.querySelectorAll(":scope > .bracket-slots > ol > li")]);
-                    columns.forEach((slots, c) => slots.forEach((slot, s) => {
-                        const at = `section ${section}, column ${c}, slot ${s}`;
-                        const box = slot.getBoundingClientRect();
-                        const pairing = slot.querySelector(".pairing").getBoundingClientRect();
-                        if (off(pairing.left, box.left) || off(pairing.right, box.right)) {
-                            problems.push(`${at}: the pairing is narrower than its slot`);
-                        }
-                        if (off(box.height, slots[0].getBoundingClientRect().height)) {
-                            problems.push(`${at}: the slot is not as high as the column's first`);
+                    columns.forEach((rows, c) => rows.forEach((row, r) => {
+                        const at = `section ${section}, column ${c}, row ${r}`;
+                        if (off(row.getBoundingClientRect().height,
+                            rows[0].getBoundingClientRect().height)) {
+                            problems.push(`${at}: the row is not as high as the column's first`);
                         }
                         const next = columns[c + 1];
-                        if (slot.classList.contains("line-straight")
-                            && off(middle(slot), middle(next[s]))) {
-                            problems.push(`${at}: the line misses the pairing it leads to`);
-                        }
-                        if (slot.classList.contains("line-down")
-                            && off((middle(slot) + middle(slots[s + 1])) / 2,
-                                middle(next[Math.floor(s / 2)]))) {
-                            problems.push(`${at}: the lines miss the pairing they lead to`);
-                        }
+                        // a column folded into the rows of the next one, or one of as many
+                        // pairings, leads to the pairing of the same row, else to that of the
+                        // two rows meeting
+                        const to = () =>
+                            next[rows.length === next.length ? r : Math.floor(r / 2)];
+                        // two pairings in the halves of a row of a folded column
+                        const pair = row.classList.contains("slots");
+                        const slots = pair ? [...row.querySelectorAll(":scope > ol > li")] : [row];
+                        slots.forEach((slot, s) => {
+                            if (!slot.querySelector(".pairing")) {
+                                return;
+                            }
+                            const box = slot.getBoundingClientRect();
+                            const pairing = slot.querySelector(".pairing").getBoundingClientRect();
+                            if (off(pairing.left, box.left) || off(pairing.right, box.right)) {
+                                problems.push(`${at}: the pairing is narrower than its slot`);
+                            }
+                            if (slot.classList.contains("line-straight")
+                                && off(middle(slot), middle(to()))) {
+                                problems.push(`${at}: the line misses the pairing it leads to`);
+                            }
+                            const below = pair ? slots[s + 1] : rows[r + 1];
+                            if (slot.classList.contains("line-down")
+                                && off((middle(slot) + middle(below)) / 2, middle(to()))) {
+                                problems.push(`${at}: the lines miss the pairing they lead to`);
+                            }
+                        });
                     }));
                 });
                 return problems;
@@ -1282,12 +1295,103 @@ impl Gui {
     ///
     /// # Panics
     /// Panics if it does not, with how much wider it is.
+    /// Scrolls the bracket sideways to its last column.
+    pub async fn scroll_bracket_to_the_end(&self) -> WebDriverResult<()> {
+        self.driver
+            .execute(
+                "const box = document.querySelector('[aria-labelledby=bracket] .scroll');
+                box.scrollLeft = box.scrollWidth;",
+                Vec::new(),
+            )
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the bracket's left edge fades out if `left`, as where more of it is out of
+    /// sight there, and its right edge if `right`, and the others do not.
+    ///
+    /// # Panics
+    /// Panics if they do not in time.
+    pub async fn expect_bracket_fades(&self, left: bool, right: bool) -> WebDriverResult<()> {
+        let edge = |fades, side| {
+            let attribute = format!("[data-more-{side}]");
+            if fades {
+                attribute
+            } else {
+                format!(":not({attribute})")
+            }
+        };
+        let by = format!(
+            ".bracket-frame{}{}",
+            edge(left, "left"),
+            edge(right, "right")
+        );
+        self.page
+            .expect(
+                By::Css(by),
+                |query| query,
+                &format!("the left edge fading out: {left}, the right one: {right}"),
+            )
+            .await
+    }
+
+    /// Checks that the bracket, higher than the screen below the bar and the view switch, scrolls
+    /// within a box that fits there, and that the stages of its first section stay on top of it
+    /// when it is scrolled down, which this does.
+    ///
+    /// # Panics
+    /// Panics if the bracket is not higher than its box, the box, scrolled into view, reaches
+    /// below the screen, or a stage scrolls away.
+    pub async fn expect_bracket_stages_stay_on_top(&self) -> WebDriverResult<()> {
+        let problems = self
+            .driver
+            .execute(
+                r#"
+                const box = document.querySelector("[aria-labelledby=bracket] .scroll");
+                const problems = [];
+                if (box.scrollHeight <= box.clientHeight) {
+                    problems.push("the bracket is not higher than its box");
+                }
+                // at the top of the screen below the bar and the view switch, which the page's
+                // scroll padding leaves free
+                box.scrollIntoView({ block: "start" });
+                const bottom = box.getBoundingClientRect().bottom;
+                if (bottom > window.innerHeight + 1) {
+                    problems.push(`its box ends at ${bottom}px, below the screen`);
+                }
+                box.scrollTop = box.scrollHeight / 2;
+                const top = box.getBoundingClientRect().top;
+                box.querySelectorAll(".bracket-section:first-child .bracket-stage")
+                    .forEach((stage) => {
+                        if (stage.closest(".below")) {
+                            return;
+                        }
+                        const at = stage.getBoundingClientRect().top;
+                        if (Math.abs(at - top) > 1) {
+                            problems.push(`${stage.textContent} is at ${at}, not at ${top}`);
+                        }
+                    });
+                return problems;
+                "#,
+                Vec::new(),
+            )
+            .await?
+            .json()
+            .clone();
+        assert!(
+            problems.as_array().is_some_and(Vec::is_empty),
+            "the stages of the bracket must stay on top, but {problems:#}"
+        );
+        Ok(())
+    }
+
     pub async fn expect_bracket_fits(&self) -> WebDriverResult<()> {
         let [content, shown] = self
             .driver
             .execute(
                 r#"
-                const scroll = document.querySelector("[aria-labelledby=bracket] > .scroll");
+                const scroll = document.querySelector("[aria-labelledby=bracket] .scroll");
                 return [scroll.scrollWidth, scroll.clientWidth];
                 "#,
                 Vec::new(),

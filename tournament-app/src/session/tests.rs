@@ -849,11 +849,69 @@ fn the_bracket_of_a_double_elimination_shows_where_the_losers_drop() {
     assert!(grand_final[1].pairings[0].only_if_needed);
 }
 
-/// Of five entrants, three have byes in the first round, so two byes meet in the loser bracket: a
-/// pairing never played, without lines, whose winner is a bye too. A side waiting for the winner
-/// of a pairing against a bye waits for whoever plays the bye.
+/// Of five entrants, three have byes in the first round, whose pairings are left out: the first
+/// column is drawn in the rows of the second, its one match level with the pairing it leads to,
+/// which names who moved on by a bye.
 #[test]
-fn a_pairing_of_two_byes_is_never_played_and_a_bye_is_passed_through() {
+fn a_pairing_decided_by_a_bye_is_left_out_of_its_column() {
+    let session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol", "Dave", "Erin"])
+        .format(DoubleElimination::ID)
+        .started();
+
+    let bracket = session.bracket().unwrap();
+
+    let winners = &bracket.sections[0].columns;
+    assert_eq!(winners[0].rows, 2, "the rows of the second round");
+    let [first] = &winners[0].pairings[..] else {
+        panic!("expected the one match of the first round");
+    };
+    assert_eq!(
+        (first.number, first.row, first.line_out),
+        (Some(1), 0, Some(BracketLine::Straight))
+    );
+    let second: Vec<_> = winners[1]
+        .pairings
+        .iter()
+        .map(|pairing| (pairing.after_bye, pairing.line_in))
+        .collect();
+    assert_eq!(second, [([true, false], true), ([true, true], false)]);
+    assert_eq!(
+        winners[1].rows,
+        winners[1].pairings.len(),
+        "not folded, as a line leads into it"
+    );
+}
+
+/// Of twenty entrants, twelve have byes in the round of 32, which is drawn in the eight rows of
+/// the round of 16, half as high as with a row for each of its pairings.
+#[test]
+fn a_knockout_with_many_byes_is_half_as_high() {
+    let names: Vec<&'static str> = (1..=20)
+        .map(|number| &*format!("Entrant {number}").leak())
+        .collect();
+    let session = Given::new()
+        .entrants(&names)
+        .format(SingleElimination::ID)
+        .started();
+
+    let bracket = session.bracket().unwrap();
+
+    let first = &bracket.sections[0].columns[0];
+    assert_eq!((first.rows, first.pairings.len()), (8, 4));
+    assert!(
+        first
+            .pairings
+            .iter()
+            .all(|pairing| pairing.line_out == Some(BracketLine::Straight))
+    );
+}
+
+/// Of five entrants, two byes meet in the first round of the loser bracket, which is left out
+/// whole, and a side waiting for the winner of a pairing against a bye waits for whoever plays the
+/// bye.
+#[test]
+fn a_bye_is_passed_through_to_whoever_plays_it() {
     let session = Given::new()
         .entrants(&["Alice", "Bob", "Carol", "Dave", "Erin"])
         .format(DoubleElimination::ID)
@@ -862,24 +920,25 @@ fn a_pairing_of_two_byes_is_never_played_and_a_bye_is_passed_through() {
     let bracket = session.bracket().unwrap();
 
     let losers = &bracket.sections[1].columns;
-    let byes = &losers[0].pairings[1];
-    assert_eq!(byes.unplayed, Some(Unplayed::Byes));
-    assert_eq!(byes.line_out, None);
-    assert_eq!(losers[0].pairings[0].unplayed, None);
+    let stages = losers
+        .iter()
+        .map(|column| english(column.stage.clone()).unwrap());
     assert_eq!(
-        column(&losers[1]).1,
-        [
-            ["loser of #1".to_owned(), "loser of #3".to_owned()],
-            ["bye".to_owned(), "loser of #2".to_owned()]
-        ],
+        stages.collect::<Vec<_>>(),
+        ["Losers round 2", "Losers round 3", "Losers final"]
+    );
+    assert_eq!(
+        column(&losers[0]).1,
+        [["loser of #1".to_owned(), "loser of #3".to_owned()]],
         "the losers of the winner bracket, rather than the winners of the byes they get first"
     );
-    assert!(!losers[1].pairings[1].line_in);
-    let after_the_byes = column(&losers[2]).1;
+    assert_eq!(losers[0].pairings[0].after_bye, [true, false]);
     assert_eq!(
-        after_the_byes[0][1], "loser of #2",
+        column(&losers[1]).1,
+        [["winner of #4".to_owned(), "loser of #2".to_owned()]],
         "whoever gets the bye of the pairing of a bye and the loser of #2"
     );
+    assert_eq!(losers[1].pairings[0].after_bye, [false, true]);
 }
 
 /// Reports side A as the winner of every match playable, as long as there is one, except

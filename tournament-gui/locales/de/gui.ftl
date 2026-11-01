@@ -159,6 +159,7 @@ bracket-losers = Verliererseite
 bracket-grand-final = Großes Finale
 bracket-report-hint = Der Name der Seite, die gewonnen hat, trägt das Ergebnis ein, wenn er gewählt wird.
 bracket-bye = Freilos
+bracket-after-bye = Freilos
 winner-of-match = Sieger von { $number }
 loser-of-match = Verlierer von { $number }
 winner-of-stage = Sieger: { $stage }

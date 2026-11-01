@@ -37,12 +37,29 @@ pub fn Bracket() -> Element {
     let ctx = use_context::<Ctx>();
     let focus = use_signal(|| None::<Focus>);
     let on_heading_mounted = use_focus(focus, Focus::Heading);
+    // the element scrolling, and whether more of the bracket is out of its sight to the left and
+    // to the right, which fades out at that edge
+    let mut scrolling = use_signal(|| None::<web_sys::Element>);
+    let mut more = use_signal(|| (false, false));
+    let mut measure = move || {
+        if let Some(element) = scrolling.peek().as_ref() {
+            let left = element.scroll_left();
+            let measured = (
+                left > 1,
+                left + element.client_width() < element.scroll_width() - 1,
+            );
+            if *more.peek() != measured {
+                more.set(measured);
+            }
+        }
+    };
     let Some(bracket) = ctx.session.read().bracket() else {
         return rsx! {};
     };
     let tr = ctx.translator.read();
     // said only to the tab that reports, while there is something to report
     let reports = ctx.actions().report;
+    let (more_left, more_right) = more();
     rsx! {
         section { class: "card", aria_labelledby: "bracket",
             // focused once a result is reported, so that the focus is not lost
@@ -52,18 +69,30 @@ pub fn Bracket() -> Element {
             if reports {
                 p { class: "hint", {tr.get("bracket-report-hint")} }
             }
-            // every section in one, scrolling sideways together if its columns do not fit
+            // every section in one, scrolling sideways together if its columns do not fit, and
+            // down within the screen if they are higher, their stages staying on top
             div {
-                class: "scroll",
-                role: "group",
-                tabindex: "0",
-                aria_labelledby: "bracket",
-                for (index , section) in bracket.sections.into_iter().enumerate() {
-                    Section {
-                        key: "{index}",
-                        index,
-                        section,
-                        focus,
+                class: "bracket-frame",
+                "data-more-left": more_left.then_some("true"),
+                "data-more-right": more_right.then_some("true"),
+                div {
+                    class: "scroll bracket-scroll",
+                    role: "group",
+                    tabindex: "0",
+                    aria_labelledby: "bracket",
+                    onmounted: move |event| {
+                        scrolling.set(event.data().downcast::<web_sys::Element>().cloned());
+                        measure();
+                    },
+                    onscroll: move |_| measure(),
+                    onresize: move |_| measure(),
+                    for (index , section) in bracket.sections.into_iter().enumerate() {
+                        Section {
+                            key: "{index}",
+                            index,
+                            section,
+                            focus,
+                        }
                     }
                 }
             }
@@ -106,13 +135,38 @@ fn Section(index: usize, section: BracketSection, focus: Signal<Option<Focus>>) 
 /// drawn below it, if any.
 #[component]
 fn Column(column: BracketColumn, nested: bool, focus: Signal<Option<Focus>>) -> Element {
+    // the pairings of each row, top to bottom
+    let mut rows = vec![Vec::new(); column.rows];
+    for pairing in column.pairings {
+        let row = pairing.row;
+        rows[row].push(pairing);
+    }
     rsx! {
         div { class: "bracket-column",
             Stage { stage: column.stage, nested }
             div { class: "bracket-slots",
                 ol {
-                    for (index , pairing) in column.pairings.into_iter().enumerate() {
-                        Pairing { key: "{index}", pairing, focus }
+                    for (index , mut pairings) in rows.into_iter().enumerate() {
+                        match pairings.len() {
+                            // the place of pairings left out, kept so that the others stay level
+                            // with those they lead to
+                            0 => rsx! {
+                                li { key: "{index}", class: "slot", aria_hidden: "true" }
+                            },
+                            1 => rsx! {
+                                Pairing { key: "{index}", pairing: pairings.remove(0), focus }
+                            },
+                            // two whose winners meet in the next column, each in half of the row
+                            _ => rsx! {
+                                li { key: "{index}", class: "slots",
+                                    ol {
+                                        for (index , pairing) in pairings.into_iter().enumerate() {
+                                            Pairing { key: "{index}", pairing, focus }
+                                        }
+                                    }
+                                }
+                            },
+                        }
                     }
                 }
                 if let Some(below) = column.below {
@@ -203,7 +257,12 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
             }
         };
         rsx! {
-            span { class: "side {class}", {entry_text(&tr, entry)} }
+            span { class: "side {class}",
+                {entry_text(&tr, entry)}
+                if pairing.after_bye[side] {
+                    AfterBye {}
+                }
+            }
         }
     };
     rsx! {
@@ -220,7 +279,7 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
                     span { class: "number", aria_hidden: "true" }
                 }
                 if let Some(row) = to_report {
-                    WinButtons { row, focus }
+                    WinButtons { row, after_bye: pairing.after_bye, focus }
                 } else {
                     {side(0)}
                     span { class: "visually-hidden", {tr.get("versus")} }
@@ -237,10 +296,22 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
     }
 }
 
-/// The sides of the match `row`, which has no result yet, each a button reporting that it won (a
-/// knockout has no draws).
+/// The tag of a side that moved on by a bye, from a pairing left out of the column before.
 #[component]
-fn WinButtons(row: MatchRow, focus: Signal<Option<Focus>>) -> Element {
+fn AfterBye() -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    rsx! {
+        span { class: "visually-hidden", "," }
+        " "
+        span { class: "tag", {tr.get("bracket-after-bye")} }
+    }
+}
+
+/// The sides of the match `row`, which has no result yet, each a button reporting that it won (a
+/// knockout has no draws), tagged where it moved on by a bye.
+#[component]
+fn WinButtons(row: MatchRow, after_bye: [bool; 2], focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
     let id = row.id;
     let tr = ctx.translator.read();
@@ -258,22 +329,32 @@ fn WinButtons(row: MatchRow, focus: Signal<Option<Focus>>) -> Element {
         }
     };
     // the name alone on the screen; what a click does is said under the pointer
+    let button = |name: String, label: String, result, after_bye: bool| {
+        let button = rsx! {
+            button {
+                class: "side",
+                aria_label: "{label}",
+                title: "{label}",
+                onclick: report(result),
+                "{name}"
+            }
+        };
+        // the tag beside the button, whose name says only who wins
+        if after_bye {
+            rsx! {
+                span { class: "tagged",
+                    {button}
+                    AfterBye {}
+                }
+            }
+        } else {
+            button
+        }
+    };
     rsx! {
-        button {
-            class: "side",
-            aria_label: "{a_wins}",
-            title: "{a_wins}",
-            onclick: report(MatchResult::AWins),
-            "{a}"
-        }
+        {button(a, a_wins, MatchResult::AWins, after_bye[0])}
         span { class: "visually-hidden", {tr.get("versus")} }
-        button {
-            class: "side",
-            aria_label: "{b_wins}",
-            title: "{b_wins}",
-            onclick: report(MatchResult::BWins),
-            "{b}"
-        }
+        {button(b, b_wins, MatchResult::BWins, after_bye[1])}
     }
 }
 

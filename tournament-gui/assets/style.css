@@ -1599,8 +1599,47 @@ ul.summary-items {
   flex-direction: column;
 }
 
+/* Where more of the bracket is out of sight, its edge fades out (bracket.rs): over the pairings,
+ * which would cover a shadow behind them, and within the box, whose focus ring stays clear */
+.bracket-frame {
+  position: relative;
+}
+
+.bracket-frame[data-more-left]::before,
+.bracket-frame[data-more-right]::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 2.5rem;
+  content: "";
+  pointer-events: none;
+}
+
+.bracket-frame[data-more-left]::before {
+  left: 0;
+  background: linear-gradient(to right, var(--surface), transparent);
+}
+
+.bracket-frame[data-more-right]::after {
+  right: 0;
+  background: linear-gradient(to left, var(--surface), transparent);
+}
+
+/* At most as high as the screen below the bar and the view switch, so that a bracket higher than
+ * that scrolls within it, its stages on top, rather than the page, which would take them away */
+.bracket-scroll {
+  max-height: calc(100dvh - var(--bar-height) - var(--control) - 2 * var(--space-2) - var(--space-4));
+  overflow-y: auto;
+}
+
 .bracket-stage {
-  margin: 0 0 var(--space-2);
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding-bottom: var(--space-2);
+  margin: 0;
+  background: var(--surface);
   color: var(--text-muted);
   font-size: 0.9em;
   font-weight: 600;
@@ -1653,6 +1692,35 @@ ul.summary-items {
   display: flex;
   align-items: center;
   padding: var(--space-1) 0;
+}
+
+/* two pairings whose winners meet in the next column, in a row of a column folded into the rows
+ * of the next one (bracket.rs), each in a slot of half its height */
+.slots {
+  display: flex;
+}
+
+/* the side of a pairing that moved on by a bye, in place of a pairing against nobody; beside the
+ * button of a side, whose name says only who wins */
+.pairing .tagged {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  grid-column: 2;
+}
+
+.pairing .tagged > button.side {
+  flex: 1;
+}
+
+.pairing .tag {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.8em;
+  font-weight: normal;
+  white-space: nowrap;
 }
 
 /* The lines: from the middle of a slot halfway across the gap to the next column, there down or

@@ -1,6 +1,9 @@
 //! The bracket of a knockout phase, which only the knockout formats of the engine have.
 
-use std::{any::Any, collections::HashMap};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+};
 
 use tournament_engine::{
     Phase, TypeMap,
@@ -131,6 +134,42 @@ impl Session {
             }
         }
 
+        // Folding a column leaves out its pairings decided by a bye, so it can be folded where its
+        // other pairings all lead to the next column, in whose rows they are drawn. Nothing may
+        // lead into it, whose lines would expect its pairings in rows of their own.
+        let by_bye = |id: &PairingId| by_id[id].r#match.is_none() && byes[id].contains(&true);
+        let mut folded = HashSet::new();
+        for (section, (_, columns)) in layout.iter().enumerate() {
+            for (column, (_, ids)) in columns.iter().enumerate() {
+                let led_into = next
+                    .values()
+                    .any(|to| to.section == section && to.column == column);
+                if column + 1 < columns.len()
+                    && !led_into
+                    && ids.iter().any(by_bye)
+                    && ids.iter().all(|id| by_bye(id) || next.contains_key(id))
+                {
+                    folded.insert((section, column));
+                    next.retain(|from, _| !(ids.contains(from) && by_bye(from)));
+                }
+            }
+        }
+        let left_out = |id: &PairingId| {
+            let place = places[id];
+            folded.contains(&(place.section, place.column)) && by_bye(id)
+        };
+        // the place of each pairing drawn among those drawn in its column, from 0, and how many
+        // those are
+        let mut drawn: HashMap<PairingId, (usize, usize)> = HashMap::new();
+        for (_, columns) in &layout {
+            for (_, ids) in columns {
+                let shown: Vec<_> = ids.iter().filter(|id| !left_out(id)).collect();
+                for (index, id) in shown.iter().enumerate() {
+                    drawn.insert(**id, (index, shown.len()));
+                }
+            }
+        }
+
         let number = |pairing: &Pairing| {
             pairing.number.map(|number| {
                 usize::try_from(number.get()).expect("a number of a match fits a usize")
@@ -138,12 +177,11 @@ impl Session {
         };
         let source = |id: PairingId| {
             let pairing = by_id[&id];
-            let place = places[&id];
-            let column = &layout[place.section].1[place.column].1;
+            let (index, count) = drawn[&id];
             BracketSource {
                 number: number(pairing),
                 stage: stage(phase, pairing.annotations),
-                position: (column.len() > 1).then_some(place.index + 1),
+                position: (count > 1).then_some(index + 1),
             }
         };
         // who takes `side`, where the winner of a pairing against a bye is whoever plays the bye
@@ -174,6 +212,13 @@ impl Session {
         let row = |pairing: &Pairing| {
             let sides = pairing.sides.map(entry);
             let place = places[&pairing.id];
+            let after_bye = [0, 1].map(|side| {
+                let from_left_out = matches!(
+                    pairing.sides[side].from,
+                    Some(Advance::WinnerOf(from)) if left_out(&from)
+                );
+                from_left_out && sides[side] != BracketEntry::Bye
+            });
             let line_out = next.get(&pairing.id).map(|to| {
                 // the places of the pairings whose winners meet in `to`, this one's included
                 let joining: Vec<_> = next
@@ -200,7 +245,13 @@ impl Session {
                         .expect("the bracket only holds matches of its phase");
                     self.match_row(phase, r#match)
                 }),
+                row: if folded.contains(&(place.section, place.column)) {
+                    next[&pairing.id].index
+                } else {
+                    place.index
+                },
                 sides,
+                after_bye,
                 line_out,
                 line_in: next.values().any(|to| *to == place),
                 // until it is scheduled or known not to be played
@@ -214,16 +265,31 @@ impl Session {
             }
         };
         let mut sections: Vec<BracketSection> = Vec::new();
-        for (section, columns) in &layout {
-            let mut columns = columns.iter().map(|(stage, ids)| BracketColumn {
-                stage: stage.clone(),
-                pairings: ids.iter().map(|id| row(by_id[id])).collect(),
-                below: None,
+        for (index, (section, columns)) in layout.iter().enumerate() {
+            let mut columns = columns.iter().enumerate().map(|(column, (stage, ids))| {
+                let rows = if folded.contains(&(index, column)) {
+                    layout[index].1[column + 1].1.len()
+                } else {
+                    ids.len()
+                };
+                BracketColumn {
+                    stage: stage.clone(),
+                    rows,
+                    pairings: ids
+                        .iter()
+                        .filter(|id| !left_out(id))
+                        .map(|id| row(by_id[id]))
+                        .collect(),
+                    below: None,
+                }
             });
             match section {
+                // a column of byes only is left out whole, its stage being played by nobody
                 Section::Part(part) => sections.push(BracketSection {
                     part: *part,
-                    columns: columns.collect(),
+                    columns: columns
+                        .filter(|column| !column.pairings.is_empty())
+                        .collect(),
                 }),
                 Section::Below => {
                     let last = sections

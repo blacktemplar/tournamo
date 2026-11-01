@@ -36,3 +36,6 @@ doc.rust-lang.org
 
 # dioxus website
 dioxus.dev
+
+# Zed's JSON/TOML language servers: the schema catalog
+www.schemastore.org

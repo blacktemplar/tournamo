@@ -46,6 +46,10 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- Configuration choices stay visible even when incompatible with the current
+  settings. The form reports conflicts after selection; the CLI asks for corrections
+  after checking the whole configuration, including unresolved dependencies.
+
 - New phase forms follow the format's suggested ranking and scoring until either
   is edited. Then both are kept when the format changes. “Apply suggested ranking”
   replaces both sections and resumes following. Editing an existing phase starts

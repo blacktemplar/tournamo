@@ -639,9 +639,7 @@ impl PhaseForm {
     ) -> PluginInput {
         let chosen = node.plugins.first();
         let recommended = self.recommended(axis, &node.path);
-        let options = self.options(&node.path, &recommended, |id| {
-            chosen.is_some_and(|chosen| chosen.entry.id() == id)
-        });
+        let options = self.options(&node.path, &recommended);
         PluginInput {
             optional,
             chosen: chosen.map(|chosen| Chosen {
@@ -673,7 +671,7 @@ impl PhaseForm {
         let implied = &completed.plugins[chosen.len()..];
         let recommended = self.recommended(axis, path);
         let options = self
-            .options(&path.clone().index(chosen.len()), &recommended, |_| false)
+            .options(&path.clone().index(chosen.len()), &recommended)
             .into_iter()
             .filter(|option| !implied.iter().any(|plugin| plugin.entry.id() == option.id))
             .collect();
@@ -725,24 +723,14 @@ impl PhaseForm {
             .collect()
     }
 
-    /// The plugins that fit the position at `path`, and those `kept` keeps although they do not,
-    /// the plugins of `recommended` first.
-    fn options(
-        &self,
-        path: &Path,
-        recommended: &[&str],
-        kept: impl Fn(&str) -> bool,
-    ) -> Vec<PluginOption> {
+    /// The registered choices at `path`, the plugins of `recommended` first.
+    fn options(&self, path: &Path, recommended: &[&str]) -> Vec<PluginOption> {
         let mut options: Vec<_> = self
             .draft
             .candidates(path)
             .unwrap_or_default()
             .into_iter()
-            .filter(|candidate| candidate.conflicts().is_empty() || kept(candidate.entry().id()))
-            .map(|candidate| {
-                let entry = candidate.entry();
-                PluginOption::of(entry, recommended.contains(&entry.id()))
-            })
+            .map(|entry| PluginOption::of(entry, recommended.contains(&entry.id())))
             .collect();
         // the catalog lists plugins by id, which tells an operator nothing
         options.sort_by_cached_key(|option| {

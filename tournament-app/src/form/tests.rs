@@ -1,11 +1,11 @@
 use plugin_factory::PluginType;
 use tournament_engine::plugins::{
     metrics_calculator::{
-        BuchholzCalculator, FewerLosses, LaterFirstLoss, MoreBuchholz, MorePoints,
-        MoreSonnebornBerger, MoreWins, PointsCalculator, RoundOfFirstLossCalculator,
-        SonnebornBergerCalculator, WinsDrawsLossesCalculator,
+        BuchholzCalculator, FewerLosses, LaterElimination, LaterFirstLoss, MoreBuchholz,
+        MorePoints, MoreSonnebornBerger, MoreWins, PointsCalculator, RoundOfEliminationCalculator,
+        RoundOfFirstLossCalculator, SonnebornBergerCalculator, WinsDrawsLossesCalculator,
     },
-    phase_format::{MonsterDyp, RandomRounds, RoundRobin, SingleElimination},
+    phase_format::{DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination},
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -165,7 +165,7 @@ fn a_field_for_draws_is_left_out_without_draws() {
 /// The plugins recommended come first, the others follow by label; a plugin chosen in a list
 /// is not offered for it again.
 #[test]
-fn a_field_offers_the_plugins_that_fit_the_recommended_first() {
+fn a_field_offers_all_registered_plugins_the_recommended_first() {
     let view = new_form().view();
 
     let formats: Vec<_> = plugin(&view, "format")
@@ -191,6 +191,29 @@ fn a_field_offers_the_plugins_that_fit_the_recommended_first() {
             .iter()
             .all(|option| !option.recommended && option.id != MorePoints::ID)
     );
+    assert!(
+        ranking
+            .options
+            .iter()
+            .any(|option| option.id == LaterElimination::ID)
+    );
+}
+
+#[test]
+fn an_incompatible_choice_stays_selected_until_the_operator_resolves_it() {
+    let mut form = new_form();
+    form.add(&path("ranking"), LaterElimination::ID).unwrap();
+    form.add(&path("metrics"), RoundOfEliminationCalculator::ID)
+        .unwrap();
+    let view = form.view();
+    assert!(!view.complete);
+    assert!(!field(&view, "format").issues.is_empty());
+    assert!(items(&view, "ranking").contains(&LaterElimination::ID));
+
+    form.choose(&path("format"), Some(DoubleElimination::ID))
+        .unwrap();
+    assert!(form.view().complete);
+    assert!(items(&form.view(), "ranking").contains(&LaterElimination::ID));
 }
 
 /// A new form follows format suggestions until ranking or scoring is edited.

@@ -7,10 +7,18 @@ rejected because it replaced JSON editing with more identity and adapter machine
 
 The next change should remove a responsibility or representation. Moving functions
 to smaller files, adding a common solver, and caching existing work do not by
-themselves establish a simplification. No implementation is proposed in this
-document as already approved.
+themselves establish a simplification. Target 1 has since been approved and
+implemented; the other targets remain assessments, not implementation commitments.
 
 ## 1. Stop predicting whether future choices can become compatible
+
+**Implemented after operator review.** All registered choices remain visible,
+with duplicate list entries excluded. The recursive predictor and `Candidate`
+metadata were removed; `Draft::candidates` now returns catalog entries. Partial
+issues use shallow unanswered-axis information, and final validation remains exact.
+The CLI checks a completed copy with implied providers and retries unresolved
+dependencies as well as conflicts. Net result: 257 fewer workspace main-code
+lines. The specification and reasoning below record the decision.
 
 **Assessment: strongest structural opportunity, with a real interaction change.**
 

@@ -215,15 +215,6 @@ impl PluginEntry {
             .collect()
     }
 
-    /// The types of the facts the plugins of the [sub-axes](Self::sub_axes) could provide, see
-    /// [`AnyAxis::facts`].
-    pub(crate) fn sub_facts(&self) -> OpenFacts {
-        self.sub_axes()
-            .iter()
-            .flat_map(|axis| axis.facts().iter())
-            .collect()
-    }
-
     /// `config`, the config of the plugin at `at`, walked as [`Schema::walk`] walks it.
     ///
     /// If `complete`, this is the value the plugin is deserialized from, as

@@ -262,3 +262,26 @@ Upstream changes account for the larger baseline than the original report.
 The reduction is modest in lines; the simpler contract removes a policy rather
 than moving it to another layer. Generic plugin recommendations, predictive
 compatibility, implied dependencies, and the CLI questionnaire remain in place.
+
+## Unfiltered choices and explicit conflict correction
+
+Compatibility no longer filters the choices offered by the form or questionnaire.
+`Draft::candidates` returns catalog entries directly, omitting only duplicate list
+entries at a list position. The recursive completion predictor, its source metadata,
+and the candidate conflict/sole-supplier wrapper were deleted. Partial issues use
+shallow knowledge of unanswered axes; building still validates the actual complete
+configuration. The CLI validates a copy with implied providers and retries remaining
+issues, including missing dependencies.
+
+| Scope | Before | After | Difference |
+| --- | ---: | ---: | ---: |
+| Draft core, main code | 889 | 673 | -216 |
+| App form, main code | 749 | 738 | -11 |
+| CLI questionnaire, main code | 734 | 710 | -24 |
+| Workspace, main code | 20,215 | 19,958 | -257 |
+| Workspace, tests | 16,665 | 16,669 | +4 |
+
+The remaining six main lines removed were catalog metadata used only by prediction.
+The plugin framework plus app and GUI configuration now totals 4,767 main lines,
+or 5,477 with the CLI questionnaire. These counts exclude concrete tournament
+algorithms, shared widgets, CSS, and translations, as in the previous comparison.

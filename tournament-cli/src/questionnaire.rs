@@ -21,7 +21,7 @@ use inquire::{Confirm, CustomType, InquireError, MultiSelect, Select, validator:
 use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{ConfigError, Path, PluginConfig, Segment, Value},
-    draft::{Candidate, Draft, Issue, Problem},
+    draft::{Draft, Issue, Problem},
     schema::{Configurable, DecimalRange, Field, FieldKind, IntegerRange},
 };
 use thiserror::Error;
@@ -267,8 +267,8 @@ pub enum Error {
     /// [`AcceptDefaults`] has no answer to give, because the question offers none.
     #[error("{question:?} offers no answer, so it has to be answered")]
     NoDefault { question: String },
-    /// No plugin of the field's axis fits next to the answers given so far.
-    #[error("no plugin fits {path} next to the answers given so far")]
+    /// No plugin is registered for the field's axis.
+    #[error("no plugin is registered for {path}")]
     NoCandidate { path: Path },
     /// The answers given do not make a composite, and are not asked again.
     #[error("the answers do not fit together:{}", IssueList(.0))]
@@ -298,22 +298,20 @@ impl From<InquireError> for Error {
 /// that does not matter with the answers before it, see [`Draft::is_relevant`], e.g. the points for
 /// a draw where no match ends in a draw, is answered so without being asked.
 ///
-/// A field taking plugins offers those that fit next to the answers given before it, see
-/// [`Draft::candidates`]. A field taking an unordered list of plugins starts out with the plugins
-/// it offers and those it is the only source of something another plugin requires, see
-/// [`Candidate::is_sole_supplier`]. The plugins a question starts out at come first, in the order
+/// A field offers every registered plugin of its axis, see [`Draft::candidates`].
+/// The plugins a question starts out at come first, in the order
 /// they are offered in, so that what the plugins chosen before recommend leads; the others follow
 /// alphabetically by label.
 ///
 /// Answers a plugin rejects are handed to [`Prompter::retry`] as soon as the fields of the plugin
 /// are answered, and its fields are asked again. Once every field is answered, plugins that do not
 /// fit next to the others are handed to it as well, and the fields of the composite they are in
-/// are asked again. A fact nothing provides is not checked, since a plugin it implies may still be
-/// added, see [`Draft::add_implied`].
+/// are asked again. Missing facts are checked after adding implied plugins to a copy, so the
+/// operator is asked to resolve only dependencies that cannot be added automatically.
 ///
 /// # Errors
-/// Returns what the prompter returns, and [`Error::NoCandidate`] if no plugin fits a field taking
-/// one. The draft keeps the answers given so far.
+/// Returns what the prompter returns, and [`Error::NoCandidate`] if no plugin is registered for
+/// a field taking one. The draft keeps the answers given so far.
 pub fn fill<T: Configurable>(
     draft: &mut Draft<T>,
     prompter: &mut impl Prompter,
@@ -340,11 +338,9 @@ pub async fn fill_async<T: Configurable>(
         for field in asked {
             asker.field(field, &Path::ROOT, None).await?;
         }
-        let issues: Vec<_> = draft
-            .issues()
-            .into_iter()
-            .filter(|issue| !matches!(issue.problem(), Problem::Unprovided { .. }))
-            .collect();
+        let mut completed = draft.clone();
+        completed.add_implied();
+        let issues = completed.build().err().unwrap_or_default();
         if issues.is_empty() {
             return Ok(());
         }
@@ -754,16 +750,10 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
         Ok(())
     }
 
-    /// The plugins that fit at `path`, see [`Draft::candidates`], those of `first` first, see
+    /// The registered choices at `path`, see [`Draft::candidates`], those of `first` first, see
     /// [`ordered`].
-    fn candidates(&self, path: &Path, first: &[&str]) -> Result<Vec<Candidate>, Error> {
-        let candidates = self
-            .draft
-            .candidates(path)?
-            .into_iter()
-            .filter(|candidate| candidate.conflicts().is_empty())
-            .collect();
-        Ok(ordered(candidates, first))
+    fn candidates(&self, path: &Path, first: &[&str]) -> Result<Vec<&'static PluginEntry>, Error> {
+        Ok(ordered(self.draft.candidates(path)?, first))
     }
 
     /// Asks `question` for the plugin at `path`, or for none if `optional`, starting out at
@@ -778,14 +768,11 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
         let default_plugin = default.as_ref().and_then(PluginConfig::from_answer);
         let first: Vec<_> = default_plugin.iter().map(PluginConfig::plugin).collect();
         let candidates = self.candidates(path, &first)?;
-        let mut options: Vec<_> = candidates
-            .iter()
-            .map(|candidate| Choice::of(candidate.entry()))
-            .collect();
+        let mut options: Vec<_> = candidates.iter().map(|entry| Choice::of(entry)).collect();
         let mut cursor = default_plugin.as_ref().and_then(|default| {
             candidates
                 .iter()
-                .position(|candidate| candidate.entry().id() == default.plugin())
+                .position(|entry| entry.id() == default.plugin())
         });
         if optional {
             if default.as_ref().is_some_and(Value::is_null) {
@@ -798,16 +785,13 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
         }
         let chosen = self.prompter.select(question, &options, cursor).await?;
         match candidates.get(chosen) {
-            Some(candidate) => {
-                self.put(candidate.entry(), path, default_plugin.as_ref())
-                    .await
-            }
+            Some(entry) => self.put(entry, path, default_plugin.as_ref()).await,
             None => Ok(self.draft.set(path, Value::Null)?),
         }
     }
 
     /// Asks `question` for the plugins of the unordered list at `path`, starting out with
-    /// `defaults` and the plugins that are the only source of something another one requires.
+    /// `defaults`.
     async fn plugin_set(
         &mut self,
         path: &Path,
@@ -816,23 +800,13 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
     ) -> Result<(), Error> {
         let defaults = plugins(defaults);
         let at = path.clone().index(0);
-        // what the list offers, then what only one plugin supplies to another
-        let mut first: Vec<_> = defaults.iter().map(PluginConfig::plugin).collect();
-        for candidate in self.candidates(&at, &[])? {
-            let id = candidate.entry().id();
-            if !first.contains(&id) && candidate.is_sole_supplier() {
-                first.push(id);
-            }
-        }
+        let first: Vec<_> = defaults.iter().map(PluginConfig::plugin).collect();
         let candidates = self.candidates(&at, &first)?;
-        let options: Vec<_> = candidates
-            .iter()
-            .map(|candidate| Choice::of(candidate.entry()))
-            .collect();
+        let options: Vec<_> = candidates.iter().map(|entry| Choice::of(entry)).collect();
         let preselected: Vec<_> = candidates
             .iter()
             .enumerate()
-            .filter(|(_, candidate)| first.contains(&candidate.entry().id()))
+            .filter(|(_, entry)| first.contains(&entry.id()))
             .map(|(index, _)| index)
             .collect();
         if options.is_empty() {
@@ -843,7 +817,7 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
             .select_many(question, &options, &preselected)
             .await?;
         for (position, index) in chosen.into_iter().enumerate() {
-            let entry = candidates[index].entry();
+            let entry = candidates[index];
             let default = defaults
                 .iter()
                 .find(|default| default.plugin() == entry.id());
@@ -854,8 +828,8 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
     }
 
     /// Asks `question` for the plugins of the ordered list at `path` one after another, until the
-    /// operator asks for no further one or none fits, each starting out at the first of `defaults`
-    /// that fits.
+    /// operator asks for no further one or every plugin is selected, starting at the first
+    /// default not selected yet.
     async fn plugin_list(
         &mut self,
         path: &Path,
@@ -872,7 +846,7 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
             }
             let options: Vec<_> = candidates
                 .iter()
-                .map(|candidate| Choice::of(candidate.entry()))
+                .map(|entry| Choice::of(entry))
                 .chain([Choice::nothing(NO_FURTHER_ONE)])
                 .collect();
             // a plugin in the list already is no candidate any more, so this is the first default
@@ -882,7 +856,7 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
                 .find_map(|default| {
                     candidates
                         .iter()
-                        .position(|candidate| candidate.entry().id() == default.plugin())
+                        .position(|entry| entry.id() == default.plugin())
                 })
                 .unwrap_or(candidates.len());
             let question = if position == 0 {
@@ -899,8 +873,8 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
             };
             let default = defaults
                 .iter()
-                .find(|default| default.plugin() == candidate.entry().id());
-            self.put(candidate.entry(), &at, default).await?;
+                .find(|default| default.plugin() == candidate.id());
+            self.put(candidate, &at, default).await?;
         }
         Ok(())
     }
@@ -951,10 +925,9 @@ fn capitalized(label: &str) -> String {
 
 /// `candidates` in the order they are offered in: those whose id is in `first`, in that order,
 /// then the others by label.
-fn ordered(mut candidates: Vec<Candidate>, first: &[&str]) -> Vec<Candidate> {
+fn ordered(mut candidates: Vec<&'static PluginEntry>, first: &[&str]) -> Vec<&'static PluginEntry> {
     // the catalog lists plugins by id, which tells an operator nothing
-    candidates.sort_by_cached_key(|candidate| {
-        let entry = candidate.entry();
+    candidates.sort_by_cached_key(|entry| {
         (
             first
                 .iter()
@@ -995,6 +968,8 @@ mod tests {
         Integer(i64),
         /// The option with this label.
         Pick(&'static str),
+        Many(&'static [&'static str]),
+        Retry,
     }
 
     /// Answers the questions with its steps in turn, and accepts every question once they are
@@ -1044,7 +1019,7 @@ mod tests {
             match self.next(question) {
                 Step::Accept => Ok(Self::offered(question, default)),
                 Step::Integer(answer) => Ok(answer),
-                Step::Pick(_) => panic!("{:?} takes a whole number", question.label()),
+                _ => panic!("{:?} takes a whole number", question.label()),
             }
         }
 
@@ -1074,7 +1049,7 @@ mod tests {
                     .iter()
                     .position(|option| option.label() == label)
                     .unwrap_or_else(|| panic!("{:?} offers no {label:?}", question.label()))),
-                Step::Integer(_) => panic!("{:?} takes an option", question.label()),
+                _ => panic!("{:?} takes an option", question.label()),
             }
         }
 
@@ -1088,13 +1063,23 @@ mod tests {
                 .push(options.iter().map(Choice::label).collect());
             match self.next(question) {
                 Step::Accept => Ok(defaults.to_vec()),
+                Step::Many(labels) => Ok(options
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, option)| labels.contains(&option.label()))
+                    .map(|(index, _)| index)
+                    .collect()),
                 _ => panic!("{:?} is only accepted", question.label()),
             }
         }
 
-        fn retry(&mut self, _: Vec<Issue>) -> Result<(), Error> {
+        fn retry(&mut self, issues: Vec<Issue>) -> Result<(), Error> {
             self.retries += 1;
-            Ok(())
+            if matches!(self.steps.pop_front(), Some(Step::Retry)) {
+                Ok(())
+            } else {
+                Err(Error::Issues(issues))
+            }
         }
     }
 
@@ -1222,10 +1207,9 @@ mod tests {
         assert_eq!(capitalized(""), "");
     }
 
-    /// A metric is offered as calculated once something ranks by it, if a single calculator
-    /// calculates it.
+    /// A fieldless dependency is validated through the implied copy, without preselecting it.
     #[test]
-    fn a_metric_the_ranking_requires_starts_out_chosen() {
+    fn a_fieldless_dependency_is_implied_without_being_preselected() {
         let mut script = Script::new([
             Step::Pick("round robin"),
             Step::Pick("more Buchholz"),
@@ -1238,13 +1222,50 @@ mod tests {
         assert_eq!(ids(&draft, "ranking"), ["more_buchholz"]);
         assert_eq!(
             ids(&draft, "metrics"),
-            [
-                "wins_draws_losses",
-                "points",
-                "sonneborn_berger",
-                "buchholz"
-            ]
+            ["wins_draws_losses", "points", "sonneborn_berger"]
         );
+        draft.add_implied();
+        assert!(ids(&draft, "metrics").contains(&"buchholz".to_owned()));
+        assert!(draft.build().is_ok());
+    }
+
+    #[test]
+    fn an_incompatible_choice_is_offered_and_the_operator_can_resolve_its_conflict() {
+        let mut script = Script::new([
+            Step::Pick("round robin"),
+            Step::Pick("later elimination"),
+            Step::Pick(NO_FURTHER_ONE),
+            Step::Many(&["round of elimination"]),
+            Step::Retry,
+            Step::Pick("double elimination"),
+        ]);
+        let mut draft = phase_draft();
+        fill(&mut draft, &mut script).unwrap();
+        assert_eq!(script.retries, 1);
+        assert_eq!(
+            &script.asked[4..],
+            ["Format", "Double elimination: grand final reset"]
+        );
+        assert!(draft.build().is_ok());
+    }
+
+    #[test]
+    fn a_missing_configurable_dependency_is_asked_again_instead_of_ignored() {
+        let mut script = Script::new([
+            Step::Pick("round robin"),
+            Step::Pick("more points"),
+            Step::Pick(NO_FURTHER_ONE),
+            Step::Many(&[]),
+            Step::Retry,
+            Step::Many(&["points"]),
+        ]);
+        let mut draft = phase_draft();
+        fill(&mut draft, &mut script).unwrap();
+        assert_eq!(script.retries, 1);
+        assert_eq!(script.asked[4], "Metrics");
+        assert_eq!(ids(&draft, "metrics"), ["points"]);
+        draft.add_implied();
+        assert!(draft.build().is_ok());
     }
 
     /// A number out of the range of its field is asked for again right away, even from a prompter

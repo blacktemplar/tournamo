@@ -806,8 +806,16 @@ rather than snapshotting fields before they have been chosen.
   **warnings** (a ranking of nothing) do not block.
 - **A set keeps one order**, by label, so a checkbox stays under the pointer,
   also when another format recommends other metrics.
-- **Options that fit, recommended first**, plus the chosen one even if it no
-  longer fits.
+- **All registered options, recommended first**. Compatibility does not hide a
+  choice. Selecting an incompatible combination shows issues where they can be
+  fixed; adding or saving a phase requires a valid configuration. Duplicate list
+  entries remain excluded. Partial library issues postpone a missing fact while
+  an unanswered field's axis could provide it, without recursively proving a
+  feasible completion. The CLI checks a completed copy with implied providers
+  before returning, and retries unresolved conflicts and missing dependencies.
+  Its lists start with recommendations or existing answers, without sole-supplier
+  preselection. The recursive completion predictor was removed rather than kept
+  behind a visibility switch; future preset/advanced/expert visibility is separate.
 - **The form of a new phase starts at the phase undone last**, so adding it again
   adds the same phase.
 - **Numbers are typed as text** (`type=text` with `inputmode`), taken on change

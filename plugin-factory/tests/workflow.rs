@@ -4,7 +4,7 @@
 
 use plugin_factory::{
     Plugin, PluginType, axis,
-    catalog::AnyAxis,
+    catalog::{AnyAxis, PluginEntry},
     compatibility::{Declaration, Fact, Incompatibility, check},
     config::{ConfigError, Path, PluginConfig, Value},
     draft::{Draft, FieldNode, Issue, Problem},
@@ -354,25 +354,14 @@ fn unprovided(issues: &[Issue]) -> Vec<(String, &'static str)> {
         .collect()
 }
 
-/// The ids of the candidates at `at` that fit.
-fn fitting(draft: &Draft<Phase>, at: &str) -> Vec<&'static str> {
+/// The ids of the registered choices at `at`.
+fn choices(draft: &Draft<Phase>, at: &str) -> Vec<&'static str> {
     draft
         .candidates(&path(at))
         .unwrap()
-        .iter()
-        .filter(|candidate| candidate.conflicts().is_empty())
-        .map(|candidate| candidate.entry().id())
+        .into_iter()
+        .map(PluginEntry::id)
         .collect()
-}
-
-/// Asserts that the plugin `id` is a candidate at `at` that does not fit because of `conflict`.
-fn assert_conflict(draft: &Draft<Phase>, at: &str, id: &str, conflict: Incompatibility) {
-    let candidates = draft.candidates(&path(at)).unwrap();
-    let candidate = candidates
-        .iter()
-        .find(|candidate| candidate.entry().id() == id)
-        .expect("the plugin is a candidate");
-    assert_eq!(candidate.conflicts(), [conflict]);
 }
 
 /// The ids of the plugins of `axis`, which come sorted.
@@ -476,20 +465,10 @@ fn an_operator_configures_a_phase_one_answer_at_a_time() {
         ]
     );
 
-    // the format: a candidate conflicting with the context is offered with why
+    // Every format remains visible, including one conflicting with the context.
     assert_eq!(
-        fitting(&draft, "format"),
-        ["full::knockout", "full::round_robin"]
-    );
-    assert_conflict(
-        &draft,
-        "format",
-        "full::doubles",
-        Incompatibility::ConditionNotMet {
-            condition: "rankings of pairs",
-            required_by: "doubles".to_owned(),
-            provided: "EntrantsPerRanking(1)".to_owned(),
-        },
+        choices(&draft, "format"),
+        ["full::doubles", "full::knockout", "full::round_robin"]
     );
     draft.set(&path("format"), plugin::<Knockout>()).unwrap();
     assert_eq!(
@@ -566,21 +545,10 @@ fn an_operator_configures_a_phase_one_answer_at_a_time() {
     // a whole number answers a decimal field
     draft.set(&path("metrics[2].for_win"), 3).unwrap();
 
-    // the candidates for one more metric are the ones not in the list yet fitting next to the
-    // others; what they miss can still be added to the metrics
+    // Only duplicate plugins are excluded, not conflicting alternative providers.
     assert_eq!(
-        fitting(&draft, "metrics[3]"),
-        ["full::combined", "full::match_count"]
-    );
-    assert_conflict(
-        &draft,
-        "metrics[3]",
-        "full::score",
-        Incompatibility::FactProvidedTwice {
-            fact: "Points".to_owned(),
-            first: "wins (metrics[2])".to_owned(),
-            second: "score".to_owned(),
-        },
+        choices(&draft, "metrics[3]"),
+        ["full::combined", "full::match_count", "full::score"]
     );
 
     // the match count is left to be added as implied

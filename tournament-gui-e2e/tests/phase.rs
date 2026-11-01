@@ -105,6 +105,31 @@ async fn custom_scoring_is_kept_until_suggestions_are_applied() {
     .await;
 }
 
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn incompatible_choices_are_visible_and_can_be_corrected() {
+    run_in_new_competition(async |gui| {
+        gui.choose_plugin("ranking", "Later elimination").await?;
+        gui.toggle("Round of elimination").await?;
+        gui.expect_list(
+            "ranking",
+            &["More points", "More Sonneborn-Berger", "Later elimination"],
+        )
+        .await?;
+        gui.click("Add phase").await?;
+        gui.expect_phase(&[]).await?;
+        gui.page.check_accessibility().await?;
+        gui.choose_format("Double elimination").await?;
+        gui.expect_issues(&[]).await?;
+        gui.expect_list(
+            "ranking",
+            &["More points", "More Sonneborn-Berger", "Later elimination"],
+        )
+        .await
+    })
+    .await;
+}
+
 /// Enter takes the number typed, as leaving the field does, rather than adding the phase.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

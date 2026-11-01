@@ -129,17 +129,17 @@ else alphabetically. Enter confirms, Space toggles a metric, `↑`/`↓` move an
 filters a list. Esc cancels the configuration and leaves the competition
 unchanged, which is also what Ctrl-C does during it.
 
-Only what fits the answers given so far is offered: a metric that needs a format
-knocking entrants out is not offered for a round robin. The ranking is asked
+Every registered choice is offered, even if it conflicts with the current answers.
+For example, a round robin can select a metric requiring a knockout, then the
+operator is asked to resolve that conflict before the phase can be added. The ranking is asked
 for one criterion at a time, each one only breaking the ties of the ones before
-it, until `(no further one)` is chosen. A metric the ranking needs starts out
-chosen, and so does every metric a chosen one is derived from: ranking by
-Sonneborn-Berger starts out calculating the points it sums and the results they
-are scored from, and the ranking shows them. A metric with nothing to configure,
+it, until `(no further one)` is chosen. Metrics start out at the format's
+recommendations or the existing answers. A metric with nothing to configure,
 such as the results, is calculated even when it was not picked; one that has to
 be configured, such as the points, is never added unasked. An answer a plugin rejects, such as a negative number of rounds, is asked
-again right away, and a phase whose plugins do not fit together is asked for
-again, starting out at the answers given.
+again right away. After all questions, implied metrics are added to a copy and the
+whole configuration is checked. Remaining conflicts and missing dependencies ask
+for the fields where they can be resolved again, starting at the answers given.
 
 Since this needs a terminal to ask at, a piped `add-phase` has to name a
 format.

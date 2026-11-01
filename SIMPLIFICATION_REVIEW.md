@@ -320,3 +320,25 @@ the fresh comparison after rebasing. Standard hooks, wasm runtime tests, and
 both GUI and browser-terminal E2E suites passed. The GUI tests include preserving
 custom scoring across format changes, explicit reset, resumed following, focus
 retention, and editing an existing phase.
+
+## Implemented: visible choices and explicit conflict correction
+
+The next accepted interaction change keeps all registered choices visible,
+including incompatible ones. Selected configurations are validated, and operators
+resolve the reported conflicts. Duplicate list entries remain prevented. This
+removed the recursive `Reach` predictor, `Sources`, candidate conflict metadata,
+and sole-supplier preselection. `Draft::candidates` returns catalog entries directly.
+Partial library issues postpone missing facts using unanswered axes without
+proving future feasibility; `build` still validates the complete configuration.
+
+The CLI now checks a completed copy with implied providers before returning, so
+remaining dependencies are explicitly resolved through its retry loop instead of
+being ignored. Unambiguous fieldless providers remain automatic. Recommendations
+still supply compatible starting values; they do not restrict visibility.
+
+This removes 257 main-code lines across the workspace, including 216 from the
+draft core. App and GUI configuration plus the framework now totals 4,767 main
+lines, or 5,477 including the CLI questionnaire. See `CODE_SIZE.md` for the
+comparison. The tests exercise selecting a metric requiring a double-elimination
+annotation while using round robin, retaining the selection and showing its
+issues, then correcting the format; configurable missing dependencies also retry.

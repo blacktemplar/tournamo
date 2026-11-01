@@ -193,14 +193,14 @@ fn a_field_offers_the_plugins_that_fit_the_recommended_first() {
     );
 }
 
-/// Choosing another format brings what it recommends, both its own fields and the ranking and
-/// metrics; a field the operator changed stays as they changed it.
+/// A new form follows format suggestions until ranking or scoring is edited.
 #[test]
-fn the_fields_answered_as_offered_follow_another_format() {
+fn a_new_form_follows_suggestions_until_the_section_is_customized() {
     let mut form = new_form();
     form.choose(&path("format"), Some(SingleElimination::ID))
         .unwrap();
     let view = form.view();
+    assert!(view.following_suggestions);
     assert_eq!(
         items(&view, "ranking"),
         [LaterFirstLoss::ID, FewerLosses::ID]
@@ -223,6 +223,7 @@ fn the_fields_answered_as_offered_follow_another_format() {
         .unwrap();
 
     let view = form.view();
+    assert!(!view.following_suggestions);
     assert_eq!(
         items(&view, "ranking"),
         [MorePoints::ID, MoreSonnebornBerger::ID, MoreWins::ID]
@@ -239,10 +240,9 @@ fn the_fields_answered_as_offered_follow_another_format() {
     assert!(view.complete);
 }
 
-/// The metrics following another format calculate what the ranking the operator chose needs,
-/// rather than what the format would rank by.
+/// Any customization keeps both lists, including metrics no remaining criterion needs.
 #[test]
-fn the_metrics_following_another_format_fit_the_ranking_kept() {
+fn a_customized_section_is_kept_as_a_whole() {
     let mut form = new_form();
     form.remove(&path("ranking[1]")).unwrap();
 
@@ -253,7 +253,11 @@ fn the_metrics_following_another_format_fit_the_ranking_kept() {
     assert_eq!(items(&view, "ranking"), [MorePoints::ID]);
     assert_eq!(
         items(&view, "metrics"),
-        [WinsDrawsLossesCalculator::ID, PointsCalculator::ID]
+        [
+            WinsDrawsLossesCalculator::ID,
+            PointsCalculator::ID,
+            SonnebornBergerCalculator::ID
+        ]
     );
 
     form.choose(&path("format"), Some(SingleElimination::ID))
@@ -261,9 +265,120 @@ fn the_metrics_following_another_format_fit_the_ranking_kept() {
     let view = form.view();
     assert_eq!(
         items(&view, "metrics"),
-        [WinsDrawsLossesCalculator::ID, PointsCalculator::ID]
+        [
+            WinsDrawsLossesCalculator::ID,
+            PointsCalculator::ID,
+            SonnebornBergerCalculator::ID
+        ]
     );
     assert!(view.complete);
+}
+
+#[test]
+fn applying_suggestions_replaces_custom_settings_and_resumes_following() {
+    let mut form = new_form();
+    form.enter(&path("metrics[1].points_for_win"), "7").unwrap();
+    let customized = form.draft().answers().clone();
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(
+        form.draft().answers().get("metrics"),
+        customized.get("metrics")
+    );
+    assert!(!form.view().following_suggestions);
+
+    form.apply_suggestions().unwrap();
+    assert_eq!(
+        items(&form.view(), "ranking"),
+        [LaterFirstLoss::ID, FewerLosses::ID]
+    );
+    assert!(form.view().following_suggestions);
+    form.choose(&path("format"), Some(RoundRobin::ID)).unwrap();
+    assert_eq!(
+        items(&form.view(), "ranking"),
+        [MorePoints::ID, MoreSonnebornBerger::ID]
+    );
+    assert_eq!(
+        field(&form.view(), "metrics[1].points_for_win")
+            .input
+            .clone(),
+        field(&new_form().view(), "metrics[1].points_for_win")
+            .input
+            .clone()
+    );
+}
+
+#[test]
+fn editing_an_existing_phase_keeps_its_settings_until_suggestions_are_applied() {
+    let mut session = Session::new("cup");
+    session.add_phase(new_form().draft()).unwrap();
+    let mut form = session.phase_form_to_edit().unwrap();
+    assert!(!form.view().following_suggestions);
+    let before = form.draft().answers().clone();
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(form.draft().answers().get("ranking"), before.get("ranking"));
+    assert_eq!(form.draft().answers().get("metrics"), before.get("metrics"));
+    form.apply_suggestions().unwrap();
+    assert!(form.view().following_suggestions);
+    assert_eq!(
+        items(&form.view(), "ranking"),
+        [LaterFirstLoss::ID, FewerLosses::ID]
+    );
+}
+
+#[test]
+fn rejected_scoring_input_customizes_the_section_and_survives_a_format_change() {
+    let mut form = new_form();
+    form.enter(&path("metrics[1].points_for_win"), "x").unwrap();
+    assert!(!form.view().following_suggestions);
+    form.choose(&path("format"), Some(RandomRounds::ID))
+        .unwrap();
+    assert!(!form.view().complete);
+    let view = form.view();
+    let input = &field(&view, "metrics[1].points_for_win").input;
+    assert!(matches!(input, Input::Decimal { entered: Some(entered), .. } if entered == "x"));
+    form.apply_suggestions().unwrap();
+    assert!(form.view().complete);
+    assert!(form.view().following_suggestions);
+}
+
+#[test]
+fn applying_suggestions_keeps_rejected_basic_settings() {
+    let mut form = new_form();
+    form.choose(&path("format"), Some(RandomRounds::ID))
+        .unwrap();
+    form.enter(&path("format.rounds"), "x").unwrap();
+    form.apply_suggestions().unwrap();
+    assert!(!form.view().complete);
+    let view = form.view();
+    let input = &field(&view, "format.rounds").input;
+    assert!(matches!(input, Input::Integer { entered: Some(entered), .. } if entered == "x"));
+}
+
+#[test]
+fn a_failed_edit_does_not_stop_following_suggestions() {
+    let mut form = new_form();
+    let before = form.draft().answers().clone();
+    assert!(form.add(&path("ranking"), MorePoints::ID).is_err());
+    assert!(form.view().following_suggestions);
+    assert_eq!(form.draft().answers(), &before);
+}
+
+#[test]
+fn returning_to_the_original_value_does_not_resume_following() {
+    let mut form = new_form();
+    let original = form.draft().answers().clone();
+    form.enter(&path("metrics[1].points_for_win"), "7").unwrap();
+    form.enter(&path("metrics[1].points_for_win"), "1").unwrap();
+    assert_eq!(form.draft().answers(), &original);
+    assert!(!form.view().following_suggestions);
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(
+        form.draft().answers().get("metrics"),
+        original.get("metrics")
+    );
 }
 
 /// What a plugin recommends follows its own fields too: a single elimination with a match for

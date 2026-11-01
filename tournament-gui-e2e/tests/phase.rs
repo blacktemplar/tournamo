@@ -82,6 +82,29 @@ async fn the_phase_says_how_long_it_takes() {
     .await;
 }
 
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn custom_scoring_is_kept_until_suggestions_are_applied() {
+    run_in_new_competition(async |gui| {
+        gui.enter("metrics[1].points_for_win", "7").await?;
+        gui.choose_format("Single elimination").await?;
+        gui.expect_list("ranking", &["More points", "More Sonneborn-Berger"])
+            .await?;
+        gui.expect_entered("metrics[1].points_for_win", "7").await?;
+        gui.page.check_accessibility().await?;
+
+        gui.click("Apply suggested ranking").await?;
+        gui.expect_list("ranking", &["Later first loss", "Fewer losses"])
+            .await?;
+        gui.expect_focus("Apply suggested ranking").await?;
+        gui.choose_format("Round robin").await?;
+        gui.expect_list("ranking", &["More points", "More Sonneborn-Berger"])
+            .await?;
+        gui.expect_entered("metrics[1].points_for_win", "1").await
+    })
+    .await;
+}
+
 /// Enter takes the number typed, as leaving the field does, rather than adding the phase.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -659,6 +682,7 @@ async fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
         gui.click("Edit phase").await?;
 
         gui.choose_format("Round robin").await?;
+        gui.click("Apply suggested ranking").await?;
         gui.click("Save changes").await?;
 
         gui.expect_no_dialog().await?;

@@ -682,17 +682,21 @@ impl Session {
     /// A form of a new phase of this competition, answered as the phase was played whose adding
     /// this session undid last, so that adding it again adds the same phase; if it undid none,
     /// with every field answered as offered: in the format a phase offers, with what that
-    /// recommends. Once filled, its [draft](PhaseForm::draft) is handed to [`Self::add_phase`].
+    /// recommends, following suggestions until customized. An undone phase's settings are kept.
+    /// Once filled, its [draft](PhaseForm::draft) is handed to [`Self::add_phase`].
     ///
     /// # Errors
     /// Returns an error if a plugin offers an answer it does not take.
     pub fn phase_form(&self) -> Result<PhaseForm, PhaseDraftError> {
         let draft = self.competition().phase_draft();
-        let draft = match &self.undone_phase {
-            Some(config) => draft.with_answers(config)?,
-            None => draft.with_defaults()?,
-        };
-        Ok(PhaseForm::new(draft))
+        match &self.undone_phase {
+            Some(config) => Ok(PhaseForm::new(draft.with_answers(config)?)),
+            None => {
+                let mut form = PhaseForm::new(draft);
+                form.apply_suggestions()?;
+                Ok(form)
+            }
+        }
     }
 
     /// A form of the phase as it is played, see [`Self::phase_draft_to_edit`]. Once changed, its

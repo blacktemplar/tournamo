@@ -46,6 +46,11 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- New phase forms follow the format's suggested ranking and scoring until either
+  is edited. Then both are kept when the format changes. “Apply suggested ranking”
+  replaces both sections and resumes following. Editing an existing phase starts
+  with its settings kept.
+
 - The CLI uses the same competition operations as the GUI, including the
   minimum number of entrants a format needs. Action refusals use the app's
   wording; a refused phase edit names the reported match that prevents it.

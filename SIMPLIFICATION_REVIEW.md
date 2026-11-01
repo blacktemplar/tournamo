@@ -291,3 +291,32 @@ replacing addresses does not remove the expensive-to-understand policies around
 edits. A substantial reduction is more likely to require simpler recommendation
 or dependency-selection behavior. That needs concrete operator-facing examples
 and agreement on the behavior before implementation.
+
+## Implemented: one following/customized section
+
+The agreed behavior replaces selective recommendation following with one flag
+for ranking and scoring together. A new form follows suggestions for its basic
+settings. Editing a ranking, a metric, or their fields stops following for both
+lists; returning a value to its original default does not resume it. Invalid
+scoring text also counts as customization and survives a basic-setting change.
+“Apply suggested ranking” replaces both lists and their settings and resumes
+following. Existing and undone phases start with their settings kept.
+
+The form no longer compares individual answers to offered defaults or merges
+dependencies of retained and declined recommendations. Compatibility validation
+and implied dependencies still apply. The flag is local to the form; saved
+configuration and log formats are unchanged. The CLI's questionnaire is unchanged.
+
+The reset clears only ranking and metrics, leaving other phase fields as inputs
+to suggestions, so a future match-type axis can participate alongside the format.
+Preset, advanced, and expert visibility remain separate concerns: opening a level
+must not count as editing. A complete preset can be supplied as a draft. The
+section-wide policy deliberately keeps hidden fields fixed after customization;
+making those fields continue following would need a later design.
+
+The app form loses 102 main-code lines; the workspace loses 69 after accounting
+for the new GUI controls and the E2E driver adjustment. See `CODE_SIZE.md` for
+the fresh comparison after rebasing. Standard hooks, wasm runtime tests, and
+both GUI and browser-terminal E2E suites passed. The GUI tests include preserving
+custom scoring across format changes, explicit reset, resumed following, focus
+retention, and editing an existing phase.

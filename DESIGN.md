@@ -778,24 +778,28 @@ It includes unanswered fields and adds neither defaults nor implied plugins.
 The form enumerates a copy with implied plugins to distinguish them from choices.
 
 The enumeration is an owned snapshot, rebuilt after edits. Nodes carry paths for
-checked edits, diagnostics, and the ordering of fields whose recommendations
-follow a change. Paths are addresses in the current structure, not stable ids
+checked edits and diagnostics. Paths are addresses in the current structure, not stable ids
 across replacing a plugin or moving a list item. Live mutable handles would need
 invalidation and synchronization with those structural changes; snapshots keep
 one owner of the answers. The CLI already descends through the schema as it asks
 questions, discovering children after choosing their plugin; it keeps that walk
 rather than snapshotting fields before they have been chosen.
 
-- **All fields at once**, so recommendations are kept current instead of asked
-  in order: **a field still answered as offered follows a change of a field
-  before it** in schema order, so another format brings its ranking and
-  metrics. "As offered" is decided by answering a copy as it offers, not by
-  remembering what was touched, so a form loaded from a config behaves the same.
-  **A field never follows a change of one after it**: removing a metric must not
-  silently drop the criterion needing it; an issue says so instead.
-- **A list that follows fits what the operator kept**: it leaves out what only a
-  recommendation not chosen elsewhere needs, and keeps what a plugin chosen
-  elsewhere needs, read from static declarations (`PluginEntry::providers_in`).
+- **One following/customized state for ranking and scoring**. A new form follows
+  suggestions: changing basic settings replaces both ranking and metrics with
+  defaults and suggestions for those settings. Editing either list or a field
+  within it, including entering invalid numeric text, keeps the whole section
+  from then on. Applying suggestions explicitly replaces both lists and their
+  settings and resumes following. There is no per-field comparison or merging.
+  Existing and undone phases start customized, preserving their configuration.
+  The state belongs to the form and is not saved.
+- **Visibility does not imply customization**. Future preset, advanced, and expert
+  levels may expose different fields without changing this state. A preset can
+  supply a complete draft; an actual edit takes control of the section. Keeping
+  hidden fields following after customization would require a separate design;
+  the current section-wide state intentionally freezes them too. Suggestion
+  outputs are ranking and metrics; other basic settings remain inputs, allowing
+  a future match-type axis alongside the format.
 - **Implied plugins are shown, not chosen**: added to a copy for the view, never
   to the draft, so they go when nothing needs them.
 - **Issues where they are fixed**, at the deepest field or item their path is in;

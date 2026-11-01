@@ -237,3 +237,28 @@ the CLI, validating all names before changing anything and retaining individual
 undo actions. Action error wording is now shared, while CLI configuration
 issues and match-number errors retain their command-specific explanations.
 The baseline counts above have not been updated.
+
+## Section-wide suggestion following
+
+After rebasing onto main `0c00a77`, the automatic-following policy was replaced
+with one following/customized flag for the entire ranking and scoring section.
+New forms follow suggestions until that section is edited. Applying suggestions
+replaces it and resumes following; existing and undone phases start customized.
+This deletes per-field default comparisons, selective refreshes, and the merge
+that tried to retain dependencies of customized choices.
+
+Fresh measurements with `cargo warloc --by-file -o json`:
+
+| Scope | Before | After | Difference |
+| --- | ---: | ---: | ---: |
+| App form, main code | 851 | 749 | -102 |
+| Workspace, main code | 20,284 | 20,215 | -69 |
+| Workspace, tests | 16,529 | 16,665 | +136 |
+| Examples | 86 | 86 | 0 |
+
+The workspace comparison includes the new GUI controls, behavior tests, a test
+driver scroll adjustment, and a fractional-height layout assertion correction.
+Upstream changes account for the larger baseline than the original report.
+The reduction is modest in lines; the simpler contract removes a policy rather
+than moving it to another layer. Generic plugin recommendations, predictive
+compatibility, implied dependencies, and the CLI questionnaire remain in place.

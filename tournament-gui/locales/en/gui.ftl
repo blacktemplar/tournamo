@@ -164,6 +164,9 @@ choose-plugin = Choose…
 no-plugin = (none)
 # next to a plugin the plugins chosen elsewhere recommend
 recommended = (recommended)
+following-suggestions = Ranking and scoring follow suggestions for the format until you edit them.
+customized-settings = Your ranking and scoring settings are kept when the format changes. Applying suggestions replaces them and resumes automatic updates.
+apply-suggested-ranking = Apply suggested ranking
 # next to the choice of a plugin added to a list
 add-plugin = Add
 # the button showing what is said about $subject, a plugin or a field

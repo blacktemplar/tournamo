@@ -8,17 +8,16 @@
 //! [`Session::add_phase`](crate::session::Session::add_phase) or
 //! [`Session::edit_phase`](crate::session::Session::edit_phase).
 //!
-//! The fields offer what the plugins chosen recommend, see [`Draft::default_value`], and a field
-//! still answered as offered follows when a change of a field before it in schema order makes it
-//! offer something else: choosing another format of a phase changes its ranking and metrics too,
-//! unless the operator changed them, while removing a metric leaves the ranking as it is.
+//! New forms follow suggestions for their ranking and metrics until either is edited. Then the
+//! whole section stays as chosen, until [`PhaseForm::apply_suggestions`] replaces it and resumes
+//! following. Existing phases start with their settings kept.
 
 pub use plugin_factory::config::Path;
 use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{ConfigError, PluginConfig, Segment, Value},
     draft::{Draft, FieldNode, Issue, PluginNode, Problem},
-    schema::{Configurable, DecimalRange, FieldKind, IntegerRange, NumberRange},
+    schema::{DecimalRange, FieldKind, IntegerRange, NumberRange},
 };
 use tournament_engine::PhasePlugins;
 
@@ -28,8 +27,9 @@ use crate::i18n::{Arg, Text};
 #[derive(Clone)]
 pub struct PhaseForm {
     draft: Draft<PhasePlugins>,
+    following_suggestions: bool,
     /// What was entered into a number field and not taken, with why, by the path of the field.
-    /// Dropped by any change other than entering a number, which may move the fields.
+    /// Dropped when its section is replaced or edited structurally, which may move the fields.
     rejected: Vec<Rejected>,
 }
 
@@ -45,6 +45,8 @@ struct Rejected {
 pub struct FormView {
     /// The fields of the phase, in schema order.
     pub fields: Vec<FormField>,
+    /// Whether changes to the basic settings refresh the whole ranking and scoring section.
+    pub following_suggestions: bool,
     /// What is wrong with the answers that no field in particular fixes.
     pub issues: Vec<Text>,
     /// Whether nothing is wrong with the answers, so that a phase can be played with them, and
@@ -264,11 +266,13 @@ impl PluginOption {
 }
 
 impl PhaseForm {
-    /// A form of the phase `draft` configures, e.g.
-    /// [`Session::phase_form`](crate::session::Session::phase_form).
+    /// A form preserving the settings of `draft`. [`Self::apply_suggestions`] starts following
+    /// suggestions; [`Session::phase_form`](crate::session::Session::phase_form) does so for a
+    /// new phase.
     pub fn new(draft: Draft<PhasePlugins>) -> Self {
         Self {
             draft,
+            following_suggestions: false,
             rejected: Vec::new(),
         }
     }
@@ -276,6 +280,20 @@ impl PhaseForm {
     /// The draft as the form answered it.
     pub fn draft(&self) -> &Draft<PhasePlugins> {
         &self.draft
+    }
+
+    /// Replaces the ranking and metrics, including their settings, with the suggestions for the
+    /// other phase fields, and resumes following suggestions. Those fields and their rejected
+    /// numeric input are kept.
+    ///
+    /// # Errors
+    /// Returns an error if a suggested answer does not fit its schema. Nothing changes then.
+    pub fn apply_suggestions(&mut self) -> Result<(), ConfigError> {
+        self.draft = suggested(self.draft.clone())?;
+        self.following_suggestions = true;
+        self.rejected
+            .retain(|rejected| !is_suggested(&rejected.path));
+        Ok(())
     }
 
     /// What the form shows now.
@@ -306,6 +324,7 @@ impl PhaseForm {
         }
         FormView {
             fields,
+            following_suggestions: self.following_suggestions,
             complete: issues.is_empty() && self.rejected.is_empty(),
             issues: unplaced,
         }
@@ -359,6 +378,9 @@ impl PhaseForm {
             entered: entered.to_owned(),
             problem,
         });
+        if is_suggested(path) {
+            self.following_suggestions = false;
+        }
         Ok(())
     }
 
@@ -440,8 +462,8 @@ impl PhaseForm {
     /// # Errors
     /// Returns an error if there is no such position.
     pub fn remove(&mut self, item: &Path) -> Result<(), ConfigError> {
-        let (list, _) = position(item)?;
-        self.change(&list, |draft| draft.unset(item))
+        position(item)?;
+        self.change(item, |draft| draft.unset(item))
     }
 
     /// Moves the plugin at `item`, a position in a list, one up, before the plugin before it;
@@ -500,57 +522,28 @@ impl PhaseForm {
             .ok_or_else(|| ConfigError::UnknownField { path: path.clone() })
     }
 
-    /// Makes `change` to the answers of the field at `field`. Every field after it in schema
-    /// order still answered as it offers before is answered as it offers after, with the plugins
-    /// answering it as they offer, and so is every field `change` leaves unanswered. Nothing is
-    /// changed if `change` fails.
+    /// Applies an edit and fills new fields with defaults. Nothing changes if either fails.
     fn change(
         &mut self,
-        field: &Path,
+        path: &Path,
         change: impl FnOnce(&mut Draft<PhasePlugins>) -> Result<(), ConfigError>,
     ) -> Result<(), ConfigError> {
-        // only the fields after the one changed follow, as the questionnaire asks a field after
-        // those whose answers it offers what they recommend: a field before it following, e.g. the
-        // ranking dropping a criterion when the metric it needs is removed, would change what the
-        // operator may no longer look at, where an issue shows what is missing instead
-        let nodes = self.draft.fields();
-        let paths = field_paths(&nodes);
-        let after = paths
-            .iter()
-            .position(|path| path == field)
-            .map_or(paths.len(), |position| position + 1);
-        let following: Vec<_> = paths
-            .into_iter()
-            .skip(after)
-            // a field within the one changed is changed with it
-            .filter(|path| !path.segments().starts_with(field.segments()))
-            .filter(|path| as_offered(&self.draft, path))
-            .collect();
         let mut draft = self.draft.clone();
         change(&mut draft)?;
-        let mut answered_anew: Vec<Path> = Vec::new();
-        for path in following {
-            // those within a field answered anew are answered as offered with it
-            if answered_anew
-                .iter()
-                .any(|anew| path.segments().starts_with(anew.segments()))
-                || as_offered(&draft, &path)
-            {
-                continue;
-            }
-            draft.unset(&path)?;
-            if let Some(offered) = draft.default_value(&path)? {
-                draft.set(&path, offered)?;
-            }
-            answered_anew.push(path);
+        let following = self.following_suggestions && !is_suggested(path);
+        self.draft = if following {
+            suggested(draft)?
+        } else {
+            draft.with_defaults()?
+        };
+        self.following_suggestions = following;
+        if is_suggested(path) || following {
+            self.rejected.clear();
+        } else {
+            // Basic settings do not move customized ranking or metric fields.
+            self.rejected
+                .retain(|rejected| is_suggested(&rejected.path));
         }
-        // a field left unanswered is answered as offered only now
-        let mut draft = draft.with_defaults()?;
-        for list in &answered_anew {
-            keep_what_is_needed(&self.draft, &mut draft, list)?;
-        }
-        self.draft = draft;
-        self.rejected.clear();
         Ok(())
     }
 
@@ -765,87 +758,11 @@ impl PhaseForm {
     }
 }
 
-/// Fits the list at `list` of `draft`, just answered as offered after a change of `before`, to the
-/// plugins chosen in the other fields of the phase: a plugin it offers only since a plugin offered
-/// elsewhere and not chosen there needs it, e.g. a metric of a criterion the ranking left out, is
-/// left out too, and a plugin of the list before the change that a plugin chosen elsewhere needs
-/// is kept, e.g. the metric of a criterion the ranking kept. Nothing is done if `list` takes no
-/// list.
-fn keep_what_is_needed(
-    before: &Draft<PhasePlugins>,
-    draft: &mut Draft<PhasePlugins>,
-    list: &Path,
-) -> Result<(), ConfigError> {
-    let nodes = draft.fields();
-    let Some(FieldKind::List { axis, .. }) = field_at(&nodes, list).map(|node| node.field.kind())
-    else {
-        return Ok(());
+fn is_suggested(path: &Path) -> bool {
+    let Some(Segment::Field(name)) = path.segments().first() else {
+        return false;
     };
-    let axis = *axis;
-    let mut chosen = Vec::new();
-    let mut declined = Vec::new();
-    for field in PhasePlugins::schema().fields() {
-        let path = Path::ROOT.field(field.name());
-        let Some(field_axis) = field.kind().axis().filter(|_| path != *list) else {
-            continue;
-        };
-        let answered = plugins_in(field_axis, draft.answers().get_at(&path));
-        // what a list offers is recommended by the plugins chosen, while a single plugin offered
-        // is no more than where the field starts out
-        if matches!(field.kind(), FieldKind::List { .. }) {
-            let offered = plugins_in(field_axis, draft.default_value(&path)?.as_ref());
-            declined.extend(
-                offered
-                    .into_iter()
-                    .filter(|offered| !answered.iter().any(|entry| entry.id() == offered.id())),
-            );
-        }
-        chosen.extend(answered);
-    }
-    let needed_by = |entry: &PluginEntry, plugins: &[&'static PluginEntry]| {
-        plugins.iter().any(|plugin| {
-            plugin
-                .providers_in(axis)
-                .iter()
-                .any(|provider| provider.id() == entry.id())
-        })
-    };
-    let items: Vec<(Value, &'static PluginEntry)> = answers_in(axis, draft.answers().get_at(list));
-    let (mut kept, mut left_out): (Vec<_>, Vec<_>) = items
-        .into_iter()
-        .partition(|(_, entry)| !needed_by(entry, &declined) || needed_by(entry, &chosen));
-    // a plugin left out that one kept needs stays after all, e.g. a metric calculated from another
-    loop {
-        let entries: Vec<_> = kept.iter().map(|(_, entry)| *entry).collect();
-        let Some(position) = left_out
-            .iter()
-            .position(|(_, entry)| needed_by(entry, &entries))
-        else {
-            break;
-        };
-        kept.push(left_out.remove(position));
-    }
-    for (answer, entry) in answers_in(axis, before.answers().get_at(list)) {
-        let present = kept.iter().any(|(_, kept)| kept.id() == entry.id());
-        if !present && needed_by(entry, &chosen) {
-            kept.push((answer, entry));
-        }
-    }
-    let answers = kept.into_iter().map(|(answer, _)| answer).collect();
-    draft.set(list, Value::Array(answers))
-}
-
-/// The plugins of `axis` answering a field with `answer`, one or a list of them.
-fn plugins_in(axis: AnyAxis, answer: Option<&Value>) -> Vec<&'static PluginEntry> {
-    let answers = match answer {
-        Some(Value::Array(answers)) => answers.iter().collect(),
-        Some(answer) => vec![answer],
-        None => Vec::new(),
-    };
-    answers
-        .into_iter()
-        .filter_map(|answer| axis.entry(PluginConfig::from_answer(answer)?.plugin()))
-        .collect()
+    name == "ranking" || name == "metrics"
 }
 
 /// The plugins answering the fields of the phase in `completed` that need `entry` of `axis`, in
@@ -865,17 +782,11 @@ fn needed_by(entry: &PluginEntry, axis: AnyAxis, completed: &[FieldNode]) -> Vec
         .collect()
 }
 
-/// The answers of the list `answer` of plugins of `axis`, each with its plugin.
-fn answers_in(axis: AnyAxis, answer: Option<&Value>) -> Vec<(Value, &'static PluginEntry)> {
-    answer
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|answer| {
-            let entry = axis.entry(PluginConfig::from_answer(answer)?.plugin())?;
-            Some((answer.clone(), entry))
-        })
-        .collect()
+fn suggested(mut draft: Draft<PhasePlugins>) -> Result<Draft<PhasePlugins>, ConfigError> {
+    for field in ["ranking", "metrics"] {
+        draft.unset(&Path::ROOT.field(field))?;
+    }
+    draft.with_defaults()
 }
 
 /// Why a number entered is not taken, see [`number`].
@@ -923,40 +834,6 @@ fn number(entered: &str, range: NumberRange) -> Result<Value, NotTaken> {
         }
         NumberRange::Decimal(_) => Ok(Value::from(number)),
     }
-}
-
-/// Whether the field at `path` of `draft` is answered as it offers, and the plugins answering it
-/// as they offer.
-fn as_offered(draft: &Draft<PhasePlugins>, path: &Path) -> bool {
-    let Some(answer) = draft.answers().get_at(path) else {
-        return false;
-    };
-    let Ok(Some(offered)) = draft.default_value(path) else {
-        return false;
-    };
-    let mut as_offered = draft.clone();
-    as_offered
-        .set(path, offered)
-        .ok()
-        .and_then(|()| as_offered.with_defaults().ok())
-        .is_some_and(|as_offered| as_offered.answers().get_at(path) == Some(answer))
-}
-
-/// The paths of the enumerated fields: those of the phase, each
-/// followed by those of the plugins answering it, in schema order.
-fn field_paths(fields: &[FieldNode]) -> Vec<Path> {
-    fn walk(fields: &[FieldNode], paths: &mut Vec<Path>) {
-        for field in fields {
-            paths.push(field.path.clone());
-            for plugin in &field.plugins {
-                walk(&plugin.fields, paths);
-            }
-        }
-    }
-
-    let mut paths = Vec::new();
-    walk(fields, &mut paths);
-    paths
 }
 
 /// Puts `text` at the deepest field or item of `fields` that `path` is within; `false` if it is

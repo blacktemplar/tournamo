@@ -3,6 +3,7 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
+    error::PhaseDraftError,
     form::{
         self, FormField, FormView, Input, Item, ListInput, Path, PhaseForm, PluginInput,
         PluginOption, SetEntry,
@@ -211,10 +212,41 @@ fn EditPhase() -> Element {
 /// the answers as a whole.
 #[component]
 fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
-    let FormView { fields, issues, .. } = form.read().view();
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let mut error = use_signal(|| None::<Text>);
+    let FormView {
+        fields,
+        issues,
+        following_suggestions,
+        ..
+    } = form.read().view();
     rsx! {
         div { class: "phase-form",
             Fields { form, fields, disabled }
+            p { role: "status",
+                if following_suggestions {
+                    {tr.get("following-suggestions")}
+                } else {
+                    {tr.get("customized-settings")}
+                }
+            }
+            button {
+                r#type: "button",
+                disabled,
+                aria_disabled: following_suggestions,
+                onclick: move |_| {
+                    if !disabled && !form.read().view().following_suggestions {
+                        error.set(form.write().apply_suggestions().err().map(|error| {
+                            PhaseDraftError::Configuration(error).text()
+                        }));
+                    }
+                },
+                {tr.get("apply-suggested-ranking")}
+            }
+            if let Some(error) = error() {
+                Issues { id: "suggestion-issues", issues: vec![error] }
+            }
             Issues { id: "phase-issues", issues }
         }
     }

@@ -456,17 +456,21 @@ async fn the_bar_shows_its_labels_until_a_phone() {
             "{labels:?}"
         );
         gui.page.expect_room_for_words(".bar h1").await?;
-        let cut = gui
+        let size = gui
             .driver
             .execute(
                 "const title = document.querySelector('.bar h1');
-                return title.scrollHeight > title.clientHeight
-                    || title.scrollWidth > title.clientWidth;",
+                return [title.scrollHeight, title.clientHeight,
+                        title.scrollWidth, title.clientWidth];",
                 Vec::new(),
             )
             .await?
-            .convert::<bool>()?;
-        assert!(!cut, "the name must show whole");
+            .convert::<Vec<f64>>()?;
+        // A fractional line height can round these integer heights a pixel apart.
+        assert!(
+            size[0] <= size[1] + 1.0 && size[2] <= size[3],
+            "the name must show whole: {size:?}"
+        );
         gui.page.expect_no_sideways_scroll().await
     })
     .await;

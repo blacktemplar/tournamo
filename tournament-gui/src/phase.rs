@@ -4,8 +4,8 @@
 use dioxus::prelude::*;
 use tournament_app::{
     form::{
-        FormField, FormView, Input, Item, ListInput, Path, PhaseForm, PluginInput, PluginOption,
-        SetEntry,
+        self, FormField, FormView, Input, Item, ListInput, Path, PhaseForm, PluginInput,
+        PluginOption, SetEntry,
     },
     i18n::{Message as _, PluginText, Text, Translator},
 };
@@ -19,7 +19,7 @@ use crate::{
         select::{Select, SelectOption},
     },
     i18n::t,
-    icons,
+    icons, sentence,
     toggletip::Toggletip,
 };
 
@@ -388,7 +388,7 @@ fn NumberField(
                     typed.set(None);
                 },
             }
-            span { class: "hint", id: "{id}-hint", {capitalized(&hint)} }
+            span { class: "hint", id: "{id}-hint", {sentence(&hint)} }
             Issues { id: "{id}-issues", issues }
             Warnings { id: "{id}-warnings", warnings }
         }
@@ -460,7 +460,7 @@ fn PluginField(
             }
             if let Some(description) = chosen_description {
                 p { class: "hint chosen-description", id: "{id}-chosen",
-                    {capitalized(&description)}
+                    {sentence(&description)}
                 }
             }
             {children}
@@ -519,7 +519,7 @@ fn PluginChoice(select: String, index: usize, option: PluginOption) -> Element {
                         class: "option-description",
                         id: "{described_by}",
                         "data-tapped": tapped().then_some("true"),
-                        span { class: "option-description-text", "{description}" }
+                        span { class: "option-description-text", {sentence(&description)} }
                     }
                 }
             }
@@ -694,17 +694,35 @@ struct Implied {
 }
 
 /// What a list shows for the plugins of `implied`.
-fn implied(tr: &Translator, implied: &[PluginOption]) -> Vec<Implied> {
+fn implied(tr: &Translator, implied: &[form::Implied]) -> Vec<Implied> {
     implied
         .iter()
-        .map(|option| {
-            let plugin = plugin_label(tr, option);
-            Implied {
-                option: *option,
-                text: capitalized(&t!(tr, "implied-plugin", plugin = plugin.as_str())),
-            }
+        .map(|implied| Implied {
+            option: implied.plugin,
+            text: implied_text(tr, implied),
         })
         .collect()
+}
+
+/// What a list shows for `implied`: its label and what needs it.
+fn implied_text(tr: &Translator, implied: &form::Implied) -> String {
+    let plugin = plugin_label(tr, &implied.plugin);
+    let text = if implied.needed_by.is_empty() {
+        t!(tr, "implied-plugin", plugin = plugin.as_str())
+    } else {
+        let needed_by: Vec<_> = implied
+            .needed_by
+            .iter()
+            .map(|option| plugin_label(tr, option))
+            .collect();
+        t!(
+            tr,
+            "implied-plugin-needed-by",
+            plugin = plugin.as_str(),
+            needed_by = needed_by.join(&tr.get("list-separator")),
+        )
+    };
+    capitalized(&text)
 }
 
 /// The toggletip saying the description of `option`, a plugin of the list whose id is `list`;
@@ -744,13 +762,9 @@ fn UnorderedList(
                 text: capitalized(&plugin_label(&tr, &item.plugin)),
                 state: SetState::Chosen(item.clone()),
             },
-            SetEntry::Implied(option) => SetItem {
-                option: *option,
-                text: capitalized(&t!(
-                    tr,
-                    "implied-plugin",
-                    plugin = plugin_label(&tr, option).as_str()
-                )),
+            SetEntry::Implied(implied) => SetItem {
+                option: implied.plugin,
+                text: implied_text(&tr, implied),
                 state: SetState::Implied,
             },
             SetEntry::Offered(option) => SetItem {
@@ -921,10 +935,10 @@ fn Summary(fields: Vec<FormField>) -> Element {
                                         }
                                     }
                                 }
-                                for option in list.implied.clone() {
+                                for implied in list.implied.clone() {
                                     li {
                                         span { class: "answer",
-                                            {capitalized(&plugin_label(&tr, &option))}
+                                            {capitalized(&plugin_label(&tr, &implied.plugin))}
                                         }
                                     }
                                 }
@@ -974,7 +988,11 @@ pub fn answer(tr: &Translator, input: &Input) -> String {
                 .items
                 .iter()
                 .map(|item| plugin_label(tr, &item.plugin))
-                .chain(list.implied.iter().map(|option| plugin_label(tr, option)))
+                .chain(
+                    list.implied
+                        .iter()
+                        .map(|implied| plugin_label(tr, &implied.plugin)),
+                )
                 .collect();
             if labels.is_empty() {
                 tr.get("no-plugin")
@@ -991,13 +1009,9 @@ fn plugin_label(tr: &Translator, option: &PluginOption) -> String {
 }
 
 fn plugin_description(tr: &Translator, option: &PluginOption) -> Option<String> {
-    option.description.map(|description| {
-        tr.plugin(
-            description.plugin,
-            PluginText::Description,
-            description.english,
-        )
-    })
+    option
+        .description
+        .map(|english| tr.plugin(option.id, PluginText::Description, english))
 }
 
 /// The id of the element of the field at `path`, e.g. `field-metrics-1-points_for_win`.

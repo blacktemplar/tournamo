@@ -57,6 +57,7 @@ impl TypeMapValue for WinsDrawsLosses {}
 #[plugin(
     id = "tournament_engine::more_wins",
     label = "more wins",
+    description = "a tie break that ranks winning above drawing",
     declare_static = requires_metric::<Self>
 )]
 pub struct MoreWins;
@@ -78,6 +79,7 @@ crate::register_criterion!(MoreWins);
 #[plugin(
     id = "tournament_engine::more_draws",
     label = "more draws",
+    description = "a tie break that ranks drawing above both winning and losing",
     declare_static = requires_metric::<Self>
 )]
 pub struct MoreDraws;
@@ -97,6 +99,7 @@ crate::register_criterion!(MoreDraws);
 #[plugin(
     id = "tournament_engine::fewer_losses",
     label = "fewer losses",
+    description = "a tie break that ranks drawing above losing",
     declare_static = requires_metric::<Self>
 )]
 pub struct FewerLosses;

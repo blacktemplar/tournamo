@@ -19,13 +19,15 @@ use plugin_factory::{
     draft::Draft,
 };
 use tournament_engine::{
-    AddEntrant, AddPhase, Annotated as _, Competition, CompetitionStateMachine,
+    AddEntrant, AddPhase, Annotated as _, Bye, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt as _, CompetitionTransition, Entrant, EntrantId, Match, MatchId,
-    MatchResult, Phase, PhaseData, PhaseId, PhasePlugins, RankingId, RemoveEntrant,
+    MatchResult, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId, RemoveEntrant,
     ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap,
     map::IdAble as _,
     plugins::{
-        metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
+        metrics_calculator::{Cell, MetricsCalculator},
+        phase_format::PhaseFormat,
+        ranker::SliceRanker,
     },
     transitions::{
         self as engine, CompetitionAlreadyStarted, ReconfigurePhaseError, UndoMatchResultError,
@@ -50,7 +52,7 @@ use crate::{
     storage::{Changes, CompetitionKey, Listing, Progress, Storage, Stored},
     view::{
         Action, Actions, ByeRow, Column, Entered, EntrantRow, Format, MatchRow, Medal, NameSearch,
-        Reopened, Reported, Round, RoundSummary, StageName, StandingRow, Standings,
+        Reopened, Reported, Round, RoundSummary, StageName, StandingCell, StandingRow, Standings,
     },
 };
 
@@ -302,15 +304,15 @@ impl Session {
     /// nothing of it is saved yet.
     ///
     /// # Errors
-    /// Returns an error if `file` is no competition's file, or its log does not replay.
+    /// Returns an error if `file` is no competition's file, one of a newer version, or one whose
+    /// log does not replay, see [`ImportError`].
     pub fn import(file: &str, name: &str, stored: &[Listing]) -> Result<Self, ImportError> {
         let File {
             format: _,
             name: named,
             log: machine,
             people,
-        } = serde_json::from_str::<File<CompetitionStateMachine, People>>(file)
-            .map_err(ImportError)?;
+        } = File::<CompetitionStateMachine, People>::read(file)?;
         // a blank name, which the list could not show, is no name; nor is a blank file name
         let name = [named.as_deref(), Some(name)]
             .into_iter()
@@ -682,8 +684,22 @@ impl Session {
             round,
             matches: 0,
             open: 0,
+            stage: None,
         };
         let mut rounds = BTreeMap::new();
+        // the stage of each round, until a match or a bye of another one makes it `None`
+        let mut stages: BTreeMap<NonZeroU32, Option<StageName>> = BTreeMap::new();
+        let mut note_stage = |round, annotations| {
+            let stage = stage(phase, annotations);
+            stages
+                .entry(round)
+                .and_modify(|kept| {
+                    if *kept != stage {
+                        *kept = None;
+                    }
+                })
+                .or_insert(stage);
+        };
         for r#match in data.matches().values() {
             let round = r#match.round();
             let summary = rounds.entry(round).or_insert_with(|| empty(round));
@@ -691,12 +707,20 @@ impl Session {
             if !r#match.is_finished() {
                 summary.open += 1;
             }
+            note_stage(round, r#match.annotations());
         }
         for bye in data.byes().values() {
             let round = bye.round();
             rounds.entry(round).or_insert_with(|| empty(round));
+            note_stage(round, bye.annotations());
         }
-        rounds.into_values().collect()
+        rounds
+            .into_values()
+            .map(|summary| RoundSummary {
+                stage: stages.remove(&summary.round).flatten(),
+                ..summary
+            })
+            .collect()
     }
 
     /// The matches and byes of `round`, or `None` if it has neither, e.g. before the start.
@@ -1045,7 +1069,9 @@ impl Session {
                     played: ranking.played_matches().len(),
                     cells: columns
                         .iter()
-                        .map(|(_, column)| column.cell(ranking))
+                        .map(|(_, column)| {
+                            Some(standing_cell(phase, ranking, column.cell(ranking)?))
+                        })
                         .collect(),
                     medal: finished.then(|| Medal::of(ranking.rank())).flatten(),
                 })
@@ -1278,6 +1304,42 @@ impl<'a> NamedEntry<'a> {
                 results.into_iter().map(move |result| (row, result))
             })
             .collect()
+    }
+}
+
+/// `cell` of `ranking` as the standings show it: a round, a phrase with the number `round`, by the
+/// stage of the ranking's match or bye in it, where the format names one.
+fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
+    let round = match &cell {
+        Cell::Text(phrase) => phrase
+            .numbers()
+            .iter()
+            .find(|(name, _)| *name == "round")
+            .map(|(_, round)| *round),
+        Cell::Number(_) => None,
+    };
+    let Some(round) = round else {
+        return StandingCell::Metric(cell);
+    };
+    let data = phase.data();
+    let matches = ranking
+        .played_matches()
+        .iter()
+        .filter_map(|id| data.matches().get(id))
+        .filter(|r#match| r#match.round().get() == round)
+        .map(Match::annotations);
+    let byes = data
+        .byes()
+        .values()
+        .filter(|bye| bye.ranking() == ranking.id() && bye.round().get() == round)
+        .map(Bye::annotations);
+    match matches
+        .chain(byes)
+        .next()
+        .and_then(|annotations| stage(phase, annotations))
+    {
+        Some(stage) => StandingCell::Stage(stage),
+        None => StandingCell::Metric(cell),
     }
 }
 

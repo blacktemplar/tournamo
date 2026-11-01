@@ -9,8 +9,8 @@ use std::{num::NonZeroU32, rc::Rc};
 
 use dioxus::prelude::*;
 use tournament_app::{
-    i18n::{Message as _, PluginText, Text},
-    view::{MatchRow, Medal, RoundSummary},
+    i18n::{Message as _, PluginText, Text, Translator},
+    view::{MatchRow, Medal, RoundSummary, StandingCell},
 };
 use tournament_engine::{MatchId, MatchResult};
 use wasm_bindgen::JsCast as _;
@@ -216,7 +216,7 @@ pub fn Rounds() -> Element {
                                     chosen.set(Some(Shown::Round(round)));
                                 }
                             },
-                            for summary in rounds {
+                            for summary in rounds.iter() {
                                 option {
                                     key: "{summary.round}",
                                     value: "{summary.round}",
@@ -226,12 +226,12 @@ pub fn Rounds() -> Element {
                                             t!(
                                                 tr,
                                                 "round-with-open",
-                                                round = summary.round,
+                                                round = round_name(&tr, summary),
                                                 open = summary.open,
                                             )
                                         }
                                     } else {
-                                        {t!(tr, "round", round = summary.round)}
+                                        {round_name(&tr, summary)}
                                     }
                                 }
                             }
@@ -255,7 +255,12 @@ pub fn Rounds() -> Element {
                 match (&entered, shown) {
                     (Some((text, ..)), _) => t!(tr, "entry-found", text = text.as_str()),
                     (None, Shown::Playable) => tr.get("playable-now"),
-                    (None, Shown::Round(round)) => t!(tr, "round", round = round),
+                    (None, Shown::Round(round)) => {
+                        match rounds.iter().find(|summary| summary.round == round) {
+                            Some(summary) => round_name(&tr, summary),
+                            None => t!(tr, "round", round = round),
+                        }
+                    }
                 }
             }
             if rows.is_empty() && byes.is_empty() {
@@ -295,6 +300,14 @@ pub fn Rounds() -> Element {
                 }
             }
         }
+    }
+}
+
+/// The name of the round of `summary`: the stage it is of, if one, else its number.
+fn round_name(tr: &Translator, summary: &RoundSummary) -> String {
+    match &summary.stage {
+        Some(stage) => capitalized(&tr.stage(stage)),
+        None => t!(tr, "round", round = summary.round),
     }
 }
 
@@ -472,7 +485,8 @@ fn MatchLine(
             span { class: "side b {winner(Side::B)}", {team_name(&tr, &row.b)} }
             if with_round || with_stage {
                 span { class: "meta",
-                    if with_round {
+                    // a stage names the round already
+                    if with_round && row.stage.is_none() {
                         span { class: "round", {t!(tr, "round", round = row.round)} }
                     }
                     if with_stage {
@@ -728,7 +742,16 @@ pub fn Standings() -> Element {
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
                                     td { class: "metric",
-                                        {cell.map(|cell| tr.cell(column.calculator, &cell))}
+                                        {
+                                            cell.map(|cell| match cell {
+                                                StandingCell::Metric(cell) => {
+                                                    capitalized(&tr.cell(column.calculator, &cell))
+                                                }
+                                                StandingCell::Stage(stage) => {
+                                                    capitalized(&tr.stage(&stage))
+                                                }
+                                            })
+                                        }
                                     }
                                 }
                                 td { class: "played", "{row.played}" }

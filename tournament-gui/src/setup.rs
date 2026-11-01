@@ -1,12 +1,16 @@
 //! What is done before the start: entering the entrants, adding the phase, starting.
 
 use dioxus::prelude::*;
-use tournament_app::{i18n::Message as _, session::Session};
+use tournament_app::{
+    i18n::{Message as _, Text},
+    session::Session,
+};
 
 use crate::{
     announcement::Announcement,
     competition::Ctx,
     i18n::t,
+    notices::use_cleared_on_language_change,
     phase::{NewPhase, PhaseSummary, focus_later},
     team_name,
 };
@@ -15,6 +19,9 @@ use crate::{
 pub fn Entrants() -> Element {
     let ctx = use_context::<Ctx>();
     let mut name = use_signal(String::new);
+    // why the name was refused, shown at its field until it is changed
+    let mut error = use_signal(|| None::<Text>);
+    use_cleared_on_language_change(ctx.translator, error);
     let entrants = ctx.session.read().entrants();
     // an entrant whose name the one typed looks like, e.g. differing in case only
     let like = ctx.session.read().entrant_like(&name.read());
@@ -74,13 +81,21 @@ pub fn Entrants() -> Element {
                 class: "row",
                 onsubmit: move |event| {
                     event.prevent_default();
-                    if let Some(id) = ctx.act(|session| session.add_entrant(&name.peek())) {
-                        name.set(String::new());
-                        scroll_to_field();
-                        let added = ctx.session.peek().entrants().into_iter().find(|e| e.id == id);
-                        if let Some(added) = added {
-                            ctx.announce(Announcement::AddedEntrant(added));
+                    // as `Ctx::act`, but with why it is refused at the field
+                    if !ctx.changes() {
+                        return;
+                    }
+                    match ctx.try_act(|session| session.add_entrant(&name.peek())) {
+                        Ok(id) => {
+                            name.set(String::new());
+                            scroll_to_field();
+                            let added =
+                                ctx.session.peek().entrants().into_iter().find(|e| e.id == id);
+                            if let Some(added) = added {
+                                ctx.announce(Announcement::AddedEntrant(added));
+                            }
                         }
+                        Err(refused) => error.set(Some(refused)),
                     }
                 },
                 label { r#for: "entrant-name", class: "visually-hidden", {tr.get("name")} }
@@ -89,13 +104,17 @@ pub fn Entrants() -> Element {
                     value: "{name}",
                     autocomplete: "off",
                     placeholder: tr.get("name"),
-                    aria_describedby: "entrant-like",
+                    aria_invalid: error.read().is_some().then_some("true"),
+                    aria_describedby: "entrant-name-error entrant-like",
                     onmounted: move |event| async move {
                         if opened_empty {
                             _ = event.data().set_focus(true).await;
                         }
                     },
-                    oninput: move |event| name.set(event.value()),
+                    oninput: move |event| {
+                        error.set(None);
+                        name.set(event.value());
+                    },
                 }
                 button {
                     class: "primary",
@@ -103,9 +122,15 @@ pub fn Entrants() -> Element {
                     disabled: !actions.add_entrant,
                     {tr.get("add-entrant")}
                 }
-                // said as it is typed, without refusing the name
+                p { id: "entrant-name-error", class: "error", role: "alert",
+                    if let Some(error) = error() {
+                        {tr.sentence(&error)}
+                    }
+                }
+                // said as it is typed, without refusing the name; once refused, the refusal says
+                // it instead
                 p { id: "entrant-like", class: "warnings", role: "status",
-                    if let Some(like) = like {
+                    if let Some(like) = like.filter(|_| error.read().is_none()) {
                         {t!(tr, "entrant-like", name = like.as_str())}
                     }
                 }

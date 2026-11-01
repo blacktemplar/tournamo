@@ -21,8 +21,11 @@ async fn everything_is_said_in_the_language_chosen() {
 
         gui.expect_page_language("de").await?;
         gui.click("Teilnehmer hinzufügen").await?;
-        gui.expect_error("Der Name eines Teilnehmers darf nicht leer sein.")
-            .await?;
+        gui.expect_field_error(
+            "entrant-name",
+            "Der Name eines Teilnehmers darf nicht leer sein.",
+        )
+        .await?;
         gui.add_entrant("Alice").await?;
         gui.add_entrant("Bob").await?;
         gui.choose_format("Jeder gegen jeden").await?;
@@ -30,6 +33,7 @@ async fn everything_is_said_in_the_language_chosen() {
         gui.click("Starten").await?;
         gui.click_labelled("Alice gewinnt").await?;
         gui.expect_results(&["Alice hat gewonnen"]).await?;
+        gui.expect_winners(Some("Sieger: Alice")).await?;
         gui.page
             .expect_text(By::Css("#standing-list th"), "Punkte")
             .await
@@ -56,7 +60,7 @@ async fn the_stages_are_said_in_the_language_chosen() {
         gui.page
             .expect(
                 By::Css("#standing-list tbody"),
-                |query| query.with_text(StringMatch::new("Runde").partial()),
+                |query| query.with_text(StringMatch::new("Halbfinale").partial()),
                 "the round lost in, in German",
             )
             .await

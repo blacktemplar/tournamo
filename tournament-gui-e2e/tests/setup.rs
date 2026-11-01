@@ -84,9 +84,34 @@ async fn an_entrant_without_a_name_is_refused_with_why() {
     run_in_new_competition(async |gui| {
         gui.click("Add entrant").await?;
 
-        gui.expect_error("An entrant name must not be empty.")
+        gui.expect_field_error("entrant-name", "An entrant name must not be empty.")
             .await?;
-        gui.expect_entrants(&[]).await
+        gui.page.check_accessibility().await?;
+        gui.expect_entrants(&[]).await?;
+        // gone once the name is changed
+        gui.type_entrant_name("Alice").await?;
+        gui.expect_no_error().await
+    })
+    .await;
+}
+
+/// The name of an entrant entered already is refused at the field, in place of saying that it is
+/// entered, rather than in a second message.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_name_entered_already_is_refused_at_its_field() {
+    run_in_new_competition(async |gui| {
+        gui.add_entrant("Alice").await?;
+        gui.type_entrant_name("Alice").await?;
+        gui.expect_entrant_like(Some("“Alice” is entered already."))
+            .await?;
+
+        gui.press(Key::Enter).await?;
+
+        gui.expect_field_error("entrant-name", "There already is an entrant named “Alice”.")
+            .await?;
+        gui.expect_entrant_like(None).await?;
+        gui.expect_entrants(&["Alice"]).await
     })
     .await;
 }

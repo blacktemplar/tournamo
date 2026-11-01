@@ -2,7 +2,7 @@
 //! keep what is stored.
 
 use dioxus::prelude::*;
-use tournament_app::i18n::Text;
+use tournament_app::i18n::{Text, Translator};
 
 use crate::{Page, install};
 
@@ -30,6 +30,22 @@ pub fn Notices(export: Option<EventHandler>) -> Element {
             Detail { detail }
         }
     }
+}
+
+/// Clears `error`, why an action was refused at a field, when another language is chosen in
+/// `translator`, which the alert would say again as if just refused, as the page does with its
+/// own.
+pub fn use_cleared_on_language_change(
+    translator: Signal<Translator>,
+    mut error: Signal<Option<Text>>,
+) {
+    use_effect(move || {
+        // runs again whenever the language changes
+        let _language = translator.read().language();
+        if error.peek().is_some() {
+            error.set(None);
+        }
+    });
 }
 
 /// The [detail](Text::detail) of an error, folded away, for whoever looks into it. It is not part

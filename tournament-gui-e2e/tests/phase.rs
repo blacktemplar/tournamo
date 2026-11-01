@@ -190,6 +190,27 @@ async fn the_metrics_stay_in_place_when_toggled() {
     .await;
 }
 
+/// A metric calculated since a criterion ranks by it names that criterion.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_metric_implied_names_what_needs_it() {
+    run_in_new_competition(async |gui| {
+        gui.choose_plugin("ranking", "More Buchholz").await?;
+
+        gui.expect_checked(
+            "metrics",
+            &[
+                "Points",
+                "Sonneborn-Berger",
+                "Win-draw-loss record",
+                "Buchholz, needed by more Buchholz",
+            ],
+        )
+        .await
+    })
+    .await;
+}
+
 /// The focus stays with what the operator works on: the list a plugin was added from, the
 /// plugin moved, even to the top, and the plugin after the one removed.
 #[tokio::test]
@@ -385,23 +406,26 @@ async fn a_number_is_shown_with_a_comma_in_german() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn what_is_said_about_a_plugin_shows_on_hover_and_after_a_click() {
-    const POINTS: &str = "scored for every win, every draw and every bye";
+    const POINTS: &str = "Scored for every win, every draw and every bye.";
     run_in_new_competition(async |gui| {
         gui.expect_toggletip(None).await?;
 
         gui.hover_labelled("About order of the standings").await?;
 
         gui.expect_toggletip(Some(
-            "best first, every criterion only breaks the ties of the ones before it",
+            "Best first, every criterion only breaks the ties of the ones before it.",
         ))
         .await?;
         gui.press(Key::Escape).await?;
         gui.expect_toggletip(None).await?;
-        // a criterion has the description of its metric
+        // a criterion says when to rank by it, rather than what its metric is
         gui.hover_labelled("About more points").await?;
-        gui.expect_toggletip(Some(POINTS)).await?;
+        gui.expect_toggletip(Some(
+            "Usually the first criterion; the points set what each result is worth.",
+        ))
+        .await?;
         gui.hover_labelled("About format").await?;
-        gui.expect_toggletip(Some("how the matches are scheduled"))
+        gui.expect_toggletip(Some("How the matches are scheduled."))
             .await?;
         gui.click_labelled("About points").await?;
         gui.expect_toggletip(Some(POINTS)).await?;
@@ -426,15 +450,14 @@ async fn the_description_of_an_option_shows_while_the_pointer_is_on_it() {
 
         gui.hover_option("Fewer matches played").await?;
 
-        gui.expect_option_description("the same result out of fewer matches ranks higher")
+        gui.expect_option_description("The same result out of fewer matches ranks higher.")
             .await?;
         gui.page.check_accessibility().await?;
         gui.hover_option("Later first loss").await?;
-        gui.expect_option_description("by the round of the first loss; never having lost is best")
+        gui.expect_option_description("By the round of the first loss; never having lost is best.")
             .await?;
-        // a criterion without a description of its own has that of its metric
         gui.hover_option("More Buchholz").await?;
-        gui.expect_option_description("the points of all opponents")
+        gui.expect_option_description("A tie break favouring those who met stronger opponents.")
             .await
     })
     .await;
@@ -450,7 +473,7 @@ async fn a_tap_on_the_info_of_an_option_shows_its_description_without_choosing_i
         gui.tap_option_info("Fewer matches played").await?;
 
         gui.expect_option_description_tapped_open(
-            "the same result out of fewer matches ranks higher",
+            "The same result out of fewer matches ranks higher.",
         )
         .await?;
         gui.page.check_accessibility().await?;
@@ -483,7 +506,7 @@ async fn what_is_said_about_a_field_at_the_right_of_the_dialog_shows_whole() {
         gui.hover_labelled("About weight of an opponent played to a draw")
             .await?;
 
-        gui.expect_toggletip(Some("the points of that opponent are multiplied by this"))
+        gui.expect_toggletip(Some("The points of that opponent are multiplied by this."))
             .await
     })
     .await;

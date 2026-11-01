@@ -72,6 +72,21 @@ a file whose `"format"` changes is migrated, not refused.
 - A change of the phase refused for a result it does not fit names the match of
   that result and says that reopening it allows the change. A change that keeps
   results says how many, and the dialog says in plain words that results stay.
+- What is said about a plugin or a field, and the hint below the entry of
+  results, reads as sentences. Each criterion of the ranking says when to rank
+  by it, rather than what its metric is, and a metric calculated since a
+  criterion ranks by it names that criterion.
+- A round of a knockout whose matches are all of one stage is named by it (the
+  semifinals, the final), in the list of rounds, above its matches and in the
+  standings, which name the round an entrant lost in by the stage of its match.
+- A file that cannot be imported says whether it is no competition at all, one
+  of a newer version, or a damaged one.
+- The question whether to delete a competition offers to export it first.
+- An empty or taken name of an entrant, and an empty name of a new competition,
+  are refused at their field, in one message instead of two.
+- German: "Sieger" for the winner, "höhere Sonneborn-Berger-Wertung" (and so
+  for Buchholz), "Vorherige Runde", and a clearer hint below the entry of
+  results.
 
 ## [0.1.0] - 2026-10-28
 

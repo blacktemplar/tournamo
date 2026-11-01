@@ -39,7 +39,9 @@ error-competition-unreadable = das Turnier kann nicht gelesen werden
 error-log-entry-unreadable = Eintrag { $position } des Protokolls kann nicht gelesen werden
 error-person-unreadable = der Name eines Teilnehmers kann nicht gelesen werden
 error-log-does-not-replay = das Protokoll lässt sich nicht nachspielen
-error-file-unreadable = die Datei ist kein Turnier, das diese Version öffnen kann
+error-file-no-competition = die Datei ist kein Turnier von Tournamo
+error-file-newer = die Datei stammt von einer neueren Version von Tournamo, die diese nicht öffnen kann; mit einem Neuladen der Seite kommt die neueste
+error-file-damaged = die Datei ist ein Turnier von Tournamo, aber beschädigt
 error-rejected = abgelehnt: { $reason }
 
 ## The form of a phase

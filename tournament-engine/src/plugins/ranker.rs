@@ -101,6 +101,7 @@ dyn_clone::clone_trait_object!(SliceRanker);
 /// #[plugin(
 ///     id = "my_crate::fewer_points",
 ///     label = "fewer points",
+///     description = "for games in which points count against, e.g. golf",
 ///     declare_static = requires_metric::<Self>
 /// )]
 /// struct FewerPoints;

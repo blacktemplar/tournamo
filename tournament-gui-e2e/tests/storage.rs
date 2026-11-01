@@ -85,6 +85,40 @@ async fn the_question_whether_to_delete_opens_at_cancel() {
     .await;
 }
 
+/// The question whether to delete offers to export the competition first, as it advises.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_question_whether_to_delete_offers_an_export() {
+    run(async |gui| {
+        gui.new_competition("Cup").await?;
+        gui.follow("All competitions").await?;
+        gui.click_labelled("Delete Cup").await?;
+
+        gui.click("Export").await?;
+
+        gui.page.expect_download("Cup.json").await?;
+        gui.expect_alert_dialog("Delete Cup?").await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Delete").await?;
+        gui.expect_competitions(&[]).await
+    })
+    .await;
+}
+
+/// A competition is created only with a name, which the field says.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_competition_without_a_name_is_refused_at_its_field() {
+    run(async |gui| {
+        gui.click("Create").await?;
+
+        gui.expect_field_error("competition-name", "A competition needs a name.")
+            .await?;
+        gui.page.check_accessibility().await
+    })
+    .await;
+}
+
 /// A tab showing a competition would go on saving it, so it is not deleted meanwhile.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -168,11 +202,40 @@ async fn a_file_that_is_no_competition_is_refused_with_its_detail_apart() {
 
         gui.import(&file).await?;
 
-        gui.expect_error("The file is no competition this version can open.")
+        gui.expect_error("The file is no competition of Tournamo.")
             .await?;
         gui.expect_error_detail("line 1 column 1").await?;
         gui.page.check_accessibility().await?;
         std::fs::remove_file(file).unwrap();
+        Ok(())
+    })
+    .await;
+}
+
+/// A file of a newer version, and one whose log does not load, are told apart from a file that is
+/// no competition.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_newer_or_damaged_competition_is_refused_for_that() {
+    run(async |gui| {
+        let newer = std::env::temp_dir().join(format!("newer-{}.json", std::process::id()));
+        std::fs::write(&newer, r#"{"format": 2, "log": {}, "people": []}"#).unwrap();
+        gui.import(&newer).await?;
+        gui.expect_error(
+            "The file is of a newer version of Tournamo, which this one cannot open; reload the \
+             page for the newest.",
+        )
+        .await?;
+        // another file, since choosing the same one again changes nothing
+        let damaged = std::env::temp_dir().join(format!("damaged-{}.json", std::process::id()));
+        std::fs::write(&damaged, r#"{"format": 1, "log": [{}], "people": []}"#).unwrap();
+
+        gui.import(&damaged).await?;
+
+        gui.expect_error("The file is a competition of Tournamo, but damaged.")
+            .await?;
+        std::fs::remove_file(newer).unwrap();
+        std::fs::remove_file(damaged).unwrap();
         Ok(())
     })
     .await;
@@ -188,7 +251,7 @@ async fn a_refusal_is_gone_once_the_next_action_is_done() {
         let file = std::env::temp_dir().join(format!("refused-{}.json", std::process::id()));
         std::fs::write(&file, "<html>").unwrap();
         gui.import(&file).await?;
-        gui.expect_error("The file is no competition this version can open.")
+        gui.expect_error("The file is no competition of Tournamo.")
             .await?;
 
         gui.rename_competition("Cup", "Cup 2026").await?;
@@ -207,7 +270,8 @@ async fn a_refusal_is_gone_once_the_next_action_is_done() {
 async fn a_refusal_is_gone_once_the_language_changes() {
     run(async |gui| {
         gui.click("Create").await?;
-        gui.expect_error("A competition needs a name.").await?;
+        gui.expect_field_error("competition-name", "A competition needs a name.")
+            .await?;
 
         gui.choose_language("Deutsch").await?;
 

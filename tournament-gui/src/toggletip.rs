@@ -16,7 +16,7 @@ use tournament_browser::channel::Events;
 use wasm_bindgen::JsCast as _;
 use web_sys::KeyboardEvent;
 
-use crate::{Page, i18n::t, icons};
+use crate::{Page, i18n::t, icons, sentence};
 
 /// What the toggletips of the page share.
 #[derive(Clone, Copy)]
@@ -80,7 +80,8 @@ impl Toggletips {
     }
 }
 
-/// A toggletip saying `text` about `subject`, e.g. the label of a plugin, which names its button
+/// A toggletip saying `text` as a sentence, see [`sentence`], about `subject`, e.g. the label of a
+/// plugin, which names its button
 /// for screen readers. `id` is that of the element of the text, unique on the page, which an
 /// element may name as its description.
 #[component]
@@ -153,7 +154,7 @@ pub fn Toggletip(id: String, subject: String, text: String) -> Element {
                 id: "{id}",
                 role: "tooltip",
                 style: pinned,
-                "{text}"
+                {sentence(&text)}
             }
         }
     }

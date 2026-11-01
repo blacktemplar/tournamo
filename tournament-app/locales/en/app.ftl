@@ -46,7 +46,9 @@ error-competition-unreadable = the competition cannot be read
 error-log-entry-unreadable = entry { $position } of the log cannot be read
 error-person-unreadable = an entrant’s name cannot be read
 error-log-does-not-replay = the log does not replay
-error-file-unreadable = the file is no competition this version can open
+error-file-no-competition = the file is no competition of Tournamo
+error-file-newer = the file is of a newer version of Tournamo, which this one cannot open; reload the page for the newest
+error-file-damaged = the file is a competition of Tournamo, but damaged
 # $reason: in English, why the engine refused an action
 error-rejected = { $reason }
 

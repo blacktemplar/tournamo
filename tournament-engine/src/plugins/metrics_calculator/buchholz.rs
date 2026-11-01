@@ -43,6 +43,7 @@ impl From<Score> for Buchholz {
 #[plugin(
     id = "tournament_engine::more_buchholz",
     label = "more Buchholz",
+    description = "a tie break favouring those who met stronger opponents",
     declare_static = requires_metric::<Self>
 )]
 pub struct MoreBuchholz;
@@ -141,6 +142,7 @@ impl From<Score> for BuchholzOfBuchholz {
 #[plugin(
     id = "tournament_engine::more_buchholz_of_buchholz",
     label = "more Buchholz of Buchholz",
+    description = "a tie break for when the Buchholz is level too, by the opponents’ opponents",
     declare_static = requires_metric::<Self>
 )]
 pub struct MoreBuchholzOfBuchholz;
@@ -244,6 +246,7 @@ impl From<Score> for SonnebornBerger {
 #[plugin(
     id = "tournament_engine::more_sonneborn_berger",
     label = "more Sonneborn-Berger",
+    description = "a tie break favouring those who beat or drew stronger opponents",
     declare_static = requires_metric::<Self>
 )]
 pub struct MoreSonnebornBerger;

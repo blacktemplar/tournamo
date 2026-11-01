@@ -17,7 +17,7 @@ use crate::{
     download,
     i18n::t,
     icons,
-    notices::Detail,
+    notices::{Detail, use_cleared_on_language_change},
     open,
     phase::focus_later,
     winners_text,
@@ -27,6 +27,9 @@ use crate::{
 pub fn Competitions() -> Element {
     let page = use_context::<Page>();
     let mut name = use_signal(String::new);
+    // why the name of a new competition was refused, shown at its field until it is changed
+    let mut name_error = use_signal(|| None::<Text>);
+    use_cleared_on_language_change(page.translator, name_error);
     // counts what other tabs saved, which may be a competition the list does not have yet
     let mut saved_elsewhere = use_signal(|| 0_u32);
     // counts the competitions renamed or deleted here
@@ -69,11 +72,11 @@ pub fn Competitions() -> Element {
                     onsubmit: move |event| {
                         event.prevent_default();
                         let chosen = name.peek().trim().to_owned();
-                        let mut error = page.error;
+                        let mut page_error = page.error;
+                        page_error.set(None);
                         if chosen.is_empty() {
-                            error.set(Some(Text::new("error-empty-competition-name")));
+                            name_error.set(Some(Text::new("error-empty-competition-name")));
                         } else {
-                            error.set(None);
                             store(page, Session::new(chosen));
                         }
                     },
@@ -83,9 +86,19 @@ pub fn Competitions() -> Element {
                         value: "{name}",
                         autocomplete: "off",
                         placeholder: tr.get("name"),
-                        oninput: move |event| name.set(event.value()),
+                        aria_invalid: name_error.read().is_some().then_some("true"),
+                        aria_describedby: "competition-name-error",
+                        oninput: move |event| {
+                            name_error.set(None);
+                            name.set(event.value());
+                        },
                     }
                     button { class: "primary", r#type: "submit", {tr.get("create")} }
+                    p { id: "competition-name-error", class: "error", role: "alert",
+                        if let Some(error) = name_error() {
+                            {tr.sentence(&error)}
+                        }
+                    }
                 }
                 // looks like a button; the input in it takes the focus and the file
                 label { class: "button file-button",
@@ -251,6 +264,15 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>) -> Element {
                             class: "primary danger",
                             onclick: move |_| _ = spawn(delete(page, key, asked, changed, error)),
                             {tr.get("delete")}
+                        }
+                        // what the description advises, without leaving the dialog
+                        button {
+                            r#type: "button",
+                            onclick: {
+                                let name = current.clone();
+                                move |_| export(page, key, name.clone())
+                            },
+                            {tr.get("export")}
                         }
                         button {
                             id: "delete-cancel",

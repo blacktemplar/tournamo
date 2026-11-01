@@ -36,6 +36,7 @@ impl AsRef<Score> for Points {
 #[plugin(
     id = "tournament_engine::more_points",
     label = "more points",
+    description = "usually the first criterion; the points set what each result is worth",
     declare_static = requires_metric::<Self>
 )]
 pub struct MorePoints;

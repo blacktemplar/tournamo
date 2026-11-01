@@ -174,7 +174,7 @@ pub struct ListInput {
     pub items: Vec<Item>,
     /// The plugins added after them since the others need them, see [`Draft::add_implied`]. They
     /// have nothing to configure, and go when nothing needs them any more.
-    pub implied: Vec<PluginOption>,
+    pub implied: Vec<Implied>,
     /// The plugins that can be added, ordered as [`PluginInput::options`].
     pub options: Vec<PluginOption>,
 }
@@ -199,13 +199,22 @@ impl ListInput {
     }
 }
 
+/// A plugin added to a list since others need it, see [`ListInput::implied`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Implied {
+    pub plugin: PluginOption,
+    /// The plugins of the phase that need it, e.g. the criterion ranking by the metric it
+    /// calculates, in the order of the fields of the phase.
+    pub needed_by: Vec<PluginOption>,
+}
+
 /// A plugin of a list, see [`ListInput::set`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SetEntry<'a> {
     /// One of [`ListInput::items`].
     Chosen(&'a Item),
     /// One of [`ListInput::implied`].
-    Implied(&'a PluginOption),
+    Implied(&'a Implied),
     /// One of [`ListInput::options`].
     Offered(&'a PluginOption),
 }
@@ -214,7 +223,8 @@ impl SetEntry<'_> {
     pub fn plugin(&self) -> &PluginOption {
         match self {
             Self::Chosen(item) => &item.plugin,
-            Self::Implied(plugin) | Self::Offered(plugin) => plugin,
+            Self::Implied(implied) => &implied.plugin,
+            Self::Offered(plugin) => plugin,
         }
     }
 }
@@ -238,31 +248,11 @@ pub struct PluginOption {
     pub id: &'static str,
     /// The label in English.
     pub label: &'static str,
-    /// What is said about it: its own description, or else that of the one plugin of the phase
-    /// providing what it requires, e.g. the metric a criterion ranks by.
-    pub description: Option<Description>,
+    /// What is said about it in English, translated as its
+    /// [`PluginText::Description`](crate::i18n::PluginText::Description).
+    pub description: Option<&'static str>,
     /// Whether the plugins chosen elsewhere recommend it here.
     pub recommended: bool,
-}
-
-/// The description of a plugin, see [`PluginOption::description`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Description {
-    /// The id of the plugin it is the description of, which translates it, see
-    /// [`PluginText::Description`](crate::i18n::PluginText::Description).
-    pub plugin: &'static str,
-    /// The description in English.
-    pub english: &'static str,
-}
-
-impl Description {
-    /// The description of `entry`, if it has one.
-    fn of(entry: &PluginEntry) -> Option<Self> {
-        Some(Self {
-            plugin: entry.id(),
-            english: entry.description()?,
-        })
-    }
 }
 
 impl PluginOption {
@@ -270,24 +260,10 @@ impl PluginOption {
         Self {
             id: entry.id(),
             label: entry.label(),
-            description: Description::of(entry).or_else(|| borrowed_description(entry)),
+            description: entry.description(),
             recommended,
         }
     }
-}
-
-/// The description of the one plugin of an axis of the phase that provides what `entry` requires
-/// and has a description; [`None`] if there is none or more than one.
-fn borrowed_description(entry: &PluginEntry) -> Option<Description> {
-    let schema = PhasePlugins::schema();
-    let mut described = schema
-        .fields()
-        .iter()
-        .filter_map(|field| field.kind().axis())
-        .flat_map(|axis| entry.providers_in(axis))
-        .filter_map(Description::of);
-    let only = described.next()?;
-    described.next().is_none().then_some(only)
 }
 
 impl PhaseForm {
@@ -714,7 +690,10 @@ impl PhaseForm {
                 .collect(),
             implied: implied
                 .into_iter()
-                .map(|entry| PluginOption::of(entry, recommended.contains(&entry.id())))
+                .map(|entry| Implied {
+                    plugin: PluginOption::of(entry, recommended.contains(&entry.id())),
+                    needed_by: needed_by(entry, axis, completed),
+                })
                 .collect(),
             options,
         }
@@ -849,6 +828,27 @@ fn plugins_in(axis: AnyAxis, answer: Option<&Value>) -> Vec<&'static PluginEntry
     answers
         .into_iter()
         .filter_map(|answer| axis.entry(PluginConfig::from_answer(answer)?.plugin()))
+        .collect()
+}
+
+/// The plugins answering the fields of the phase in `completed` that need `entry` of `axis`, in
+/// the order of the fields, by their static declarations, see [`PluginEntry::providers_in`].
+fn needed_by(entry: &PluginEntry, axis: AnyAxis, completed: &Config) -> Vec<PluginOption> {
+    PhasePlugins::schema()
+        .fields()
+        .iter()
+        .filter_map(|field| {
+            let answer = completed.get_at(&Path::ROOT.field(field.name()));
+            Some(plugins_in(field.kind().axis()?, answer))
+        })
+        .flatten()
+        .filter(|plugin| {
+            plugin
+                .providers_in(axis)
+                .iter()
+                .any(|provider| provider.id() == entry.id())
+        })
+        .map(|plugin| PluginOption::of(plugin, false))
         .collect()
 }
 

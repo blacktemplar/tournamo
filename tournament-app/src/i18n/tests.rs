@@ -154,7 +154,13 @@ fn an_error_says_in_english_what_its_display_says() {
         both(LoadError::<io::Error>::Person(
             serde_json::from_str::<u32>("x").unwrap_err(),
         )),
-        both(ImportError(serde_json::from_str::<u32>("x").unwrap_err())),
+        both(ImportError::NoCompetition(
+            serde_json::from_str::<u32>("x").unwrap_err(),
+        )),
+        both(ImportError::Newer(serde_json::from_str("1").unwrap())),
+        both(ImportError::Damaged(
+            serde_json::from_str::<u32>("x").unwrap_err(),
+        )),
         both(UndoReportError::DependedOn),
         both(UndoReportError::DependedOnBy(3)),
         both(NothingToUndo),

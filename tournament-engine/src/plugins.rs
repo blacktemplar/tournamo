@@ -29,8 +29,10 @@
 //!   command (not `Play a match for third place?`). A consumer prefixes it with the label of its
 //!   plugin, so it does not repeat that.
 //! - **A description says what the label leaves open**, as a lowercase phrase without a final
-//!   period: what a format does, what a metric counts, how a criterion treats its extremes
-//!   (`never having lost is best`), what an answer means. Leave it out rather than restate the
+//!   period: what a format does, what a metric counts, when to rank by a criterion (`a tie break
+//!   favouring those who met stronger opponents`) or how it treats its extremes (`never having
+//!   lost is best`), what an answer means. Every criterion has one, since its label does not say
+//!   when to choose it. Leave it out rather than restate the
 //!   label (no `more points are better` for `more points`).
 //! - **A field offers an answer**, with `#[plugin(default = ..)]`, wherever one value suits most
 //!   phases, e.g. the scoring of chess for points.
@@ -339,6 +341,19 @@ mod tests {
             if let Some(description) = field.description() {
                 check_text(description, "the description");
             }
+        }
+    }
+
+    /// A criterion's label says which way it sorts, but not when to choose it, which its
+    /// description says.
+    #[test]
+    fn every_criterion_is_described() {
+        for entry in AnyAxis::of::<dyn SliceRanker>().entries() {
+            assert!(
+                entry.description().is_some(),
+                "{} is not described",
+                entry.id()
+            );
         }
     }
 

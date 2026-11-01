@@ -30,13 +30,16 @@ pub struct Format {
 }
 
 /// A round of the phase as a list of rounds shows it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RoundSummary {
     pub round: NonZeroU32,
     /// The matches scheduled in the round.
     pub matches: usize,
     /// Those of [`Self::matches`] without a result.
     pub open: usize,
+    /// The stage every match of the round belongs to, which names the round, e.g. the
+    /// semifinals; `None` if they belong to several, or to none.
+    pub stage: Option<StageName>,
 }
 
 /// The matches and byes of a round.
@@ -312,11 +315,21 @@ pub struct StandingRow {
     /// How many matches it has a result of, which tells one that lost every match from one that
     /// has not played yet.
     pub played: usize,
-    /// One cell per column of [`Standings::columns`], `None` where the metric is not calculated,
-    /// said in the operator's language by [`Translator::cell`](crate::i18n::Translator::cell).
-    pub cells: Vec<Option<Cell>>,
+    /// One cell per column of [`Standings::columns`], `None` where the metric is not calculated.
+    pub cells: Vec<Option<StandingCell>>,
     /// The medal of its rank, once every match has a result; `None` before that.
     pub medal: Option<Medal>,
+}
+
+/// A cell of the standings.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum StandingCell {
+    /// What the calculator of the column shows, said in the operator's language by
+    /// [`Translator::cell`](crate::i18n::Translator::cell).
+    Metric(Cell),
+    /// A round of the phase, which the calculator shows as a phrase with the number `round`, e.g.
+    /// that of the first loss, named by the stage of the team's match or bye in it, e.g. the final.
+    Stage(StageName),
 }
 
 /// A medal of the first three ranks. Teams tied share the rank and its medal, and the next rank

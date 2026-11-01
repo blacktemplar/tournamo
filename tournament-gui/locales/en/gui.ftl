@@ -134,6 +134,8 @@ move-down = Move { $plugin } down
 remove-plugin = Remove { $plugin }
 # $plugin: a plugin added to a list since another one needs it
 implied-plugin = { $plugin }, since another one needs it
+# $needed_by: the plugins needing it, as a list
+implied-plugin-needed-by = { $plugin }, needed by { $needed_by }
 yes = yes
 no = no
 edit-phase = Edit phase
@@ -152,7 +154,8 @@ matches-and-standings = Matches & standings
 # the lists of matches to choose from: those playable now, and each round
 rounds = Rounds
 round = Round { $round }
-round-with-open = Round { $round } ({ $open } open)
+# $round: the name of the round, as `round` says it or the stage it is of
+round-with-open = { $round } ({ $open } open)
 # the matches whose entrants have played every round before
 playable-now = Playable now
 playable-now-count = Playable now ({ $count })
@@ -214,12 +217,12 @@ bracket-not-needed = not needed
 type-results = Type in results
 enter-result = Enter a result
 # $draws: yes if a match may end in a draw, else no
-enter-result-hint = the number of the match, then 1 if the side on the left won{ $draws ->
+enter-result-hint = Type the number of the match, then 1 if the side on the left won{ $draws ->
         [yes] , X for a draw,
        *[no] {""}
-    } or 2 if the side on the right won, e.g. “3 1”; or part of the winner's name, with the number of the match where it fits several{ $draws ->
-        [yes] {" "}and X for a draw, e.g. “ali”, “ali 5” or “ali X”
-       *[no] , e.g. “ali” or “ali 5”
+    } or 2 if the side on the right won, e.g. “3 1”. Or type part of the winner’s name, with the number of the match if it fits several{ $draws ->
+        [yes] {" "}and X for a draw, e.g. “ali”, “ali 5” or “ali X”.
+       *[no] , e.g. “ali” or “ali 5”.
     }
 # what the entry reports if submitted now; $result: what the message won or draw says
 result-entry-preview = Reports match { $number }: { $result }.

@@ -280,21 +280,21 @@ async fn a_column_of_the_standings_says_what_it_shows() {
 
         gui.expect_toggletip(Some(
             "Sonneborn-Berger: the points of the opponents that were beaten or played to a draw \
-             (weight of a beaten opponent: 1, weight of an opponent played to a draw: 0.5)",
+             (weight of a beaten opponent: 1, weight of an opponent played to a draw: 0.5).",
         ))
         .await?;
         gui.page.check_accessibility().await?;
         gui.click_labelled("About Points").await?;
         gui.expect_toggletip(Some(
-            "scored for every win, every draw and every bye (points for a win: 1, points for a \
-             draw: 0.5, points for a bye: 1)",
+            "Scored for every win, every draw and every bye (points for a win: 1, points for a \
+             draw: 0.5, points for a bye: 1).",
         ))
         .await?;
         gui.choose_language("Deutsch").await?;
         gui.click_labelled("Über Punkte").await?;
         gui.expect_toggletip(Some(
-            "für jeden Sieg, jedes Unentschieden und jedes Freilos (Punkte für einen Sieg: 1, \
-             Punkte für ein Unentschieden: 0,5, Punkte für ein Freilos: 1)",
+            "Für jeden Sieg, jedes Unentschieden und jedes Freilos (Punkte für einen Sieg: 1, \
+             Punkte für ein Unentschieden: 0,5, Punkte für ein Freilos: 1).",
         ))
         .await
     })
@@ -318,6 +318,30 @@ async fn the_entry_of_results_stays_as_it_was_left() {
         gui.toggle_result_entry().await?;
         gui.page.reload().await?;
         gui.expect_result_entry_open(false).await
+    })
+    .await;
+}
+
+/// The hint of the entry of results reads as a sentence.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_hint_of_the_entry_of_results_is_a_sentence() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob"]).await?;
+
+        gui.toggle_result_entry().await?;
+
+        gui.page
+            .expect_texts(
+                By::Id("result-entry-hint"),
+                &[
+                    "Type the number of the match, then 1 if the side on the left won, X for a \
+                   draw, or 2 if the side on the right won, e.g. “3 1”. Or type part of the \
+                   winner’s name, with the number of the match if it fits several and X for a \
+                   draw, e.g. “ali”, “ali 5” or “ali X”.",
+                ],
+            )
+            .await
     })
     .await;
 }
@@ -466,11 +490,42 @@ async fn reopening_a_result_a_later_one_depends_on_names_that_one() {
         for entry in ["1 1", "2 1", "3 1"] {
             gui.enter_result(entry).await?;
         }
-        gui.choose_round("Round 1").await?;
+        gui.choose_round("Semifinals").await?;
 
         gui.click_labelled("Reopen match 1").await?;
 
         gui.expect_error("The result of match 3 depends on this one; reopen that match first.")
+            .await
+    })
+    .await;
+}
+
+/// A round of a knockout whose matches are all of one stage is named by it, in the list of rounds,
+/// above its matches and in the standings, rather than by its number as well; one of several
+/// stages keeps its number.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_rounds_of_a_knockout_are_named_by_their_stages() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        // with the match for third place, which shares its round with the final
+        gui.choose_format("Single elimination").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+
+        gui.page
+            .expect_texts(By::Css("[aria-labelledby=matches] > h3"), &["Semifinals"])
+            .await?;
+        gui.expect_round_options(&["Semifinals (2 open)"]).await?;
+        gui.enter_result("1 1").await?;
+        gui.enter_result("2 1").await?;
+        gui.expect_round_options(&["Semifinals", "Round 2 (2 open)"])
+            .await?;
+        gui.enter_result("4 1").await?;
+        gui.enter_result("3 1").await?;
+        gui.expect_standings_cells("Lost in", &["-", "Final", "Semifinals", "Semifinals"])
             .await
     })
     .await;

@@ -13,7 +13,7 @@ use plugin_factory::{
 use tournament_engine::{
     Score,
     plugins::{
-        metrics_calculator::{Cell as MetricCell, MoreWins},
+        metrics_calculator::{Cell as MetricCell, MoreWins, RoundOfFirstLossCalculator},
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
@@ -27,7 +27,7 @@ use crate::{
     storage::{MemoryStorage, Progress, Stored},
     view::{
         BracketColumn, BracketEntry, BracketLine, BracketPart, BracketSection, BracketSource,
-        Medal, NameSearch, Outcome, Unplayed,
+        Medal, NameSearch, Outcome, StandingCell, Unplayed,
     },
 };
 
@@ -359,9 +359,10 @@ fn the_matches_are_listed_by_round_with_the_names_of_their_entrants() {
                 round: round(number),
                 matches: 2,
                 open: 2,
+                stage: None,
             })
             .collect::<Vec<_>>(),
-        "a round robin of four plays three rounds of two matches"
+        "a round robin of four plays three rounds of two matches, none of a stage"
     );
     let first = session.round(round(1)).unwrap();
     assert_eq!(
@@ -485,6 +486,55 @@ fn a_knockout_names_the_stage_of_every_match() {
     assert_eq!(last.new_matches, 0);
     assert_eq!(last.winners, session.winners());
     assert!(last.winners.is_some_and(|winners| winners.len() == 1));
+}
+
+/// A round whose matches are all of one stage is named by it, one of several stages is not.
+#[test]
+fn a_round_of_one_stage_is_named_by_it() {
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    for number in 1..=2 {
+        session
+            .report(numbered(&session, number), MatchResult::AWins)
+            .unwrap();
+    }
+
+    let stages: Vec<_> = session
+        .rounds()
+        .into_iter()
+        .map(|summary| english(summary.stage))
+        .collect();
+
+    assert_eq!(stages, [Some("Semifinals".to_owned()), None]);
+}
+
+/// A round a cell of the standings names, e.g. that of the first loss, is named by the stage of
+/// the entrant's match in it, also in a round of several stages.
+#[test]
+fn the_standings_name_the_round_of_a_cell_by_its_stage() {
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    for number in 1..=4 {
+        session
+            .report(numbered(&session, number), MatchResult::AWins)
+            .unwrap();
+    }
+
+    let standings = session.standings().unwrap();
+
+    let column = standings
+        .columns
+        .iter()
+        .position(|column| column.calculator == RoundOfFirstLossCalculator::ID)
+        .unwrap();
+    let lost_in: Vec<_> = standings
+        .rows
+        .iter()
+        .map(|row| match &row.cells[column] {
+            Some(StandingCell::Stage(stage)) => stage.stage.to_string(),
+            Some(StandingCell::Metric(MetricCell::Text(phrase))) => phrase.to_string(),
+            cell => panic!("{cell:?} is no round"),
+        })
+        .collect();
+    assert_eq!(lost_in, ["-", "Final", "Semifinals", "Semifinals"]);
 }
 
 /// Who `entry` is, as a test reads it: the names of a team, `bye`, or where a side not decided
@@ -924,7 +974,7 @@ fn the_standings_show_the_columns_of_the_metrics() {
         .rows
         .iter()
         .map(|row| match row.cells[0] {
-            Some(MetricCell::Number(points)) => points,
+            Some(StandingCell::Metric(MetricCell::Number(points))) => points,
             ref cell => panic!("{cell:?} is no number of points"),
         })
         .collect();
@@ -2012,18 +2062,57 @@ fn a_file_of_a_newer_format_is_not_imported_for_its_format() {
     // what a newer format might hold instead of a log
     file["log"] = serde_json::json!({ "entries": [] });
 
-    let Err(ImportError(error)) = Session::import(&file.to_string(), "cup", &[]) else {
-        panic!("a file of a newer format must not be imported");
-    };
+    let result = Session::import(&file.to_string(), "cup", &[]);
 
-    assert!(error.to_string().contains("format 2"), "{error}");
+    assert!(
+        matches!(result, Err(ImportError::Newer(format)) if format.to_string() == "2"),
+        "{:?}",
+        result.err()
+    );
 }
 
+/// A file that is no JSON, or no object with a log and people, is no competition at all.
 #[test]
 fn a_file_that_is_no_competition_is_not_imported() {
-    assert!(Session::import("", "cup", &[]).is_err());
-    assert!(Session::import(r#"{"people": []}"#, "cup", &[]).is_err());
-    assert!(Session::import(r#"{"log": [{}], "people": []}"#, "cup", &[]).is_err());
+    for file in [
+        "",
+        "<html>",
+        "[1, 2]",
+        r#"{"people": []}"#,
+        r#"{"format": "x"}"#,
+    ] {
+        let result = Session::import(file, "cup", &[]);
+
+        assert!(
+            matches!(result, Err(ImportError::NoCompetition(_))),
+            "{file}: {:?}",
+            result.err()
+        );
+    }
+}
+
+/// A file with a log and people that do not load is a competition, but damaged.
+#[test]
+fn a_damaged_competition_is_not_imported() {
+    let session = Given::new().started();
+    let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
+    file["log"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({}));
+
+    for file in [
+        file.to_string(),
+        r#"{"log": [{}], "people": []}"#.to_owned(),
+    ] {
+        let result = Session::import(&file, "cup", &[]);
+
+        assert!(
+            matches!(result, Err(ImportError::Damaged(_))),
+            "{:?}",
+            result.err()
+        );
+    }
 }
 
 /// A log written by a version with a plugin this one does not have, say, cannot be loaded, but the

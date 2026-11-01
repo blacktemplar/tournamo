@@ -107,6 +107,7 @@ move-up = { $plugin } nach oben schieben
 move-down = { $plugin } nach unten schieben
 remove-plugin = { $plugin } entfernen
 implied-plugin = { $plugin }, da ein anderes es braucht
+implied-plugin-needed-by = { $plugin }, gebraucht für { $needed_by }
 yes = ja
 no = nein
 edit-phase = Phase bearbeiten
@@ -122,12 +123,12 @@ view = Ansicht
 matches-and-standings = Spiele & Tabelle
 rounds = Runden
 round = Runde { $round }
-round-with-open = Runde { $round } ({ $open } offen)
+round-with-open = { $round } ({ $open } offen)
 playable-now = Jetzt spielbar
 playable-now-count = Jetzt spielbar ({ $count })
 by-round = Nach Runde
 matches-shown = Gezeigte Spiele
-previous-round = Vorige Runde
+previous-round = Vorherige Runde
 next-round = Nächste Runde
 nothing-playable = Gerade kann kein Spiel gespielt werden.
 match = Spiel
@@ -163,12 +164,12 @@ if-needed = falls nötig
 bracket-not-needed = nicht nötig
 type-results = Ergebnisse eintippen
 enter-result = Ergebnis eingeben
-enter-result-hint = die Nummer des Spiels, dann 1, wenn die linke Seite gewonnen hat{ $draws ->
+enter-result-hint = Tippe die Nummer des Spiels, dann 1, wenn die linke Seite gewonnen hat{ $draws ->
         [yes] , X für ein Unentschieden
        *[no] {""}
-    } oder 2, wenn die rechte Seite gewonnen hat, z. B. „3 1“; oder einen Teil des Namens des Siegers, mit der Nummer des Spiels, wo er zu mehreren passt{ $draws ->
-        [yes] {" "}und X für ein Unentschieden, z. B. „ali“, „ali 5“ oder „ali X“
-       *[no] , z. B. „ali“ oder „ali 5“
+    } oder 2, wenn die rechte Seite gewonnen hat, z. B. „3 1“. Oder tippe einen Teil des Namens des Siegers, falls er auf mehrere passt, mit der Nummer des Spiels{ $draws ->
+        [yes] {" "}und X für ein Unentschieden, z. B. „ali“, „ali 5“ oder „ali X“.
+       *[no] , z. B. „ali“ oder „ali 5“.
     }
 result-entry-preview = Meldet Spiel { $number }: { $result }.
 entry-found = Spiele zu „{ $text }“
@@ -217,6 +218,6 @@ no-name = (ohne Namen)
 team-separator = {" & "}
 list-separator = {", "}
 winners = { $count ->
-        [one] Sieg: { $winners }
+        [one] Sieger: { $winners }
        *[other] geteilter erster Platz: { $winners }
     }

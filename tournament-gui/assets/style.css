@@ -298,6 +298,17 @@ input::placeholder {
   flex: 1 1 8rem;
 }
 
+/* why the field was refused, below it and its button; no room, and no gap, while it says nothing,
+ * staying a live region all the same */
+.row > .error[role="alert"] {
+  width: 100%;
+  margin: 0;
+}
+
+.row > .error[role="alert"]:empty {
+  display: contents;
+}
+
 /* buttons that belong together, joined */
 .segmented {
   display: inline-flex;

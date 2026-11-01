@@ -10,7 +10,10 @@ use plugin_factory::{config::ConfigError, draft::Issue};
 use thiserror::Error;
 use tournament_engine::undoable_state_machine::{StateMachineError, TransitionError};
 
-use crate::i18n::{Message, Text};
+use crate::{
+    file::Format,
+    i18n::{Message, Text},
+};
 
 /// Why an entrant was not added.
 #[derive(Debug, Error)]
@@ -213,11 +216,24 @@ pub enum LoadError<E> {
     Replay(#[source] StateMachineError),
 }
 
-/// Why a file was not imported: it is no competition's file, or holds a log that does not replay,
-/// e.g. one of a plugin this version does not have. Its source says where.
+/// Why a file was not imported.
 #[derive(Debug, Error)]
-#[error("the file is no competition this version can open")]
-pub struct ImportError(#[source] pub serde_json::Error);
+pub enum ImportError {
+    /// The file is no JSON object holding a log and people; the source says where reading it
+    /// stopped.
+    #[error("the file is no competition of Tournamo")]
+    NoCompetition(#[source] serde_json::Error),
+    /// The file is of this format, newer than [`Format::CURRENT`](crate::file::Format::CURRENT).
+    #[error(
+        "the file is of a newer version of Tournamo, which this one cannot open; reload the page \
+         for the newest"
+    )]
+    Newer(Format),
+    /// The file holds a log and people that do not load, e.g. a log of a plugin this version does
+    /// not have; the source says where.
+    #[error("the file is a competition of Tournamo, but damaged")]
+    Damaged(#[source] serde_json::Error),
+}
 
 impl Message for AddEntrantError {
     fn text(&self) -> Text {
@@ -394,7 +410,13 @@ impl<E: Display> Message for LoadError<E> {
 
 impl Message for ImportError {
     fn text(&self) -> Text {
-        Text::new("error-file-unreadable").with_detail(self.0.to_string())
+        match self {
+            Self::NoCompetition(error) => {
+                Text::new("error-file-no-competition").with_detail(error.to_string())
+            }
+            Self::Newer(_) => Text::new("error-file-newer"),
+            Self::Damaged(error) => Text::new("error-file-damaged").with_detail(error.to_string()),
+        }
     }
 }
 

@@ -405,8 +405,15 @@ fn a_calculator_needed_and_without_fields_is_implied() {
 
     let view = form.view();
     let metrics = list(&view, "metrics");
-    let implied: Vec<_> = metrics.implied.iter().map(|option| option.id).collect();
-    assert_eq!(implied, [BuchholzCalculator::ID]);
+    let implied: Vec<_> = metrics
+        .implied
+        .iter()
+        .map(|implied| {
+            let needed_by: Vec<_> = implied.needed_by.iter().map(|option| option.id).collect();
+            (implied.plugin.id, needed_by)
+        })
+        .collect();
+    assert_eq!(implied, [(BuchholzCalculator::ID, vec![MoreBuchholz::ID])]);
     assert!(
         metrics
             .options
@@ -583,41 +590,29 @@ fn the_form_of_a_new_phase_starts_out_at_the_phase_whose_adding_was_undone() {
     ));
 }
 
-/// A criterion says no more than how it ranks, so it is described by what describes its metric,
-/// while a plugin with a description of its own has that.
+/// A plugin is described by its own description, a criterion by when to rank by it rather than by
+/// what its metric is.
 #[test]
-fn a_plugin_without_a_description_has_that_of_the_provider_of_what_it_needs() {
+fn a_plugin_has_its_own_description() {
     let view = new_form().view();
-    let described_by = |options: &[PluginOption], id| {
-        let option = options.iter().find(|option| option.id == id).unwrap();
-        option.description.map(|description| description.plugin)
-    };
     let ranking = list(&view, "ranking");
-    let chosen: Vec<_> = ranking.items.iter().map(|item| item.plugin).collect();
-
-    assert_eq!(
-        described_by(&chosen, MorePoints::ID),
-        Some(PointsCalculator::ID)
-    );
-    assert_eq!(
-        described_by(&ranking.options, MoreBuchholz::ID),
-        Some(BuchholzCalculator::ID)
-    );
-    assert_eq!(
-        described_by(&ranking.options, LaterFirstLoss::ID),
-        Some(LaterFirstLoss::ID)
-    );
+    let more_points = ranking
+        .items
+        .iter()
+        .find(|item| item.plugin.id == MorePoints::ID);
     let metrics = list(&view, "metrics");
     let points = metrics
         .items
         .iter()
         .find(|item| item.plugin.id == PointsCalculator::ID);
+
+    assert_eq!(
+        more_points.unwrap().plugin.description,
+        Some("usually the first criterion; the points set what each result is worth")
+    );
     assert_eq!(
         points.unwrap().plugin.description,
-        Some(Description {
-            plugin: PointsCalculator::ID,
-            english: "scored for every win, every draw and every bye",
-        })
+        Some("scored for every win, every draw and every bye")
     );
 }
 

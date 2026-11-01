@@ -349,6 +349,20 @@ fn capitalized(label: &str) -> String {
     capitalized
 }
 
+/// `phrase`, a lowercase fragment like a plugin's description, as a sentence: capitalized, with a
+/// final period unless it ends with a mark of its own.
+fn sentence(phrase: &str) -> String {
+    let mut sentence = capitalized(phrase);
+    let last = sentence
+        .trim_end_matches(['\u{2068}', '\u{2069}'])
+        .chars()
+        .last();
+    if last.is_some_and(|last| !matches!(last, '.' | '!' | '?' | '…')) {
+        sentence.push('.');
+    }
+    sentence
+}
+
 /// What a screen says of the teams that won a competition, each by the names of its entrants: the
 /// winner, or those tied for first.
 fn winners_text(tr: &Translator, winners: &[Vec<Option<String>>]) -> String {

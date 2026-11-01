@@ -838,6 +838,30 @@ impl Gui {
             .await
     }
 
+    /// Waits until the field whose id is `field` shows why the last action was refused, `text`, as
+    /// the only refusal on the screen, and is marked invalid and described by it.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what the screen shows instead.
+    pub async fn expect_field_error(&self, field: &str, text: &str) -> WebDriverResult<()> {
+        self.expect_error(text).await?;
+        self.page
+            .expect_texts(
+                By::Css(format!(
+                    "#{field}[aria-invalid=true] ~ [role=alert]#{field}-error"
+                )),
+                &[text],
+            )
+            .await?;
+        self.driver
+            .query(By::Css(format!(
+                "#{field}[aria-describedby~={field}-error]"
+            )))
+            .first()
+            .await?;
+        Ok(())
+    }
+
     /// Unfolds the detail of the refusal shown, and waits until it contains `part`.
     ///
     /// # Panics
@@ -924,6 +948,49 @@ impl Gui {
             .await?;
         Page::pause().await;
         Ok(())
+    }
+
+    /// Waits until the rounds to choose from, while the matches are shown by round, read `texts`,
+    /// e.g. `"Round 2 (2 open)"`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they read instead.
+    pub async fn expect_round_options(&self, texts: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("select#round option"), texts)
+            .await
+    }
+
+    /// Waits until the cells of the column of the standings whose header starts with `header` are
+    /// `cells`, best first.
+    ///
+    /// # Panics
+    /// Panics if there is no such column, or its cells are not `cells` in time, with what they are
+    /// instead.
+    pub async fn expect_standings_cells(
+        &self,
+        header: &str,
+        cells: &[&str],
+    ) -> WebDriverResult<()> {
+        let headers = self
+            .driver
+            .query(By::Css("#standing-list thead th"))
+            .all_from_selector_required()
+            .await?;
+        let mut column = None;
+        for (index, th) in headers.iter().enumerate() {
+            if th.text().await?.starts_with(header) {
+                column = Some(index + 1);
+                break;
+            }
+        }
+        let column = column.unwrap_or_else(|| panic!("the standings have no column {header:?}"));
+        self.page
+            .expect_texts(
+                By::Css(format!("#standing-list tbody tr > :nth-child({column})")),
+                cells,
+            )
+            .await
     }
 
     /// Waits until the results of the matches of the round shown that have one are `results`, in

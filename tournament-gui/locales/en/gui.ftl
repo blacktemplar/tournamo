@@ -76,6 +76,8 @@ export-competition = Export { $name }
 rename = Rename
 rename-competition = Rename { $name }
 rename-title = Rename { $name }
+# said while a name is typed that another competition has; it is taken all the same
+competition-name-taken = Another competition is named “{ $name }” already.
 delete = Delete
 delete-competition = Delete { $name }
 delete-title = Delete { $name }?

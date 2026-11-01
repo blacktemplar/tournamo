@@ -65,6 +65,33 @@ async fn a_competition_is_renamed_and_deleted_from_the_list() {
     .await;
 }
 
+/// A name another competition has is pointed out while typed, when creating one and when renaming
+/// one, though not the one's own name; it is taken all the same.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_name_another_competition_has_is_pointed_out() {
+    run(async |gui| {
+        gui.new_competition("Cup").await?;
+        gui.follow("All competitions").await?;
+
+        gui.type_competition_name("Cup").await?;
+
+        gui.expect_name_taken(Some("Another competition is named “Cup” already."))
+            .await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Create").await?;
+        gui.expect_open("Cup").await?;
+        gui.follow("All competitions").await?;
+        gui.expect_name_taken(None).await?;
+        gui.click_labelled("Rename Cup").await?;
+        gui.expect_name_taken(Some("Another competition is named “Cup” already."))
+            .await?;
+        gui.type_new_name("League").await?;
+        gui.expect_name_taken(None).await
+    })
+    .await;
+}
+
 /// Deleting cannot be undone, so the dialog asking opens at Cancel, and a double Enter on the
 /// button opening it deletes nothing.
 #[tokio::test]

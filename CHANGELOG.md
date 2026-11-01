@@ -16,6 +16,8 @@ a file whose `"format"` changes is migrated, not refused.
   rather than removed and added again. Renaming is not undone by Undo.
 - A list pasted into the name of a new entrant adds an entrant for each of its
   lines, or nobody if one of the names is taken.
+- Naming a new competition, or renaming one, as another one is named says so
+  while it is typed.
 
 ### Changed
 

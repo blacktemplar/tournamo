@@ -60,6 +60,7 @@ export-competition = { $name } exportieren
 rename = Umbenennen
 rename-competition = { $name } umbenennen
 rename-title = { $name } umbenennen
+competition-name-taken = Ein anderes Turnier heißt schon „{ $name }“.
 delete = Löschen
 delete-competition = { $name } löschen
 delete-title = { $name } löschen?

@@ -853,12 +853,14 @@ footer a,
 /* the start, apart from the phase above it */
 /* below the field and its button; no room, and no gap, while it says nothing, staying a live
  * region all the same */
-#entrant-like {
+#entrant-like,
+.name-taken {
   width: 100%;
   margin: 0;
 }
 
-#entrant-like:empty {
+#entrant-like:empty,
+.name-taken:empty {
   display: contents;
 }
 

@@ -49,6 +49,18 @@ pub struct Listing {
     pub progress: Option<Progress>,
 }
 
+impl Listing {
+    /// Whether a competition of `listings` other than `besides`, e.g. the one being renamed, is
+    /// named `name`, without the spaces around it, so that an operator naming another one so may
+    /// want to know.
+    pub fn is_taken(listings: &[Self], name: &str, besides: Option<CompetitionKey>) -> bool {
+        let name = name.trim();
+        listings
+            .iter()
+            .any(|listing| Some(listing.key) != besides && listing.name == name)
+    }
+}
+
 /// How far a competition is, as a list of competitions shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Progress {
@@ -265,5 +277,32 @@ impl Storage for MemoryStorage {
     async fn delete(&self, key: CompetitionKey) -> Result<(), Infallible> {
         self.0.borrow_mut().shift_remove(&key);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn a_name_is_taken_by_another_competition_only() {
+        let listing = |number, name: &str| Listing {
+            key: CompetitionKey::new(Uuid::from_u128(number)),
+            name: name.to_owned(),
+            progress: None,
+        };
+        let listings = [listing(1, "Cup"), listing(2, "League")];
+
+        assert!(Listing::is_taken(&listings, " Cup ", None));
+        assert!(!Listing::is_taken(&listings, "Cup", Some(listings[0].key)));
+        assert!(Listing::is_taken(
+            &listings,
+            "League",
+            Some(listings[0].key)
+        ));
+        assert!(!Listing::is_taken(&listings, "Final", None));
     }
 }

@@ -133,11 +133,42 @@ impl Gui {
     /// button opens.
     pub async fn rename_competition(&self, name: &str, new_name: &str) -> WebDriverResult<()> {
         self.click_labelled(&format!("Rename {name}")).await?;
+        self.type_new_name(new_name).await?;
+        self.click("Rename").await
+    }
+
+    /// Types `name` over the name in the dialog renaming a competition, without renaming it.
+    pub async fn type_new_name(&self, name: &str) -> WebDriverResult<()> {
         let input = self.driver.query(By::Id("new-name")).first().await?;
         input.clear().await?;
-        input.send_keys(new_name).await?;
+        input.send_keys(name).await?;
         Page::pause().await;
-        self.click("Rename").await
+        Ok(())
+    }
+
+    /// Types `name` into the field of a new competition's name, without creating it.
+    pub async fn type_competition_name(&self, name: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::Id("competition-name"))
+            .first()
+            .await?;
+        input.send_keys(name).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the field of a competition's name shown, that of a new one or of renaming one,
+    /// says that another competition is named as typed, `Some` of what it says, or says nothing
+    /// for `None`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_name_taken(&self, text: Option<&str>) -> WebDriverResult<()> {
+        let texts: Vec<&str> = text.into_iter().collect();
+        self.page
+            .expect_texts(By::Css(".name-taken:not(:empty)"), &texts)
+            .await
     }
 
     /// Asks to delete the competition `name` of the list of competitions, and confirms it in the

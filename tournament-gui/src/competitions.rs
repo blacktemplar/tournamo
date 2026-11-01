@@ -6,7 +6,7 @@ use futures_util::StreamExt as _;
 use tournament_app::{
     i18n::{Message as _, Text, Translator},
     session::Session,
-    storage::{CompetitionKey, Progress, Storage as _},
+    storage::{CompetitionKey, Listing, Progress, Storage as _},
 };
 use tournament_browser::{channel::Broadcast, lock};
 
@@ -62,6 +62,7 @@ pub fn Competitions() -> Element {
         Some(Err(why)) => (Vec::new(), Some(why.clone())),
         None => (Vec::new(), None),
     };
+    let taken = Listing::is_taken(&listings, &name.read(), None).then(|| name.read().clone());
     rsx! {
         main { class: "narrow",
             Notices {}
@@ -87,7 +88,7 @@ pub fn Competitions() -> Element {
                         autocomplete: "off",
                         placeholder: tr.get("name"),
                         aria_invalid: name_error.read().is_some().then_some("true"),
-                        aria_describedby: "competition-name-error",
+                        aria_describedby: "competition-name-error competition-name-taken",
                         oninput: move |event| {
                             name_error.set(None);
                             name.set(event.value());
@@ -99,6 +100,7 @@ pub fn Competitions() -> Element {
                             {tr.sentence(&error)}
                         }
                     }
+                    NameTaken { id: "competition-name-taken", name: taken }
                 }
                 // looks like a button; the input in it takes the focus and the file
                 label { class: "button file-button",
@@ -128,7 +130,7 @@ pub fn Competitions() -> Element {
                 }
                 // the latest first, which is the one most likely to be played
                 ul { id: "competition-list",
-                    for listing in listings.into_iter().rev() {
+                    for listing in listings.iter().rev().cloned() {
                         li { key: "{listing.key}",
                             div { class: "listing",
                                 a { class: "name", href: "#{listing.key}", "{listing.name}" }
@@ -174,7 +176,22 @@ pub fn Competitions() -> Element {
                     }
                 }
             }
-            AskDialog { asked, changed }
+            AskDialog { asked, changed, listings }
+        }
+    }
+}
+
+/// Says, as it is typed, that another competition is named `name` already, if `Some`; it is taken
+/// all the same, as an import numbers it instead. `id` is that of the element saying it.
+#[component]
+fn NameTaken(id: String, name: Option<String>) -> Element {
+    let page = use_context::<Page>();
+    let tr = page.translator.read();
+    rsx! {
+        p { id, class: "warnings name-taken", role: "status",
+            if let Some(name) = name {
+                {t!(tr, "competition-name-taken", name = name.trim())}
+            }
         }
     }
 }
@@ -188,10 +205,10 @@ enum Ask {
     Delete { key: CompetitionKey, name: String },
 }
 
-/// The dialog asking what `asked` asks, if anything; once done, `changed` counts on, which reads
-/// the list anew.
+/// The dialog asking what `asked` asks, if anything, about a competition of `listings`; once done,
+/// `changed` counts on, which reads the list anew.
 #[component]
-fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>) -> Element {
+fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>, listings: Vec<Listing>) -> Element {
     let page = use_context::<Page>();
     let mut error = use_signal(|| None::<Text>);
     let mut name = use_signal(String::new);
@@ -237,7 +254,13 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>) -> Element {
                             id: "new-name",
                             value: "{name}",
                             autocomplete: "off",
+                            aria_describedby: "new-name-taken",
                             oninput: move |event| name.set(event.value()),
+                        }
+                        NameTaken {
+                            id: "new-name-taken",
+                            name: Listing::is_taken(&listings, &name.read(), Some(key))
+                                .then(|| name.read().clone()),
                         }
                         p { class: "error", role: "alert",
                             if let Some(error) = error() {

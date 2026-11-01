@@ -1230,14 +1230,22 @@ ul.summary-items {
 
 /* The matches */
 
-/* the heading of a card with a control on its right, e.g. the one showing the entry of results */
+/* the heading of a card with a control on its right, e.g. the one showing the entry of results;
+ * as high without it, so that the finish, which hides that one, moves nothing */
 .card-heading {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  min-height: 2.25rem;
   margin-bottom: var(--space-3);
   gap: var(--space-2);
+}
+
+@media (pointer: coarse) {
+  .card-heading {
+    min-height: var(--control);
+  }
 }
 
 .card-heading h2 {

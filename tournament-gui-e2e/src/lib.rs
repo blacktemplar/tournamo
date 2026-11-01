@@ -728,7 +728,8 @@ impl Gui {
         Ok(())
     }
 
-    /// Waits until the toggletip shown says `text`, or until none is shown for `None`.
+    /// Waits until the toggletip shown says `text`, ignoring [`ISOLATION_MARKS`], or until none is
+    /// shown for `None`.
     ///
     /// # Panics
     /// Panics if it does not in time, or if what it says is cut off or out of the window.
@@ -736,10 +737,14 @@ impl Gui {
         let shown = By::Css(".toggletip-text");
         match text {
             Some(text) => {
+                let saying = || {
+                    let text = text.to_owned();
+                    move |found: &str| found.replace(ISOLATION_MARKS, "") == text
+                };
                 self.page
                     .expect(
                         shown.clone(),
-                        |query| query.and_displayed().with_text(text.to_owned()),
+                        |query| query.and_displayed().with_text(saying()),
                         &format!("a toggletip shown saying {text:?}"),
                     )
                     .await?;
@@ -747,7 +752,7 @@ impl Gui {
                     .driver
                     .query(shown)
                     .and_displayed()
-                    .with_text(text.to_owned())
+                    .with_text(saying())
                     .first()
                     .await?;
                 // the middle of each edge (its corners are round) shows the text, not something
@@ -1381,6 +1386,39 @@ impl Gui {
         assert!(
             shown.wait_until_gone().await.is_ok(),
             "the entry of results must be closed"
+        );
+        Ok(())
+    }
+
+    /// Waits until the hint of the open entry of results is folded behind a toggletip, if
+    /// `folded`, or else shows below the entry.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_result_entry_hint_folded(&self, folded: bool) -> WebDriverResult<()> {
+        let (by, expected) = if folded {
+            (
+                ".result-entry .toggletip-text#result-entry-hint",
+                "the hint folded behind a toggletip",
+            )
+        } else {
+            ("p#result-entry-hint", "the hint shown")
+        };
+        self.page.expect(By::Css(by), |query| query, expected).await
+    }
+
+    /// Waits until neither the entry of results nor the button showing it is on the page, as
+    /// once every match has a result.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_no_result_entry(&self) -> WebDriverResult<()> {
+        let entry = self
+            .driver
+            .query(By::Css("#result-entry, #result-entry-toggle"));
+        assert!(
+            entry.wait_until_gone().await.is_ok(),
+            "the entry of results must be gone"
         );
         Ok(())
     }

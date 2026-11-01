@@ -94,7 +94,7 @@ pub fn Rounds() -> Element {
     let focus = use_signal(|| None::<Focus>);
     let on_heading_mounted = use_focus(focus, Focus::Heading);
     // whether the entry of results typed in is shown
-    let typing = use_signal(result_entry_open);
+    let typing = use_signal(|| remembered(RESULT_ENTRY_OPEN));
     // what is typed into it, which while there is any shows the matches it fits instead
     let entry = use_signal(String::new);
     let session = ctx.session.read();
@@ -110,8 +110,10 @@ pub fn Rounds() -> Element {
         .unwrap_or(Shown::Round(current));
     let playable = session.playable();
     let draws = session.round(current).is_some_and(|round| round.draws);
+    // once every match has a result, there is nothing left to type in until one is reopened
+    let finished = rounds.iter().all(|summary| summary.open == 0);
     let entered = entry.read().trim().to_owned();
-    let entered = (typing() && !entered.is_empty()).then(|| {
+    let entered = (typing() && !finished && !entered.is_empty()).then(|| {
         let read = session.read_entered(&entered);
         (entered, read.found, read.report.ok().map(|row| row.id))
     });
@@ -168,10 +170,12 @@ pub fn Rounds() -> Element {
             div { class: "card-heading",
                 // focused at the start
                 h2 { id: "matches", tabindex: "-1", {tr.get("matches")} }
-                ResultEntryToggle { open: typing }
+                if !finished {
+                    ResultEntryToggle { open: typing }
+                }
             }
-            if typing() {
-                ResultEntry { draws, entry }
+            if typing() && !finished {
+                ResultEntry { draws, entry, focus }
             }
             // out of the way while the matches shown are those the entry fits, which they would not
             // change
@@ -336,7 +340,7 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
             onclick: move |_| {
                 let opened = !open();
                 open.set(opened);
-                remember_result_entry_open(opened);
+                remember(RESULT_ENTRY_OPEN, opened);
             },
             {tr.get("type-results")}
             icons::ChevronDown {}
@@ -345,12 +349,14 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
 }
 
 /// Reports a result typed in as `entry`, the number of its match and the result, e.g. "3 1", or
-/// part of the winner's name, saying while it is typed what it would report, or why nothing.
+/// part of the winner's name, saying while it is typed what it would report, or why nothing. Its
+/// hint folds behind a toggletip once a result typed in was reported in this browser.
 #[component]
-fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
+fn ResultEntry(draws: bool, entry: Signal<String>, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
     // why what was entered last was not reported, until it is changed
     let mut error = use_signal(|| None::<Text>);
+    let mut used = use_signal(|| remembered(RESULT_ENTRY_USED));
     // only reported by the tab that changes the competition
     let disabled = !ctx.changes();
     // the match and result reported if submitted now, or why none; nothing while nothing is typed
@@ -369,6 +375,11 @@ fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
         ),
         Err(why) => ("preview hint", tr.sentence(&why.text())),
     });
+    let hint = t!(
+        tr,
+        "enter-result-hint",
+        draws = if draws { "yes" } else { "no" }
+    );
     rsx! {
         form {
             class: "result-entry",
@@ -380,6 +391,14 @@ fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
                         ctx.announce(Announcement::Reported(reported));
                         entry.set(String::new());
                         error.set(None);
+                        if !used() {
+                            used.set(true);
+                            remember(RESULT_ENTRY_USED, true);
+                        }
+                        // the entry is gone with the last result, and the focus with it
+                        if ctx.session.peek().winners().is_some() {
+                            focus.set(Some(Focus::Heading));
+                        }
                     }
                     Err(refused) => error.set(Some(refused)),
                 }
@@ -399,6 +418,13 @@ fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
             }
             " "
             button { r#type: "submit", disabled, {tr.get("report")} }
+            if used() {
+                Toggletip {
+                    id: "result-entry-hint",
+                    subject: tr.get("typing-results"),
+                    text: hint.clone(),
+                }
+            }
             p { id: "result-entry-error", class: "error", role: "alert",
                 if let Some(error) = error() {
                     {tr.sentence(&error)}
@@ -414,8 +440,8 @@ fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
                     p { id: "result-entry-preview", class, role: "status", {text} }
                 }
             }
-            p { id: "result-entry-hint", class: "hint",
-                {t!(tr, "enter-result-hint", draws = if draws { "yes" } else { "no" })}
+            if !used() {
+                p { id: "result-entry-hint", class: "hint", {hint} }
             }
         }
     }
@@ -424,20 +450,25 @@ fn ResultEntry(draws: bool, entry: Signal<String>) -> Element {
 /// Where the browser remembers that the operator opened the entry of results.
 const RESULT_ENTRY_OPEN: &str = "tournamo.result-entry-open";
 
-/// Whether the operator left the entry of results open in this browser.
-fn result_entry_open() -> bool {
+/// Where the browser remembers that a result typed in was reported, after which the hint of the
+/// entry is folded.
+const RESULT_ENTRY_USED: &str = "tournamo.result-entry-used";
+
+/// Whether this browser remembers `key`, see [`remember`].
+fn remembered(key: &str) -> bool {
     local_storage()
-        .and_then(|storage| storage.get_item(RESULT_ENTRY_OPEN).ok().flatten())
+        .and_then(|storage| storage.get_item(key).ok().flatten())
         .is_some()
 }
 
-fn remember_result_entry_open(open: bool) {
-    // without local storage, the entry is closed again on the next visit
+/// Makes this browser remember `key` if `set`, or else forget it.
+fn remember(key: &str, set: bool) {
+    // without local storage, it is forgotten on the next visit
     if let Some(storage) = local_storage() {
-        _ = if open {
-            storage.set_item(RESULT_ENTRY_OPEN, "true")
+        _ = if set {
+            storage.set_item(key, "true")
         } else {
-            storage.remove_item(RESULT_ENTRY_OPEN)
+            storage.remove_item(key)
         };
     }
 }

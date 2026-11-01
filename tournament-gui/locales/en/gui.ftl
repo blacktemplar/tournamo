@@ -216,6 +216,8 @@ bracket-not-needed = not needed
 # what opens the field reporting results typed in
 type-results = Type in results
 enter-result = Enter a result
+# what the toggletip holding the hint below is about, once a result typed in was reported
+typing-results = typing in results
 # $draws: yes if a match may end in a draw, else no
 enter-result-hint = Type the number of the match, then 1 if the side on the left won{ $draws ->
         [yes] , X for a draw,

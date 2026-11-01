@@ -103,6 +103,9 @@ a file whose `"format"` changes is migrated, not refused.
 - The field of a new entrant keeps room for a name beside a long button.
 - On the narrowest phones, cards and the buttons of a match take less padding,
   so that a long word of a name fits beside the buttons in wider fonts too.
+- Once a result typed in was reported, the hint below the entry of results
+  folds behind its ⓘ, and once every match has a result, the entry is gone
+  until a match is reopened.
 
 ## [0.1.0] - 2026-10-28
 

@@ -164,6 +164,7 @@ if-needed = falls nötig
 bracket-not-needed = nicht nötig
 type-results = Ergebnisse eintippen
 enter-result = Ergebnis eingeben
+typing-results = das Eintippen von Ergebnissen
 enter-result-hint = Tippe die Nummer des Spiels, dann 1, wenn die linke Seite gewonnen hat{ $draws ->
         [yes] , X für ein Unentschieden
        *[no] {""}

@@ -346,6 +346,41 @@ async fn the_hint_of_the_entry_of_results_is_a_sentence() {
     .await;
 }
 
+/// Once a result typed in is reported, the hint of the entry folds behind a toggletip, also after a
+/// reload. Once every match has a result, the entry is gone, the focus on the heading of the round,
+/// until a match is reopened.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_entry_of_results_folds_its_hint_and_goes_once_finished() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
+        gui.toggle_result_entry().await?;
+        gui.expect_result_entry_hint_folded(false).await?;
+
+        gui.enter_result("1 1").await?;
+
+        gui.expect_result_entry_hint_folded(true).await?;
+        gui.click_labelled("About typing in results").await?;
+        gui.expect_toggletip(Some(
+            "Type the number of the match, then 1 if the side on the left won, X for a draw, or 2 \
+             if the side on the right won, e.g. “3 1”. Or type part of the winner’s name, with \
+             the number of the match if it fits several and X for a draw, e.g. “ali”, “ali 5” or \
+             “ali X”.",
+        ))
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.page.reload().await?;
+        gui.expect_result_entry_hint_folded(true).await?;
+        gui.enter_result("2 1").await?;
+        gui.enter_result("3 1").await?;
+        gui.expect_no_result_entry().await?;
+        gui.expect_focus("Round 3").await?;
+        gui.click_labelled("Reopen match 3").await?;
+        gui.expect_result_entry_open(true).await
+    })
+    .await;
+}
+
 /// After a result is reported by its button, the focus moves on to the next match without one,
 /// and to the heading of the round once there is none.
 #[tokio::test]

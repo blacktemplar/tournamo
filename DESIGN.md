@@ -605,7 +605,8 @@ undo entry naming its target. Operations appending an action take the history
 - **Per session, outside the log**: with a shared log, an operator's undo must
   revert what they did, not what was pulled in or done in another session. A
   loaded competition has nothing to undo; a single result can still be undone
-  by `undo_match_result`.
+  by `undo_match_result`. The GUI says so under the pointer on Undo while it
+  has nothing to undo, since a reload or another tab taking over loses it.
 - **A targeted undo is an action**: after `undo-report`, `undo` brings the
   result back.
 - **Explicit targets**, so an undo means the same however logs are merged.

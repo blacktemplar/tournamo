@@ -9,6 +9,7 @@ theme-light = Hell
 theme-dark = Dunkel
 undo = Rückgängig
 redo = Wiederherstellen
+undo-since-opened = Rückgängig umfasst, was hier seit dem Öffnen dieses Turniers getan wurde. Um ein Ergebnis von davor zu ändern, öffne sein Spiel wieder.
 undo-start-title = Start rückgängig machen?
 undo-start-description = Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phase geändert werden können. Wiederherstellen startet es wieder.
 undo-start = Start rückgängig machen

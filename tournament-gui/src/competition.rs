@@ -253,6 +253,13 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
     // whether the operator is asked to confirm undoing the start
     let mut undoing_start = use_signal(|| false);
     let tr = ctx.translator.read();
+    // the label of Undo under the pointer as well, where only its icon shows; while there is
+    // nothing to undo, why, since the history is gone after a reload, for one
+    let undo_title = if changes && !actions.undo {
+        tr.get("undo-since-opened")
+    } else {
+        tr.get("undo")
+    };
     let export = move || {
         let session = ctx.session.peek();
         download(page, session.name(), &session.export());
@@ -276,8 +283,8 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                         undo(ctx);
                     }
                 },
-                // the label under the pointer as well, where only the icon shows
-                title: tr.get("undo"),
+                aria_label: tr.get("undo"),
+                title: undo_title,
                 icons::Undo {}
                 span { class: "bar-label", {tr.get("undo")} }
             }

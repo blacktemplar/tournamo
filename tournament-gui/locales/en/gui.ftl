@@ -12,6 +12,8 @@ theme-light = Light
 theme-dark = Dark
 undo = Undo
 redo = Redo
+# under the pointer on Undo while there is nothing to undo, e.g. after a reload
+undo-since-opened = Undo covers what was done here since this competition was opened. To change a result reported before, reopen its match.
 # undoing the start leaves play, so it is asked about first
 undo-start-title = Undo the start?
 undo-start-description = The competition goes back to its setup, where the entrants and the phase can be changed. Redo starts it again.

@@ -106,6 +106,9 @@ a file whose `"format"` changes is migrated, not refused.
 - Once a result typed in was reported, the hint below the entry of results
   folds behind its ⓘ, and once every match has a result, the entry is gone
   until a match is reopened.
+- Undo says under the pointer, while it has nothing to undo, that it covers
+  what was done since the competition was opened, and that reopening a match
+  changes a result reported before.
 
 ## [0.1.0] - 2026-10-28
 

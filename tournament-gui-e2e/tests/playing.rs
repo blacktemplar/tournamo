@@ -85,6 +85,28 @@ async fn the_controls_are_named_for_screen_readers() {
     .await;
 }
 
+/// Undo covers what was done since the competition was opened, which it says under the pointer
+/// once there is nothing to undo, as after a reload.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn undo_says_what_it_covers() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob"]).await?;
+        gui.click_labelled("Alice wins").await?;
+        gui.expect_titled("Undo").await?;
+
+        gui.page.reload().await?;
+
+        gui.expect_titled(
+            "Undo covers what was done here since this competition was opened. To change a \
+             result reported before, reopen its match.",
+        )
+        .await?;
+        gui.page.check_accessibility().await
+    })
+    .await;
+}
+
 /// What a result did shows in a toast, and neither it nor the finish moves the matches, so that
 /// the next tap lands where it was aimed.
 #[tokio::test]

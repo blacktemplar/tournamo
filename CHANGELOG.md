@@ -87,6 +87,20 @@ a file whose `"format"` changes is migrated, not refused.
 - German: "Sieger" for the winner, "höhere Sonneborn-Berger-Wertung" (and so
   for Buchholz), "Vorherige Runde", and a clearer hint below the entry of
   results.
+- The names in the bracket look like the other names rather than like links,
+  their row tinted under the pointer.
+- In the dark theme, cards stand out from the page behind them.
+- The views are tabs, unlike the joined buttons within a card, and the native
+  lists (the round, the language, the colours) look like the choices of the
+  phase.
+- Under a finger, checkboxes are bigger, on rows as high as every control.
+- The bar shows the labels of its buttons down to about 600 pixels (800 in
+  German), and on a phone the competition's name takes two lines rather than
+  being cut off; on a wide screen the bar lines up with the page.
+- The form of the phase is flat within its card, a criterion's buttons stay
+  beside its name on a phone, and removing one is an icon. Removing an entrant
+  and deleting a competition are quieter buttons.
+- The field of a new entrant keeps room for a name beside a long button.
 
 ## [0.1.0] - 2026-10-28
 

@@ -643,6 +643,7 @@ fn OrderedItem(
                     r#type: "button",
                     id: "{own}-up",
                     aria_label: t!(tr, "move-up", plugin = name.as_str()),
+                    title: t!(tr, "move-up", plugin = name.as_str()),
                     disabled,
                     aria_disabled: (index == 0).then_some("true"),
                     onclick: move |_| {
@@ -656,6 +657,7 @@ fn OrderedItem(
                     r#type: "button",
                     id: "{own}-down",
                     aria_label: t!(tr, "move-down", plugin = name.as_str()),
+                    title: t!(tr, "move-down", plugin = name.as_str()),
                     disabled,
                     aria_disabled: last.then_some("true"),
                     onclick: move |_| {
@@ -665,11 +667,13 @@ fn OrderedItem(
                     },
                     icons::ArrowDown {}
                 }
+                // an icon, so that the buttons fit beside the name on a phone
                 button {
-                    class: "small",
+                    class: "small icon-only",
                     r#type: "button",
                     id: "{own}-remove",
                     aria_label: t!(tr, "remove-plugin", plugin = name.as_str()),
+                    title: t!(tr, "remove-plugin", plugin = name.as_str()),
                     disabled,
                     onclick: move |_| {
                         _ = form.write().remove(&remove);
@@ -677,7 +681,7 @@ fn OrderedItem(
                             after_removal.iter().map(String::as_str).collect();
                         focus_later(&selectors);
                     },
-                    {tr.get("remove")}
+                    icons::Trash {}
                 }
             }
             Fields { form, fields: item.fields, disabled }

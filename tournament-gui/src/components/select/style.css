@@ -10,9 +10,12 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  /* changed: as high and round as the page's controls, a native list among them */
+  min-height: var(--control);
   padding: 8px 12px;
   border: none;
-  border-radius: 0.5rem;
+  /* changed: as round as the page's controls */
+  border-radius: var(--radius);
   background: var(--light, var(--primary-color)) var(--dark, var(--primary-color-3));
   box-shadow: inset 0 0 0 1px var(--light, var(--primary-color-6)) var(--dark, var(--primary-color-7));
   color: var(--secondary-color-4);

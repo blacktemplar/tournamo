@@ -187,6 +187,26 @@ pub async fn run(site: Site, test: impl AsyncFnOnce(Page) -> WebDriverResult<()>
     }
 }
 
+/// Where an element is shown, in CSS pixels from the window's top left corner, see
+/// [`Page::rects_of`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+impl Rect {
+    pub fn width(&self) -> f64 {
+        self.right - self.left
+    }
+
+    pub fn height(&self) -> f64 {
+        self.bottom - self.top
+    }
+}
+
 /// Where [`run`] saves what the page showed when the current test failed: the directory
 /// `e2e-failures/<test file>/<test>` in the target directory, with `screenshot.png`, and
 /// `report.txt` with the page's URL, source and logs.
@@ -681,6 +701,78 @@ impl Page {
             .await?
             .convert::<Option<f64>>()?;
         Ok(top.unwrap_or_else(|| panic!("{selector} must find an element")))
+    }
+
+    /// Makes the page take the pointer for a finger, as on a phone or a tablet: `(pointer: coarse)`
+    /// matches from now on.
+    ///
+    /// # Panics
+    /// Panics if the browser does not take it so.
+    pub async fn emulate_touch_screen(&self) -> WebDriverResult<()> {
+        let cdp = self.driver.cdp();
+        cdp.send_raw(
+            "Emulation.setTouchEmulationEnabled",
+            serde_json::json!({ "enabled": true, "maxTouchPoints": 5 }),
+        )
+        .await?;
+        cdp.send_raw(
+            "Emulation.setEmitTouchEventsForMouse",
+            serde_json::json!({ "enabled": true, "configuration": "mobile" }),
+        )
+        .await?;
+        let coarse = self
+            .driver
+            .execute(
+                "return matchMedia('(pointer: coarse)').matches;",
+                Vec::new(),
+            )
+            .await?
+            .convert::<bool>()?;
+        assert!(coarse, "the browser must take the pointer for a finger");
+        Self::pause().await;
+        Ok(())
+    }
+
+    /// The computed value of the CSS property `property` of the first element the CSS selector
+    /// `selector` finds, e.g. `"rgb(255, 255, 255)"` for `"background-color"`.
+    ///
+    /// # Panics
+    /// Panics if there is no such element.
+    pub async fn style_of(&self, selector: &str, property: &str) -> WebDriverResult<String> {
+        let value = self
+            .driver
+            .execute(
+                "const element = document.querySelector(arguments[0]);
+                return element ? getComputedStyle(element).getPropertyValue(arguments[1]) : null;",
+                vec![serde_json::json!(selector), serde_json::json!(property)],
+            )
+            .await?
+            .convert::<Option<String>>()?;
+        Ok(value.unwrap_or_else(|| panic!("{selector} must find an element")))
+    }
+
+    /// Where each element the CSS selector `selector` finds is shown, in the order of the page.
+    pub async fn rects_of(&self, selector: &str) -> WebDriverResult<Vec<Rect>> {
+        let rects: Vec<[f64; 4]> = self
+            .driver
+            .execute(
+                "return [...document.querySelectorAll(arguments[0])].map((element) => {
+                    const rect = element.getBoundingClientRect();
+                    return [rect.left, rect.top, rect.right, rect.bottom];
+                });",
+                vec![serde_json::json!(selector)],
+            )
+            .await?
+            .convert()?;
+        Ok(rects
+            .into_iter()
+            .map(|[left, top, right, bottom]| Rect {
+                left,
+                top,
+                right,
+                bottom,
+            })
+            .collect())
     }
 
     /// Whether the page is higher than its window, so that it scrolls, and how wide its body is

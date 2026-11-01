@@ -53,8 +53,9 @@ pub fn Entrants() -> Element {
                 for (position, (row, name)) in entrants.into_iter().enumerate() {
                     li { key: "{row.id:?}",
                         span { class: "name", "{name}" }
+                        // quiet, so that a long list is no column of outlines
                         button {
-                            class: "small",
+                            class: "small quiet",
                             aria_label: t!(tr, "remove-entrant", name = name.as_str()),
                             disabled: !actions.remove_entrant,
                             onclick: move |_| {

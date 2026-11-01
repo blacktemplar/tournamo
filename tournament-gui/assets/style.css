@@ -8,11 +8,12 @@
 
   --text: light-dark(#1b1f24, #e6e8eb);
   --text-muted: light-dark(#57606a, #9aa4ae);
-  --surface: light-dark(#fff, #1a1e23);
+  /* the cards; in the dark lighter than the page by 1.2:1, so that they stand out from it */
+  --surface: light-dark(#fff, #21262d);
   --background: light-dark(#f3f5f7, #111418);
   --bar: light-dark(#fff, #161a1f);
   /* under what the pointer is on, and what is chosen without being the accent */
-  --hover: light-dark(#eef1f4, #252b32);
+  --hover: light-dark(#eef1f4, #2d333b);
   --border: light-dark(#d8dee4, #2f363d);
   --border-strong: light-dark(#848d97, #6b7681);
   /* navy would not stand out from the dark, so lighter there */
@@ -20,7 +21,7 @@
   --accent-hover: light-dark(#173b5c, #9cc5ee);
   --on-accent: light-dark(#fff, #0b1a2a);
   /* a tint of the accent, e.g. under what is chosen */
-  --accent-subtle: light-dark(#e7eff7, #1c2b3b);
+  --accent-subtle: light-dark(#e7eff7, #1f3a57);
   --focus: light-dark(#2f73d0, #58a6ff);
   --error: light-dark(#b42318, #ff8a80);
   --error-subtle: light-dark(#fef3f2, #2d1a1a);
@@ -118,6 +119,8 @@ body {
  * then the footer */
 #main {
   display: grid;
+  /* its width, `cqw`, without the scroll bar's, for the bar to line up with the page */
+  container-type: inline-size;
   min-height: 100vh;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto 1fr auto;
@@ -211,6 +214,11 @@ button.quiet {
   background: transparent;
 }
 
+/* receding behind the buttons beside it, e.g. deleting next to renaming */
+button.muted {
+  color: var(--text-muted);
+}
+
 /* what cannot be undone, e.g. deleting a competition */
 button.primary.danger,
 button.primary.danger:hover:not(:disabled, [aria-disabled="true"]) {
@@ -239,6 +247,20 @@ button.icon-only {
 
   button.icon-only {
     min-width: var(--control);
+  }
+
+  /* a box a finger finds, on a row as high as a control */
+  input[type="checkbox"] {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: 0;
+  }
+
+  label:has(> input[type="checkbox"]) {
+    display: inline-flex;
+    min-height: var(--control);
+    align-items: center;
+    gap: var(--space-2);
   }
 }
 
@@ -271,6 +293,22 @@ select {
   color: var(--text);
 }
 
+/* a native list looks like the choices of the phase (components/select): its own arrow, drawn in
+ * the text's colour by two halves of a square */
+select {
+  padding-right: 2rem;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentcolor 50%),
+    linear-gradient(135deg, currentcolor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.05rem) 50%,
+    calc(100% - 0.75rem) 50%;
+  background-repeat: no-repeat;
+  background-size: 0.3rem 0.3rem;
+  cursor: pointer;
+}
+
 input::placeholder {
   color: var(--text-muted);
 }
@@ -294,8 +332,9 @@ input::placeholder {
   gap: var(--space-2);
 }
 
+/* room for a name beside the button, or else the whole line above it */
 .row input {
-  flex: 1 1 8rem;
+  flex: 1 1 12rem;
 }
 
 /* why the field was refused, below it and its button; no room, and no gap, while it says nothing,
@@ -340,7 +379,8 @@ input::placeholder {
   display: flex;
   height: var(--bar-height);
   align-items: center;
-  padding: var(--space-1) var(--space-4);
+  /* its content where the page's is, which `main` centres at most 90rem wide */
+  padding: var(--space-1) max(var(--space-4), calc((100cqw - 90rem) / 2 + var(--space-4)));
   border-bottom: 1px solid var(--border);
   background: var(--bar);
   gap: var(--space-2);
@@ -348,6 +388,11 @@ input::placeholder {
 
 header.bar {
   min-width: 0;
+}
+
+/* the actions follow in the same bar */
+header.bar:has(+ .bar-actions) {
+  padding-right: var(--space-2);
 }
 
 .bar-actions {
@@ -378,9 +423,10 @@ header.bar {
 }
 
 /* only the icons where the bar is narrow, so that the competition's name keeps room in longer
- * languages too; the texts stay for screen readers */
+ * languages too: first that of the way back, then on a phone those of the actions; the texts stay
+ * for screen readers */
 @media (width < 60rem) {
-  .bar-label {
+  .back .bar-label {
     position: absolute;
     overflow: hidden;
     width: 1px;
@@ -391,6 +437,39 @@ header.bar {
 
   .bar-actions button {
     padding: 0 var(--space-2);
+  }
+}
+
+/* on a phone, the name on up to two smaller lines rather than cut off on one */
+@media (width < 38rem) {
+  .bar-actions .bar-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .bar h1 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+}
+
+/* German's labels are half as long again */
+@media (width < 50rem) {
+  :root:lang(de) .bar-actions .bar-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
@@ -608,9 +687,29 @@ footer a,
   background: var(--background);
 }
 
-.view-switch button {
+/* tabs: on a line, the chosen one underlined in the accent, unlike the joined buttons of a card */
+.view-switch {
+  box-shadow: inset 0 -1px var(--border);
+}
+
+.view-switch button,
+.view-switch button:first-child,
+.view-switch button:last-child {
   flex: 1 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-left: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
   white-space: nowrap;
+}
+
+.view-switch button[aria-pressed="true"],
+.view-switch button[aria-pressed="true"]:hover:not(:disabled) {
+  border-bottom-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
 }
 
 @media (width < 60rem) {
@@ -770,10 +869,9 @@ footer a,
   margin: var(--space-3) 0;
 }
 
+/* no box in the card, but room above, its label heading it */
 .field.list {
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  margin-top: var(--space-6);
 }
 
 /* a text, read by the form (phase.rs) */
@@ -845,8 +943,8 @@ footer a,
   margin: var(--space-1) 0;
 }
 
-/* an item of an ordered list: its number, its name, and its buttons at the end of the line, its
- * fields below */
+/* an item of an ordered list: its number, its name, what is said about it, and its buttons at the
+ * end of the line, the name wrapping rather than the buttons on a phone; its fields below */
 .plugin-list {
   padding-left: 0;
   counter-reset: item;
@@ -854,15 +952,14 @@ footer a,
 }
 
 .plugin-list li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   align-items: center;
   counter-increment: item;
   gap: var(--space-1) var(--space-2);
+  grid-template-columns: 1.5em minmax(0, max-content) auto 1fr auto;
 }
 
 .plugin-list li::before {
-  min-width: 1.5em;
   content: counter(item) ".";
 }
 
@@ -872,13 +969,13 @@ footer a,
 
 .item-buttons {
   display: inline-flex;
-  margin-left: auto;
   gap: var(--space-1);
+  grid-column: -2;
 }
 
 .plugin-list li > .field,
 .plugin-list li > .issues {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
 }
 
 .implied {
@@ -1606,9 +1703,9 @@ ul.summary-items {
   grid-column: 2;
 }
 
-/* the side of a match without a result, a button reporting that it won: the name in the accent,
- * underlined like a link, tinted under the pointer, its padding taken from the pairing's so that
- * the pairing keeps its size */
+/* the side of a match without a result, a button reporting that it won: the name as the others,
+ * its row tinted under the pointer, its padding taken from the pairing's so that the pairing keeps
+ * its size */
 .pairing button.side {
   min-height: 0;
   justify-content: flex-start;
@@ -1616,16 +1713,13 @@ ul.summary-items {
   border: 0;
   margin: 0 calc(-1 * var(--space-1));
   background: transparent;
-  color: var(--accent);
+  color: var(--text);
   justify-self: stretch;
   text-align: left;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.2em;
 }
 
-.pairing button.side:hover {
-  background: var(--hover);
+.pairing button.side:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--accent-subtle);
 }
 
 /* where a side comes from: wrapping within the narrowest column, rather than widening its column

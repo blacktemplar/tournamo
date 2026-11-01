@@ -158,8 +158,9 @@ pub fn Competitions() -> Element {
                                     },
                                     icons::Export {}
                                 }
+                                // quieter than the others, being what is done the least
                                 button {
-                                    class: "small icon-only",
+                                    class: "small icon-only quiet muted",
                                     aria_label: t!(tr, "delete-competition", name = &*listing.name),
                                     title: t!(tr, "delete-competition", name = &*listing.name),
                                     onclick: ask(Ask::Delete {

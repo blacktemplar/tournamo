@@ -20,6 +20,8 @@ a file whose `"format"` changes is migrated, not refused.
   the standings and metric. The list of competitions says what Tournamo is for
   and links there, as do the empty list of entrants and the phase, in a tab of
   its own.
+- The metrics of the phase are listed by name, rather than those the format
+  recommends first, so that they stay in place when another format is chosen.
 - Random rounds and Monster DYP say what they are for, and the rounds of a
   Monster DYP say that all of them are drawn at the start.
 - Naming a new competition, or renaming one, as another one is named says so

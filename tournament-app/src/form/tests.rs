@@ -490,6 +490,10 @@ fn a_set_of_plugins_keeps_its_order_whatever_is_chosen() {
     form.add(&path("metrics"), WinsDrawsLossesCalculator::ID)
         .unwrap();
     assert_eq!(set(&form), before);
+    // another format recommends other metrics
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(set(&form), before);
 }
 
 /// A phase ranked by nothing can be played, but the form says what that leads to.

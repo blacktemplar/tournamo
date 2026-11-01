@@ -758,8 +758,8 @@ It serves adding a phase and editing it at any point (`reconfigure_phase`).
   to the draft, so they go when nothing needs them.
 - **Issues where they are fixed**, at the deepest field or item their path is in;
   **warnings** (a ranking of nothing) do not block.
-- **A set keeps one order** (recommended first, then by label), so a checkbox
-  stays under the pointer.
+- **A set keeps one order**, by label, so a checkbox stays under the pointer,
+  also when another format recommends other metrics.
 - **Options that fit, recommended first**, plus the chosen one even if it no
   longer fits.
 - **The form of a new phase starts at the phase undone last**, so adding it again

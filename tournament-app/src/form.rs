@@ -180,9 +180,9 @@ pub struct ListInput {
 }
 
 impl ListInput {
-    /// Every plugin of the list, chosen, implied or offered, in an order that choosing one or
-    /// leaving it out does not change, for a list whose order does not matter: the plugins
-    /// recommended first, then the others, each by label.
+    /// Every plugin of the list, chosen, implied or offered, in an order that neither choosing one
+    /// or leaving it out nor another recommendation, e.g. of another format, changes, for a list
+    /// whose order does not matter: by label.
     pub fn set(&self) -> Vec<SetEntry<'_>> {
         let mut entries: Vec<_> = self
             .items
@@ -191,10 +191,7 @@ impl ListInput {
             .chain(self.implied.iter().map(SetEntry::Implied))
             .chain(self.options.iter().map(SetEntry::Offered))
             .collect();
-        entries.sort_by_cached_key(|entry| {
-            let plugin = entry.plugin();
-            (!plugin.recommended, plugin.label.to_lowercase())
-        });
+        entries.sort_by_cached_key(|entry| entry.plugin().label.to_lowercase());
         entries
     }
 }

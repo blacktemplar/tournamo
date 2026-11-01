@@ -200,10 +200,10 @@ async fn a_metric_implied_names_what_needs_it() {
         gui.expect_checked(
             "metrics",
             &[
+                "Buchholz, needed by more Buchholz",
                 "Points",
                 "Sonneborn-Berger",
                 "Win-draw-loss record",
-                "Buchholz, needed by more Buchholz",
             ],
         )
         .await

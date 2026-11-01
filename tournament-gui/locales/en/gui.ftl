@@ -107,6 +107,9 @@ add-entrant = Add entrant
 entrant-like = “{ $name }” is entered already.
 remove = Remove
 remove-entrant = Remove { $name }
+rename-entrant = Rename { $name }
+# the field of the name an entrant is renamed to
+entrant-new-name = New name of { $name }
 # not `phase`, which is the app's message of the fields of a phase
 phase-heading = Phase
 # the heading once every match is played
@@ -256,6 +259,7 @@ announce-undone = Undone: { $action }.
 announce-redone = Redone: { $action }.
 announce-added-entrant = Added { $name }.
 announce-removed-entrant = Removed { $name }.
+announce-renamed-entrant = Renamed { $name } to { $new_name }.
 announce-added-phase = The phase is added.
 announce-edited-phase = The phase is changed.
 # $count: the matches with a result, at least one

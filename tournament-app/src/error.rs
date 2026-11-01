@@ -41,6 +41,17 @@ pub enum RemoveEntrantError {
     Rejected(TransitionError),
 }
 
+/// Why an entrant was not renamed.
+#[derive(Debug, Error)]
+pub enum RenameEntrantError {
+    #[error("there is no such entrant")]
+    UnknownEntrant,
+    #[error("an entrant name must not be empty")]
+    EmptyName,
+    #[error("there already is an entrant named “{0}”")]
+    DuplicateName(String),
+}
+
 /// Why there is no draft of a phase played in a format.
 #[derive(Debug, Error)]
 pub enum PhaseDraftError {
@@ -254,6 +265,18 @@ impl Message for RemoveEntrantError {
             Self::UnknownEntrant => Text::new("error-unknown-entrant"),
             Self::Started => Text::new("error-entrant-removed-after-start"),
             Self::Rejected(error) => rejected(error),
+        }
+    }
+}
+
+impl Message for RenameEntrantError {
+    fn text(&self) -> Text {
+        match self {
+            Self::UnknownEntrant => Text::new("error-unknown-entrant"),
+            Self::EmptyName => Text::new("error-empty-name"),
+            Self::DuplicateName(name) => {
+                Text::new("error-duplicate-name").with("name", name.as_str())
+            }
         }
     }
 }

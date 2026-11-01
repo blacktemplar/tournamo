@@ -181,6 +181,54 @@ fn a_removed_entrant_comes_back_with_its_name_by_undo() {
     assert_eq!(names(&session.entrants()), ["Alice", "Bob"]);
 }
 
+/// Renaming keeps the entrant's place, also after the start, and is saved; it appends nothing to
+/// the log, so undo undoes the action before it.
+#[test]
+fn an_entrant_is_renamed_in_place() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    now(session.save(&storage)).unwrap();
+    let bob = session.entrants()[1].id;
+    let log = session.next_entry();
+
+    session.rename_entrant(bob, " Robert ").unwrap();
+
+    assert_eq!(
+        names(&session.entrants()),
+        ["Alice", "Robert", "Carol", "Dave"]
+    );
+    assert_eq!(session.next_entry(), log);
+    now(session.save(&storage)).unwrap();
+    let loaded = now(Session::load(&storage, session.key())).unwrap();
+    assert_eq!(loaded.entrants(), session.entrants());
+    assert_eq!(session.undo().unwrap(), Action::Start);
+}
+
+#[test]
+fn a_rename_to_an_empty_or_taken_name_is_refused() {
+    let mut session = Session::new("cup");
+    let alice = session.add_entrant("Alice").unwrap();
+    let bob = session.add_entrant("Bob").unwrap();
+    session.remove_entrant(bob).unwrap();
+
+    assert!(matches!(
+        session.rename_entrant(alice, " "),
+        Err(RenameEntrantError::EmptyName)
+    ));
+    assert!(matches!(
+        session.rename_entrant(bob, "Robert"),
+        Err(RenameEntrantError::UnknownEntrant)
+    ));
+    let carol = session.add_entrant("Carol").unwrap();
+    assert!(matches!(
+        session.rename_entrant(carol, "alice"),
+        Err(RenameEntrantError::DuplicateName(name)) if name == "Alice"
+    ));
+    // differing from its own name in case only
+    session.rename_entrant(alice, "ALICE").unwrap();
+    assert_eq!(names(&session.entrants()), ["ALICE", "Carol"]);
+}
+
 #[test]
 fn no_entrant_is_added_or_removed_after_the_start() {
     let mut session = Given::new().started();

@@ -60,6 +60,36 @@ async fn an_entrant_is_removed() {
     .await;
 }
 
+/// An entrant is renamed in place, keeping its place in the list, and the focus is back at its
+/// button; a name entered already is refused at the field, and Escape leaves the name as it was.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn an_entrant_is_renamed_in_place() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol"] {
+            gui.add_entrant(name).await?;
+        }
+
+        gui.rename_entrant("Bob", "Robert", Key::Enter).await?;
+
+        gui.expect_entrants(&["Alice", "Robert", "Carol"]).await?;
+        gui.expect_announcement("Renamed Bob to Robert.").await?;
+        gui.expect_focus_labelled("Rename Robert").await?;
+        gui.rename_entrant("Alice", "carol", Key::Enter).await?;
+        gui.expect_field_error(
+            "entrant-new-name-0",
+            "There already is an entrant named “Carol”.",
+        )
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.press(Key::Escape).await?;
+        gui.expect_focus_labelled("Rename Alice").await?;
+        gui.page.reload().await?;
+        gui.expect_entrants(&["Alice", "Robert", "Carol"]).await
+    })
+    .await;
+}
+
 /// The start moves the focus to the matches, and says how many there are to play.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

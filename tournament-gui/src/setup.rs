@@ -4,12 +4,14 @@ use dioxus::prelude::*;
 use tournament_app::{
     i18n::{Message as _, Text},
     session::Session,
+    view::EntrantRow,
 };
 
 use crate::{
     announcement::Announcement,
     competition::Ctx,
     i18n::t,
+    icons,
     notices::use_cleared_on_language_change,
     phase::{NewPhase, PhaseSummary, focus_later},
     team_name,
@@ -51,29 +53,7 @@ pub fn Entrants() -> Element {
             }
             ol { id: "entrant-list",
                 for (position, (row, name)) in entrants.into_iter().enumerate() {
-                    li { key: "{row.id:?}",
-                        span { class: "name", "{name}" }
-                        // quiet, so that a long list is no column of outlines
-                        button {
-                            class: "small quiet",
-                            aria_label: t!(tr, "remove-entrant", name = name.as_str()),
-                            disabled: !actions.remove_entrant,
-                            onclick: move |_| {
-                                let id = row.id;
-                                if ctx.act(|session| session.remove_entrant(id)).is_some() {
-                                    ctx.announce(Announcement::RemovedEntrant(row.clone()));
-                                    // the button of the entrant after it, which takes its place,
-                                    // else the field adding one
-                                    let next = format!(
-                                        "#entrant-list > li:nth-child({}) button",
-                                        position + 1
-                                    );
-                                    focus_later(&[&next, "#entrant-name"]);
-                                }
-                            },
-                            {tr.get("remove")}
-                        }
-                    }
+                    EntrantItem { key: "{row.id:?}", row, name, position }
                 }
             }
             // below the list, so that the entrant just added shows right above the field, which
@@ -133,6 +113,135 @@ pub fn Entrants() -> Element {
                 p { id: "entrant-like", class: "warnings", role: "status",
                     if let Some(like) = like.filter(|_| error.read().is_none()) {
                         {t!(tr, "entrant-like", name = like.as_str())}
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// An entrant of the list, `row` shown as `name`, at `position` from 0: its name, which is
+/// renamed in place, and its removal.
+#[component]
+fn EntrantItem(row: EntrantRow, name: String, position: usize) -> Element {
+    let ctx = use_context::<Ctx>();
+    // the name typed while the entrant is renamed
+    let mut renaming = use_signal(|| None::<String>);
+    // why the new name was refused, shown at its field until it is changed
+    let mut error = use_signal(|| None::<Text>);
+    use_cleared_on_language_change(ctx.translator, error);
+    let actions = ctx.actions();
+    let tr = ctx.translator.read();
+    let item = format!("#entrant-list > li:nth-child({})", position + 1);
+    let field = format!("entrant-new-name-{position}");
+    // back to the name, with the focus on the button renaming it
+    let stop_renaming = {
+        let rename_button = format!("{item} .rename");
+        move || {
+            renaming.set(None);
+            error.set(None);
+            focus_later(&[&rename_button]);
+        }
+    };
+    let Some(typed) = renaming() else {
+        let removed = row.clone();
+        return rsx! {
+            li {
+                span { class: "name", "{name}" }
+                // quiet, so that a long list is no column of outlines
+                button {
+                    class: "small quiet icon-only rename",
+                    aria_label: t!(tr, "rename-entrant", name = name.as_str()),
+                    title: t!(tr, "rename-entrant", name = name.as_str()),
+                    disabled: !actions.rename_entrant,
+                    onclick: move |_| renaming.set(Some(row.name.clone().unwrap_or_default())),
+                    icons::Pencil {}
+                }
+                button {
+                    class: "small quiet remove",
+                    aria_label: t!(tr, "remove-entrant", name = name.as_str()),
+                    disabled: !actions.remove_entrant,
+                    onclick: move |_| {
+                        let id = removed.id;
+                        if ctx.act(|session| session.remove_entrant(id)).is_some() {
+                            ctx.announce(Announcement::RemovedEntrant(removed.clone()));
+                            // the entrant after it, which takes its place, else the field adding
+                            // one
+                            let next = format!("{item} .remove");
+                            focus_later(&[&next, "#entrant-name"]);
+                        }
+                    },
+                    {tr.get("remove")}
+                }
+            }
+        };
+    };
+    let (mut on_escape, mut on_cancel, mut on_renamed) =
+        (stop_renaming.clone(), stop_renaming.clone(), stop_renaming);
+    rsx! {
+        li {
+            form {
+                class: "row rename-entrant",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    if !ctx.changes() {
+                        return;
+                    }
+                    let id = row.id;
+                    let typed = renaming.peek().clone().unwrap_or_default();
+                    match ctx.try_act(|session| session.rename_entrant(id, &typed)) {
+                        Ok(()) => {
+                            let renamed = ctx
+                                .session
+                                .peek()
+                                .entrants()
+                                .into_iter()
+                                .find(|entrant| entrant.id == id);
+                            if let Some(renamed) = renamed.filter(|renamed| *renamed != row) {
+                                ctx.announce(Announcement::RenamedEntrant(row.clone(), renamed));
+                            }
+                            on_renamed();
+                        }
+                        Err(refused) => error.set(Some(refused)),
+                    }
+                },
+                label { r#for: "{field}", class: "visually-hidden",
+                    {t!(tr, "entrant-new-name", name = name.as_str())}
+                }
+                input {
+                    id: "{field}",
+                    value: "{typed}",
+                    autocomplete: "off",
+                    aria_invalid: error.read().is_some().then_some("true"),
+                    aria_describedby: "{field}-error",
+                    onmounted: {
+                        let field = field.clone();
+                        move |_| {
+                            document::eval(
+                                &format!("document.getElementById('{field}')?.select()"),
+                            );
+                        }
+                    },
+                    oninput: move |event| {
+                        error.set(None);
+                        renaming.set(Some(event.value()));
+                    },
+                    onkeydown: move |event| {
+                        if event.key() == Key::Escape {
+                            on_escape();
+                        }
+                    },
+                }
+                button { class: "small primary", r#type: "submit", {tr.get("rename")} }
+                button {
+                    class: "small quiet",
+                    r#type: "button",
+                    onclick: move |_| on_cancel(),
+                    {tr.get("cancel")}
+                }
+                p { id: "{field}-error", class: "error", role: "alert",
+                    if let Some(error) = error() {
+                        {tr.sentence(&error)}
                     }
                 }
             }

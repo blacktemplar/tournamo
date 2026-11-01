@@ -10,6 +10,11 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Added
+
+- An entrant is renamed in place in the list of entrants, keeping its place,
+  rather than removed and added again. Renaming is not undone by Undo.
+
 ### Changed
 
 - Renamed from Matchwright to Tournamo, now hosted at

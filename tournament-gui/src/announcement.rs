@@ -1,6 +1,6 @@
-//! What the operator is told was done: an entrant added or removed, the phase added or changed,
-//! the start, a result reported or reopened, and what undo and redo walked through. It is shown in
-//! a live region, so that a screen reader says it too.
+//! What the operator is told was done: an entrant added, removed or renamed, the phase added or
+//! changed, the start, a result reported or reopened, and what undo and redo walked through. It is
+//! shown in a live region, so that a screen reader says it too.
 
 use tournament_app::{
     i18n::Translator,
@@ -15,6 +15,8 @@ use crate::{capitalized, i18n::t, result_text, team_name, winners_text};
 pub enum Announcement {
     AddedEntrant(EntrantRow),
     RemovedEntrant(EntrantRow),
+    /// An entrant renamed, as it was and as it is.
+    RenamedEntrant(EntrantRow, EntrantRow),
     AddedPhase,
     /// The phase changed, with the number of matches that have a result after the change.
     EditedPhase(usize),
@@ -37,6 +39,12 @@ impl Announcement {
             Self::RemovedEntrant(removed) => {
                 t!(tr, "announce-removed-entrant", name = entrant(removed))
             }
+            Self::RenamedEntrant(was, is) => t!(
+                tr,
+                "announce-renamed-entrant",
+                name = entrant(was),
+                new_name = entrant(is),
+            ),
             Self::AddedPhase => tr.get("announce-added-phase"),
             Self::EditedPhase(results) => {
                 let mut sentences = vec![tr.get("announce-edited-phase")];

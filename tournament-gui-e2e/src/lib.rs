@@ -198,9 +198,31 @@ impl Gui {
         self.page.expect_texts(By::Css(".notice"), notices).await
     }
 
+    /// Renames the entrant `name` in place: opens its field by its button, and types `new_name`
+    /// over the name there, then presses `key`, Enter to rename it or Escape to leave it.
+    pub async fn rename_entrant(
+        &self,
+        name: &str,
+        new_name: &str,
+        key: Key,
+    ) -> WebDriverResult<()> {
+        self.click_labelled(&format!("Rename {name}")).await?;
+        let input = self
+            .driver
+            .query(By::Css("#entrant-list input"))
+            .first()
+            .await?;
+        input.send_keys(Key::Control + "a").await?;
+        input.send_keys(new_name).await?;
+        Page::pause().await;
+        input.send_keys(key).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Adds the entrant `name`, and waits until it is listed.
     pub async fn add_entrant(&self, name: &str) -> WebDriverResult<()> {
-        let input = self.driver.query(By::Css("form input")).first().await?;
+        let input = self.driver.query(By::Id("entrant-name")).first().await?;
         input.send_keys(name).await?;
         Page::pause().await;
         input.send_keys(Key::Enter).await?;

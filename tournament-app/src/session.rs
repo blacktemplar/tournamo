@@ -43,8 +43,8 @@ use unicode_normalization::UnicodeNormalization as _;
 use crate::{
     error::{
         AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
-        NothingToRedo, NothingToUndo, PhaseDraftError, RemoveEntrantError, ReportEnteredError,
-        ReportError, StartError, UndoReportError,
+        NothingToRedo, NothingToUndo, PhaseDraftError, RemoveEntrantError, RenameEntrantError,
+        ReportEnteredError, ReportError, StartError, UndoReportError,
     },
     file::{self, File},
     form::PhaseForm,
@@ -352,6 +352,7 @@ impl Session {
         Actions {
             add_entrant: !started,
             remove_entrant: !started && !competition.entrants().is_empty(),
+            rename_entrant: !competition.entrants().is_empty(),
             add_phase: !started && !has_phase,
             edit_phase: has_phase,
             start: self.start_refusal().is_none(),
@@ -399,6 +400,11 @@ impl Session {
     /// composes them (NFKC), and leading and trailing whitespace. [`Self::add_entrant`] refuses
     /// such a name, which a screen can say while it is typed.
     pub fn entrant_like(&self, name: &str) -> Option<String> {
+        self.entrant_like_besides(name, None)
+    }
+
+    /// As [`Self::entrant_like`], but never `besides`, e.g. the entrant being renamed.
+    fn entrant_like_besides(&self, name: &str, besides: Option<EntrantId>) -> Option<String> {
         let folded = |name: &str| name.trim().nfkc().collect::<String>().to_lowercase();
         let name = folded(name);
         if name.is_empty() {
@@ -407,6 +413,7 @@ impl Session {
         self.competition()
             .entrants()
             .keys()
+            .filter(|id| Some(**id) != besides)
             .filter_map(|id| self.people.name(id))
             .find(|entered| folded(entered) == name)
             .map(str::to_owned)
@@ -465,6 +472,31 @@ impl Session {
                 RemoveEntrantError::Rejected(error)
             }
         })?;
+        Ok(())
+    }
+
+    /// Shows the entrant `id` by `name` from now on, with leading and trailing whitespace removed,
+    /// also after the start. Only its name changes, which is no entry of the log, so this is no
+    /// action that [`Self::undo`] undoes; the actions done before name the entrant as it was then.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such entrant, or if `name` is empty or looks like another
+    /// entrant's, see [`Self::entrant_like`].
+    pub fn rename_entrant(&mut self, id: EntrantId, name: &str) -> Result<(), RenameEntrantError> {
+        if !self.competition().entrants().contains_key(&id) {
+            return Err(RenameEntrantError::UnknownEntrant);
+        }
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(RenameEntrantError::EmptyName);
+        }
+        if let Some(entered) = self.entrant_like_besides(name, Some(id)) {
+            return Err(RenameEntrantError::DuplicateName(entered));
+        }
+        if self.people.name(&id) != Some(name) {
+            self.people.add(Person::new(id, name));
+            self.unsaved_people.insert(id);
+        }
         Ok(())
     }
 

@@ -361,6 +361,7 @@ impl Medal {
 pub struct Actions {
     pub add_entrant: bool,
     pub remove_entrant: bool,
+    pub rename_entrant: bool,
     pub add_phase: bool,
     pub edit_phase: bool,
     pub start: bool,

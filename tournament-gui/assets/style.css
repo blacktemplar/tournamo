@@ -841,8 +841,13 @@ footer a,
   text-align: right;
 }
 
-#entrant-list .name {
+#entrant-list .name,
+#entrant-list .rename-entrant {
   flex: 1;
+}
+
+#entrant-list .rename-entrant {
+  align-items: center;
 }
 
 /* the start, apart from the phase above it */

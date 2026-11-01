@@ -373,7 +373,8 @@ A field on the entity (not a side map) makes it reachable from a bare `&Match`
 **Personal data stays out of the log.** Names and contacts must be deletable,
 and a log replays as written. So they live in `People`, keyed by `EntrantId` and
 saved next to the log, keeping everyone ever entered, since undo can bring them
-back.
+back. Renaming an entrant changes only its `Person`, at any time; being in no
+log entry, it is no action of a session's undo.
 
 Rejected: a sparse `Map<MatchId, TypeMap>` on `Phase` (unreachable from a bare
 `&Match`); consumer side-tables in general (in neither persistence path, not

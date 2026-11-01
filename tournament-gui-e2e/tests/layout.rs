@@ -657,11 +657,12 @@ async fn removing_and_deleting_are_quiet() {
 
         assert_eq!(
             gui.page
-                .style_of("#entrant-list button", "border-top-color")
+                .style_of("#entrant-list .remove", "border-top-color")
                 .await?,
             "rgba(0, 0, 0, 0)"
         );
         gui.follow("All competitions").await?;
+        gui.expect_competitions(&["Cup"]).await?;
         // rename, export, delete
         let delete = gui
             .page

@@ -27,7 +27,8 @@ use crate::{
 #[plugin(
     id = "tournament_engine::random_rounds",
     label = "random rounds",
-    description = "randomly chosen rounds of a round robin",
+    description = "for many entrants and little time: some rounds of a round robin, chosen at \
+                   random, so that nobody meets anyone twice",
     recommends = Self::recommends
 )]
 pub struct RandomRounds {

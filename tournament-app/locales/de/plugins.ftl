@@ -17,7 +17,7 @@ plugin-tournament_engine-round_robin =
     .description = alle spielen gegen alle
 plugin-tournament_engine-random_rounds =
     .label = zufällige Runden
-    .description = zufällig gewählte Runden von Jeder gegen jeden
+    .description = für viele Teilnehmer und wenig Zeit: einige Runden von Jeder gegen jeden, zufällig gewählt, sodass sich niemand zweimal trifft
     .field-rounds = Runden
     .field-rounds-description = ist Jeder gegen jeden kürzer, wird das ganz gespielt
 plugin-tournament_engine-single_elimination =
@@ -49,8 +49,9 @@ plugin-tournament_engine-double_elimination =
     .stage-grand-final-reset = Wiederholung des großen Finales
 plugin-tournament_engine-monster_dyp =
     .label = Monster-DYP
-    .description = jede Runde werden die Teilnehmer zu Zweierteams gelost, die gegeneinander spielen
+    .description = „Draw Your Partner“ wie beim Tischfußball: jede Runde werden die Teilnehmer zu Zweierteams gelost, die gegeneinander spielen, und jeder Teilnehmer wird für sich gewertet
     .field-rounds = Runden
+    .field-rounds-description = alle werden zu Beginn gelost
 
 ## Metrics calculators
 

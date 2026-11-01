@@ -89,8 +89,8 @@ that is linked in is asked for the same way.
 tournament*> add-phase
 ? Format
   double elimination — an entrant is out after its second loss, draws are not allowed
-  Monster DYP — every round, entrants are drawn into teams of two that play each other
-  random rounds — randomly chosen rounds of a round robin
+  Monster DYP — “draw your partner”, as in foosball: every round, entrants are drawn into teams of two that play each other, and each entrant is ranked on its own
+  random rounds — for many entrants and little time: some rounds of a round robin, chosen at random, so that nobody meets anyone twice
 > round robin — everyone plays everyone
   single elimination — the loser of a match is out, draws are not allowed
 ? Ranked by

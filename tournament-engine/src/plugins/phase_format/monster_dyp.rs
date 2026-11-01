@@ -32,13 +32,20 @@ use crate::{
 #[plugin(
     id = "tournament_engine::monster_dyp",
     label = "Monster DYP",
-    description = "every round, entrants are drawn into teams of two that play each other",
+    description = "“draw your partner”, as in foosball: every round, entrants are drawn into \
+                   teams of two that play each other, and each entrant is ranked on its own",
     declare_static = Self::declare_static,
     recommends = Self::recommends
 )]
 pub struct MonsterDyp {
     // all rounds are scheduled at once, so far more than a day's play would hold the page up
-    #[plugin(label = "rounds", min = 1, max = 100, default = 5)]
+    #[plugin(
+        label = "rounds",
+        description = "all of them are drawn at the start",
+        min = 1,
+        max = 100,
+        default = 5
+    )]
     rounds: u32,
 }
 

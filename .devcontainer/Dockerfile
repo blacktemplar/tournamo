@@ -58,6 +58,9 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf \
         prek wasm-pack trunk "dioxus-cli@$DIOXUS_CLI_VERSION" \
     && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
+# disable dx telemetry
+RUN dx config set disable-telemetry true
+
 # Claude Code for the terminal; Zed's Claude Agent brings its own
 RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
 COPY managed-settings.json /etc/claude-code/managed-settings.json

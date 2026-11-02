@@ -1255,6 +1255,30 @@ fn the_cross_table_shows_the_match_of_every_two_teams() {
             .any(|played| played.outcome == Some(Outcome::Win)),
         "the winner first: {table:?}"
     );
+    let totals: Vec<_> = table.rows.iter().map(|row| row.total).collect();
+    assert_eq!(
+        totals,
+        [Score::ONE, Score::ZERO, Score::ZERO, Score::ZERO],
+        "the winner's one win"
+    );
+}
+
+/// A draw adds a half to the total of each of its teams.
+#[test]
+fn a_draw_adds_a_half_to_the_cross_table() {
+    let mut session = Given::new().started();
+    session
+        .report(numbered(&session, 1), MatchResult::Draw)
+        .unwrap();
+
+    let table = session.cross_table().unwrap();
+
+    let halves = table
+        .rows
+        .iter()
+        .filter(|row| row.total == Score::new(0.5))
+        .count();
+    assert_eq!(halves, 2);
 }
 
 /// A knockout has its bracket instead, and the teams of a Monster DYP change every round.

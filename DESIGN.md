@@ -891,6 +891,9 @@ pairing (every slot grows); the bracket in half the width.
 - **Read-only**, an open match's cell empty: with rows by rank, reporting in the
   table would move the cell under the operator's hand, and narrow cells fit
   many teams.
+- **A total last** (`CrossRow::total`), the sum of the row's `1`, `½`, `0`, as
+  published tables have, whatever the points of the phase; wins and losses
+  are tinted (`--win-subtle`, `--error-subtle`), the number saying it too.
 
 Rejected: rows in entry or draw order (stable, but an order seen nowhere else);
 open matches shown by number (wider columns, the list tells it anyway).

@@ -228,6 +228,8 @@ played = Played
 # a table with a row and a column per team, each cell the matches of the row's team against the
 # column's
 cross-table = Cross table
+# the column of what the results of a row add up to: 1 for a win, ½ for a draw
+cross-table-total = Total
 # how a match ended for the team of the row, said by screen readers for 1, ½ and 0
 outcome-win = won
 outcome-draw = drawn

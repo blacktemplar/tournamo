@@ -177,6 +177,7 @@ standings = Tabelle
 rank = Platz
 played = Spiele
 cross-table = Kreuztabelle
+cross-table-total = Gesamt
 outcome-win = gewonnen
 outcome-draw = unentschieden
 outcome-loss = verloren

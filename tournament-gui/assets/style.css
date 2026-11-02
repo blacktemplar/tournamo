@@ -25,6 +25,8 @@
   --focus: light-dark(#2f73d0, #58a6ff);
   --error: light-dark(#b42318, #ff8a80);
   --error-subtle: light-dark(#fef3f2, #2d1a1a);
+  /* under a win, e.g. in the cross table, as --error-subtle is under a loss */
+  --win-subtle: light-dark(#e8f5ec, #1a2e22);
   /* text on the colour of errors, e.g. on a button deleting */
   --on-error: light-dark(#fff, #2a0d0b);
   --warning: light-dark(#b54708, #e3a13b);
@@ -2087,5 +2089,29 @@ td.name {
 }
 
 .cross-table .outcome {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius);
   font-weight: 600;
+}
+
+/* a win and a loss tinted, so that the table reads at a glance; the number says it as well */
+.cross-table .outcome.win {
+  background: var(--win-subtle);
+}
+
+.cross-table .outcome.loss {
+  background: var(--error-subtle);
+}
+
+/* the names no heavier than the results, which the table is about */
+.cross-table tbody th.name {
+  font-weight: 400;
+}
+
+/* what the results of a row add up to, apart from them */
+.cross-table .total {
+  padding-inline: var(--space-2);
+  border-left: 2px solid var(--border-strong);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }

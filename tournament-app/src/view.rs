@@ -4,7 +4,7 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    EntrantId, MatchId, MatchResult,
+    EntrantId, MatchId, MatchResult, Score,
     plugins::{metrics_calculator::Cell, phase_format::Stage},
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
@@ -305,6 +305,8 @@ pub struct CrossRow {
     /// One per column, i.e. per row of the table, in the same order: the matches of this team
     /// against that row's team, by their numbers; none against itself.
     pub cells: Vec<Vec<CrossMatch>>,
+    /// What its matches with a result add up to: 1 for a win, ½ for a draw, 0 for a loss.
+    pub total: Score,
 }
 
 /// A match in a cell of a [`CrossTable`], seen from the team of the cell's row.

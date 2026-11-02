@@ -1,6 +1,7 @@
 //! The cross table of a phase whose teams stay the same, e.g. a round robin: a row and a column
 //! per team in the order of the standings, each cell the matches of the row's team against the
-//! column's, seen from the row. It only shows them; results are reported in the list of matches.
+//! column's, seen from the row, and last what the row's results add up to. It only shows them;
+//! results are reported in the list of matches.
 
 use dioxus::prelude::*;
 use tournament_app::view::{CrossMatch, Outcome};
@@ -40,6 +41,7 @@ pub fn CrossTable() -> Element {
                                     span { class: "visually-hidden", "{name}" }
                                 }
                             }
+                            th { class: "total", scope: "col", {tr.get("cross-table-total")} }
                         }
                     }
                     tbody {
@@ -61,6 +63,7 @@ pub fn CrossTable() -> Element {
                                         }
                                     }
                                 }
+                                td { class: "total", {tr.number(row.total.get())} }
                             }
                         }
                     }
@@ -75,14 +78,15 @@ pub fn CrossTable() -> Element {
 fn Cell(played: CrossMatch) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    let (shown, said) = match played.outcome {
-        Some(Outcome::Win) => ("1", "outcome-win"),
-        Some(Outcome::Draw) => ("½", "outcome-draw"),
-        Some(Outcome::Loss) => ("0", "outcome-loss"),
+    // tinted by how it ended, which the number says as well
+    let (shown, said, class) = match played.outcome {
+        Some(Outcome::Win) => ("1", "outcome-win", "win"),
+        Some(Outcome::Draw) => ("½", "outcome-draw", "draw"),
+        Some(Outcome::Loss) => ("0", "outcome-loss", "loss"),
         None => return rsx! {},
     };
     rsx! {
-        span { class: "outcome",
+        span { class: "outcome {class}",
             span { aria_hidden: "true", "{shown}" }
             span { class: "visually-hidden", {tr.get(said)} }
         }

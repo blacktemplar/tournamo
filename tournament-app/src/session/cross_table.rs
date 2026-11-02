@@ -2,10 +2,13 @@
 
 use std::collections::HashMap;
 
-use tournament_engine::{MatchResult, RankingId};
+use tournament_engine::{MatchResult, RankingId, Score};
 
 use super::{Session, bracket::plays_bracket};
 use crate::view::{CrossMatch, CrossRow, CrossTable, Outcome};
+
+/// What a draw adds to the total of a row.
+const HALF: Score = Score::new(0.5);
 
 impl Session {
     /// The cross table of the phase, if each of its matches is played by two teams of one
@@ -37,6 +40,7 @@ impl Session {
             .map(|ranking| CrossRow {
                 entrants: self.team(data, &[ranking.id()]),
                 cells: vec![Vec::new(); ranked.len()],
+                total: Score::ZERO,
             })
             .collect();
         for (a, b, r#match) in pairs {
@@ -49,6 +53,11 @@ impl Session {
             };
             let (a, b) = (index[&a], index[&b]);
             for ((team, against), outcome) in [(a, b), (b, a)].into_iter().zip(outcomes) {
+                rows[team].total += match outcome {
+                    Some(Outcome::Win) => Score::ONE,
+                    Some(Outcome::Draw) => HALF,
+                    Some(Outcome::Loss) | None => Score::ZERO,
+                };
                 rows[team].cells[against].push(CrossMatch {
                     row: row.clone(),
                     outcome,

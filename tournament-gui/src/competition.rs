@@ -32,7 +32,7 @@ use crate::{
     capitalized,
     components::dialog::{Dialog, DialogDescription, DialogTitle},
     cross_table::CrossTable,
-    download, icons,
+    download, go_to, icons,
     phase::PhaseSummary,
     play::{Rounds, Standings},
     setup::{Entrants, Phase},
@@ -365,13 +365,40 @@ fn undo(ctx: Ctx) {
 }
 
 /// What the screen after the start shows: the matches or the standings, both side by side where
-/// there is room for two columns, the chart of the phase, or how the phase is played.
+/// there is room for two columns, the chart of the phase, or how the phase is played. The URL
+/// names it, see [`Screen`](crate::Screen).
 #[derive(Clone, Copy, PartialEq)]
-enum Column {
+pub enum View {
     Matches,
     Standings,
     Chart,
     Phase,
+}
+
+impl View {
+    /// The view `fragment` names, see [`Self::fragment_of`].
+    pub fn in_fragment(fragment: &str) -> Option<Self> {
+        match fragment {
+            "standings" => Some(Self::Standings),
+            "bracket" | "cross-table" => Some(Self::Chart),
+            "phase" => Some(Self::Phase),
+            _ => None,
+        }
+    }
+
+    /// What the URL names it by after the competition's key, `None` for the matches, which the
+    /// key alone shows. The chart is named by what it is, which `chart` says.
+    fn fragment_of(self, chart: Option<Chart>) -> Option<&'static str> {
+        match self {
+            Self::Matches => None,
+            Self::Standings => Some("standings"),
+            Self::Chart => Some(match chart {
+                Some(Chart::CrossTable) => "cross-table",
+                _ => "bracket",
+            }),
+            Self::Phase => Some("phase"),
+        }
+    }
 }
 
 /// What a phase shows of all its matches at once, if anything.
@@ -391,13 +418,12 @@ enum Chart {
 #[component]
 fn Play() -> Element {
     let ctx = use_context::<Ctx>();
-    let mut shown = use_signal(|| {
-        if chart_remembered() {
-            Column::Chart
-        } else {
-            Column::Matches
-        }
-    });
+    let page = use_context::<Page>();
+    // as the URL names it, so that a reload and going back and forth keep it
+    let (key, shown) = match *page.screen.read() {
+        crate::Screen::Competition(key, view) => (key, view),
+        _ => return rsx! {},
+    };
     let chart = if ctx.session.read().bracket().is_some() {
         Some(Chart::Bracket)
     } else if ctx.session.read().cross_table().is_some() {
@@ -405,17 +431,14 @@ fn Play() -> Element {
     } else {
         None
     };
-    // a phase without a chart shows the matches, whatever was chosen for another phase
-    let current = match shown() {
-        Column::Chart if chart.is_none() => Column::Matches,
-        column => column,
+    // a phase without a chart shows the matches, e.g. after the phase changed to one without
+    let current = match shown {
+        View::Chart if chart.is_none() => View::Matches,
+        view => view,
     };
-    let mut show = move |column| {
-        shown.set(column);
-        // the phase is looked at now and then, so the next visit shows what was played on
-        if column != Column::Phase {
-            remember_chart(column == Column::Chart);
-        }
+    let show = move |view: View| match view.fragment_of(chart) {
+        Some(view) => go_to(&format!("{key}/{view}")),
+        None => go_to(&key.to_string()),
     };
     let tr = ctx.translator.read();
     let column = |column| {
@@ -425,7 +448,7 @@ fn Play() -> Element {
             "column hidden-narrow"
         }
     };
-    let columns_shown = matches!(current, Column::Matches | Column::Standings);
+    let columns_shown = matches!(current, View::Matches | View::Standings);
     rsx! {
         div {
             class: "segmented view-switch",
@@ -433,26 +456,26 @@ fn Play() -> Element {
             aria_label: tr.get("view"),
             button {
                 class: "narrow-only",
-                aria_pressed: current == Column::Matches,
-                onclick: move |_| show(Column::Matches),
+                aria_pressed: current == View::Matches,
+                onclick: move |_| show(View::Matches),
                 {tr.get("matches")}
             }
             button {
                 class: "narrow-only",
-                aria_pressed: current == Column::Standings,
-                onclick: move |_| show(Column::Standings),
+                aria_pressed: current == View::Standings,
+                onclick: move |_| show(View::Standings),
                 {tr.get("standings")}
             }
             button {
                 class: "wide-only",
                 aria_pressed: columns_shown,
-                onclick: move |_| show(Column::Matches),
+                onclick: move |_| show(View::Matches),
                 {tr.get("matches-and-standings")}
             }
             if let Some(chart) = chart {
                 button {
-                    aria_pressed: current == Column::Chart,
-                    onclick: move |_| show(Column::Chart),
+                    aria_pressed: current == View::Chart,
+                    onclick: move |_| show(View::Chart),
                     match chart {
                         Chart::Bracket => tr.get("bracket"),
                         Chart::CrossTable => tr.get("cross-table"),
@@ -460,16 +483,16 @@ fn Play() -> Element {
                 }
             }
             button {
-                aria_pressed: current == Column::Phase,
-                onclick: move |_| show(Column::Phase),
+                aria_pressed: current == View::Phase,
+                onclick: move |_| show(View::Phase),
                 {tr.get("phase-heading")}
             }
         }
         div { class: "columns play",
-            div { class: column(Column::Matches), hidden: !columns_shown, Rounds {} }
-            div { class: column(Column::Standings), hidden: !columns_shown, Standings {} }
+            div { class: column(View::Matches), hidden: !columns_shown, Rounds {} }
+            div { class: column(View::Standings), hidden: !columns_shown, Standings {} }
             if let Some(chart) = chart {
-                div { class: "column wide", hidden: current != Column::Chart,
+                div { class: "column wide", hidden: current != View::Chart,
                     match chart {
                         Chart::Bracket => rsx! {
                             Bracket {}
@@ -480,7 +503,7 @@ fn Play() -> Element {
                     }
                 }
             }
-            div { class: "column wide", hidden: current != Column::Phase,
+            div { class: "column wide", hidden: current != View::Phase,
                 section { class: "card", aria_labelledby: "phase",
                     h2 { id: "phase", {tr.get("phase-heading")} }
                     PhaseSummary {}
@@ -488,32 +511,6 @@ fn Play() -> Element {
             }
         }
     }
-}
-
-/// Where the browser remembers that the operator chose the chart, which a phase with one shows
-/// first then.
-const CHART_SHOWN: &str = "tournamo.chart-shown";
-
-/// Whether the operator chose the chart last in this browser.
-fn chart_remembered() -> bool {
-    local_storage()
-        .and_then(|storage| storage.get_item(CHART_SHOWN).ok().flatten())
-        .is_some()
-}
-
-fn remember_chart(shown: bool) {
-    // without local storage, the matches are shown first on the next visit
-    if let Some(storage) = local_storage() {
-        _ = if shown {
-            storage.set_item(CHART_SHOWN, "true")
-        } else {
-            storage.remove_item(CHART_SHOWN)
-        };
-    }
-}
-
-fn local_storage() -> Option<web_sys::Storage> {
-    web_sys::window()?.local_storage().ok().flatten()
 }
 
 /// What the screen says once every match is played: who won, or who is tied for first.

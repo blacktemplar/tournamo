@@ -723,7 +723,8 @@ through a `BroadcastChannel`.
   numbered (`Cup (2)`) if the name exists (a number, not a translated word in
   stored data). Exporting from the list writes the stored records as they are,
   so a log that no longer replays can still be exported.
-- **The competition open is in the URL** after `#`. Renaming changes only the
+- **The competition open is in the URL** after `#`, and a fragment naming none
+  shows the list saying so. Renaming changes only the
   listing (the name is not in the log); deleting removes everything in one
   transaction, under the lock, so it is refused while a tab holds it open.
 - **Look-alike entrant names are refused** (case and NFKC,
@@ -864,7 +865,9 @@ winners (old listings would not read).
   edges fade out where more is out of sight, over the pairings, measured on
   scroll and resize, since a shadow behind them is covered.
 - **Shown in place of the columns** by the view switch, the rest kept `hidden`
-  so state survives; local storage remembers the choice.
+  so state survives; the URL names the view (`#<key>/bracket`), so that a
+  reload and the history keep it, and a competition opened shows its matches
+  rather than what was chosen in another.
 - **A result is a click on the winner's name** (a button "Alice wins", styled as
   a link, since touch has no hover); the focus moves on as in the list.
   Reopening and typed results stay in the list. A reopen a later result depends

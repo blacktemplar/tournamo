@@ -1,5 +1,5 @@
 use tournament_gui_e2e::{
-    Gui, Key, run_in_new_competition,
+    Gui, Key, run, run_in_new_competition,
     thirtyfour::{By, error::WebDriverResult},
 };
 
@@ -599,25 +599,54 @@ async fn the_rounds_of_a_knockout_are_named_by_their_stages() {
     .await;
 }
 
-/// The bracket, once chosen, is shown first on the next visit.
+/// The view chosen is in the URL, so that a reload keeps it and going back returns to the one
+/// before; the competition alone shows the matches, whatever was chosen in another.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn the_bracket_chosen_is_shown_again_after_a_reload() {
-    run_in_new_competition(async |gui| {
+async fn the_view_chosen_is_in_the_url() {
+    run(async |gui| {
+        gui.new_competition("Cup").await?;
         for name in ["Alice", "Bob"] {
             gui.add_entrant(name).await?;
         }
         gui.choose_format("Single elimination").await?;
         gui.click("Add phase").await?;
         gui.click("Start").await?;
+        let key = gui.page.fragment().await?;
 
         gui.click("Bracket").await?;
-        gui.page.reload().await?;
 
-        gui.expect_view("Bracket").await?;
-        gui.click("Matches & standings").await?;
+        assert_eq!(gui.page.fragment().await?, format!("{key}/bracket"));
         gui.page.reload().await?;
+        gui.expect_view("Bracket").await?;
+        gui.click("Phase").await?;
+        gui.expect_view("Phase").await?;
+        gui.page.back().await?;
+        gui.expect_view("Bracket").await?;
+        gui.follow("All competitions").await?;
+        gui.new_competition("League").await?;
+        for name in ["Alice", "Bob"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Single elimination").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
         gui.expect_view("Matches & standings").await
+    })
+    .await;
+}
+
+/// A URL naming no competition shows the list, saying so.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_url_naming_nothing_says_so() {
+    run(async |gui| {
+        gui.page.open_at("nonexistent").await?;
+
+        gui.expect_error("There is no such competition.").await?;
+        gui.page
+            .expect_text(By::Id("new-competition"), "New competition")
+            .await
     })
     .await;
 }

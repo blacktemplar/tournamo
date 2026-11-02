@@ -422,6 +422,19 @@ impl Page {
         self.reload().await
     }
 
+    /// Goes back in the history of the tab, as the browser's back button does.
+    pub async fn back(&self) -> WebDriverResult<()> {
+        self.driver.back().await?;
+        Self::pause().await;
+        Ok(())
+    }
+
+    /// What the URL has after its `#`, without it.
+    pub async fn fragment(&self) -> WebDriverResult<String> {
+        let url = self.driver.current_url().await?;
+        Ok(url.fragment().unwrap_or_default().to_owned())
+    }
+
     /// Reloads the page, and waits until it runs.
     pub async fn reload(&self) -> WebDriverResult<()> {
         self.driver.refresh().await?;

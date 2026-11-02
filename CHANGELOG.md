@@ -26,6 +26,11 @@ a file whose `"format"` changes is migrated, not refused.
   the entrants entered, e.g. 23 rounds and 276 matches of a round robin of 24.
 - The cross table ends each row with what its results add up to, tints wins
   and losses, and its names are no heavier than the results.
+- The view shown after the start (matches, standings, bracket or cross table,
+  phase) is in the URL, so that a reload keeps it and the browser's back
+  button returns to the one before; a competition opened shows its matches,
+  rather than the view last chosen in another one. A URL naming no
+  competition says so.
 - Random rounds and Monster DYP say what they are for, and the rounds of a
   Monster DYP say that all of them are drawn at the start.
 - Naming a new competition, or renaming one, as another one is named says so

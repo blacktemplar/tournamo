@@ -41,7 +41,11 @@ use tournament_browser::{channel::Events, indexed_db::IndexedDb, persistence};
 use tournament_engine::{MatchResult, uuid::Uuid};
 
 use crate::{
-    competition::Competition, competitions::Competitions, help::Help, i18n::t, notices::Notices,
+    competition::{Competition, View},
+    competitions::Competitions,
+    help::Help,
+    i18n::t,
+    notices::Notices,
     theme::Theme,
 };
 
@@ -65,10 +69,14 @@ fn main() {
 /// What the page shows, as the `#` of the URL names it.
 #[derive(Clone, Copy, PartialEq)]
 enum Screen {
-    /// The list of competitions, for an empty fragment or one naming nothing.
+    /// The list of competitions, for an empty fragment.
     List,
+    /// The list of competitions, for a fragment naming nothing, which it says.
+    Unknown,
     Help,
-    Competition(CompetitionKey),
+    /// A competition, `#<key>`, and what of it is shown after the start, `#<key>/<view>` (see
+    /// [`View::in_fragment`]), the matches without a view.
+    Competition(CompetitionKey, View),
 }
 
 impl Screen {
@@ -78,13 +86,23 @@ impl Screen {
             return Self::List;
         };
         let fragment = hash.strip_prefix('#').unwrap_or(&hash);
+        if fragment.is_empty() {
+            return Self::List;
+        }
         // or a section of it, by the id of its heading
         if fragment == HELP || fragment.starts_with(&format!("{HELP}-")) {
             return Self::Help;
         }
-        Uuid::parse_str(fragment).map_or(Self::List, |key| {
-            Self::Competition(CompetitionKey::new(key))
-        })
+        let (key, view) = fragment.split_once('/').unwrap_or((fragment, ""));
+        let view = if view.is_empty() {
+            Some(View::Matches)
+        } else {
+            View::in_fragment(view)
+        };
+        match (Uuid::parse_str(key), view) {
+            (Ok(key), Some(view)) => Self::Competition(CompetitionKey::new(key), view),
+            _ => Self::Unknown,
+        }
     }
 }
 
@@ -160,6 +178,14 @@ fn App() -> Element {
         screen: Signal::new(Screen::in_url()),
     });
     toggletip::use_toggletips();
+    // a fragment naming nothing shows the list, saying so; on a change of the URL after the error
+    // of the screen before is gone
+    use_effect(move || {
+        if *page.screen.read() == Screen::Unknown {
+            page.error
+                .set(Some(Text::new("error-competition-not-found")));
+        }
+    });
     // runs again whenever the language changes
     use_effect(move || i18n::set_page_language(page.translator.read().language()));
     // and whenever the theme does
@@ -209,7 +235,7 @@ fn App() -> Element {
             Help {}
         } else if !stored {
             main { Notices {} }
-        } else if let Screen::Competition(key) = *page.screen.read() {
+        } else if let Screen::Competition(key, _) = *page.screen.read() {
             // made anew for another competition
             Competition { competition: key, key: "{key}" }
         } else {
@@ -221,11 +247,14 @@ fn App() -> Element {
 
 /// Opens the competition `key`, or the list of competitions for `None`.
 fn open(key: Option<CompetitionKey>) {
+    go_to(&key.map(|key| key.to_string()).unwrap_or_default());
+}
+
+/// Goes to the screen the fragment `fragment` names, as an entry of the history, so that going
+/// back returns; the page follows the change.
+fn go_to(fragment: &str) {
     if let Some(window) = web_sys::window() {
-        // an entry of the history, so that going back returns; the page follows the change
-        _ = window
-            .location()
-            .set_hash(&key.map(|key| key.to_string()).unwrap_or_default());
+        _ = window.location().set_hash(fragment);
     }
 }
 

@@ -778,6 +778,12 @@ It serves adding a phase and editing it at any point (`reconfigure_phase`).
   plugin. The phase and the empty list of entrants link to its sections
   (`#help-<section>`) in a tab of their own, which keeps the session open, and
   with it what can be undone.
+- **How long a phase takes shows before the start** (`Session::scale`), found
+  by playing it out apart from the competition with as many entrants, once
+  with every match won by side A and once by side B, so that a number
+  depending on the results (a grand final played again) is a range. It knows
+  no format, and a few milliseconds suffice; the GUI plays it out again only
+  when the phase or the entrants change.
 - **Widgets from the Dioxus team's components** (`select`, `dialog`), copied
   into `src/components/` and changed there: a plugin's option shows its
   description, which a native `option` cannot.

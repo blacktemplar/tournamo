@@ -33,6 +33,22 @@ pub struct Plugin {
     pub description: Option<&'static str>,
 }
 
+/// How long a phase takes with the entrants entered, see
+/// [`Session::scale`](crate::session::Session::scale).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Scale {
+    pub rounds: Count,
+    pub matches: Count,
+}
+
+/// A number that may depend on the results, e.g. the matches of a double elimination, whose grand
+/// final is played again if its first is lost by the champion of the winner bracket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Count {
+    pub least: usize,
+    pub most: usize,
+}
+
 /// Every plugin a phase can be configured with, by what it is, e.g. for a help explaining them,
 /// see [`Session::glossary`](crate::session::Session::glossary). Each list is in the order of the
 /// ids.

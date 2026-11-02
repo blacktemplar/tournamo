@@ -140,6 +140,20 @@ medal-gold = Gold medal,
 medal-silver = Silver medal,
 medal-bronze = Bronze medal,
 add-phase = Add phase
+# how long the phase takes with the entrants entered, before the start; $rounds and $matches: what
+# the messages below say
+phase-scale = With { $entrants } entrants, the phase takes { $rounds } and { $matches }.
+scale-rounds = { $count ->
+        [one] one round
+       *[other] { $count } rounds
+    }
+# a number depending on the results, e.g. whether a grand final is played again
+scale-rounds-range = { $least } to { $most } rounds
+scale-matches = { $count ->
+        [one] one match
+       *[other] { $count } matches
+    }
+scale-matches-range = { $least } to { $most } matches
 start = Start
 
 ## Configuring the phase

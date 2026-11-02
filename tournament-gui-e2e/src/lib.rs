@@ -1599,6 +1599,20 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the phase says how many rounds and matches it takes, `text`, ignoring
+    /// [`ISOLATION_MARKS`], or says nothing for `None`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_phase_scale(&self, text: Option<&str>) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(
+                By::Css("#phase-scale[role=status]:not(:empty)"),
+                &Vec::from_iter(text),
+            )
+            .await
+    }
+
     /// Waits until the help explains the plugin labelled `label` as `description`.
     ///
     /// # Panics

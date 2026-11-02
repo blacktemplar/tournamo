@@ -8,6 +8,7 @@ use tournament_app::{
         PluginOption, SetEntry,
     },
     i18n::{Message as _, PluginText, Text, Translator},
+    view::Count,
 };
 
 use crate::{
@@ -56,6 +57,7 @@ pub fn NewPhase() -> Element {
                 }
             },
             Form { form, disabled: !actions.add_phase }
+            PhaseScale { form }
             div { class: "form-actions",
                 button {
                     class: "primary",
@@ -65,6 +67,49 @@ pub fn NewPhase() -> Element {
                 }
             }
         }
+    }
+}
+
+/// How many rounds and matches the phase takes with the entrants entered, until the start, which
+/// shows them: the phase of `form`, or else the phase added. Said as it changes, since it is what
+/// a format is chosen by.
+#[component]
+fn PhaseScale(form: Option<Signal<PhaseForm>>) -> Element {
+    let ctx = use_context::<Ctx>();
+    // played out anew only when the phase or the entrants change, see `Session::scale`
+    let scale = use_memo(move || {
+        let session = ctx.session.read();
+        if session.competition().is_started() {
+            return None;
+        }
+        let scale = match form {
+            Some(form) => session.scale(form.read().draft()),
+            None => session.scale(&session.phase_draft_to_edit().ok()?),
+        };
+        scale.map(|scale| (session.competition().entrants().len(), scale))
+    });
+    let tr = ctx.translator.read();
+    let count = |count: Count, exact: &'static str, range: &'static str| {
+        let text = if count.least == count.most {
+            Text::new(exact).with("count", count.least)
+        } else {
+            Text::new(range)
+                .with("least", count.least)
+                .with("most", count.most)
+        };
+        tr.text(&text)
+    };
+    let text = scale().map(|(entrants, scale)| {
+        t!(
+            tr,
+            "phase-scale",
+            entrants = entrants,
+            rounds = count(scale.rounds, "scale-rounds", "scale-rounds-range"),
+            matches = count(scale.matches, "scale-matches", "scale-matches-range"),
+        )
+    });
+    rsx! {
+        p { id: "phase-scale", class: "hint", role: "status", {text} }
     }
 }
 
@@ -78,6 +123,7 @@ pub fn PhaseSummary() -> Element {
     let actions = ctx.actions();
     rsx! {
         Summary { fields: form.view().fields }
+        PhaseScale {}
         if actions.edit_phase {
             EditPhase {}
         }

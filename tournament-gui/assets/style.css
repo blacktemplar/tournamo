@@ -961,6 +961,11 @@ footer a,
   font-size: 0.9em;
 }
 
+/* how long the phase takes (phase.rs): no room while it says nothing, staying a live region */
+#phase-scale:empty {
+  display: contents;
+}
+
 .plugin-fields,
 .plugin-list .field,
 .plugin-set .field {

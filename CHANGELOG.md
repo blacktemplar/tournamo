@@ -22,6 +22,8 @@ a file whose `"format"` changes is migrated, not refused.
   its own.
 - The metrics of the phase are listed by name, rather than those the format
   recommends first, so that they stay in place when another format is chosen.
+- Before the start, the phase says how many rounds and matches it takes with
+  the entrants entered, e.g. 23 rounds and 276 matches of a round robin of 24.
 - Random rounds and Monster DYP say what they are for, and the rounds of a
   Monster DYP say that all of them are drawn at the start.
 - Naming a new competition, or renaming one, as another one is named says so

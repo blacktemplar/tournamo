@@ -114,6 +114,17 @@ medal-gold = Goldmedaille,
 medal-silver = Silbermedaille,
 medal-bronze = Bronzemedaille,
 add-phase = Phase hinzufügen
+phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
+scale-rounds = { $count ->
+        [one] eine Runde
+       *[other] { $count } Runden
+    }
+scale-rounds-range = { $least } bis { $most } Runden
+scale-matches = { $count ->
+        [one] einem Spiel
+       *[other] { $count } Spielen
+    }
+scale-matches-range = { $least } bis { $most } Spielen
 start = Starten
 
 ## Configuring the phase

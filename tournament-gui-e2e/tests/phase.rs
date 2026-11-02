@@ -31,6 +31,40 @@ async fn a_format_brings_what_it_recommends() {
     .await;
 }
 
+/// Before the start, the phase says how many rounds and matches it takes with the entrants
+/// entered, a range where that depends on the results; nothing without enough entrants.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_phase_says_how_long_it_takes() {
+    run_in_new_competition(async |gui| {
+        gui.add_entrant("Alice").await?;
+        gui.expect_phase_scale(None).await?;
+        for name in ["Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+
+        gui.expect_phase_scale(Some(
+            "With 4 entrants, the phase takes 3 rounds and 6 matches.",
+        ))
+        .await?;
+        gui.choose_format("Double elimination").await?;
+        gui.expect_phase_scale(Some(
+            "With 4 entrants, the phase takes 4 to 5 rounds and 6 to 7 matches.",
+        ))
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Add phase").await?;
+        gui.expect_phase_scale(Some(
+            "With 4 entrants, the phase takes 4 to 5 rounds and 6 to 7 matches.",
+        ))
+        .await?;
+        gui.click("Start").await?;
+        gui.click("Phase").await?;
+        gui.expect_phase_scale(None).await
+    })
+    .await;
+}
+
 /// Enter takes the number typed, as leaving the field does, rather than adding the phase.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

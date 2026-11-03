@@ -10,6 +10,13 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Added
+
+- An exported file, and a competition the CLI saves, also holds the competition
+  as its log played out, so that a later version can still show it should it no
+  longer replay the log. Still format 1: older versions ignore it and open the
+  file as before.
+
 ## [0.1.1] - 2026-11-03
 
 Competitions saved with 0.1.0 open unchanged.

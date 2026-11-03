@@ -254,14 +254,15 @@ impl Session {
         }
     }
 
-    /// The competition's file data, borrowing its log and people. Its optional name can be
-    /// changed or omitted before serialization, without changing the session.
-    pub fn file(&self) -> File<&CompetitionStateMachine, &People> {
+    /// The competition's file data, borrowing its log, people and competition. Its optional name
+    /// can be changed or omitted before serialization, without changing the session.
+    pub fn file(&self) -> File<&CompetitionStateMachine, &People, &Competition> {
         File {
             format: file::Format::CURRENT,
             name: Some(self.name.clone()),
             log: &self.machine,
             people: &self.people,
+            competition: Some(self.machine.current()),
         }
     }
 

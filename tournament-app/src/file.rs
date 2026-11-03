@@ -1,6 +1,6 @@
 //! A competition as a file, to keep a copy of it or to move it elsewhere: the JSON of its
-//! [`Format`], its name, its log and its people. The CLI saves the same, without the name, so each
-//! opens the other's files.
+//! [`Format`], its name, its log, its people and the competition the log replays into. The CLI
+//! saves the same, without the name, so each opens the other's files.
 //!
 //! A session is exported by [`Session::export`](crate::session::Session::export) and imported by
 //! [`Session::import`](crate::session::Session::import); what is stored of a competition is
@@ -10,7 +10,7 @@ use std::fmt::{self, Display};
 
 use serde::{
     Deserialize, Deserializer, Serialize,
-    de::{DeserializeOwned, Error as _},
+    de::{DeserializeOwned, Error as _, IgnoredAny},
 };
 use serde_json::Value;
 
@@ -66,9 +66,10 @@ impl<'de> Deserialize<'de> for Format {
     }
 }
 
-/// What a file holds: the log `L` and the people `P`, as the CLI saves them, plus the name.
+/// What a file holds: the log `L` and the people `P`, as the CLI saves them, plus the name and the
+/// competition `C` the log replays into. Reading skips the competition unless `C` says otherwise.
 #[derive(Serialize, Deserialize)]
-pub struct File<L, P> {
+pub struct File<L, P, C = IgnoredAny> {
     // first, so that a file of a newer format is refused for that before its log is read
     #[serde(default)]
     pub format: Format,
@@ -77,6 +78,10 @@ pub struct File<L, P> {
     pub name: Option<String>,
     pub log: L,
     pub people: P,
+    /// What the log replayed into when the file was written, for a version that can no longer
+    /// replay it. Missing in files of older versions, which ignore it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub competition: Option<C>,
 }
 
 impl<L: DeserializeOwned, P: DeserializeOwned> File<L, P> {
@@ -128,17 +133,18 @@ impl Stored {
                 })
                 .collect()
         };
-        to_json(&File {
+        to_json(&File::<_, _, Value> {
             format: Format::CURRENT,
             name: Some(self.name.clone()),
             log: values(&self.entries),
             people: values(&self.people),
+            competition: None,
         })
     }
 }
 
 /// The JSON of `file`, indented to be readable.
-pub(crate) fn to_json<L: Serialize, P: Serialize>(file: &File<L, P>) -> String {
+pub(crate) fn to_json<L: Serialize, P: Serialize, C: Serialize>(file: &File<L, P, C>) -> String {
     serde_json::to_string_pretty(file).expect("a competition's file serializes as JSON")
 }
 

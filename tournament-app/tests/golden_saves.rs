@@ -61,6 +61,11 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
             replayed == saved,
             "{save} replays into another competition than it was saved as"
         );
+        let file: Value = serde_json::from_str(file).unwrap();
+        assert!(
+            file.get("competition").is_none_or(|held| *held == saved),
+            "{save} holds another competition than it was saved as"
+        );
     }
 }
 

@@ -538,6 +538,24 @@ drift from its log, and a log that no longer replays fails to load.
 A snapshot loads without replay but holds only the current state; a log keeps
 how it came about, so a result reported before a restore can still be undone.
 
+### The competition next to its log
+
+A log replays only as long as every transition and plugin behaves as it did:
+a changed pairing leaves later results naming matches that no longer exist, a
+fixed metric changes the standings of a finished competition. Keeping every
+version of every behaviour is not sustainable, and not wanted where an old one
+was a bug. So a file holds the competition its log replayed into next to the
+log, for a version that can no longer replay it to show it read-only instead
+(*planned*), and to tell a replay that comes out otherwise. The log stays what
+is loaded; the competition is only read in place of it. Its serialized form is
+a persistence contract too, kept loading by converters where it changes.
+Older versions ignore it, so the file's format stays 1.
+
+Rejected: every version of every transition (unbounded, and keeps old bugs);
+only the competition (no undo, no history); a smaller, display-only archive
+instead of the competition (cannot be continued from or compared with a
+replay).
+
 ### Tag stability
 
 A tag is a persistence contract, not a name: renaming or moving a type must not

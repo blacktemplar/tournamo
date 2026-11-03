@@ -2293,6 +2293,46 @@ fn an_exported_competition_is_imported_as_a_new_one_as_it_was() {
     assert_eq!(matches(&loaded), matches(&session));
 }
 
+/// For a version that can no longer replay its log.
+#[test]
+fn an_exported_competition_holds_what_its_log_replays_into() {
+    let mut session = Given::new().started();
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+
+    let file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
+
+    assert_eq!(
+        file["competition"],
+        serde_json::to_value(session.competition()).unwrap()
+    );
+}
+
+/// The log is what is imported: the competition is only read by a version that cannot replay it.
+#[test]
+fn a_file_is_imported_from_its_log_whatever_its_competition_holds() {
+    let session = Given::new().added();
+    let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
+
+    for competition in [
+        None,
+        Some(serde_json::json!({ "of a later version": true })),
+    ] {
+        match competition {
+            None => file.as_object_mut().unwrap().remove("competition"),
+            Some(competition) => file
+                .as_object_mut()
+                .unwrap()
+                .insert("competition".to_owned(), competition),
+        };
+
+        let imported = Session::import(&file.to_string(), "cup", &[]).unwrap();
+
+        assert_eq!(imported.entrants(), session.entrants());
+    }
+}
+
 /// The CLI saves the same file without the name.
 #[test]
 fn a_file_without_a_name_is_imported_under_the_name_given() {

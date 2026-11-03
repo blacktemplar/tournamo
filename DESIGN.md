@@ -1044,8 +1044,9 @@ assets (waits on a bad venue connection, and content-named assets never go
 stale); dismissing the warning per session only (nags in every tab).
 
 **Hosting**: static files over HTTPS on GitHub Pages, under `/tournamo/`
-(hence `--base-path`), built and deployed by CI after every push to `main` that
-passes it: the wasm holds the absolute paths of its asset sources, so what is
+(hence `--base-path`), built and deployed by CI for each release tag (`v*`)
+that passes it, so that what is hosted is always a release (deploying every
+push to `main` would make releases meaningless): the wasm holds the absolute paths of its asset sources, so what is
 hosted must not be built on a developer's machine. Navigation is after `#`, so
 no 404 fallback is needed. The command line in the browser (`tournament-web`)
 is a development tool and not hosted.

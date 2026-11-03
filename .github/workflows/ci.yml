@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
+  # run on a release tag to deploy it again, e.g. after changing the media owner
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -111,10 +114,11 @@ jobs:
           extra-args: --all-files cargo-fmt
 
   # the GUI on GitHub Pages, at blacktemplar.github.io/tournamo/ (hence the base path), built
-  # here, since the wasm holds the absolute paths of the sources of its assets; after every push to
-  # main that passes the jobs above
+  # here, since the wasm holds the absolute paths of the sources of its assets; for a release tag
+  # (pushed, or chosen when running the workflow by hand) that passes the jobs above, so that the
+  # page is always a release
   pages-build:
-    if: github.event_name == 'push'
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [test, wasm-test, web-e2e, gui-e2e, fmt]
     runs-on: ubuntu-latest
     steps:

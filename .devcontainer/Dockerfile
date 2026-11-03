@@ -49,13 +49,14 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     && CARGO_HOME=/usr/local/cargo rustup toolchain install nightly --profile minimal --component rustfmt \
     && chmod -R a+rX /usr/local/rustup /usr/local/cargo
 
-# the tools of the hooks, prebuilt; dioxus-cli of the version of dioxus in Cargo.lock
+# the tools of the hooks and cargo-warloc (counts lines of code), prebuilt; dioxus-cli of the
+# version of dioxus in Cargo.lock
 ARG DIOXUS_CLI_VERSION=0.7.10
 RUN curl -L --proto '=https' --tlsv1.2 -sSf \
         https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
         | CARGO_HOME=/usr/local/cargo bash \
     && CARGO_HOME=/usr/local/cargo cargo binstall -y --locked \
-        prek wasm-pack trunk "dioxus-cli@$DIOXUS_CLI_VERSION" \
+        prek wasm-pack trunk "dioxus-cli@$DIOXUS_CLI_VERSION" cargo-warloc \
     && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 # Claude Code for the terminal; Zed's Claude Agent brings its own

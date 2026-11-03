@@ -3,7 +3,8 @@
 A container for working on Tournamo, made for letting Claude Code work without asking
 (`bypassPermissions`), in Zed or in a terminal. It has everything the hooks need, including the
 manual ones (`prek run --all-files --stage manual`): Rust stable with the wasm target, nightly
-rustfmt, wasm-pack, trunk, dx, Chromium and chromedriver, Node.
+rustfmt, wasm-pack, trunk, dx, Chromium and chromedriver, Node. Also cargo-warloc, to count lines
+of code.
 
 ## Using it in Zed
 

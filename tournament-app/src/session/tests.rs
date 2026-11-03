@@ -151,7 +151,14 @@ fn a_batch_is_checked_before_any_entrant_is_added() {
     let before = session.export();
     let undo = session.next_undo().cloned();
 
-    for names in [["Bob", "Alice"], ["Bob", "Bob"], ["Bob", " "]] {
+    for names in [
+        ["Bob", "Alice"],
+        ["Bob", "ALICE"],
+        ["Bob", "Ａｌｉｃｅ"],
+        ["Bob", "Bob"],
+        ["Bob", "bob"],
+        ["Bob", " "],
+    ] {
         let names = names.map(str::to_owned);
         assert!(session.add_named_entrants(&names).is_err());
         assert_eq!(session.export(), before);

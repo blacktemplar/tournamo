@@ -562,7 +562,10 @@ impl PhaseForm {
             // Rejected input stays visible even when the field becomes irrelevant.
             .filter(|(node, _)| {
                 self.draft.is_relevant(&node.path).unwrap_or(true)
-                    || self.rejected.iter().any(|rejected| rejected.path == node.path)
+                    || self
+                        .rejected
+                        .iter()
+                        .any(|rejected| rejected.path == node.path)
             })
             .map(|(node, completed)| {
                 let field = &node.field;

@@ -455,8 +455,12 @@ impl Session {
     /// undoable action, as when calling [`Self::add_entrant`] for each one.
     ///
     /// # Errors
-    /// Returns an error if a name is empty or duplicated, or the competition has started.
-    pub fn add_named_entrants(&mut self, names: &[String]) -> Result<Vec<EntrantId>, AddEntrantError> {
+    /// Returns an error if a name is empty or looks like an existing or earlier name,
+    /// see [`Self::entrant_like`], or the competition has started.
+    pub fn add_named_entrants(
+        &mut self,
+        names: &[String],
+    ) -> Result<Vec<EntrantId>, AddEntrantError> {
         self.check_names(names.iter().map(String::as_str))?;
         names
             .iter()

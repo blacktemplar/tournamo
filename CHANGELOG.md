@@ -10,163 +10,64 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-03
+
+Competitions saved with 0.1.0 open unchanged.
+
 ### Added
 
-- The help names the version of Tournamo.
-- An entrant is renamed in place in the list of entrants, keeping its place,
-  rather than removed and added again. Renaming is not undone by Undo.
-- A list pasted into the name of a new entrant adds an entrant for each of its
-  lines, or nobody if one of the names is taken.
-- The help explains how a competition is run, and every format, criterion of
-  the standings and metric. The list of competitions says what Tournamo is for
-  and links there, as do the empty list of entrants and the phase, in a tab of
-  its own.
-- The metrics of the phase are listed by name, rather than those the format
-  recommends first, so that they stay in place when another format is chosen.
-- Before the start, the phase says how many rounds and matches it takes with
-  the entrants entered, e.g. 23 rounds and 276 matches of a round robin of 24.
-- The cross table ends each row with what its results add up to, tints wins
-  and losses, and its names are no heavier than the results.
-- The view shown after the start (matches, standings, bracket or cross table,
-  phase) is in the URL, so that a reload keeps it and the browser's back
-  button returns to the one before; a competition opened shows its matches,
-  rather than the view last chosen in another one. A URL naming no
-  competition says so.
-- A phase whose matches never end in a draw, a single or double elimination,
-  no longer shows or asks for the points for a draw and the Sonneborn-Berger
-  weight of an opponent played to a draw; they keep their answers.
-- Random rounds and Monster DYP say what they are for, and the rounds of a
-  Monster DYP say that all of them are drawn at the start.
-- Naming a new competition, or renaming one, as another one is named says so
-  while it is typed.
-- The bracket draws no box for a pairing against nobody: the entrant moving on
-  shows in the next round, tagged "bye", so that a knockout of 20 is half as
-  high. A bracket higher than the screen scrolls within it, the names of the
-  rounds staying on top, and its edges fade out where more of it is out of
-  sight.
+- A help page on how a competition is run and on every format, criterion and
+  metric, linked from the list of competitions, the entrants and the phase. It
+  names the version.
+- Entrants are renamed in place; pasting a list adds an entrant per line.
+- Before the start, the phase says how many rounds and matches it takes.
+- The view (matches, standings, bracket, cross table, phase) is in the URL, so
+  a reload and the back button keep it.
+- The cross table shows each entrant's total and tints wins and losses.
+- Deleting a competition offers to export it first.
 
 ### Changed
 
-- Plugin authors provide phase ranking and scoring suggestions through
-  `PhaseFormat::suggestions`, rather than the generic `Plugin` trait and derive
-  attribute. Schema defaults and saved configurations are unchanged.
-
-- Configuration choices stay visible even when incompatible with the current
-  settings. The form reports conflicts after selection; the CLI asks for corrections
-  after checking the whole configuration, including unresolved dependencies.
-
-- New phase forms follow the format's suggested ranking and scoring until either
-  is edited. Then both are kept when the format changes. “Apply suggested ranking”
-  replaces both sections and resumes following. Editing an existing phase starts
-  with its settings kept.
-
-- The CLI uses the same competition operations as the GUI, including the
-  minimum number of entrants a format needs. Action refusals use the app's
-  wording; a refused phase edit names the reported match that prevents it.
-
-- Renamed from Matchwright to Tournamo, now hosted at
-  <https://blacktemplar.github.io/tournamo/>. Competitions stored in the browser
-  under the old name are not carried over; export them there and import them
-  here.
-
-- A Monster DYP takes at most 100 rounds, all of which it schedules at once; a
-  phase saved with more still loads, and editing it asks for fewer.
-- A Monster DYP starts with four entrants at least, rather than finishing at
-  once with fewer.
+- The form of the phase lists every choice and reports conflicts after
+  selection. A new phase follows the format's suggested ranking and scoring
+  until either is edited; "Apply suggested ranking" follows them again. Fields
+  about draws are hidden for formats without draws.
+- The bracket draws no box for a bye, so it is about half as high, and scrolls
+  within itself.
+- Rounds of a knockout are named by their stage (semifinals, final), also in
+  the standings.
+- The standings show the metrics ranked by right after the names, in the order
+  of the criteria.
+- A Monster DYP needs at least four entrants and takes at most 100 rounds
+  (phases saved with more still load).
+- Names of entrants differing only in case are refused.
+- The command line uses the same operations and wording as the app.
+- Plugin authors: ranking and scoring suggestions moved from the `Plugin` trait
+  and derive to `PhaseFormat::suggestions`; `plugin-factory`'s `Draft` exposes
+  its fields as a tree (`Draft::fields`) instead of `Candidate`s.
 
 ### Fixed
 
-- An imported file naming its competition by nothing but spaces is named after
-  the file, or else "Competition", rather than shown as an empty entry of the
-  list.
+- Accessibility: the focus no longer falls to the page after an action,
+  actions and results are announced, and buttons, the standings and the
+  preview of a typed result are named properly.
+- Phones: matches stack their sides, names break only between words, the
+  standings keep rank and name in sight, and the bar and views no longer shift
+  or get cut off.
+- A number a field of the phase does not take keeps the phase from being saved,
+  rather than being dropped unnoticed.
+- Escape in a dropdown closes only the dropdown.
+- A double tap reporting a result no longer reopens the match.
+- Errors show at their field and are gone after the next action; a refused
+  change of the phase names the match preventing it.
+- An import that fails says why; a competition named only by spaces gets the
+  file's name.
+- Many smaller fixes to the look (dark theme, tabs, touch targets) and to the
+  German wording.
 
-- A number a field of the phase does not take keeps the phase from being added
-  or saved, rather than the number before it being kept unnoticed; why shows
-  while it is typed, and the focus goes to the field.
-- Escape in the list of a choice closes only the list, no longer the dialog
-  around it with the edits made there, and the focus is back at the choice. The
-  option highlighted in such a list stands out clearly.
-- A double tap reporting a result no longer reopens the match at once: the
-  button reopening it takes no tap for a moment after it shows.
-- The views (matches, standings, bracket, phase) stay right below the bar, with
-  nothing showing through between them, and fit on one line on the narrowest
-  phones; the bar no longer shifts between screens that scroll and those that
-  do not.
-- The focus no longer falls to the page: a new competition opens at the field of
-  the first entrant, the start moves to the matches, removing an entrant moves
-  to the next one, and a result reported in the bracket moves to its heading
-  rather than to the next match, where one more Enter reported it. The edit of
-  the phase opens at its format, and the question whether to delete a
-  competition at Cancel, as an alert dialog.
-- Adding or removing an entrant, adding or changing the phase and the start are
-  announced, and the announcement of the last result names who won.
-- Screen readers hear a draw button by its match ("Alice – Bob: draw"), the
-  preview of a result typed in as it changes, the standings by their caption
-  with each row by its name, and the switch between the matches playable now
-  and those by round by its name. Buttons showing only their icon show what
-  they do under the pointer.
-- On a phone, a match stacks its sides, each name on a line of its own beside
-  its button, so that names break only between words. A match played keeps a
-  solid border, the dashed one being for placeholders, and its loser recedes
-  behind its winner.
-- The standings show the metrics the phase is ranked by right after the names,
-  in the order of its criteria, and the matches played last; on a phone the
-  rank and the name stay in sight while the rest scrolls. The metrics of an
-  entrant yet to play recede.
-- The warning that the browser may not keep the competitions takes one line
-  until unfolded, with buttons big enough to tap. What an action did shows in a
-  toast at the bottom for a while, rather than in a line that pushed the page
-  down, and the banner of the winners shows above the standings, so that the
-  matches no longer move when the last result is reported.
-- Why an action was refused is gone once the next action is done, also on the
-  list of competitions and in a dialog, and no longer said again when another
-  language is chosen.
-- A change of the phase refused for a result it does not fit names the match of
-  that result and says that reopening it allows the change. A change that keeps
-  results says how many, and the dialog says in plain words that results stay.
-- What is said about a plugin or a field, and the hint below the entry of
-  results, reads as sentences. Each criterion of the ranking says when to rank
-  by it, rather than what its metric is, and a metric calculated since a
-  criterion ranks by it names that criterion.
-- A round of a knockout whose matches are all of one stage is named by it (the
-  semifinals, the final), in the list of rounds, above its matches and in the
-  standings, which name the round an entrant lost in by the stage of its match.
-- A file that cannot be imported says whether it is no competition at all, one
-  of a newer version, or a damaged one.
-- The question whether to delete a competition offers to export it first.
-- An empty or taken name of an entrant, and an empty name of a new competition,
-  are refused at their field, in one message instead of two.
-- German: "Sieger" for the winner, "höhere Sonneborn-Berger-Wertung" (and so
-  for Buchholz), "Vorherige Runde", and a clearer hint below the entry of
-  results.
-- The names in the bracket look like the other names rather than like links,
-  their row tinted under the pointer.
-- In the dark theme, cards stand out from the page behind them.
-- The views are tabs, unlike the joined buttons within a card, and the native
-  lists (the round, the language, the colours) look like the choices of the
-  phase.
-- Under a finger, checkboxes are bigger, on rows as high as every control.
-- The bar shows the labels of its buttons down to about 600 pixels (800 in
-  German), and on a phone the competition's name takes two lines rather than
-  being cut off; on a wide screen the bar lines up with the page.
-- The form of the phase is flat within its card, a criterion's buttons stay
-  beside its name on a phone, and removing one is an icon. Removing an entrant
-  and deleting a competition are quieter buttons.
-- The field of a new entrant keeps room for a name beside a long button.
-- On the narrowest phones, cards and the buttons of a match take less padding,
-  so that a long word of a name fits beside the buttons in wider fonts too.
-- Once a result typed in was reported, the hint below the entry of results
-  folds behind its ⓘ, and once every match has a result, the entry is gone
-  until a match is reopened.
-- Undo says under the pointer, while it has nothing to undo, that it covers
-  what was done since the competition was opened, and that reopening a match
-  changes a result reported before.
-- The name of an entrant differing from another one's only in case ("alice"
-  beside "Alice") is refused, rather than only pointed out.
+## [0.1.0] - 2026-10-29
 
-## [0.1.0] - 2026-10-28
-
-The first release, hosted at <https://blacktemplar.github.io/matchwright/>.
+The first release, hosted at <https://blacktemplar.github.io/tournamo/>.
 
 ### Added
 
@@ -188,5 +89,6 @@ The first release, hosted at <https://blacktemplar.github.io/matchwright/>.
   is no tracking, that GitHub Pages, which serves the page, sees the IP address,
   and who the media owner is (§ 25 MedienG).
 
-[Unreleased]: https://github.com/blacktemplar/tournamo/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/blacktemplar/tournamo/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/blacktemplar/tournamo/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/blacktemplar/tournamo/releases/tag/v0.1.0

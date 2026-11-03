@@ -1433,7 +1433,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "e2e-harness"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "dirs",
@@ -2967,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "plugin-factory"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "inventory",
  "plugin-factory-derive",
@@ -2981,7 +2981,7 @@ dependencies = [
 
 [[package]]
 name = "plugin-factory-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4266,7 +4266,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fluent-bundle",
  "fluent-syntax",
@@ -4285,7 +4285,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-browser"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -4306,7 +4306,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "getrandom 0.4.3",
@@ -4326,7 +4326,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion",
  "dyn-clone",
@@ -4351,7 +4351,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-gui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dioxus",
  "dioxus-icons",
@@ -4370,7 +4370,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-gui-e2e"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "e2e-harness",
  "serde_json",
@@ -4379,7 +4379,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-web"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "console_error_panic_hook",
  "getrandom 0.4.3",
@@ -4395,7 +4395,7 @@ dependencies = [
 
 [[package]]
 name = "tournament-web-e2e"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "e2e-harness",
  "futures-util",

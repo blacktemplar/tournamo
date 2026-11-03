@@ -1,0 +1,83 @@
+{
+  "entrants": [
+    {
+      "id": "12a947a6-ce3b-47d3-806a-2b927e0a6d73",
+      "annotations": []
+    },
+    {
+      "id": "05c0f7b6-d5fc-4523-a899-f680ce748613",
+      "annotations": []
+    },
+    {
+      "id": "038fcea8-4913-49c4-a49c-fd02ae132cca",
+      "annotations": []
+    },
+    {
+      "id": "331c450e-f575-4bb0-8b3f-fd3a14a3eae4",
+      "annotations": []
+    }
+  ],
+  "phases": [
+    {
+      "id": "21cf3a37-504c-45c2-9322-162b280c3265",
+      "phase_format": {
+        "type": "tournament_engine::single_elimination",
+        "value": {
+          "third_place_match": true,
+          "bracket": null
+        }
+      },
+      "ranker": [
+        {
+          "type": "tournament_engine::more_wins",
+          "value": null
+        }
+      ],
+      "metrics_calculators": [
+        {
+          "type": "tournament_engine::round_of_first_loss",
+          "value": null
+        },
+        {
+          "type": "tournament_engine::wins_draws_losses",
+          "value": null
+        }
+      ],
+      "data": {
+        "rankings": [],
+        "ranking_ids_ordered_by_unique_rank": [],
+        "matches": [],
+        "byes": [],
+        "seed": [
+          237,
+          149,
+          61,
+          29,
+          91,
+          93,
+          128,
+          68,
+          125,
+          58,
+          173,
+          82
+        ]
+      }
+    }
+  ],
+  "started": false,
+  "seed": [
+    15,
+    139,
+    118,
+    203,
+    248,
+    252,
+    89,
+    207,
+    183,
+    40,
+    35,
+    217
+  ]
+}

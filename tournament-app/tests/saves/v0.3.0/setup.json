@@ -1,0 +1,361 @@
+{
+  "format": 1,
+  "name": "setup",
+  "log": [
+    {
+      "id": "668d337e-bba7-4719-b60e-31f2a4b9f4a0",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::set_competition_seed",
+          "value": {
+            "seed": [
+              15,
+              139,
+              118,
+              203,
+              248,
+              252,
+              89,
+              207,
+              183,
+              40,
+              35,
+              217
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "a6fb6c36-cd91-4b4c-a242-7a0f579a5bde",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "12a947a6-ce3b-47d3-806a-2b927e0a6d73",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "79b12d48-6d1c-43d5-80a8-5fd91146d9f2",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "05c0f7b6-d5fc-4523-a899-f680ce748613",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "40a40645-5a11-4a11-a4f6-9a6c99c353e3",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "038fcea8-4913-49c4-a49c-fd02ae132cca",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "564d4278-6341-4a90-b6be-616ba452ec1f",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "331c450e-f575-4bb0-8b3f-fd3a14a3eae4",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "45f040cb-6815-4eb5-acea-502c1c0a16bb",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "3056f5b1-d55e-4530-bb35-3971d6796cec",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "23b2e4cc-3c7b-4b4c-bee8-30cd5064896a",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::remove_entrant",
+          "value": {
+            "entrant_id": "3056f5b1-d55e-4530-bb35-3971d6796cec"
+          }
+        }
+      }
+    },
+    {
+      "id": "e7941ae9-0b33-422e-b073-aeb6aaa088c6",
+      "kind": {
+        "Undo": "23b2e4cc-3c7b-4b4c-bee8-30cd5064896a"
+      }
+    },
+    {
+      "id": "71729609-f4b2-4b57-8a3a-9ebd1f3f09a9",
+      "kind": {
+        "Undo": "e7941ae9-0b33-422e-b073-aeb6aaa088c6"
+      }
+    },
+    {
+      "id": "0d50291f-2e2f-478d-b1de-a0331459727d",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_phase",
+          "value": {
+            "id": "9d013557-4be1-4654-b913-9f2eb9641c25",
+            "plugins": {
+              "format": {
+                "type": "tournament_engine::round_robin",
+                "value": null
+              },
+              "ranking": [
+                {
+                  "type": "tournament_engine::more_points",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::more_sonneborn_berger",
+                  "value": null
+                }
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::points",
+                  "value": {
+                    "points_for_win": 1.0,
+                    "points_for_draw": 0.5,
+                    "points_for_bye": 1.0
+                  }
+                },
+                {
+                  "type": "tournament_engine::sonneborn_berger",
+                  "value": {
+                    "weight_for_win": 1.0,
+                    "weight_for_draw": 0.5
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "aa1616ed-fbc4-40e0-8bfd-853ac3845542",
+      "kind": {
+        "Undo": "0d50291f-2e2f-478d-b1de-a0331459727d"
+      }
+    },
+    {
+      "id": "4a234b6f-587b-46a0-a3b6-1e72a4f231c6",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_phase",
+          "value": {
+            "id": "21cf3a37-504c-45c2-9322-162b280c3265",
+            "plugins": {
+              "format": {
+                "type": "tournament_engine::single_elimination",
+                "value": {
+                  "third_place_match": true,
+                  "bracket": null
+                }
+              },
+              "ranking": [
+                {
+                  "type": "tournament_engine::later_first_loss",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::fewer_losses",
+                  "value": null
+                }
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": null
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e01c13e7-34b8-4cef-b049-1cc6297282be",
+      "kind": {
+        "Replace": {
+          "target": "4a234b6f-587b-46a0-a3b6-1e72a4f231c6",
+          "with": {
+            "type": "tournament_engine::add_phase",
+            "value": {
+              "id": "21cf3a37-504c-45c2-9322-162b280c3265",
+              "plugins": {
+                "format": {
+                  "type": "tournament_engine::single_elimination",
+                  "value": {
+                    "third_place_match": true,
+                    "bracket": null
+                  }
+                },
+                "ranking": [
+                  {
+                    "type": "tournament_engine::more_wins",
+                    "value": null
+                  }
+                ],
+                "metrics": [
+                  {
+                    "type": "tournament_engine::round_of_first_loss",
+                    "value": null
+                  },
+                  {
+                    "type": "tournament_engine::wins_draws_losses",
+                    "value": null
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "people": [
+    {
+      "id": "12a947a6-ce3b-47d3-806a-2b927e0a6d73",
+      "name": "Alicia"
+    },
+    {
+      "id": "05c0f7b6-d5fc-4523-a899-f680ce748613",
+      "name": "Bob"
+    },
+    {
+      "id": "038fcea8-4913-49c4-a49c-fd02ae132cca",
+      "name": "Carol"
+    },
+    {
+      "id": "331c450e-f575-4bb0-8b3f-fd3a14a3eae4",
+      "name": "Dave"
+    },
+    {
+      "id": "3056f5b1-d55e-4530-bb35-3971d6796cec",
+      "name": "Eve"
+    }
+  ],
+  "competition": {
+    "entrants": [
+      {
+        "id": "12a947a6-ce3b-47d3-806a-2b927e0a6d73",
+        "annotations": []
+      },
+      {
+        "id": "05c0f7b6-d5fc-4523-a899-f680ce748613",
+        "annotations": []
+      },
+      {
+        "id": "038fcea8-4913-49c4-a49c-fd02ae132cca",
+        "annotations": []
+      },
+      {
+        "id": "331c450e-f575-4bb0-8b3f-fd3a14a3eae4",
+        "annotations": []
+      }
+    ],
+    "phases": [
+      {
+        "id": "21cf3a37-504c-45c2-9322-162b280c3265",
+        "phase_format": {
+          "type": "tournament_engine::single_elimination",
+          "value": {
+            "third_place_match": true,
+            "bracket": null
+          }
+        },
+        "ranker": [
+          {
+            "type": "tournament_engine::more_wins",
+            "value": null
+          }
+        ],
+        "metrics_calculators": [
+          {
+            "type": "tournament_engine::round_of_first_loss",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::wins_draws_losses",
+            "value": null
+          }
+        ],
+        "data": {
+          "rankings": [],
+          "ranking_ids_ordered_by_unique_rank": [],
+          "matches": [],
+          "byes": [],
+          "seed": [
+            237,
+            149,
+            61,
+            29,
+            91,
+            93,
+            128,
+            68,
+            125,
+            58,
+            173,
+            82
+          ]
+        }
+      }
+    ],
+    "started": false,
+    "seed": [
+      15,
+      139,
+      118,
+      203,
+      248,
+      252,
+      89,
+      207,
+      183,
+      40,
+      35,
+      217
+    ]
+  }
+}

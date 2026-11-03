@@ -8,7 +8,10 @@
 
 mod range;
 
-use std::fmt::{self, Debug, Formatter};
+use std::{
+    any::TypeId,
+    fmt::{self, Debug, Formatter},
+};
 
 pub use plugin_factory_derive::Configurable;
 pub use range::{DecimalRange, IntegerRange, NumberRange};
@@ -21,7 +24,7 @@ use thiserror::Error;
 use crate::{
     Plugin,
     catalog::{AnyAxis, Axis},
-    compatibility::{self, Incompatibility},
+    compatibility::{self, Fact, Incompatibility},
     config::{self, Config, ConfigError, Path, PluginConfig, Value, names},
 };
 
@@ -533,6 +536,8 @@ pub struct Field {
     description: Option<&'static str>,
     kind: FieldKind,
     default: Option<Value>,
+    /// The type of the fact whose presence makes the field irrelevant.
+    irrelevant_with: Option<fn() -> TypeId>,
 }
 
 impl Field {
@@ -546,7 +551,25 @@ impl Field {
             description: None,
             kind,
             default: None,
+            irrelevant_with: None,
         }
+    }
+
+    /// This field irrelevant where the composite provides a fact of type `F`, from
+    /// `#[plugin(irrelevant_with = F)]`. Called by the derive; not part of the API.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn made_irrelevant_by<F: Fact>(mut self) -> Self {
+        self.irrelevant_with = Some(TypeId::of::<F>);
+        self
+    }
+
+    /// The type of the fact whose presence in the composite makes this field irrelevant, e.g. the
+    /// points for a draw where no match ends in a draw: a UI may leave it out while the composite
+    /// provides it, see [`Draft::is_relevant`](crate::draft::Draft::is_relevant). It is answered
+    /// all the same.
+    pub fn irrelevant_with(&self) -> Option<TypeId> {
+        self.irrelevant_with.map(|type_id| type_id())
     }
 
     /// This field with `description` as the help text of its question. Called by the derive; not

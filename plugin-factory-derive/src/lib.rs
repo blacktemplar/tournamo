@@ -44,6 +44,9 @@ pub fn axis(arguments: TokenStream, input: TokenStream) -> TokenStream {
 ///   `multiple_of` has to be a multiple of what the type takes multiples of, and `min` and `max`
 ///   multiples of `multiple_of`. A bound wider than the type's leaves the type's; a bound or
 ///   default out of the range makes building the schema panic;
+/// - `irrelevant_with = Fact`, optional: a type implementing `Fact` whose presence in the
+///   composite makes the field irrelevant, so that a UI may leave it out (`Field::irrelevant_with`,
+///   `Draft::is_relevant`); it is answered all the same;
 /// - or `skip` alone, which leaves the field out of the schema, e.g. for state a plugin builds up
 ///   once it is configured. Such a field needs a `#[serde(default)]`, on the field or the struct,
 ///   which is what a plugin built from a config holds in it; a config answering it is not
@@ -76,7 +79,8 @@ pub fn derive_plugin(input: TokenStream) -> TokenStream {
 /// # Attributes
 ///
 /// None on the struct. On every field `serde` deserializes, `label = "..."`, required, and
-/// `description = "..."`, `default`, `min`, `max` and `multiple_of`, optional, or `skip`, as for
+/// `description = "..."`, `default`, `min`, `max`, `multiple_of` and `irrelevant_with`, optional,
+/// or `skip`, as for
 /// `Plugin`.
 ///
 /// # Errors

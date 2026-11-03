@@ -328,6 +328,27 @@ impl<T: Configurable> Draft<T> {
         ))
     }
 
+    /// Whether the field at `path` matters with the answers given: not if the composite provides
+    /// the fact that makes it irrelevant (see [`Field::irrelevant_with`]), its context or a plugin
+    /// answered so far; a position in a list always does. A UI may leave out a field that does
+    /// not; it is answered all the same.
+    ///
+    /// # Errors
+    /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers.
+    pub fn is_relevant(&self, path: &Path) -> Result<bool, ConfigError> {
+        let schema = T::schema();
+        let position = locate(&schema, &self.answers, path)?;
+        let Some(fact) = position.field.and_then(|field| field.irrelevant_with()) else {
+            return Ok(true);
+        };
+        let provided = self.context.provides_type(fact)
+            || Tree::of(&schema, &self.answers)
+                .declarations(None)
+                .iter()
+                .any(|declared| declared.declaration.provides_type(fact));
+        Ok(!provided)
+    }
+
     /// The plugins that could answer the position at `path`, in the order of their ids, each with
     /// how it fits; empty if the position takes no plugins.
     ///
@@ -1630,6 +1651,21 @@ mod tests {
     #[register]
     impl Metric for Losses {}
 
+    /// A metric with a field that does not matter in an elimination.
+    #[derive(Debug, Serialize, Deserialize, Plugin)]
+    #[plugin(
+        id = "draws",
+        label = "draws",
+        description = "a plugin of the draft's tests"
+    )]
+    struct Draws {
+        #[plugin(label = "Points for a draw", default = 0.5, irrelevant_with = Eliminating)]
+        for_draw: f64,
+    }
+
+    #[register]
+    impl Metric for Draws {}
+
     /// A metric made of metrics, so that plugins nest.
     #[derive(Debug, Serialize, Deserialize, Plugin)]
     #[plugin(
@@ -1684,6 +1720,41 @@ mod tests {
             draft.set(&path(at), answer.clone()).unwrap();
         }
         draft
+    }
+
+    /// A field is irrelevant while the composite provides the fact its schema names, here the
+    /// eliminations a knockout provides; it stays answered all the same.
+    #[test]
+    fn a_field_is_irrelevant_while_its_fact_is_provided() {
+        let mut draft = answered(&[
+            ("format", json!(plugin::<RoundRobin>())),
+            ("metrics", json!([plugin::<Draws>().with("for_draw", 0.5)])),
+        ]);
+        let for_draw = path("metrics[0].for_draw");
+        assert!(draft.is_relevant(&for_draw).unwrap());
+        assert!(
+            draft.is_relevant(&path("metrics[0]")).unwrap(),
+            "a position"
+        );
+
+        draft
+            .set(
+                &path("format"),
+                json!(plugin::<Knockout>().with("third_place", false)),
+            )
+            .unwrap();
+
+        assert!(!draft.is_relevant(&for_draw).unwrap());
+        assert!(draft.is_relevant(&path("format")).unwrap());
+        assert_eq!(
+            draft.answers().get_at(&for_draw),
+            Some(&json!(0.5)),
+            "still answered"
+        );
+        assert!(matches!(
+            draft.is_relevant(&path("metrics[1].for_draw")),
+            Err(ConfigError::UnknownField { .. })
+        ));
     }
 
     /// The candidates at `at` in a phase of single players, by id, each with why it does not fit.
@@ -1960,6 +2031,7 @@ mod tests {
         let all = [
             "buchholz",
             "combined",
+            "draws",
             "losses",
             "match_count",
             "score",
@@ -1969,13 +2041,20 @@ mod tests {
         // the wins are left out whatever they are configured with
         assert_eq!(
             ids("metrics[2]"),
-            ["combined", "losses", "match_count", "score"]
+            ["combined", "draws", "losses", "match_count", "score"]
         );
         // what answers the position itself stays a candidate, and so does what answers another
         // field
         assert_eq!(
             ids("metrics[0]"),
-            ["buchholz", "combined", "losses", "match_count", "score"]
+            [
+                "buchholz",
+                "combined",
+                "draws",
+                "losses",
+                "match_count",
+                "score"
+            ]
         );
         assert_eq!(ids("metrics"), all);
         assert_eq!(ids("tie_break.parts[0]"), all);

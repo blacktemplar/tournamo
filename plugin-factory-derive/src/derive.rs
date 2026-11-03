@@ -253,6 +253,9 @@ struct Field {
     default: Option<Offered>,
     /// How the range of numbers the field's type takes is narrowed.
     narrowing: Narrowing,
+    /// The fact whose presence makes the field irrelevant, from
+    /// `#[plugin(irrelevant_with = Fact)]`.
+    irrelevant_with: Option<Type>,
     /// The function the field is serialized with instead of its `Serialize` impl.
     serialize_with: Option<ExprPath>,
 }
@@ -344,6 +347,7 @@ impl Field {
         let mut description = None;
         let mut default = None;
         let mut narrowing = Narrowing::default();
+        let mut irrelevant_with = None;
         let mut left_out = None;
         for attribute in attributes(&field.attrs, "plugin") {
             attribute.parse_nested_meta(|meta| {
@@ -359,24 +363,30 @@ impl Field {
                     set_once(&mut narrowing.max, &meta, meta.value()?.parse()?)
                 } else if meta.path.is_ident("multiple_of") {
                     set_once(&mut narrowing.multiple_of, &meta, meta.value()?.parse()?)
+                } else if meta.path.is_ident("irrelevant_with") {
+                    set_once(&mut irrelevant_with, &meta, meta.value()?.parse()?)
                 } else if meta.path.is_ident("skip") {
                     set_once(&mut left_out, &meta, meta.path.clone())
                 } else {
                     Err(meta.error(
-                        "expected `label`, `description`, `default`, `min`, `max`, `multiple_of` \
-                         or `skip`",
+                        "expected `label`, `description`, `default`, `min`, `max`, `multiple_of`, \
+                         `irrelevant_with` or `skip`",
                     ))
                 }
             })?;
         }
         if let Some(left_out) = left_out {
-            if label.is_some() || description.is_some() || default.is_some() || narrowing.narrows()
+            if label.is_some()
+                || description.is_some()
+                || default.is_some()
+                || narrowing.narrows()
+                || irrelevant_with.is_some()
             {
                 return Err(Error::new_spanned(
                     left_out,
                     format!(
                         "a field of a {what} left out of the schema takes no label, description, \
-                         default or range"
+                         default, range or fact making it irrelevant"
                     ),
                 ));
             }
@@ -419,6 +429,7 @@ impl Field {
             description,
             default,
             narrowing,
+            irrelevant_with,
             serialize_with,
         }))))
     }
@@ -433,11 +444,15 @@ impl Field {
             description,
             default,
             narrowing,
+            irrelevant_with,
             serialize_with,
         } = self;
         let described = description
             .as_ref()
             .map(|description| quote!(let field = field.described(#description);));
+        let irrelevant_with = irrelevant_with
+            .as_ref()
+            .map(|fact| quote!(let field = field.made_irrelevant_by::<#fact>();));
         // before the default, which has to be in the narrowed range
         let narrowing = narrowing.calls();
         let default = default.as_ref().map(|default| {
@@ -470,6 +485,7 @@ impl Field {
                     <#ty as ::plugin_factory::schema::FieldType>::kind(),
                 );
                 #described
+                #irrelevant_with
                 #narrowing
                 #default
                 field
@@ -658,9 +674,27 @@ mod tests {
                     state: i64,
                 }
             }),
-            "a field of a plugin left out of the schema takes no label, description, default or \
-             range"
+            "a field of a plugin left out of the schema takes no label, description, default, \
+             range or fact making it irrelevant"
         );
+    }
+
+    /// The fact making a field irrelevant is a type, named on its field of the schema.
+    #[test]
+    fn a_field_names_the_fact_making_it_irrelevant() {
+        let expanded = expand_plugin(&parse_quote! {
+            #[plugin(id = "points", label = "points")]
+            struct Points {
+                #[plugin(label = "for a draw", irrelevant_with = facts::NoDraws)]
+                for_draw: f64,
+            }
+        })
+        .unwrap()
+        .to_string();
+
+        assert!(expanded.contains(
+            &quote!(let field = field.made_irrelevant_by::<facts::NoDraws>();).to_string()
+        ));
     }
 
     /// A field is narrowed to the multiples before its bounds, which have to be multiples, and

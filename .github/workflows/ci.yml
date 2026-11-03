@@ -113,20 +113,27 @@ jobs:
         with:
           extra-args: --all-files cargo-fmt
 
-  # a tag `v<version>` (pushed, or chosen when running the workflow by hand) must name the version
-  # in Cargo.toml, the one the help shows; only a release `v<major>.<minor>.<patch>` is deployed,
-  # not e.g. `v0.2.0-rc.1`
+  # a tag `v<version>` (pushed, or chosen when running the workflow by hand) must be on main and
+  # name the version in Cargo.toml, the one the help shows; only a release
+  # `v<major>.<minor>.<patch>` is deployed, not e.g. `v0.2.0-rc.1`
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.check.outputs.deploy }}
     steps:
+      # the whole history, with main, to tell whether the tag is on it
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - id: check
         env:
           TAG: ${{ github.ref_name }}
         run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::the tag $TAG is on a commit that main does not contain"
+            exit 1
+          fi
           # e.g. path+file:///…/tournament-gui#0.1.0
           id=$(cargo pkgid -p tournament-gui)
           version=${id##*[#@]}

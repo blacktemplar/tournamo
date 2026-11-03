@@ -1045,8 +1045,8 @@ stale); dismissing the warning per session only (nags in every tab).
 
 **Hosting**: static files over HTTPS on GitHub Pages, under `/tournamo/`
 (hence `--base-path`), built and deployed by CI for each release tag
-(`v<major>.<minor>.<patch>`, naming the version in `Cargo.toml`, which the help
-shows; not a pre-release like `v0.2.0-rc.1`) that passes it, so that what is
+(`v<major>.<minor>.<patch>` on `main`, naming the version in `Cargo.toml`,
+which the help shows; not a pre-release like `v0.2.0-rc.1`) that passes it, so that what is
 hosted is always a release (deploying every
 push to `main` would make releases meaningless): the wasm holds the absolute paths of its asset sources, so what is
 hosted must not be built on a developer's machine. Navigation is after `#`, so

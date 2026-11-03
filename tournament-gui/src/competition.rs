@@ -127,9 +127,10 @@ impl Ctx {
     }
 
     /// Writes what changed since the last save, without holding the session across the write, and
-    /// tells the other tabs once it is written.
+    /// tells the other tabs once it is written; nothing while another tab changes the competition.
+    /// Right after opening it, that is what an older version left out.
     fn save(mut self) {
-        if !self.session.peek().has_unsaved_changes() {
+        if self.lock.peek().is_none() || !self.session.peek().has_unsaved_changes() {
             return;
         }
         let changes = self.session.peek().unsaved_changes();
@@ -238,6 +239,7 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
             announcement: Signal::new(None),
         }
     });
+    use_hook(move || ctx.save());
     use_future(move || follow(ctx, competition));
     let mut shown = page.shown;
     use_effect(move || {
@@ -557,6 +559,8 @@ async fn follow(mut ctx: Ctx, key: CompetitionKey) {
     // what the other tab saved last
     catch_up(ctx, key).await;
     ctx.lock.set(Some(Rc::new(lock)));
+    // e.g. what the other tab, of an older version, left out
+    ctx.save();
 }
 
 /// Appends what was stored of the competition `key` since the session loaded or caught up last,

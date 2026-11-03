@@ -16,6 +16,10 @@ a file whose `"format"` changes is migrated, not refused.
   as its log played out, so that a later version can still show it should it no
   longer replay the log. Still format 1: older versions ignore it and open the
   file as before.
+- The browser stores the same next to each competition. A competition stored
+  by an earlier version gets it when it is next opened. The database moves to
+  version 2: a tab of an earlier version still open can no longer save and has
+  to be reloaded.
 
 ## [0.1.1] - 2026-11-03
 

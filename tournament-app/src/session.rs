@@ -89,6 +89,9 @@ pub struct Session {
     saved_entries: usize,
     /// The people added or changed since the last save.
     unsaved_people: IndexSet<EntrantId>,
+    /// Whether the storage holds the competition the log replays into, which it does not if
+    /// nothing is saved yet or it was saved by a version that did not store it.
+    competition_saved: bool,
 }
 
 impl Session {
@@ -114,11 +117,13 @@ impl Session {
             undone_phase: None,
             saved_entries: 0,
             unsaved_people: IndexSet::new(),
+            competition_saved: false,
         }
     }
 
     /// Opens the competition stored in `storage` under `key`. The session has done nothing yet, so
-    /// there is nothing to undo.
+    /// there is nothing to undo. If a version that did not store the competition the log replays
+    /// into saved it last, that is unsaved.
     ///
     /// # Errors
     /// Returns an error if nothing is stored under `key`, the storage cannot be read, or what is
@@ -142,6 +147,7 @@ impl Session {
             undone: Vec::new(),
             undone_phase: None,
             unsaved_people: IndexSet::new(),
+            competition_saved: stored.competition.is_some(),
         })
     }
 
@@ -186,16 +192,17 @@ impl Session {
     /// nothing is appended; if one does not apply, the entries before it stay appended.
     ///
     /// # Panics
-    /// Panics if `first_entry` is not [`Self::next_entry`], or the session has unsaved changes:
-    /// what was stored after them is of another session that took over the competition, and the
-    /// log would fork.
+    /// Panics if `first_entry` is not [`Self::next_entry`], or the session has unsaved entries or
+    /// people: what was stored after them is of another session that took over the competition,
+    /// and the log would fork. An unsaved competition is no change of the session's own, e.g. of
+    /// one opened read-only that an older version saved.
     pub fn catch_up_with<E>(
         &mut self,
         stored: &Stored,
         first_entry: usize,
     ) -> Result<usize, LoadError<E>> {
         assert!(
-            !self.has_unsaved_changes(),
+            self.machine.log().len() == self.saved_entries && self.unsaved_people.is_empty(),
             "a session catches up only with nothing unsaved"
         );
         assert_eq!(
@@ -205,6 +212,7 @@ impl Session {
         );
         let entries = entries(stored, first_entry)?;
         self.people = people(stored)?;
+        self.competition_saved = stored.competition.is_some();
         let appended = entries.len();
         for entry in entries {
             self.machine.apply(entry).map_err(LoadError::Replay)?;
@@ -251,6 +259,7 @@ impl Session {
             undone: Vec::new(),
             undone_phase: None,
             saved_entries: 0,
+            competition_saved: false,
         }
     }
 
@@ -266,8 +275,12 @@ impl Session {
         }
     }
 
+    /// Whether a save would write anything: entries, people, or the competition the log replays
+    /// into where the storage lacks it, see [`Self::load`].
     pub fn has_unsaved_changes(&self) -> bool {
-        self.machine.log().len() != self.saved_entries || !self.unsaved_people.is_empty()
+        self.machine.log().len() != self.saved_entries
+            || !self.unsaved_people.is_empty()
+            || !self.competition_saved
     }
 
     /// What changed since the last save, to be written to a storage and then handed to
@@ -275,7 +288,7 @@ impl Session {
     /// has not been saved yet creates the stored competition.
     ///
     /// # Panics
-    /// Panics if an entry of the log or a person does not serialize as JSON.
+    /// Panics if an entry of the log, a person or the competition does not serialize as JSON.
     pub fn unsaved_changes(&self) -> Changes {
         Changes {
             listing: Listing {
@@ -293,6 +306,8 @@ impl Session {
                 .iter()
                 .map(|id| (*id, record(self.person(id))))
                 .collect(),
+            competition: serde_json::to_string(self.competition())
+                .expect("a competition serializes as JSON"),
         }
     }
 
@@ -310,6 +325,8 @@ impl Session {
         self.saved_entries = self
             .saved_entries
             .max(changes.first_entry + changes.entries.len());
+        // stored with the latest changes; until those are written, their entries are unsaved
+        self.competition_saved = true;
         for (id, saved) in &changes.people {
             if record(self.person(id)) == *saved {
                 self.unsaved_people.shift_remove(id);

@@ -125,20 +125,15 @@ impl Stored {
     /// Panics if the file does not serialize as JSON, which it always does.
     pub fn export(&self) -> String {
         // a record that is no JSON, which no session writes, is kept as the text it is
-        let values = |records: &[String]| -> Vec<Value> {
-            records
-                .iter()
-                .map(|record| {
-                    serde_json::from_str(record).unwrap_or_else(|_| Value::String(record.clone()))
-                })
-                .collect()
+        let value = |record: &String| -> Value {
+            serde_json::from_str(record).unwrap_or_else(|_| Value::String(record.clone()))
         };
-        to_json(&File::<_, _, Value> {
+        to_json(&File {
             format: Format::CURRENT,
             name: Some(self.name.clone()),
-            log: values(&self.entries),
-            people: values(&self.people),
-            competition: None,
+            log: self.entries.iter().map(value).collect::<Vec<_>>(),
+            people: self.people.iter().map(value).collect::<Vec<_>>(),
+            competition: self.competition.as_ref().map(value),
         })
     }
 }

@@ -2054,6 +2054,72 @@ fn a_save_writes_what_changed_since_the_last_one() {
     );
 }
 
+/// For a version that can no longer replay the log.
+#[test]
+fn a_save_stores_what_the_log_replays_into() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+
+    now(session.save(&storage)).unwrap();
+
+    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
+    let competition: serde_json::Value =
+        serde_json::from_str(stored.competition.as_deref().unwrap()).unwrap();
+    assert_eq!(
+        competition,
+        serde_json::to_value(session.competition()).unwrap()
+    );
+}
+
+/// Opening a competition an older version saved is enough to store what its log replays into,
+/// while that version's log still replays.
+#[test]
+fn a_competition_stored_without_what_its_log_replays_into_gets_it_on_the_next_save() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    now(session.save(&storage)).unwrap();
+    storage.forget_competition(session.key());
+
+    let mut loaded = now(Session::load(&storage, session.key())).unwrap();
+
+    assert!(loaded.has_unsaved_changes());
+    let changes = loaded.unsaved_changes();
+    assert!(changes.entries().is_empty() && changes.people().is_empty());
+    now(loaded.save(&storage)).unwrap();
+    assert!(!loaded.has_unsaved_changes());
+    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
+    assert_eq!(
+        stored.competition.unwrap(),
+        serde_json::to_string(session.competition()).unwrap()
+    );
+    let reloaded = now(Session::load(&storage, session.key())).unwrap();
+    assert!(!reloaded.has_unsaved_changes());
+}
+
+/// A tab that opened such a competition read-only follows the one changing it.
+#[test]
+fn a_competition_stored_without_what_its_log_replays_into_is_caught_up_with() {
+    let storage = MemoryStorage::default();
+    let mut changing = Given::new().started();
+    now(changing.save(&storage)).unwrap();
+    storage.forget_competition(changing.key());
+    let mut following = now(Session::load(&storage, changing.key())).unwrap();
+
+    changing
+        .report(numbered(&changing, 1), MatchResult::AWins)
+        .unwrap();
+    now(changing.save(&storage)).unwrap();
+
+    assert_eq!(now(following.catch_up(&storage)).unwrap(), 1);
+    assert!(
+        !following.has_unsaved_changes(),
+        "the storage holds it again"
+    );
+}
+
 /// A GUI writes changes while the operator goes on, so a write may finish after a later one.
 #[test]
 fn changes_written_out_of_order_are_all_saved() {
@@ -2072,6 +2138,12 @@ fn changes_written_out_of_order_are_all_saved() {
     assert!(!session.has_unsaved_changes());
     let loaded = now(Session::load(&storage, session.key())).unwrap();
     assert_eq!(names(&loaded.entrants()), ["Alice", "Bob"]);
+    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
+    assert_eq!(
+        stored.competition.as_deref(),
+        Some(second.competition()),
+        "the competition of the whole log stays"
+    );
 }
 
 /// Changes taken before a person changed leave that change unsaved once they are written.
@@ -2458,6 +2530,11 @@ fn what_is_stored_is_exported_whether_it_replays_or_not() {
     assert_eq!(exported["log"].as_array().unwrap().len(), 3);
     assert_eq!(exported["log"][2], serde_json::json!({ "unknown": true }));
     assert_eq!(exported["people"][0]["name"], "Alice");
+    assert_eq!(
+        exported["competition"],
+        serde_json::to_value(session.competition()).unwrap(),
+        "what the log replayed into in the version that wrote it"
+    );
     assert!(Session::import(&file, "cup", &[]).is_err());
 }
 
@@ -2475,6 +2552,7 @@ fn what_does_not_replay_into_a_competition_is_not_loaded() {
             first_entry: 0,
             entries: entries.iter().map(|entry| (*entry).to_owned()).collect(),
             people: Vec::new(),
+            competition: "{}".to_owned(),
         }))
         .unwrap();
     };

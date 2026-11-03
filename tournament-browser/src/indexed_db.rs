@@ -1,14 +1,14 @@
 //! Competitions stored in the browser's IndexedDB.
 //!
-//! A database holds three object stores, each record of them a JSON text: `competitions`, the
+//! A database holds four object stores, each record of them a JSON text: `competitions`, the
 //! listing of each competition under its key; `entries`, the entries of the logs under
-//! `[competition, position]`; and `people`, under `[competition, entrant]`. A write is one
-//! transaction over all three.
+//! `[competition, position]`; `people`, under `[competition, entrant]`; and `replayed`, what the
+//! log of each competition replays into, under its key. A write is one transaction over all four.
 
 use std::rc::Rc;
 
 use futures_channel::oneshot;
-use futures_util::future::try_join3;
+use futures_util::future::{try_join3, try_join4};
 use idb::{
     Database, KeyRange, ObjectStore, Query, TransactionMode, TransactionResult,
     builder::ObjectStoreBuilder,
@@ -20,12 +20,16 @@ use tournament_app::storage::{Changes, CompetitionKey, Listing, Progress, Storag
 use wasm_bindgen::JsValue;
 
 /// The version of the layout of the database, raised with every change of its object stores.
-const VERSION: u32 = 1;
+/// Opening it at a higher version closes the connections of pages of older versions, which then
+/// fail to write, rather than waiting for them.
+const VERSION: u32 = 2;
 
 const COMPETITIONS: &str = "competitions";
 const ENTRIES: &str = "entries";
 const PEOPLE: &str = "people";
-const STORES: [&str; 3] = [COMPETITIONS, ENTRIES, PEOPLE];
+/// Added in version 2, rather than to the listings, which are all read for a list and a write.
+const REPLAYED: &str = "replayed";
+const STORES: [&str; 4] = [COMPETITIONS, ENTRIES, PEOPLE, REPLAYED];
 
 /// Stores competitions in a database of the browser's IndexedDB. Its clones share the connection
 /// to it.
@@ -110,7 +114,7 @@ impl Storage for IndexedDb {
         first_entry: usize,
     ) -> Result<Option<Stored>, IndexedDbError> {
         let transaction = self.0.transaction(&STORES, TransactionMode::ReadOnly)?;
-        let (listing, entries, people) = try_join3(
+        let (listing, entries, people, replayed) = try_join4(
             transaction
                 .object_store(COMPETITIONS)?
                 .get(competition(key))?
@@ -122,6 +126,10 @@ impl Storage for IndexedDb {
             transaction
                 .object_store(PEOPLE)?
                 .get_all(Some(records_of(key)?), None)?
+                .into_future(),
+            transaction
+                .object_store(REPLAYED)?
+                .get(competition(key))?
                 .into_future(),
         )
         .await?;
@@ -139,6 +147,9 @@ impl Storage for IndexedDb {
             // in the order of their keys, i.e. of their positions
             entries: texts(entries)?,
             people: texts(people)?,
+            competition: replayed
+                .map(|record| record.as_string().ok_or(IndexedDbError::Record))
+                .transpose()?,
         }))
     }
 
@@ -181,6 +192,9 @@ impl Storage for IndexedDb {
             .object_store(ENTRIES)?
             .delete(records_of(key)?)?;
         transaction.object_store(PEOPLE)?.delete(records_of(key)?)?;
+        transaction
+            .object_store(REPLAYED)?
+            .delete(competition(key))?;
         match transaction.commit()?.await? {
             TransactionResult::Committed => Ok(()),
             TransactionResult::Aborted => Err(IndexedDbError::Aborted),
@@ -261,6 +275,13 @@ async fn write(database: &Database, changes: &Changes) -> Result<(), IndexedDbEr
             &competition(key),
         )?;
     }
+    if changes.reach_end(stored) {
+        put(
+            &transaction.object_store(REPLAYED)?,
+            changes.competition(),
+            &competition(key),
+        )?;
+    }
     for (position, entry) in (changes.first_entry()..).zip(changes.entries()) {
         put(&entries, entry, &record(key, JsValue::from(position)))?;
     }
@@ -284,7 +305,7 @@ fn put(store: &ObjectStore, text: &str, key: &JsValue) -> Result<(), idb::Error>
     Ok(())
 }
 
-/// The key of the competition `key` in the store of competitions.
+/// The key of the competition `key` in the store of competitions and of what they replay into.
 fn competition(key: CompetitionKey) -> JsValue {
     JsValue::from(key.to_string())
 }

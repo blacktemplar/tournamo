@@ -1,9 +1,9 @@
 //! Where a [`Session`](crate::session::Session) saves its competition and loads it from.
 //!
 //! A competition is stored as records: one per entry of its transition log, one per person its
-//! entrants are, and its [`Listing`]. The log is append-only, so a save only adds the entries
-//! appended since the last one, see [`Changes`]. What a record holds is the session's business;
-//! a storage keeps it as the text it is handed.
+//! entrants are, and its [`Listing`] with the competition the log replays into. The log is
+//! append-only, so a save only adds the entries appended since the last one, see [`Changes`]. What
+//! a record holds is the session's business; a storage keeps it as the text it is handed.
 
 use std::{
     cell::RefCell,
@@ -94,6 +94,9 @@ pub struct Stored {
     pub entries: Vec<String>,
     /// The people, in any order.
     pub people: Vec<String>,
+    /// What the whole log replayed into when the latest changes were written, see
+    /// [`Changes::competition`]; `None` if stored before it was.
+    pub competition: Option<String>,
 }
 
 /// What a session changed since it was last saved, to be written by [`Storage::write`].
@@ -106,6 +109,7 @@ pub struct Changes {
     pub(crate) first_entry: usize,
     pub(crate) entries: Vec<String>,
     pub(crate) people: Vec<(EntrantId, String)>,
+    pub(crate) competition: String,
 }
 
 impl Changes {
@@ -114,6 +118,12 @@ impl Changes {
     /// log](Self::reach_end).
     pub fn listing(&self) -> &Listing {
         &self.listing
+    }
+
+    /// What the log replays into with these changes, to store with the listing and under the same
+    /// condition as its progress, so that it is always that of the whole stored log.
+    pub fn competition(&self) -> &str {
+        &self.competition
     }
 
     /// Whether these are the latest changes of a log of which `stored` entries are stored, i.e.
@@ -203,6 +213,16 @@ struct Competition {
     progress: Option<Progress>,
     entries: Vec<String>,
     people: IndexMap<EntrantId, String>,
+    competition: Option<String>,
+}
+
+#[cfg(test)]
+impl MemoryStorage {
+    /// Leaves the competition `key` as a version that did not store the competition its log
+    /// replays into would have.
+    pub(crate) fn forget_competition(&self, key: CompetitionKey) {
+        self.0.borrow_mut()[&key].competition = None;
+    }
 }
 
 impl Storage for MemoryStorage {
@@ -234,6 +254,7 @@ impl Storage for MemoryStorage {
                 .unwrap_or_default()
                 .to_vec(),
             people: competition.people.values().cloned().collect(),
+            competition: competition.competition.clone(),
         }))
     }
 
@@ -248,6 +269,7 @@ impl Storage for MemoryStorage {
                 progress: None,
                 entries: Vec::new(),
                 people: IndexMap::new(),
+                competition: None,
             });
         assert!(
             changes.first_entry <= competition.entries.len(),
@@ -255,6 +277,7 @@ impl Storage for MemoryStorage {
         );
         if changes.reach_end(competition.entries.len()) {
             competition.progress.clone_from(&changes.listing.progress);
+            competition.competition = Some(changes.competition.clone());
         }
         // older changes written after newer ones must not cut the log short
         for (position, entry) in (changes.first_entry..).zip(&changes.entries) {

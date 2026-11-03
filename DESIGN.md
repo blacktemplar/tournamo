@@ -545,8 +545,9 @@ a changed pairing leaves later results naming matches that no longer exist, a
 fixed metric changes the standings of a finished competition. Keeping every
 version of every behaviour is not sustainable, and not wanted where an old one
 was a bug. So a file holds the competition its log replayed into next to the
-log, for a version that can no longer replay it to show it read-only instead
-(*planned*), and to tell a replay that comes out otherwise. The log stays what
+log, and so does the browser's storage, for a version that can no longer
+replay it to show it read-only instead (*planned*), and to tell a replay that
+comes out otherwise. The log stays what
 is loaded; the competition is only read in place of it. Its serialized form is
 a persistence contract too, kept loading by converters where it changes.
 Older versions ignore it, so the file's format stays 1.
@@ -758,8 +759,18 @@ through a `BroadcastChannel`.
 - **The listing carries the progress** (not started, the round being played,
   won by whom), set by each save whose entries reach the end of the stored log,
   so the list need not replay every competition.
+- **What the log replays into is stored next to it** (see [The competition
+  next to its log](#the-competition-next-to-its-log)), under the same condition
+  as the progress, so it is always that of the whole stored log. It is not in
+  the listing, since every list and every write reads all listings. A
+  competition an older version saved lacks it; the session counts that as
+  unsaved, and the tab changing it saves right after opening it (not a
+  read-only tab, which catches up regardless).
 - **A write is one transaction** over the stores (`competitions`, `entries`
-  under `[key, position]`, `people` under `[key, entrant]`), refusing gaps. A
+  under `[key, position]`, `people` under `[key, entrant]`, `replayed` under
+  the key, added in the database's version 2), refusing gaps. Opening at a
+  higher version closes older pages' connections (`idb` does so on
+  `versionchange`) rather than waiting for them; their next write fails. A
   transaction stays active only in the microtasks after a request's result, so
   it runs on wasm-bindgen-futures' executor, not the awaiting one. The crate
   `idb` binds IndexedDB (thin, few dependencies).
@@ -774,7 +785,7 @@ through a `BroadcastChannel`.
 - **Persistent storage is asked for when a competition is opened** (some
   browsers ask the operator, so not on load); a refusal shows a warning, see
   [Offline and installing](#offline-and-installing).
-- **Files are the CLI's**: `{"format", "log", "people"}` plus `"name"`, so
+- **Files are the CLI's**: `{"format", "log", "people", "competition"}` plus `"name"`, so
   competitions move between CLI and GUI. `"format"` (`file::Format`, first, a
   missing one is 1) is raised with a change older versions cannot read; a newer
   one is refused as such rather than as a broken log, and a later version can

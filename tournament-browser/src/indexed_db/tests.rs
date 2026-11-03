@@ -147,6 +147,81 @@ async fn changes_written_out_of_order_are_all_saved() {
     assert_eq!(names(&loaded), names(&session));
     let listed = storage.list().await.unwrap();
     assert_eq!(listed[0].progress, Some(session.progress()));
+    let stored = storage.read(session.key(), 0).await.unwrap().unwrap();
+    assert_eq!(stored.competition.as_deref(), Some(second.competition()));
+}
+
+/// For a version that can no longer replay the log.
+#[wasm_bindgen_test]
+async fn what_the_log_replays_into_is_stored_with_it() {
+    let storage = database().await;
+    let mut session = Session::new("cup");
+    session.add_entrant("Alice").unwrap();
+
+    session.save(&storage).await.unwrap();
+
+    let stored = storage.read(session.key(), 0).await.unwrap().unwrap();
+    assert_eq!(
+        stored.competition.unwrap(),
+        serde_json::to_string(session.competition()).unwrap()
+    );
+}
+
+/// A tab of the first version still open does not keep a newer one from opening the database, and
+/// what the first version stored is kept, to be completed by the next save.
+#[wasm_bindgen_test]
+async fn a_database_of_the_first_version_is_upgraded_with_what_it_holds() {
+    let name = format!("test-{}", uuid::Uuid::new_v4());
+    let first = [COMPETITIONS, ENTRIES, PEOPLE]
+        .iter()
+        .fold(Database::builder(&name).version(1), |builder, store| {
+            builder.add_object_store(ObjectStoreBuilder::new(store))
+        })
+        .build()
+        .await
+        .unwrap();
+    let mut session = Session::new("cup");
+    session.add_entrant("Alice").unwrap();
+    let changes = session.unsaved_changes();
+    let transaction = first
+        .transaction(&[COMPETITIONS, ENTRIES, PEOPLE], TransactionMode::ReadWrite)
+        .unwrap();
+    let listing = ListingRecord {
+        key: session.key(),
+        name: "cup".to_owned(),
+        number: 0,
+        progress: None,
+    };
+    put(
+        &transaction.object_store(COMPETITIONS).unwrap(),
+        &serde_json::to_string(&listing).unwrap(),
+        &competition(session.key()),
+    )
+    .unwrap();
+    for (position, entry) in changes.entries().iter().enumerate() {
+        put(
+            &transaction.object_store(ENTRIES).unwrap(),
+            entry,
+            &record(session.key(), JsValue::from(position)),
+        )
+        .unwrap();
+    }
+    transaction.commit().unwrap().await.unwrap();
+
+    let storage = IndexedDb::open(&name).await.unwrap();
+
+    let mut loaded = Session::load(&storage, session.key()).await.unwrap();
+    assert_eq!(loaded.entrants().len(), 1);
+    assert!(
+        loaded.has_unsaved_changes(),
+        "the competition is not stored"
+    );
+    loaded.save(&storage).await.unwrap();
+    let stored = storage.read(session.key(), 0).await.unwrap().unwrap();
+    assert_eq!(
+        stored.competition.unwrap(),
+        serde_json::to_string(session.competition()).unwrap()
+    );
 }
 
 #[wasm_bindgen_test]
@@ -180,6 +255,7 @@ async fn names_are_stored_apart_from_the_log() {
 
     let stored = storage.read(session.key(), 0).await.unwrap().unwrap();
     assert!(stored.entries.iter().all(|entry| !entry.contains("Alice")));
+    assert!(!stored.competition.unwrap().contains("Alice"));
     assert!(stored.people[0].contains("Alice"));
 }
 

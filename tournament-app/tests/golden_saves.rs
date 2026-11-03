@@ -9,14 +9,21 @@
 //! users' competitions differently than they were saved. If that is intended, the save goes, noted
 //! in `CHANGELOG.md`.
 
-use std::num::NonZeroU32;
+use std::{
+    num::NonZeroU32,
+    pin::pin,
+    task::{Context, Poll, Waker},
+};
 
 use plugin_factory::{
     PluginType as _,
     config::{Path as ConfigPath, PluginConfig},
 };
 use serde_json::Value;
-use tournament_app::session::Session;
+use tournament_app::{
+    session::Session,
+    storage::{MemoryStorage, Storage as _},
+};
 use tournament_engine::{
     MatchResult,
     plugins::{
@@ -65,6 +72,25 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
         assert!(
             file.get("competition").is_none_or(|held| *held == saved),
             "{save} holds another competition than it was saved as"
+        );
+    }
+}
+
+/// Saves of versions that did not store the competition get it when they are stored.
+#[test]
+fn every_golden_save_is_stored_with_the_competition_it_was_saved_as() {
+    for (save, file, competition) in SAVES {
+        let storage = MemoryStorage::default();
+        let mut session = Session::import(file, "", &[]).unwrap();
+
+        now(session.save(&storage)).unwrap();
+
+        let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
+        let stored: Value = serde_json::from_str(&stored.competition.unwrap()).unwrap();
+        let saved: Value = serde_json::from_str(competition).unwrap();
+        assert!(
+            stored == saved,
+            "{save} is stored with another competition than it was saved as"
         );
     }
 }
@@ -286,4 +312,13 @@ fn play(session: &mut Session, results: &[MatchResult], matches: usize) {
 
 fn round(number: u32) -> NonZeroU32 {
     NonZeroU32::new(number).unwrap()
+}
+
+/// The output of `future`, which a [`MemoryStorage`] finishes right away.
+#[track_caller]
+fn now<T>(future: impl Future<Output = T>) -> T {
+    match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
+        Poll::Ready(output) => output,
+        Poll::Pending => panic!("a memory storage never waits"),
+    }
 }

@@ -113,13 +113,37 @@ jobs:
         with:
           extra-args: --all-files cargo-fmt
 
-  # the GUI on GitHub Pages, at blacktemplar.github.io/tournamo/ (hence the base path), built
-  # here, since the wasm holds the absolute paths of the sources of its assets; for a release tag
-  # (pushed, or chosen when running the workflow by hand) that passes the jobs above, so that the
-  # page is always a release
-  pages-build:
+  # a tag `v<version>` (pushed, or chosen when running the workflow by hand) must name the version
+  # in Cargo.toml, the one the help shows; only a release `v<major>.<minor>.<patch>` is deployed,
+  # not e.g. `v0.2.0-rc.1`
+  release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, wasm-test, web-e2e, gui-e2e, fmt]
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.check.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: check
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # e.g. path+file:///…/tournament-gui#0.1.0
+          id=$(cargo pkgid -p tournament-gui)
+          version=${id##*[#@]}
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::the tag $TAG does not name the version in Cargo.toml, $version"
+            exit 1
+          fi
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # the GUI on GitHub Pages, at blacktemplar.github.io/tournamo/ (hence the base path), built
+  # here, since the wasm holds the absolute paths of the sources of its assets; for a release (see
+  # above) that passes the jobs above, so that the page is always a release
+  pages-build:
+    if: needs.release.outputs.deploy == 'true'
+    needs: [release, test, wasm-test, web-e2e, gui-e2e, fmt]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

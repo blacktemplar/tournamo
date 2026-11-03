@@ -39,3 +39,4 @@ dioxus.dev
 
 # Zed's JSON/TOML language servers: the schema catalog
 www.schemastore.org
+json.schemastore.org

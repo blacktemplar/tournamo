@@ -1,0 +1,23 @@
+#!/bin/sh
+# gh with the read-only token the host hands in (see README.md, "GitHub CLI"). Installed as
+# /usr/local/bin/gh, ahead of Debian's /usr/bin/gh in PATH.
+set -eu
+
+token_file=/run/secrets/gh_token
+token=$(cat "$token_file" 2>/dev/null || true)
+
+case "$token" in
+  github_pat_*) ;;
+  "")
+    echo "gh: no token; put a read-only fine-grained token into the file initialize.sh names" \
+      "(GH_TOKEN_FILE in .devcontainer/.env) on the host and recreate the container" >&2
+    exit 1
+    ;;
+  *)
+    # a classic token (ghp_) cannot be limited to reading a repository
+    echo "gh: refusing a token that is not fine-grained (github_pat_...)" >&2
+    exit 1
+    ;;
+esac
+
+GH_TOKEN=$token exec /usr/bin/gh "$@"

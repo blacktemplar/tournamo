@@ -15,6 +15,7 @@ RUN apt-get update \
         chromium \
         chromium-driver \
         curl \
+        gh \
         git \
         less \
         pkg-config \
@@ -62,6 +63,9 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf \
 # Claude Code for the terminal; Zed's Claude Agent brings its own
 RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
 COPY managed-settings.json /etc/claude-code/managed-settings.json
+
+# gh with the read-only token from the host (README.md, "GitHub CLI")
+COPY --chmod=755 gh /usr/local/bin/gh
 
 RUN useradd --create-home --uid 1000 --shell /bin/bash dev \
     && mkdir -p /home/dev/.cargo /home/dev/.claude /home/dev/.cache \

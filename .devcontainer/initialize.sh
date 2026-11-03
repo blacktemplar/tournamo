@@ -9,12 +9,19 @@ git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
 # mounted read-only, so it has to exist
 mkdir -p "$git_common_dir/hooks"
 hash=$(printf '%s' "$workspace" | sha256sum | cut -c1-8)
+# the read-only GitHub token for gh (README.md, "GitHub CLI"); the secret's file has to exist
+gh_token_file=${XDG_CONFIG_HOME:-$HOME/.config}/tournamo/gh-token
+if [ ! -e "$gh_token_file" ]; then
+  mkdir -p "$(dirname "$gh_token_file")"
+  (umask 077 && : > "$gh_token_file")
+fi
 
 cat > .devcontainer/.env <<EOF
 COMPOSE_NAME=tournamo-$hash
 USER_ID=$(id -u)
 WORKSPACE=$workspace
 GIT_COMMON_DIR=$git_common_dir
+GH_TOKEN_FILE=$gh_token_file
 GIT_NAME='$(git config user.name)'
 GIT_EMAIL='$(git config user.email)'
 EOF

@@ -4,7 +4,7 @@ A container for working on Tournamo, made for letting Claude Code work without a
 (`bypassPermissions`), in Zed or in a terminal. It has everything the hooks need, including the
 manual ones (`prek run --all-files --stage manual`): Rust stable with the wasm target, nightly
 rustfmt, wasm-pack, trunk, dx, Chromium and chromedriver, Node. Also cargo-warloc, to count lines
-of code.
+of code, and gh, reading GitHub with a read-only token (*GitHub CLI* below).
 
 ## Using it in Zed
 
@@ -25,6 +25,21 @@ A new container has a new id, and Zed files its agent threads under the containe
 creates one, the threads of the old container neither show in the sidebar nor open
 ([zed#56576](https://github.com/zed-industries/zed/issues/56576)). To get them back, quit Zed,
 run `.devcontainer/rebind-zed-threads.sh` on the host, and start Zed again.
+
+## GitHub CLI
+
+`gh` reads issues, pull requests and CI runs with a token from the host, which must not be able to
+write: the container must stay unable to change anything on GitHub. Make a *fine-grained* personal
+access token (Settings → Developer settings → Personal access tokens → Fine-grained tokens):
+
+- *Repository access*: only `blacktemplar/tournamo`.
+- *Permissions*, all *Read-only*: Actions, Contents, Issues, Pull requests (Metadata comes with
+  them). No account permissions.
+
+Put it into `~/.config/tournamo/gh-token` on the host (`initialize.sh` creates the file empty, mode
+600), then remove the containers and open the project again. `gh` refuses classic tokens
+(`ghp_...`), whose `repo` scope cannot be read-only; whether a fine-grained one only reads, it
+cannot tell, so give it no write permission. Without a token, `gh` says so and stops.
 
 ## What it protects
 
@@ -57,8 +72,9 @@ Claude can do anything the user `dev` can do in the container. What it cannot do
   shared `.git` (the reflog keeps the old commits) and delete files of the checkout. Keep pushed
   backups.
 - **The allowed hosts are channels.** Data can leave to them: to the Anthropic API (inherent), or
-  to GitHub only with credentials, which the container has none of. Its own credentials are the
-  sign-in of Claude Code, readable in the container. Anything Claude reads from the allowed hosts
+  to GitHub only with credentials that can write, which the container has none of (`gh`'s token
+  only reads, if you made it so). Its own credentials are the sign-in of Claude Code and that
+  token, readable in the container; the token reads no more than the repository, which is public. Anything Claude reads from the allowed hosts
   (a repository, a crate, docs) may try to instruct it (prompt injection); with no secrets and a
   closed network, the damage is limited to the checkout.
 - **claude.ai connectors** (Gmail, Drive, ...) would be a way out the proxy cannot see, since they

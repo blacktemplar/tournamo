@@ -37,6 +37,9 @@ services:
       GIT_CONFIG_VALUE_0: never
       # .devcontainer is read-only here, and these hooks fail on read-only files
       SKIP: end-of-file-fixer-devcontainer,fix-byte-order-marker-devcontainer
+      GH_NO_UPDATE_NOTIFIER: "1"
+    # the read-only GitHub token gh uses (README.md, "GitHub CLI"); empty if none was given
+    secrets: [gh_token]
     volumes:
       # the checkout and the repository it belongs to, at their paths on the host, where a
       # worktree's .git file points
@@ -78,6 +81,10 @@ services:
     networks: [sandbox, egress]
     volumes:
       - ./proxy/allowed-domains.txt:/etc/squid/allowed-domains.txt:ro
+
+secrets:
+  gh_token:
+    file: ${GH_TOKEN_FILE}
 
 networks:
   sandbox:

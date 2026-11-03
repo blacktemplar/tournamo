@@ -1,6 +1,6 @@
 [package]
 name = "plugin-factory"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Plugins that describe themselves: a schema to configure them by, a catalog to find them in and checks of what they provide and require"
@@ -10,7 +10,7 @@ categories = ["config", "rust-patterns"]
 
 [dependencies]
 inventory = "0.3.25"
-plugin-factory-derive = { version = "0.1.1", path = "../plugin-factory-derive" }
+plugin-factory-derive = { version = "0.2.0", path = "../plugin-factory-derive" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 serde_path_to_error = "0.1.20"

@@ -6,7 +6,7 @@ use crate::{
     entities::competition::{Bye, Match, MatchResult, PhaseData, RankingId, ResultOfTeam, Team},
     map::Map,
     plugins::{
-        facts::CalculatesMetric,
+        facts::{CalculatesMetric, NoDraws},
         metrics_calculator::{MetricsCalculator, points::Points},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
@@ -282,7 +282,8 @@ pub struct SonnebornBergerCalculator {
         label = "weight of an opponent played to a draw",
         description = "the points of that opponent are multiplied by this",
         min = 0,
-        default = Score::new(0.5)
+        default = Score::new(0.5),
+        irrelevant_with = NoDraws
     )]
     weight_for_draw: Score,
 }

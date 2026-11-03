@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     entities::competition::PhaseData,
     plugins::{
-        facts::MatchAnnotation,
+        facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
             round_of_first_loss::{LaterFirstLoss, RoundOfFirstLossCalculator},
             wins_draws_losses::{FewerLosses, WinsDrawsLossesCalculator},
@@ -84,7 +84,10 @@ impl SingleElimination {
     }
 
     fn declare_static(declaration: &mut Declaration) {
-        declaration.provide(MatchAnnotation::<KnockoutRound>::new());
+        // every match has to produce a winner who moves on to the next round
+        declaration
+            .provide(MatchAnnotation::<KnockoutRound>::new())
+            .provide(NoDraws);
     }
 
     /// Ranked by the round of the first loss, then, with a match for third place, by the losses,
@@ -188,11 +191,6 @@ impl PhaseFormat for SingleElimination {
         self.bracket
             .get_or_insert_with(|| bracket(phase_data, third_place_match))
             .create_new_matches(phase_data)
-    }
-
-    /// Every match has to produce a winner that advances to the next round.
-    fn allows_draws(&self) -> bool {
-        false
     }
 
     fn stage(&self, annotations: &TypeMap) -> Option<Stage> {

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     entities::competition::{PhaseData, Team},
     plugins::{
-        facts::MatchAnnotation,
+        facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
             round_of_elimination::{Eliminates, LaterElimination, RoundOfEliminationCalculator},
             wins_draws_losses::{FewerLosses, WinsDrawsLossesCalculator},
@@ -102,9 +102,11 @@ impl DoubleElimination {
     }
 
     fn declare_static(declaration: &mut Declaration) {
+        // every match has to produce a winner who moves on
         declaration
             .provide(MatchAnnotation::<DoubleEliminationRound>::new())
-            .provide(MatchAnnotation::<Eliminates>::new());
+            .provide(MatchAnnotation::<Eliminates>::new())
+            .provide(NoDraws);
     }
 
     /// Ranked by the round of elimination, then the losses, and showing the wins, draws and losses
@@ -206,11 +208,6 @@ impl PhaseFormat for DoubleElimination {
         self.bracket
             .get_or_insert_with(|| bracket(phase_data, reset))
             .create_new_matches(phase_data)
-    }
-
-    /// Every match has to produce a winner that advances.
-    fn allows_draws(&self) -> bool {
-        false
     }
 
     fn stage(&self, annotations: &TypeMap) -> Option<Stage> {

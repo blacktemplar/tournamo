@@ -71,8 +71,8 @@ fn update_after_match_result(&mut self, phase_data: &PhaseData, /* ... */)
     -> Vec<(RankingId, Metric)>;                                           // MetricsCalculator
 ```
 
-Methods describing configuration (`default_metric_value`, `allows_draws`) stay
-`&self`.
+Methods describing configuration (`default_metric_value`) stay `&self`; whether
+a format allows draws is the fact `NoDraws` (below).
 
 - **`PhaseData` is everything in a `Phase` but its plugins** (rankings, matches,
   byes, seed). A call borrows a plugin field mutably and `data` immutably, two
@@ -150,6 +150,15 @@ impl Declaration {
   criterion requires it through `requires_metric::<Self>`, read off its
   `C::Metric`, so it cannot drift from what it compares. A test checks that each
   calculator declares the metric its `default_metric_value()` returns.
+- **A field can be irrelevant while a fact holds**
+  (`#[plugin(irrelevant_with = NoDraws)]` on the points for a draw), so that a
+  form leaves it out (`Draft::is_relevant`); it stays answered, and a plugin
+  reads it as before. The condition is negative, a fact making the field
+  irrelevant rather than one it needs: a plugin of another crate forgetting to
+  provide a fact shows a field too many rather than hiding one that matters.
+  `NoDraws` is the format's only statement about draws: `allows_draws` of a
+  `dyn PhaseFormat` reads it, so the form and the rejection of a draw cannot
+  disagree.
 - **Self-reported, accepted.** Facts like "rankings are pairs" are not something
   the compiler can derive. A criterion leaving out `declare_static` requires
   nothing and panics in `rank_by`; test helpers building a phase from a plugin

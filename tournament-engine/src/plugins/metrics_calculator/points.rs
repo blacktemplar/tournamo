@@ -5,7 +5,7 @@ use super::{Cell, Metric, MetricColumn, OldMetrics, ToCell};
 use crate::{
     entities::competition::{Bye, Match, PhaseData, RankingId},
     plugins::{
-        facts::CalculatesMetric,
+        facts::{CalculatesMetric, NoDraws},
         metrics_calculator::{MetricsCalculator, wins_draws_losses::WinsDrawsLosses},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
@@ -66,7 +66,12 @@ crate::register_criterion!(MorePoints);
 pub struct PointsCalculator {
     #[plugin(label = "points for a win", min = 0, default = Score::ONE)]
     points_for_win: Score,
-    #[plugin(label = "points for a draw", min = 0, default = Score::new(0.5))]
+    #[plugin(
+        label = "points for a draw",
+        min = 0,
+        default = Score::new(0.5),
+        irrelevant_with = NoDraws
+    )]
     points_for_draw: Score,
     #[plugin(
         label = "points for a bye",

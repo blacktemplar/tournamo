@@ -1,11 +1,11 @@
 use std::any::Any;
 
 use dyn_clone::DynClone;
-use plugin_factory::{Plugin, axis};
+use plugin_factory::{Plugin, axis, compatibility};
 
 use crate::{
     entities::competition::{Bye, NewMatch, PhaseData},
-    plugins::Phrase,
+    plugins::{Phrase, facts::NoDraws},
     type_map::TypeMap,
 };
 
@@ -52,16 +52,6 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
         2
     }
 
-    /// Whether a match of this format may end in a [`MatchResult::Draw`].
-    ///
-    /// A draw reported for a format that returns `false` is rejected, so
-    /// [`PhaseFormat::create_new_matches`] never sees one.
-    ///
-    /// [`MatchResult::Draw`]: crate::entities::competition::MatchResult::Draw
-    fn allows_draws(&self) -> bool {
-        true
-    }
-
     /// The stage of the phase a match or a bye with `annotations` belongs to, e.g. the semifinals,
     /// or `None` if this format names no stages. Read from the annotations the format wrote on the
     /// match or the bye, see [`Annotated::annotations`].
@@ -74,6 +64,19 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
 }
 
 dyn_clone::clone_trait_object!(PhaseFormat);
+
+impl dyn PhaseFormat {
+    /// Whether a match of this format may end in a [`MatchResult::Draw`]: unless it provides
+    /// [`NoDraws`], which a format whose every match has to produce a winner does.
+    ///
+    /// A draw reported for a format that allows none is rejected, so
+    /// [`PhaseFormat::create_new_matches`] never sees one.
+    ///
+    /// [`MatchResult::Draw`]: crate::entities::competition::MatchResult::Draw
+    pub fn allows_draws(&self) -> bool {
+        !compatibility::provides_fact::<NoDraws>(self)
+    }
+}
 
 /// The name of a stage of a phase, as a [`PhaseFormat`] names a match or a bye by, see
 /// [`PhaseFormat::stage`]: the phrase of its key among the format's stages, e.g. `"final"`.
@@ -107,3 +110,21 @@ pub use double_elimination::{DoubleElimination, DoubleEliminationRound};
 pub use monster_dyp::MonsterDyp;
 pub use round_robin::{RoundRobin, random_rounds::RandomRounds};
 pub use single_elimination::{KnockoutRound, SingleElimination};
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    /// A format allows draws unless it provides that there are none, as the eliminations do.
+    #[test]
+    fn only_a_format_providing_no_draws_allows_none() {
+        let allows = |format: Box<dyn PhaseFormat>| format.allows_draws();
+
+        assert!(allows(Box::new(RoundRobin)));
+        assert!(!allows(Box::new(SingleElimination::new())));
+        assert!(!allows(Box::new(DoubleElimination::new())));
+    }
+}

@@ -28,6 +28,19 @@ impl EntrantsPerRanking {
 
 impl Fact for EntrantsPerRanking {}
 
+/// No match of the phase ends in a draw, e.g. since every match has to produce a winner who moves
+/// on.
+///
+/// Provided by such a [`PhaseFormat`], which then allows no draw (`allows_draws` of a
+/// `dyn PhaseFormat`); a field that only matters for draws, such as the points for one, names it
+/// as the fact making it irrelevant.
+///
+/// [`PhaseFormat`]: crate::plugins::phase_format::PhaseFormat
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoDraws;
+
+impl Fact for NoDraws {}
+
 // Defines a fact about a type, e.g. that a metric is calculated. Each such fact is its own named
 // type rather than one generic fact over the type, since the fact is the guarantee the name states
 // (every ranking holds the metric, every match carries the annotation), not the type itself.

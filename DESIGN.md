@@ -555,6 +555,23 @@ Rejected: `TypeId` (stable only within a build); a hand-rolled binary tag
 registry (reimplements `typetag`); auto-derived tags from the type path
 (silently change on a rename).
 
+### Golden saves
+
+Stable tags keep a log loading, not playing the same: a changed format, metric
+or check replays an old log into another competition, or not at all, and every
+round-trip test still passes, since it saves and replays with the same code.
+So each release commits saves of a few scripted competitions (`tournament-app/tests/saves/v<version>/`:
+every format, byes, undo, redo, reopened results, edited phases), each the file
+that version exports next to the competition it held, serialized. Every later
+version must load them, replay each into that very competition and still show
+it. Saves are never rewritten: a failing one is either a bug, or a deliberate
+change of how old competitions are shown, which drops the save and goes into
+`CHANGELOG.md`.
+
+The serialized competition is the expected result, compared as JSON since
+`Competition` has no `PartialEq`, so a test also catches nondeterminism (e.g.
+iterating a `HashMap`) and differences between native and wasm.
+
 ## Progression as an undoable state machine
 
 Progress is a sequence of transitions on an initial state, through the generic

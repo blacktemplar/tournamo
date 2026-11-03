@@ -86,9 +86,10 @@ repos:
       - id: check-case-conflict
       - id: check-illegal-windows-names
       # .devcontainer/ separately: the dev container, where it is read-only, skips these (SKIP in
-      # .devcontainer/compose.yaml), as the fixers fail on read-only files
+      # .devcontainer/compose.yaml), as the fixers fail on read-only files; golden saves stay as
+      # their version wrote them
       - id: end-of-file-fixer
-        exclude: ^\.devcontainer/
+        exclude: ^(\.devcontainer|tournament-app/tests/saves)/
       - id: end-of-file-fixer
         alias: end-of-file-fixer-devcontainer
         files: ^\.devcontainer/

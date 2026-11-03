@@ -800,24 +800,6 @@ one owner of the answers. The CLI already descends through the schema as it asks
 questions, discovering children after choosing their plugin; it keeps that walk
 rather than snapshotting fields before they have been chosen.
 
-**Construction is shared with inspection.** Building first deserializes the actual
-composite, including custom checks and dependency sorting, then checks facts by
-inspecting its existing plugins. Partial evaluation constructs a complete plugin
-once and inspects its existing children; an incomplete parent still allows its
-complete children to be evaluated separately. The inspection stores declarations
-and errors, not a second collection of owned plugin objects. It matches existing
-instances by id within each parent's fields, consuming each match, so dependency
-sorting does not change the paths of the original answers or confuse repeated
-types in different fields. The existing `Configurable::plugins` enumeration
-supplies these references; no generated assembler or persistent cache is needed.
-Handwritten implementations that omit plugin enumeration retain the independent
-construction fallback, so existing custom implementations still receive checks.
-
-If deserialization fails, serde returns no partial composite. A separate inspection
-then gathers diagnostics for independent complete sub-plugins. Reconstruction on
-that error path is deliberate: the first rejected field must not hide unrelated
-issues, and custom composite rejection must still prevent building.
-
 - **One following/customized state for ranking and scoring**. A new form follows
   suggestions: changing basic settings replaces both ranking and metrics with
   defaults and suggestions for those settings. Editing either list or a field

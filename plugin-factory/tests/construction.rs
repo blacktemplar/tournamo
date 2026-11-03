@@ -93,43 +93,6 @@ struct Composite {
 }
 
 #[test]
-fn a_complete_composite_constructs_each_nested_plugin_once() {
-    let draft = Draft::<Composite>::new(|_| {})
-        .with(
-            "root",
-            PluginConfig::of::<Wrapper>()
-                .with(
-                    "child",
-                    PluginConfig::of::<Wrapper>()
-                        .with("child", PluginConfig::of::<Counted>().with("value", 0))
-                        .with("ready", true),
-                )
-                .with("ready", true),
-        )
-        .unwrap();
-    CONSTRUCTIONS.with(|count| count.set(0));
-
-    assert!(draft.build().is_ok());
-    CONSTRUCTIONS.with(|count| assert_eq!(count.get(), 1));
-}
-
-#[test]
-fn partial_evaluation_reuses_a_complete_parents_children() {
-    let draft = Draft::<Composite>::new(|_| {})
-        .with(
-            "root",
-            PluginConfig::of::<Wrapper>()
-                .with("child", PluginConfig::of::<Counted>().with("value", 0))
-                .with("ready", true),
-        )
-        .unwrap();
-    CONSTRUCTIONS.with(|count| count.set(0));
-
-    assert!(draft.issues().is_empty());
-    CONSTRUCTIONS.with(|count| assert_eq!(count.get(), 1));
-}
-
-#[test]
 fn an_incomplete_parent_still_evaluates_its_complete_child() {
     let draft = Draft::<Composite>::new(|_| {})
         .with(
@@ -260,7 +223,7 @@ fn a_failed_construction_still_reports_an_independent_siblings_issue() {
 }
 
 #[test]
-fn reordered_instances_and_repeated_types_keep_the_answer_paths() {
+fn repeated_types_in_different_fields_keep_their_answer_paths() {
     let draft = Draft::<Ordered>::new(|_| {})
         .with(
             "plugins",

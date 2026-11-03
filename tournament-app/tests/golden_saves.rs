@@ -91,11 +91,11 @@ fn every_golden_save_is_stored_with_the_competition_it_was_saved_as() {
 
         now(session.save(&storage)).unwrap();
 
-        let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
-        let stored: Value = serde_json::from_str(&stored.competition.unwrap()).unwrap();
+        let stored = now(storage.read(session.key())).unwrap().unwrap();
+        let stored: Value = serde_json::from_str(&stored.record).unwrap();
         let saved: Value = serde_json::from_str(competition).unwrap();
         assert!(
-            stored == saved,
+            stored["competition"] == saved,
             "{save} is stored with another competition than it was saved as"
         );
     }

@@ -322,7 +322,7 @@ async fn a_competition_that_no_longer_loads_is_still_exported() {
         gui.page
             .expect(
                 By::Css("[role=alert]"),
-                |query| query.with_text(StringMatch::new("of the log cannot be read").partial()),
+                |query| query.with_text(StringMatch::new("is stored damaged").partial()),
                 "why the competition does not load",
             )
             .await?;
@@ -345,11 +345,13 @@ async fn append_unknown_entry(gui: &Gui) -> WebDriverResult<()> {
             const request = indexedDB.open("tournamo");
             request.onsuccess = () => {
                 const database = request.result;
-                const transaction = database.transaction("entries", "readwrite");
-                const entries = transaction.objectStore("entries");
-                entries.getAllKeys().onsuccess = (event) => {
-                    const keys = event.target.result;
-                    entries.put('{"unknown": true}', [keys[0][0], keys.length]);
+                const transaction = database.transaction("saves", "readwrite");
+                const saves = transaction.objectStore("saves");
+                saves.openCursor().onsuccess = (event) => {
+                    const cursor = event.target.result;
+                    const file = JSON.parse(cursor.value);
+                    file.log.push({ unknown: true });
+                    cursor.update(JSON.stringify(file));
                 };
                 transaction.oncomplete = () => {
                     database.close();

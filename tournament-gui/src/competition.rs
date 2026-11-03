@@ -126,29 +126,31 @@ impl Ctx {
         self.announcement.set(Some(announcement));
     }
 
-    /// Writes what changed since the last save, without holding the session across the write, and
-    /// tells the other tabs once it is written; nothing while another tab changes the competition.
-    /// Right after opening it, that is what an older version left out.
+    /// Writes the competition if anything changed since the last save, without holding the session
+    /// across the write, and tells the other tabs once it is written; nothing while another tab
+    /// changes the competition. Right after opening it, that is what an older version left out.
     fn save(mut self) {
         if self.lock.peek().is_none() || !self.session.peek().has_unsaved_changes() {
             return;
         }
-        let changes = self.session.peek().unsaved_changes();
+        let save = self.session.peek().to_save();
         let storage = self
             .storage
             .peek()
             .clone()
             .expect("a competition is open once the database is");
         let lock = self.lock.peek().clone();
+        // started now, so that saves are stored in the order they are made
+        let written = storage.write(&save);
         // not ended with the screen, so that leaving it right after a change still saves the change
         spawn_forever(async move {
-            match storage.write(&changes).await {
+            match written.await {
                 Ok(()) => {
                     // the screen may be gone, and its session with it
                     if let Ok(mut session) = self.session.try_write() {
-                        session.mark_saved(&changes);
+                        session.mark_saved(&save);
                     }
-                    Broadcast::new(SAVED).post(&changes.listing().key.to_string());
+                    Broadcast::new(SAVED).post(&save.listing().key.to_string());
                 }
                 Err(error) => self.error.set(Some(
                     Text::new("error-not-saved").with_detail(error.to_string()),
@@ -571,9 +573,8 @@ async fn catch_up(mut ctx: Ctx, key: CompetitionKey) {
         .peek()
         .clone()
         .expect("a competition is open once the database is");
-    let first_entry = ctx.session.peek().next_entry();
-    let caught_up = match storage.read(key, first_entry).await {
-        Ok(Some(stored)) => ctx.session.write().catch_up_with(&stored, first_entry),
+    let caught_up = match storage.read(key).await {
+        Ok(Some(stored)) => ctx.session.write().catch_up_with(&stored),
         Ok(None) => Err(LoadError::NotFound),
         Err(error) => Err(LoadError::Storage(error)),
     };

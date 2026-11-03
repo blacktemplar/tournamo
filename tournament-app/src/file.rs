@@ -1,6 +1,7 @@
 //! A competition as a file, to keep a copy of it or to move it elsewhere: the JSON of its
 //! [`Format`], its name, its log, its people and the competition the log replays into. The CLI
-//! saves the same, without the name, so each opens the other's files.
+//! saves the same, without the name, so each opens the other's files. A storage holds it too,
+//! without the name, which the listing holds.
 //!
 //! A session is exported by [`Session::export`](crate::session::Session::export) and imported by
 //! [`Session::import`](crate::session::Session::import); what is stored of a competition is
@@ -10,7 +11,7 @@ use std::fmt::{self, Display};
 
 use serde::{
     Deserialize, Deserializer, Serialize,
-    de::{DeserializeOwned, Error as _, IgnoredAny},
+    de::{self, DeserializeOwned, Error as _, IgnoredAny, MapAccess},
 };
 use serde_json::Value;
 
@@ -92,14 +93,15 @@ impl<L: DeserializeOwned, P: DeserializeOwned> File<L, P> {
     /// if any, a format, [`ImportError::Newer`] if its format is newer than [`Format::CURRENT`],
     /// and [`ImportError::Damaged`] if its log or people do not load.
     pub(crate) fn read(file: &str) -> Result<Self, ImportError> {
-        let value: Value = serde_json::from_str(file).map_err(ImportError::NoCompetition)?;
+        // checked before reading the rest, which may take long, so as to tell a file of a newer
+        // version or none at all from a damaged one
+        let head: Head = serde_json::from_str(file).map_err(ImportError::NoCompetition)?;
         let no_competition = || {
             ImportError::NoCompetition(serde_json::Error::custom(
                 "the file holds no object with a log and people",
             ))
         };
-        let object = value.as_object().ok_or_else(no_competition)?;
-        if let Some(format) = object.get("format") {
+        if let Some(format) = head.format {
             let format = format
                 .as_u64()
                 .and_then(|format| u32::try_from(format).ok())
@@ -110,32 +112,82 @@ impl<L: DeserializeOwned, P: DeserializeOwned> File<L, P> {
                 return Err(ImportError::Newer(format));
             }
         }
-        if !object.contains_key("log") || !object.contains_key("people") {
+        if !head.log || !head.people {
             return Err(no_competition());
         }
-        serde_json::from_value(value).map_err(ImportError::Damaged)
+        serde_json::from_str(file).map_err(ImportError::Damaged)
+    }
+}
+
+/// What [`File::read`] checks of a JSON object before reading it: its format, if any, and whether
+/// it has a log and people.
+struct Head {
+    format: Option<Value>,
+    log: bool,
+    people: bool,
+}
+
+impl<'de> Deserialize<'de> for Head {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = Head;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("an object")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Head, A::Error> {
+                let mut head = Head {
+                    format: None,
+                    log: false,
+                    people: false,
+                };
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "format" => head.format = Some(map.next_value()?),
+                        "log" => {
+                            map.next_value::<IgnoredAny>()?;
+                            head.log = true;
+                        }
+                        "people" => {
+                            map.next_value::<IgnoredAny>()?;
+                            head.people = true;
+                        }
+                        _ => {
+                            map.next_value::<IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(head)
+            }
+        }
+
+        deserializer.deserialize_map(Visitor)
     }
 }
 
 impl Stored {
     /// The file of the competition stored as `self`, whether or not its log still replays: what is
-    /// stored is written out as it is.
-    ///
-    /// # Panics
-    /// Panics if the file does not serialize as JSON, which it always does.
+    /// stored is written out as it is, with the name.
     pub fn export(&self) -> String {
-        // a record that is no JSON, which no session writes, is kept as the text it is
-        let value = |record: &String| -> Value {
-            serde_json::from_str(record).unwrap_or_else(|_| Value::String(record.clone()))
-        };
-        to_json(&File {
-            format: Format::CURRENT,
-            name: Some(self.name.clone()),
-            log: self.entries.iter().map(value).collect::<Vec<_>>(),
-            people: self.people.iter().map(value).collect::<Vec<_>>(),
-            competition: self.competition.as_ref().map(value),
-        })
+        match serde_json::from_str::<File<Value, Value, Value>>(&self.record) {
+            Ok(file) => to_json(&File {
+                name: Some(self.name.clone()),
+                ..file
+            }),
+            // no file, which no session stores, or one of a newer format, is kept as it is
+            Err(_) => self.record.clone(),
+        }
     }
+}
+
+/// The record `file` is stored as, see [`crate::storage`]: its JSON, without the name, which the
+/// listing holds.
+pub(crate) fn to_record<L: Serialize, P: Serialize, C: Serialize>(file: File<L, P, C>) -> String {
+    serde_json::to_string(&File { name: None, ..file })
+        .expect("a competition's file serializes as JSON")
 }
 
 /// The JSON of `file`, indented to be readable.

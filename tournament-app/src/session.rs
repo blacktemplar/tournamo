@@ -2,9 +2,9 @@
 //!
 //! A [`Session`] owns the [`CompetitionStateMachine`] of the competition and turns what the
 //! operator does into its transitions. It keeps the names of the entrants apart from the log, as
-//! [`People`], and is saved to a [`Storage`] as the log entries and people it added since the
-//! last save. What can be undone and redone is what the session did itself, which is not saved: a
-//! loaded competition starts with nothing to undo.
+//! [`People`], and is saved to a [`Storage`] whole, as its file (see [`mod@file`]). What can be
+//! undone and redone is what the session did itself, which is not saved: a loaded competition
+//! starts with nothing to undo.
 
 use std::{
     any::Any,
@@ -12,7 +12,6 @@ use std::{
     num::NonZeroU32,
 };
 
-use indexmap::IndexSet;
 use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{Config, PluginConfig},
@@ -23,7 +22,6 @@ use tournament_engine::{
     CompetitionStateMachineExt as _, CompetitionTransition, Entrant, EntrantId, Match, MatchId,
     MatchResult, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId, RemoveEntrant,
     ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap,
-    map::IdAble as _,
     plugins::{
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
@@ -49,7 +47,7 @@ use crate::{
     file::{self, File},
     form::PhaseForm,
     people::{People, Person},
-    storage::{Changes, CompetitionKey, Listing, Progress, Storage, Stored},
+    storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
     view::{
         Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow, Medal,
         NameSearch, Plugin, Reopened, Reported, Round, RoundSummary, Scale, StageName,
@@ -84,11 +82,11 @@ pub struct Session {
     /// The configuration of the phase whose adding this session undid last, which the form of a
     /// new phase starts out at.
     undone_phase: Option<Config>,
-    /// The length of the log when it was last saved or loaded. The log is append-only, so every
-    /// change since makes it longer, undo and redo included.
-    saved_entries: usize,
-    /// The people added or changed since the last save.
-    unsaved_people: IndexSet<EntrantId>,
+    /// How often the session changed the people: with the length of the log, which every other
+    /// change makes longer, undo and redo included, it counts the changes, see [`Self::changes`].
+    people_changes: usize,
+    /// [`Self::changes`] when the session was last saved, loaded or caught up.
+    saved_changes: usize,
     /// Whether the storage holds the competition the log replays into, which it does not if
     /// nothing is saved yet or it was saved by a version that did not store it.
     competition_saved: bool,
@@ -115,8 +113,8 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
-            saved_entries: 0,
-            unsaved_people: IndexSet::new(),
+            people_changes: 0,
+            saved_changes: 0,
             competition_saved: false,
         }
     }
@@ -132,33 +130,31 @@ impl Session {
         storage: &S,
         key: CompetitionKey,
     ) -> Result<Self, LoadError<S::Error>> {
-        let stored = read(storage, key, 0).await?;
-        let machine =
-            CompetitionStateMachine::build(entries(&stored, 0)?).map_err(LoadError::Replay)?;
-        let people = people(&stored)?;
+        let stored = read(storage, key).await?;
+        let file = Record::read(&stored.record)?;
+        let machine = CompetitionStateMachine::build(file.log).map_err(LoadError::Replay)?;
         Ok(Self {
             key,
             name: stored.name,
-            saved_entries: machine.log().len(),
+            saved_changes: machine.log().len(),
             machine,
-            people,
+            people: file.people,
             history: SessionHistory::new(),
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
-            unsaved_people: IndexSet::new(),
-            competition_saved: stored.competition.is_some(),
+            people_changes: 0,
+            competition_saved: file.competition.is_some(),
         })
     }
 
     /// Catches up with what was saved of the competition in `storage` since this session loaded or
-    /// caught up last, e.g. by a session in another tab, see [`Self::catch_up_with`]: reads what
-    /// is stored from [`Self::next_entry`] on and hands it over. Returns how many entries it
-    /// appended.
+    /// caught up last, e.g. by a session in another tab, see [`Self::catch_up_with`]. Returns how
+    /// many entries it appended.
     ///
     /// # Errors
     /// Returns an error if nothing is stored under the session's key, the storage cannot be read,
-    /// or an entry cannot be read or does not apply, see [`Self::catch_up_with`].
+    /// or what is stored cannot be read or an entry does not apply, see [`Self::catch_up_with`].
     ///
     /// # Panics
     /// Panics if the session has unsaved changes, see [`Self::catch_up_with`].
@@ -166,59 +162,51 @@ impl Session {
         &mut self,
         storage: &S,
     ) -> Result<usize, LoadError<S::Error>> {
-        let first_entry = self.next_entry();
-        let stored = read(storage, self.key, first_entry).await?;
-        self.catch_up_with(&stored, first_entry)
+        let stored = read(storage, self.key).await?;
+        self.catch_up_with(&stored)
     }
 
-    /// The position in the log of the entry appended next, from which a storage is read to catch
-    /// up, see [`Self::catch_up_with`].
-    pub fn next_entry(&self) -> usize {
-        self.machine.log().len()
-    }
-
-    /// Catches up with `stored`, what a storage holds of this session's competition with the
-    /// entries from the position `first_entry` on, which is [`Self::next_entry`] when it was read:
-    /// appends the entries, each as [`Self::load`] would have replayed it, and takes the people as
-    /// stored. Returns how many entries it appended. They are no actions of this session, so
-    /// there is nothing more to undo. [`Self::catch_up`] reads and catches up in one; reading
-    /// apart lets a GUI hold no borrow of the session while it reads.
+    /// Catches up with `stored`, what a storage holds of this session's competition: appends the
+    /// entries of its log after those of the session's, each as [`Self::load`] would have
+    /// replayed it, and takes the people as stored. Returns how many entries it appended. They are
+    /// no actions of this session, so there is nothing more to undo. [`Self::catch_up`] reads and
+    /// catches up in one; reading apart lets a GUI hold no borrow of the session while it reads.
     ///
     /// An entry that undoes or replaces an earlier one replays the log after that one, as it did
     /// when it was appended; any other entry only applies to the current state.
     ///
     /// # Errors
-    /// Returns an error if an entry cannot be read or does not apply. If one cannot be read,
-    /// nothing is appended; if one does not apply, the entries before it stay appended.
+    /// Returns an error if what is stored cannot be read or an entry does not apply. If it cannot
+    /// be read, nothing is appended; if an entry does not apply, the entries before it stay
+    /// appended.
     ///
     /// # Panics
-    /// Panics if `first_entry` is not [`Self::next_entry`], or the session has unsaved entries or
-    /// people: what was stored after them is of another session that took over the competition,
-    /// and the log would fork. An unsaved competition is no change of the session's own, e.g. of
-    /// one opened read-only that an older version saved.
-    pub fn catch_up_with<E>(
-        &mut self,
-        stored: &Stored,
-        first_entry: usize,
-    ) -> Result<usize, LoadError<E>> {
+    /// Panics if the session has unsaved entries or people: what was stored after them is of
+    /// another session that took over the competition, and the log would fork. An unsaved
+    /// competition is no change of the session's own, e.g. of one opened read-only that an older
+    /// version saved.
+    pub fn catch_up_with<E>(&mut self, stored: &Stored) -> Result<usize, LoadError<E>> {
         assert!(
-            self.machine.log().len() == self.saved_entries && self.unsaved_people.is_empty(),
+            self.changes() == self.saved_changes,
             "a session catches up only with nothing unsaved"
         );
-        assert_eq!(
-            first_entry,
-            self.next_entry(),
-            "a session catches up from the end of its log"
-        );
-        let entries = entries(stored, first_entry)?;
-        self.people = people(stored)?;
-        self.competition_saved = stored.competition.is_some();
+        let file = Record::read(&stored.record)?;
+        self.people = file.people;
+        self.competition_saved = file.competition.is_some();
+        let entries = file.log.into_iter().skip(self.machine.log().len());
         let appended = entries.len();
         for entry in entries {
             self.machine.apply(entry).map_err(LoadError::Replay)?;
-            self.saved_entries = self.machine.log().len();
+            self.saved_changes = self.changes();
         }
         Ok(appended)
+    }
+
+    /// The number of changes made to the competition, counting the entries of its log and the
+    /// changes of the people since it was created or opened: it grows with every change, so that a
+    /// caller can tell whether anything changed since it last looked.
+    pub fn changes(&self) -> usize {
+        self.machine.log().len() + self.people_changes
     }
 
     /// The key the competition is stored under.
@@ -251,14 +239,14 @@ impl Session {
         Self {
             key: CompetitionKey::new(Uuid::new_v4()),
             name: name.into(),
-            unsaved_people: people.iter().map(|person| person.id()).collect(),
             machine,
             people,
             history: SessionHistory::new(),
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
-            saved_entries: 0,
+            people_changes: 0,
+            saved_changes: 0,
             competition_saved: false,
         }
     }
@@ -275,74 +263,54 @@ impl Session {
         }
     }
 
-    /// Whether a save would write anything: entries, people, or the competition the log replays
-    /// into where the storage lacks it, see [`Self::load`].
+    /// Whether the storage lacks anything: a change since the last save, or the competition the log
+    /// replays into, see [`Self::load`].
     pub fn has_unsaved_changes(&self) -> bool {
-        self.machine.log().len() != self.saved_entries
-            || !self.unsaved_people.is_empty()
-            || !self.competition_saved
+        self.changes() != self.saved_changes || !self.competition_saved
     }
 
-    /// What changed since the last save, to be written to a storage and then handed to
-    /// [`Self::mark_saved`]; [`Self::save`] does both. Saving the changes of a session that
-    /// has not been saved yet creates the stored competition.
+    /// The competition as it is to be saved, to be written to a storage and then handed to
+    /// [`Self::mark_saved`]; [`Self::save`] does both. Saving a session that has not been saved yet
+    /// creates the stored competition.
     ///
     /// # Panics
-    /// Panics if an entry of the log, a person or the competition does not serialize as JSON.
-    pub fn unsaved_changes(&self) -> Changes {
-        Changes {
+    /// Panics if the log, a person or the competition does not serialize as JSON.
+    pub fn to_save(&self) -> Save {
+        Save {
             listing: Listing {
                 key: self.key,
                 name: self.name.clone(),
                 progress: Some(self.progress()),
             },
-            first_entry: self.saved_entries,
-            entries: self.machine.log()[self.saved_entries..]
-                .iter()
-                .map(|entry| serde_json::to_string(entry).expect("a log entry serializes as JSON"))
-                .collect(),
-            people: self
-                .unsaved_people
-                .iter()
-                .map(|id| (*id, record(self.person(id))))
-                .collect(),
-            competition: serde_json::to_string(self.competition())
-                .expect("a competition serializes as JSON"),
+            record: file::to_record(self.file()),
+            changes: self.changes(),
         }
     }
 
-    /// Notes that `changes`, which [`Self::unsaved_changes`] of this session returned, have been
-    /// written to its storage. What changed after they were taken stays unsaved, so that changes
-    /// whose writes finish out of order are all saved once every write has.
+    /// Notes that `save`, which [`Self::to_save`] of this session returned, has been written to its
+    /// storage. What changed after it was taken stays unsaved, so that saves whose writes finish
+    /// out of order leave nothing unsaved once every write has.
     ///
     /// # Panics
-    /// Panics if `changes` are of another competition.
-    pub fn mark_saved(&mut self, changes: &Changes) {
+    /// Panics if `save` is of another competition.
+    pub fn mark_saved(&mut self, save: &Save) {
         assert_eq!(
-            changes.listing.key, self.key,
-            "the changes must be of this session's competition"
+            save.listing.key, self.key,
+            "the save must be of this session's competition"
         );
-        self.saved_entries = self
-            .saved_entries
-            .max(changes.first_entry + changes.entries.len());
-        // stored with the latest changes; until those are written, their entries are unsaved
+        self.saved_changes = self.saved_changes.max(save.changes);
         self.competition_saved = true;
-        for (id, saved) in &changes.people {
-            if record(self.person(id)) == *saved {
-                self.unsaved_people.shift_remove(id);
-            }
-        }
     }
 
-    /// Writes what changed since the last save to `storage`.
+    /// Writes the competition to `storage`.
     ///
     /// # Errors
     /// Returns the error of the storage, in which case the changes stay unsaved and the next save
     /// writes them.
     pub async fn save<S: Storage>(&mut self, storage: &S) -> Result<(), S::Error> {
-        let changes = self.unsaved_changes();
-        storage.write(&changes).await?;
-        self.mark_saved(&changes);
+        let save = self.to_save();
+        storage.write(&save).await?;
+        self.mark_saved(&save);
         Ok(())
     }
 
@@ -528,7 +496,7 @@ impl Session {
             }
         })?;
         self.people.add(Person::new(id, name));
-        self.unsaved_people.insert(id);
+        self.people_changes += 1;
         Ok(id)
     }
 
@@ -610,7 +578,7 @@ impl Session {
         }
         if self.people.name(&id) != Some(name) {
             self.people.add(Person::new(id, name));
-            self.unsaved_people.insert(id);
+            self.people_changes += 1;
         }
         Ok(())
     }
@@ -1378,13 +1346,6 @@ impl Session {
         self.phase().filter(|_| self.competition().is_started())
     }
 
-    /// The person entered as `id`, which every entrant a session added has.
-    fn person(&self, id: &EntrantId) -> &Person {
-        self.people
-            .get(id)
-            .expect("an entrant added by the session has a name")
-    }
-
     fn entrant_row(&self, id: &EntrantId) -> EntrantRow {
         EntrantRow {
             id: *id,
@@ -1574,40 +1535,17 @@ fn rejection(error: StateMachineError) -> TransitionError {
     }
 }
 
-/// What is stored of the competition `key` in `storage`, with the entries from `first_entry` on.
-async fn read<S: Storage>(
-    storage: &S,
-    key: CompetitionKey,
-    first_entry: usize,
-) -> Result<Stored, LoadError<S::Error>> {
+/// What is stored of the competition `key` in `storage`.
+async fn read<S: Storage>(storage: &S, key: CompetitionKey) -> Result<Stored, LoadError<S::Error>> {
     storage
-        .read(key, first_entry)
+        .read(key)
         .await
         .map_err(LoadError::Storage)?
         .ok_or(LoadError::NotFound)
 }
 
-/// The entries of `stored`, the first of which is at the position `first_entry` of the log.
-fn entries<E>(
-    stored: &Stored,
-    first_entry: usize,
-) -> Result<Vec<LogEntry<Box<dyn CompetitionTransition>>>, LoadError<E>> {
-    (first_entry..)
-        .zip(&stored.entries)
-        .map(|(position, entry)| {
-            serde_json::from_str(entry).map_err(|source| LoadError::Entry { position, source })
-        })
-        .collect()
-}
-
-/// The people of `stored`.
-fn people<E>(stored: &Stored) -> Result<People, LoadError<E>> {
-    let mut people = People::default();
-    for person in &stored.people {
-        people.add(serde_json::from_str(person).map_err(LoadError::Person)?);
-    }
-    Ok(people)
-}
+/// A stored record as a session reads it: the entries of its log, not replayed yet.
+type Record = File<Vec<LogEntry<Box<dyn CompetitionTransition>>>, People>;
 
 /// Every plugin of `axis`, in the order of their ids.
 fn plugins(axis: AnyAxis) -> Vec<Plugin> {
@@ -1623,11 +1561,6 @@ fn plugins(axis: AnyAxis) -> Vec<Plugin> {
 /// `name` as it is compared to tell names that look alike, see [`Session::entrant_like`].
 fn folded(name: &str) -> String {
     name.trim().nfkc().collect::<String>().to_lowercase()
-}
-
-/// What a person is stored as.
-fn record(person: &Person) -> String {
-    serde_json::to_string(person).expect("a person serializes as JSON")
 }
 
 mod bracket;

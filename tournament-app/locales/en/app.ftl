@@ -43,8 +43,8 @@ error-competition-not-found = there is no such competition
 # the messages below have a detail, in English, saying why: from the storage, from reading JSON or
 # from the engine
 error-competition-unreadable = the competition cannot be read
-error-log-entry-unreadable = entry { $position } of the log cannot be read
-error-person-unreadable = an entrant’s name cannot be read
+error-competition-newer = the competition was saved by a newer version of Tournamo, which this one cannot open; reload the page for the newest
+error-competition-damaged = the competition is stored damaged
 error-log-does-not-replay = the log does not replay
 error-file-no-competition = the file is no competition of Tournamo
 error-file-newer = the file is of a newer version of Tournamo, which this one cannot open; reload the page for the newest

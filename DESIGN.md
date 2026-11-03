@@ -545,7 +545,7 @@ a changed pairing leaves later results naming matches that no longer exist, a
 fixed metric changes the standings of a finished competition. Keeping every
 version of every behaviour is not sustainable, and not wanted where an old one
 was a bug. So a file holds the competition its log replayed into next to the
-log, and so does the browser's storage, for a version that can no longer
+log, and so does the browser's storage (which stores the file), for a version that can no longer
 replay it to show it read-only instead (*planned*), and to tell a replay that
 comes out otherwise. The log stays what
 is loaded; the competition is only read in place of it. Its serialized form is
@@ -741,47 +741,64 @@ text).
 
 ### Storage
 
-**IndexedDB, one record per log entry**, appended as each change is accepted,
-so no accepted result is lost; names stored apart. **One writer tab per
+**IndexedDB, one record per competition: its file** (see below), without the
+name, rewritten whole with each change as it is accepted, so no accepted result
+is lost. One format for files and the browser means one thing to keep loading
+(golden saves cover both) and one to migrate. **One writer tab per
 competition**, holding a Web Lock; other tabs are read-only and follow it
 through a `BroadcastChannel`.
 
 - **The `Storage` trait is async** (IndexedDB is), returning `impl Future`
   without `Send`; so not dyn-compatible, and the session takes the storage where
   it loads or saves rather than being generic over it. It knows records (the
-  JSON of each entry and person) and listings (key, name, progress).
+  text the session hands it) and listings (key, name, progress).
 - **The session changes in memory first; storage catches up.** A transition is
   known accepted only once applied, and the log cannot take an entry back. A
-  save is take (`unsaved_changes`), write (no borrow of the session across the
-  `await`), mark (`mark_saved`); a failed write leaves the changes for the next.
-  Entries are written at their position, so rewriting or out-of-order writes
-  store the same.
+  save is take (`to_save`), write (no borrow of the session across the
+  `await`), mark (`mark_saved`); a failed write leaves its changes for the next,
+  which writes everything anyway. The session counts its changes (log entries
+  and people), so a save marks only those made before it was taken, whatever
+  order writes finish in. A storage stores writes in the order they are made:
+  IndexedDB runs read-write transactions over the same stores in the order they
+  were created.
 - **The listing carries the progress** (not started, the round being played,
-  won by whom), set by each save whose entries reach the end of the stored log,
-  so the list need not replay every competition.
-- **What the log replays into is stored next to it** (see [The competition
-  next to its log](#the-competition-next-to-its-log)), under the same condition
-  as the progress, so it is always that of the whole stored log. It is not in
-  the listing, since every list and every write reads all listings. A
-  competition an older version saved lacks it; the session counts that as
-  unsaved, and the tab changing it saves right after opening it (not a
-  read-only tab, which catches up regardless).
-- **A write is one transaction** over the stores (`competitions`, `entries`
-  under `[key, position]`, `people` under `[key, entrant]`, `replayed` under
-  the key, added in the database's version 2), refusing gaps. Opening at a
-  higher version closes older pages' connections (`idb` does so on
+  won by whom), written with each save, so the list need not replay or read
+  every competition. It is a record of its own, since every list and every
+  write reads all listings.
+- **What the log replays into is in the record** (see [The competition next to
+  its log](#the-competition-next-to-its-log)). A competition an older version
+  saved lacks it; the session counts that as unsaved, and the tab changing it
+  saves right after opening it (not a read-only tab, which catches up
+  regardless).
+- **A write is one transaction** over the listings and the records. Opening at
+  a higher version closes older pages' connections (`idb` does so on
   `versionchange`) rather than waiting for them; their next write fails. A
   transaction stays active only in the microtasks after a request's result, so
   it runs on wasm-bindgen-futures' executor, not the awaiting one. The crate
   `idb` binds IndexedDB (thin, few dependencies).
+- **Older databases are moved over lazily.** Up to the database's version 2
+  (0.2.0) a competition was stored as records of each log entry and person
+  (`entries` under `[key, position]`, `people` under `[key, entrant]`) plus
+  `replayed` under the key. Reading a competition without a record puts its
+  file together from those; its next write stores the record and removes them.
+  So no upgrade has to read and write everything inside IndexedDB's
+  `versionchange` transaction, and a competition that no longer loads stays as
+  it was.
+- **Cost.** Measured in Chrome (wasm, desktop CPU) with the benchmark's
+  competition after its last result (log and competition 3.5 MB of JSON at 1000
+  entrants, 7.0 MB at 2000): a save takes ~28 ms at 1000 entrants and ~54 ms at
+  2000, of which serializing is about two thirds and the write the rest; before,
+  with records per entry but the competition rewritten anyway, ~18 and ~34 ms.
+  A mid-range phone takes about four times as long for the serializing.
 - **The lock** is held by the tab with the competition open and by each save
   under way, so a change made just before leaving is written before another tab
   takes over; the save outlives the screen. Web Locks are bound by hand, since
   web-sys has them only behind `web_sys_unstable_apis`.
 - **Catching up appends rather than reloads**: a session with N entries reads
-  the stored ones from N and applies each, replaying only for undo or replace
-  entries, as the writer did. It refuses a session with unsaved changes (the
-  log would fork). The same will serve syncing with a server.
+  the record, reads its log entries without replaying them, and applies those
+  from N on, replaying only for undo or replace entries, as the writer did. It
+  refuses a session with unsaved changes (the log would fork). The same will
+  serve syncing with a server.
 - **Persistent storage is asked for when a competition is opened** (some
   browsers ask the operator, so not on load); a refusal shows a warning, see
   [Offline and installing](#offline-and-installing).
@@ -789,11 +806,15 @@ through a `BroadcastChannel`.
   competitions move between CLI and GUI. `"format"` (`file::Format`, first, a
   missing one is 1) is raised with a change older versions cannot read; a newer
   one is refused as such rather than as a broken log, and a later version can
-  migrate older ones. The records in IndexedDB need no such field: the
-  database's own version can drive their migration. Importing makes a new competition under a new key,
-  numbered (`Cup (2)`) if the name exists (a number, not a translated word in
-  stored data). Exporting from the list writes the stored records as they are,
-  so a log that no longer replays can still be exported.
+  migrate older ones; so can a record in IndexedDB. Importing makes a new
+  competition under a new key, numbered (`Cup (2)`) if the name exists (a
+  number, not a translated word in stored data). Exporting from the list writes
+  the stored record as it is, with the name, so a log that no longer replays can
+  still be exported. Files are not compressed: gzip would make them about 3.5×
+  smaller, but compressing takes longer than serializing (in Chrome
+  `CompressionStream` at its default level ~170 ms for 7 MB, blocking the page;
+  `flate2` at level 1 ~50 ms). It can be added later without breaking older
+  files, which a reader tells apart by gzip's first bytes (`1f 8b`).
 - **The competition open is in the URL** after `#`, and a fragment naming none
   shows the list saying so. Renaming changes only the
   listing (the name is not in the log); deleting removes everything in one
@@ -806,8 +827,15 @@ through a `BroadcastChannel`.
 
 Rejected: a synchronous trait with the GUI writing IndexedDB itself (record
 format untested outside a browser); the session owning its storage (borrowed
-across every write); the whole log as one value (1.4 MB rewritten per result at
-5000 results); several writer tabs (forks the log: that is the sync problem).
+across every write); a record per log entry and person (a second format next to
+the file's, saving little, since the competition is rewritten with every save
+anyway); postcard instead of JSON (a save 3–4× faster, ~16 ms at 2000 entrants,
+and 2.7× smaller, but not self-describing: a field added with a default, one
+left out or variants reordered no longer read, so every change of a saved type
+would need a frozen copy of the old one, and a forgotten one may read as wrong
+values rather than fail); saving in a Web Worker (the session lives on the
+page's thread, so the data would have to be serialized to get there); several
+writer tabs (forks the log: that is the sync problem).
 
 ### Configuring a phase
 
@@ -1160,7 +1188,9 @@ page is built by its own tool (trunk, dx) in its own hook and fails on its own.
 Fine for the first use cases (20–50 entrants). Undo, redo and loading replay
 the whole log, which at 1000 entrants and 5000 results takes ~1.8 s in wasm and
 several seconds on a phone, missing the requirement (< 1 s with 500 entrants on
-a mid-range phone). *Planned:* snapshot checkpoints. The UI shows one round of
+a mid-range phone). *Planned:* snapshot checkpoints; reading the competition
+stored next to the log takes 13 ms at 1000 entrants and 29 ms at 2000 (Chrome,
+JSON), against 1.3 s and 6.3 s to replay its log. The UI shows one round of
 matches at a time rather than thousands of rows.
 
 Measured with the `large_tournament` benchmark's competition (1000 entrants,

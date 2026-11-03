@@ -446,7 +446,7 @@ fn export(mut page: Page, key: CompetitionKey, name: String) {
         return;
     };
     spawn(async move {
-        match storage.read(key, 0).await {
+        match storage.read(key).await {
             Ok(Some(stored)) => download(page, &name, &stored.export()),
             Ok(None) => page
                 .error

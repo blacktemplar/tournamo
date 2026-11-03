@@ -278,7 +278,7 @@ fn an_entrant_is_renamed_in_place() {
     let mut session = Given::new().started();
     now(session.save(&storage)).unwrap();
     let bob = session.entrants()[1].id;
-    let log = session.next_entry();
+    let log = session.machine.log().len();
 
     session.rename_entrant(bob, " Robert ").unwrap();
 
@@ -286,7 +286,8 @@ fn an_entrant_is_renamed_in_place() {
         names(&session.entrants()),
         ["Alice", "Robert", "Carol", "Dave"]
     );
-    assert_eq!(session.next_entry(), log);
+    assert_eq!(session.machine.log().len(), log);
+    assert!(session.has_unsaved_changes());
     now(session.save(&storage)).unwrap();
     let loaded = now(Session::load(&storage, session.key())).unwrap();
     assert_eq!(loaded.entrants(), session.entrants());
@@ -1579,19 +1580,23 @@ fn the_winner_is_the_team_ranked_first_once_every_match_is_played() {
 }
 
 #[test]
-fn the_listing_keeps_the_progress_of_the_latest_changes_written_out_of_order() {
+fn a_save_written_after_another_stores_over_it_whichever_finishes_first() {
     let storage = MemoryStorage::default();
     let mut session = Session::new("cup");
     session.add_entrant("Alice").unwrap();
-    let older = session.unsaved_changes();
+    let older = session.to_save();
     session.add_entrant("Bob").unwrap();
-    let newer = session.unsaved_changes();
+    let newer = session.to_save();
 
-    now(storage.write(&newer)).unwrap();
-    now(storage.write(&older)).unwrap();
+    let older = storage.write(&older);
+    let newer = storage.write(&newer);
+    now(newer).unwrap();
+    now(older).unwrap();
 
     let listed = now(storage.list()).unwrap();
     assert_eq!(listed[0].progress, Some(Progress::Setup { entrants: 2 }));
+    let loaded = now(Session::load(&storage, session.key())).unwrap();
+    assert_eq!(names(&loaded.entrants()), ["Alice", "Bob"]);
 }
 
 #[test]
@@ -2032,7 +2037,7 @@ fn a_saved_competition_loads_as_it_was_saved_without_anything_to_undo() {
 }
 
 #[test]
-fn a_save_writes_what_changed_since_the_last_one() {
+fn every_change_is_unsaved_until_the_next_save() {
     let storage = MemoryStorage::default();
     let mut session = Session::new("cup");
     assert!(session.has_unsaved_changes(), "the seed is not saved yet");
@@ -2040,11 +2045,7 @@ fn a_save_writes_what_changed_since_the_last_one() {
     assert!(!session.has_unsaved_changes());
 
     session.add_entrant("Alice").unwrap();
-    let changes = session.unsaved_changes();
-
-    assert_eq!(changes.first_entry(), 1);
-    assert_eq!(changes.entries().len(), 1);
-    assert_eq!(changes.people().len(), 1);
+    assert!(session.has_unsaved_changes());
     now(session.save(&storage)).unwrap();
     assert!(!session.has_unsaved_changes());
     session.undo().unwrap();
@@ -2054,9 +2055,23 @@ fn a_save_writes_what_changed_since_the_last_one() {
     );
 }
 
-/// For a version that can no longer replay the log.
+/// The record of the competition `key` in `storage`, as JSON.
+fn record(storage: &MemoryStorage, key: CompetitionKey) -> serde_json::Value {
+    let stored = now(storage.read(key)).unwrap().unwrap();
+    serde_json::from_str(&stored.record).unwrap()
+}
+
+/// Leaves the competition `key` as a version that did not store the competition its log replays
+/// into would have.
+fn forget_competition(storage: &MemoryStorage, key: CompetitionKey) {
+    let mut record = record(storage, key);
+    record.as_object_mut().unwrap().remove("competition");
+    storage.set_record(key, record.to_string());
+}
+
+/// A competition is stored as its file, so that it is exported as it is.
 #[test]
-fn a_save_stores_what_the_log_replays_into() {
+fn a_save_stores_the_file_without_the_name() {
     let storage = MemoryStorage::default();
     let mut session = Given::new().started();
     session
@@ -2065,13 +2080,24 @@ fn a_save_stores_what_the_log_replays_into() {
 
     now(session.save(&storage)).unwrap();
 
-    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
-    let competition: serde_json::Value =
-        serde_json::from_str(stored.competition.as_deref().unwrap()).unwrap();
-    assert_eq!(
-        competition,
-        serde_json::to_value(session.competition()).unwrap()
-    );
+    let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
+    file.as_object_mut().unwrap().remove("name");
+    assert_eq!(record(&storage, session.key()), file);
+}
+
+#[test]
+fn a_competition_saved_by_a_newer_version_is_refused_as_such() {
+    let storage = MemoryStorage::default();
+    let mut session = Session::new("cup");
+    now(session.save(&storage)).unwrap();
+    let mut record = record(&storage, session.key());
+    record["format"] = serde_json::json!(1000);
+    storage.set_record(session.key(), record.to_string());
+
+    assert!(matches!(
+        now(Session::load(&storage, session.key())),
+        Err(LoadError::Newer(_))
+    ));
 }
 
 /// Opening a competition an older version saved is enough to store what its log replays into,
@@ -2081,19 +2107,16 @@ fn a_competition_stored_without_what_its_log_replays_into_gets_it_on_the_next_sa
     let storage = MemoryStorage::default();
     let mut session = Given::new().started();
     now(session.save(&storage)).unwrap();
-    storage.forget_competition(session.key());
+    forget_competition(&storage, session.key());
 
     let mut loaded = now(Session::load(&storage, session.key())).unwrap();
 
     assert!(loaded.has_unsaved_changes());
-    let changes = loaded.unsaved_changes();
-    assert!(changes.entries().is_empty() && changes.people().is_empty());
     now(loaded.save(&storage)).unwrap();
     assert!(!loaded.has_unsaved_changes());
-    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
     assert_eq!(
-        stored.competition.unwrap(),
-        serde_json::to_string(session.competition()).unwrap()
+        record(&storage, session.key())["competition"],
+        serde_json::to_value(session.competition()).unwrap()
     );
     let reloaded = now(Session::load(&storage, session.key())).unwrap();
     assert!(!reloaded.has_unsaved_changes());
@@ -2105,7 +2128,7 @@ fn a_competition_stored_without_what_its_log_replays_into_is_caught_up_with() {
     let storage = MemoryStorage::default();
     let mut changing = Given::new().started();
     now(changing.save(&storage)).unwrap();
-    storage.forget_competition(changing.key());
+    forget_competition(&storage, changing.key());
     let mut following = now(Session::load(&storage, changing.key())).unwrap();
 
     changing
@@ -2122,39 +2145,28 @@ fn a_competition_stored_without_what_its_log_replays_into_is_caught_up_with() {
 
 /// A GUI writes changes while the operator goes on, so a write may finish after a later one.
 #[test]
-fn changes_written_out_of_order_are_all_saved() {
-    let storage = MemoryStorage::default();
+fn saves_written_out_of_order_leave_nothing_unsaved() {
     let mut session = Session::new("cup");
     session.add_entrant("Alice").unwrap();
-    let first = session.unsaved_changes();
+    let first = session.to_save();
     session.add_entrant("Bob").unwrap();
-    let second = session.unsaved_changes();
+    let second = session.to_save();
 
-    now(storage.write(&second)).unwrap();
     session.mark_saved(&second);
-    now(storage.write(&first)).unwrap();
     session.mark_saved(&first);
 
     assert!(!session.has_unsaved_changes());
-    let loaded = now(Session::load(&storage, session.key())).unwrap();
-    assert_eq!(names(&loaded.entrants()), ["Alice", "Bob"]);
-    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
-    assert_eq!(
-        stored.competition.as_deref(),
-        Some(second.competition()),
-        "the competition of the whole log stays"
-    );
 }
 
-/// Changes taken before a person changed leave that change unsaved once they are written.
+/// A save taken before a person changed leaves that change unsaved once it is written.
 #[test]
-fn a_person_changed_after_the_changes_were_taken_stays_unsaved() {
+fn a_person_changed_after_the_save_was_taken_stays_unsaved() {
     let mut session = Session::new("cup");
     let alice = session.add_entrant("Alice").unwrap();
-    let changes = session.unsaved_changes();
-    session.people.add(Person::new(alice, "Alicia"));
+    let save = session.to_save();
+    session.rename_entrant(alice, "Alicia").unwrap();
 
-    session.mark_saved(&changes);
+    session.mark_saved(&save);
 
     assert!(session.has_unsaved_changes());
 }
@@ -2209,13 +2221,17 @@ fn an_entry_stored_that_does_not_apply_is_not_caught_up_with() {
     now(changing.save(&storage)).unwrap();
     let mut following = now(Session::load(&storage, changing.key())).unwrap();
     changing.add_entrant("Alice").unwrap();
-    let mut changes = changing.unsaved_changes();
-    changes.entries.push(r#"{"unknown": true}"#.to_owned());
-    now(storage.write(&changes)).unwrap();
+    now(changing.save(&storage)).unwrap();
+    let mut record = record(&storage, changing.key());
+    record["log"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({ "unknown": true }));
+    storage.set_record(changing.key(), record.to_string());
 
     assert!(matches!(
         now(following.catch_up(&storage)),
-        Err(LoadError::Entry { position: 2, .. })
+        Err(LoadError::Damaged(_))
     ));
     assert!(following.entrants().is_empty(), "nothing is appended");
 }
@@ -2257,20 +2273,18 @@ impl Storage for Flaky {
         Ok(now(self.storage.list()).unwrap())
     }
 
-    async fn read(
-        &self,
-        key: CompetitionKey,
-        first_entry: usize,
-    ) -> Result<Option<Stored>, WriteFailed> {
-        Ok(now(self.storage.read(key, first_entry)).unwrap())
+    async fn read(&self, key: CompetitionKey) -> Result<Option<Stored>, WriteFailed> {
+        Ok(now(self.storage.read(key)).unwrap())
     }
 
-    async fn write(&self, changes: &Changes) -> Result<(), WriteFailed> {
-        if self.failing.get() {
-            return Err(WriteFailed);
-        }
-        now(self.storage.write(changes)).unwrap();
-        Ok(())
+    fn write(&self, save: &Save) -> impl Future<Output = Result<(), WriteFailed>> + use<> {
+        let written = if self.failing.get() {
+            Err(WriteFailed)
+        } else {
+            now(self.storage.write(save)).unwrap();
+            Ok(())
+        };
+        std::future::ready(written)
     }
 
     async fn rename(&self, key: CompetitionKey, name: &str) -> Result<(), WriteFailed> {
@@ -2306,7 +2320,7 @@ fn a_competition_stored_is_renamed_and_deleted() {
         now(Session::load(&storage, session.key())).unwrap().name(),
         "Cup 2026"
     );
-    assert!(now(storage.read(other.key(), 0)).unwrap().is_none());
+    assert!(now(storage.read(other.key())).unwrap().is_none());
 }
 
 #[test]
@@ -2337,9 +2351,9 @@ fn names_are_stored_apart_from_the_log() {
 
     now(session.save(&storage)).unwrap();
 
-    let stored = now(storage.read(session.key(), 0)).unwrap().unwrap();
-    assert!(stored.entries.iter().all(|entry| !entry.contains("Alice")));
-    assert!(stored.people[0].contains("Alice"));
+    let record = record(&storage, session.key());
+    assert!(!record["log"].to_string().contains("Alice"));
+    assert!(record["people"].to_string().contains("Alice"));
 }
 
 #[test]
@@ -2515,15 +2529,16 @@ fn what_is_stored_is_exported_whether_it_replays_or_not() {
     let storage = MemoryStorage::default();
     let mut session = Session::new("cup");
     session.add_entrant("Alice").unwrap();
-    let mut changes = session.unsaved_changes();
-    changes.entries.push(r#"{"unknown": true}"#.to_owned());
-    now(storage.write(&changes)).unwrap();
+    now(session.save(&storage)).unwrap();
+    let mut record = record(&storage, session.key());
+    record["log"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({ "unknown": true }));
+    storage.set_record(session.key(), record.to_string());
     assert!(now(Session::load(&storage, session.key())).is_err());
 
-    let file = now(storage.read(session.key(), 0))
-        .unwrap()
-        .unwrap()
-        .export();
+    let file = now(storage.read(session.key())).unwrap().unwrap().export();
 
     let exported: serde_json::Value = serde_json::from_str(&file).unwrap();
     assert_eq!(exported["name"], "cup");
@@ -2541,41 +2556,37 @@ fn what_is_stored_is_exported_whether_it_replays_or_not() {
 #[test]
 fn what_does_not_replay_into_a_competition_is_not_loaded() {
     let storage = MemoryStorage::default();
-    let key = CompetitionKey::new(Uuid::from_u128(1));
-    let write = |entries: &[&str]| {
-        now(storage.write(&Changes {
-            listing: Listing {
-                key,
-                name: "cup".to_owned(),
-                progress: None,
-            },
-            first_entry: 0,
-            entries: entries.iter().map(|entry| (*entry).to_owned()).collect(),
-            people: Vec::new(),
-            competition: "{}".to_owned(),
-        }))
-        .unwrap();
-    };
-
+    let session = Session::new("cup");
+    let key = session.key();
     assert!(matches!(
         now(Session::load(&storage, key)),
         Err(LoadError::NotFound)
     ));
-    write(&["{}"]);
+    now(storage.write(&session.to_save())).unwrap();
+    let write = |log: serde_json::Value| {
+        let mut record = record(&storage, key);
+        record["log"] = log;
+        storage.set_record(key, record.to_string());
+    };
+
+    write(serde_json::json!([{}]));
     assert!(matches!(
         now(Session::load(&storage, key)),
-        Err(LoadError::Entry { position: 0, .. })
+        Err(LoadError::Damaged(_))
     ));
-    let mut session = Session::new("cup");
-    session.add_entrant("Alice").unwrap();
-    let undo_of_nothing = format!(
-        r#"{{"id":"{}","kind":{{"Undo":"{}"}}}}"#,
-        Uuid::from_u128(2),
-        Uuid::from_u128(3)
-    );
-    write(&[&session.unsaved_changes().entries()[0], &undo_of_nothing]);
+    let seed = serde_json::to_value(&session.machine.log()[0]).unwrap();
+    let undo_of_nothing = serde_json::json!({
+        "id": Uuid::from_u128(2),
+        "kind": { "Undo": Uuid::from_u128(3) },
+    });
+    write(serde_json::json!([seed, undo_of_nothing]));
     assert!(matches!(
         now(Session::load(&storage, key)),
         Err(LoadError::Replay(_))
+    ));
+    storage.set_record(key, "no file".to_owned());
+    assert!(matches!(
+        now(Session::load(&storage, key)),
+        Err(LoadError::Damaged(_))
     ));
 }

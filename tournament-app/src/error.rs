@@ -214,17 +214,29 @@ pub enum LoadError<E> {
     NotFound,
     #[error("the competition cannot be read")]
     Storage(#[source] E),
-    /// An entry of the log is not one this version knows, e.g. one of a plugin it does not have.
-    #[error("entry {position} of the log cannot be read")]
-    Entry {
-        position: usize,
-        source: serde_json::Error,
-    },
-    #[error("an entrant’s name cannot be read")]
-    Person(#[source] serde_json::Error),
+    /// It was saved in this format, newer than [`Format::CURRENT`](crate::file::Format::CURRENT).
+    #[error(
+        "the competition was saved by a newer version of Tournamo, which this one cannot open; \
+         reload the page for the newest"
+    )]
+    Newer(Format),
+    /// What is stored does not read, e.g. an entry of the log of a plugin this version does not
+    /// have; the source says where.
+    #[error("the competition is stored damaged")]
+    Damaged(#[source] serde_json::Error),
     /// The log does not replay into a competition.
     #[error("the log does not replay")]
     Replay(#[source] StateMachineError),
+}
+
+impl<E> From<ImportError> for LoadError<E> {
+    /// What stops a file from being imported stops the record holding it from being loaded.
+    fn from(error: ImportError) -> Self {
+        match error {
+            ImportError::NoCompetition(error) | ImportError::Damaged(error) => Self::Damaged(error),
+            ImportError::Newer(format) => Self::Newer(format),
+        }
+    }
 }
 
 /// Why a file was not imported.
@@ -418,11 +430,9 @@ impl<E: Display> Message for LoadError<E> {
             Self::Storage(error) => {
                 Text::new("error-competition-unreadable").with_detail(error.to_string())
             }
-            Self::Entry { position, source } => Text::new("error-log-entry-unreadable")
-                .with("position", *position)
-                .with_detail(source.to_string()),
-            Self::Person(error) => {
-                Text::new("error-person-unreadable").with_detail(error.to_string())
+            Self::Newer(_) => Text::new("error-competition-newer"),
+            Self::Damaged(error) => {
+                Text::new("error-competition-damaged").with_detail(error.to_string())
             }
             Self::Replay(error) => {
                 Text::new("error-log-does-not-replay").with_detail(error.to_string())

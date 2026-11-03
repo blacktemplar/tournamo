@@ -10,6 +10,21 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+Competitions saved with 0.2.0 and earlier open unchanged. Once a browser has
+opened this version, earlier ones can no longer open the competitions stored in
+it.
+
+### Changed
+
+- The browser stores each competition as its file, the one it exports,
+  rewritten with every change, rather than as a record per log entry and
+  person. A competition stored by an earlier version is moved over by its next
+  change. The database moves to version 3: a tab of an earlier version still
+  open can no longer save and has to be reloaded.
+- A competition that cannot be opened says whether it was saved by a newer
+  version or is stored damaged, rather than which log entry or name could not be
+  read; the detail still says where.
+
 ## [0.2.0] - 2026-11-03
 
 Competitions saved with 0.1.x open unchanged. Once a browser has opened 0.2.0,

@@ -1,35 +1,46 @@
 //! Competitions stored in the browser's IndexedDB.
 //!
-//! A database holds four object stores, each record of them a JSON text: `competitions`, the
-//! listing of each competition under its key; `entries`, the entries of the logs under
-//! `[competition, position]`; `people`, under `[competition, entrant]`; and `replayed`, what the
-//! log of each competition replays into, under its key. A write is one transaction over all four.
+//! A database holds two object stores, each record of them a JSON text: `competitions`, the
+//! listing of each competition under its key, and `saves`, its record under its key. A write is
+//! one transaction over both.
+//!
+//! Up to version 2 of the database a competition was stored as records of its log entries
+//! (`entries`, under `[competition, position]`), its people (`people`, under
+//! `[competition, entrant]`) and what its log replays into (`replayed`, added in version 2, under
+//! its key). Such a competition is read as the record those make up, and its next write stores the
+//! record and removes them.
 
 use std::rc::Rc;
 
 use futures_channel::oneshot;
-use futures_util::future::{try_join3, try_join4};
+use futures_util::future::{try_join, try_join5};
 use idb::{
     Database, KeyRange, ObjectStore, Query, TransactionMode, TransactionResult,
     builder::ObjectStoreBuilder,
 };
 use js_sys::Array;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use thiserror::Error;
-use tournament_app::storage::{Changes, CompetitionKey, Listing, Progress, Storage, Stored};
+use tournament_app::{
+    file::{File, Format},
+    storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
+};
 use wasm_bindgen::JsValue;
 
 /// The version of the layout of the database, raised with every change of its object stores.
 /// Opening it at a higher version closes the connections of pages of older versions, which then
 /// fail to write, rather than waiting for them.
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
 
 const COMPETITIONS: &str = "competitions";
+/// Added in version 3.
+const SAVES: &str = "saves";
+/// Up to version 2, read and emptied since.
 const ENTRIES: &str = "entries";
 const PEOPLE: &str = "people";
-/// Added in version 2, rather than to the listings, which are all read for a list and a write.
 const REPLAYED: &str = "replayed";
-const STORES: [&str; 4] = [COMPETITIONS, ENTRIES, PEOPLE, REPLAYED];
+const STORES: [&str; 5] = [COMPETITIONS, SAVES, ENTRIES, PEOPLE, REPLAYED];
 
 /// Stores competitions in a database of the browser's IndexedDB. Its clones share the connection
 /// to it.
@@ -45,9 +56,6 @@ pub enum IndexedDbError {
     Aborted,
     #[error("a record is not what was stored")]
     Record,
-    /// See [`Changes::first_entry`].
-    #[error("the changes start at entry {first_entry}, but only {stored} entries are stored")]
-    Gap { first_entry: usize, stored: usize },
 }
 
 /// What the listing of a competition is stored as.
@@ -108,20 +116,20 @@ impl Storage for IndexedDb {
             .collect())
     }
 
-    async fn read(
-        &self,
-        key: CompetitionKey,
-        first_entry: usize,
-    ) -> Result<Option<Stored>, IndexedDbError> {
+    async fn read(&self, key: CompetitionKey) -> Result<Option<Stored>, IndexedDbError> {
         let transaction = self.0.transaction(&STORES, TransactionMode::ReadOnly)?;
-        let (listing, entries, people, replayed) = try_join4(
+        let (listing, record, entries, people, replayed) = try_join5(
             transaction
                 .object_store(COMPETITIONS)?
                 .get(competition(key))?
                 .into_future(),
             transaction
+                .object_store(SAVES)?
+                .get(competition(key))?
+                .into_future(),
+            transaction
                 .object_store(ENTRIES)?
-                .get_all(Some(entries_from(key, first_entry)?), None)?
+                .get_all(Some(records_of(key)?), None)?
                 .into_future(),
             transaction
                 .object_store(PEOPLE)?
@@ -136,51 +144,46 @@ impl Storage for IndexedDb {
         let Some(listing) = listing else {
             return Ok(None);
         };
-        let texts = |records: Vec<JsValue>| {
-            records
-                .iter()
-                .map(|record| record.as_string().ok_or(IndexedDbError::Record))
-                .collect::<Result<_, _>>()
+        let record = match record {
+            Some(record) => text(&record)?,
+            // in the order of their keys, i.e. of their positions
+            None => old_record(&entries, &people, replayed.as_ref())?,
         };
         Ok(Some(Stored {
             name: parse::<ListingRecord>(&listing)?.name,
-            // in the order of their keys, i.e. of their positions
-            entries: texts(entries)?,
-            people: texts(people)?,
-            competition: replayed
-                .map(|record| record.as_string().ok_or(IndexedDbError::Record))
-                .transpose()?,
+            record,
         }))
     }
 
-    /// See [`Storage::write`].
-    ///
-    /// # Errors
-    /// Returns [`IndexedDbError::Gap`] as well if the changes start after the end of the stored
-    /// log, in which case nothing is stored.
-    async fn write(&self, changes: &Changes) -> Result<(), IndexedDbError> {
+    /// Starts the transaction right away, so that saves are stored in the order this is called in.
+    fn write(&self, save: &Save) -> impl Future<Output = Result<(), IndexedDbError>> + use<> {
         // The transaction stays active only while the browser hands it the result of a request, and
         // the microtasks queued then, so the writes following the reads have to be made right after
         // them. The executor of wasm-bindgen-futures continues in such a microtask; another one,
-        // e.g. a GUI's, might not.
+        // e.g. a GUI's, might not. It runs the tasks in the order they are spawned in, and
+        // IndexedDB runs transactions over the same stores in the order they are created in.
         let (sender, receiver) = oneshot::channel();
         let database = Rc::clone(&self.0);
-        let changes = changes.clone();
+        let save = save.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            _ = sender.send(write(&database, &changes).await);
+            _ = sender.send(write(&database, &save).await);
         });
-        receiver.await.unwrap_or(Err(IndexedDbError::Aborted))
+        async { receiver.await.unwrap_or(Err(IndexedDbError::Aborted)) }
     }
 
-    async fn rename(&self, key: CompetitionKey, name: &str) -> Result<(), IndexedDbError> {
-        // read and written in one transaction, as `write` is
+    /// Starts the transaction right away, as [`Self::write`] does.
+    fn rename(
+        &self,
+        key: CompetitionKey,
+        name: &str,
+    ) -> impl Future<Output = Result<(), IndexedDbError>> {
         let (sender, receiver) = oneshot::channel();
         let database = Rc::clone(&self.0);
         let name = name.to_owned();
         wasm_bindgen_futures::spawn_local(async move {
             _ = sender.send(rename(&database, key, name).await);
         });
-        receiver.await.unwrap_or(Err(IndexedDbError::Aborted))
+        async { receiver.await.unwrap_or(Err(IndexedDbError::Aborted)) }
     }
 
     async fn delete(&self, key: CompetitionKey) -> Result<(), IndexedDbError> {
@@ -188,13 +191,8 @@ impl Storage for IndexedDb {
         transaction
             .object_store(COMPETITIONS)?
             .delete(competition(key))?;
-        transaction
-            .object_store(ENTRIES)?
-            .delete(records_of(key)?)?;
-        transaction.object_store(PEOPLE)?.delete(records_of(key)?)?;
-        transaction
-            .object_store(REPLAYED)?
-            .delete(competition(key))?;
+        transaction.object_store(SAVES)?.delete(competition(key))?;
+        delete_old(&transaction, key)?;
         match transaction.commit()?.await? {
             TransactionResult::Committed => Ok(()),
             TransactionResult::Aborted => Err(IndexedDbError::Aborted),
@@ -228,75 +226,83 @@ async fn rename(
     }
 }
 
-async fn write(database: &Database, changes: &Changes) -> Result<(), IndexedDbError> {
+async fn write(database: &Database, save: &Save) -> Result<(), IndexedDbError> {
     let transaction = database.transaction(&STORES, TransactionMode::ReadWrite)?;
     let competitions = transaction.object_store(COMPETITIONS)?;
-    let entries = transaction.object_store(ENTRIES)?;
-    let people = transaction.object_store(PEOPLE)?;
-    let key = changes.listing().key;
-    let (listing, listings, stored) = try_join3(
+    let key = save.listing().key;
+    let (listing, listings) = try_join(
         competitions.get(competition(key))?.into_future(),
         competitions.get_all(None, None)?.into_future(),
-        entries.count(Some(records_of(key)?))?.into_future(),
     )
     .await?;
-    // after the latest stored, whatever was deleted since
-    let number = listings
-        .iter()
-        .map(|listing| parse::<ListingRecord>(listing).map(|listing| listing.number + 1))
-        .try_fold(0, |highest, number| {
-            number.map(|number| highest.max(number))
-        })?;
-    let stored = stored as usize;
-    if changes.first_entry() > stored {
-        transaction.abort()?;
-        return Err(IndexedDbError::Gap {
-            first_entry: changes.first_entry(),
-            stored,
-        });
-    }
     let listing = match listing {
-        None => Some(ListingRecord {
+        Some(listing) => ListingRecord {
+            progress: save.listing().progress.clone(),
+            ..parse(&listing)?
+        },
+        None => ListingRecord {
             key,
-            name: changes.listing().name.clone(),
-            number,
-            progress: changes.listing().progress.clone(),
-        }),
-        Some(stored_listing) if changes.reach_end(stored) => Some(ListingRecord {
-            progress: changes.listing().progress.clone(),
-            ..parse(&stored_listing)?
-        }),
-        Some(_) => None,
+            name: save.listing().name.clone(),
+            // after the latest stored, whatever was deleted since
+            number: listings
+                .iter()
+                .map(|listing| parse::<ListingRecord>(listing).map(|listing| listing.number + 1))
+                .try_fold(0, |highest, number| {
+                    number.map(|number| highest.max(number))
+                })?,
+            progress: save.listing().progress.clone(),
+        },
     };
-    if let Some(listing) = listing {
-        put(
-            &competitions,
-            &serde_json::to_string(&listing).expect("a listing serializes as JSON"),
-            &competition(key),
-        )?;
-    }
-    if changes.reach_end(stored) {
-        put(
-            &transaction.object_store(REPLAYED)?,
-            changes.competition(),
-            &competition(key),
-        )?;
-    }
-    for (position, entry) in (changes.first_entry()..).zip(changes.entries()) {
-        put(&entries, entry, &record(key, JsValue::from(position)))?;
-    }
-    for (entrant, person) in changes.people() {
-        // the id as the text it serializes as
-        let entrant = serde_json::to_value(entrant).expect("an entrant id serializes");
-        let entrant = entrant
-            .as_str()
-            .expect("an entrant id serializes as a text");
-        put(&people, person, &record(key, JsValue::from(entrant)))?;
-    }
+    put(
+        &competitions,
+        &serde_json::to_string(&listing).expect("a listing serializes as JSON"),
+        &competition(key),
+    )?;
+    put(
+        &transaction.object_store(SAVES)?,
+        save.record(),
+        &competition(key),
+    )?;
+    delete_old(&transaction, key)?;
     match transaction.commit()?.await? {
         TransactionResult::Committed => Ok(()),
         TransactionResult::Aborted => Err(IndexedDbError::Aborted),
     }
+}
+
+/// The record the stores of version 2 hold of a competition: the file of its `entries`, `people`
+/// and what it `replayed` into, if anything. A text that is no JSON, which no session stored, is
+/// kept as the text it is.
+fn old_record(
+    entries: &[JsValue],
+    people: &[JsValue],
+    replayed: Option<&JsValue>,
+) -> Result<String, IndexedDbError> {
+    let value = |record: &JsValue| -> Result<Value, IndexedDbError> {
+        let text = text(record)?;
+        Ok(serde_json::from_str(&text).unwrap_or(Value::String(text)))
+    };
+    let file = File {
+        format: Format::FIRST,
+        name: None,
+        log: entries.iter().map(value).collect::<Result<Vec<_>, _>>()?,
+        people: people.iter().map(value).collect::<Result<Vec<_>, _>>()?,
+        competition: replayed.map(value).transpose()?,
+    };
+    Ok(serde_json::to_string(&file).expect("a file serializes as JSON"))
+}
+
+/// Deletes what the stores of version 2 hold of the competition `key`, without waiting for it: the
+/// transaction fails if it does.
+fn delete_old(transaction: &idb::Transaction, key: CompetitionKey) -> Result<(), idb::Error> {
+    transaction
+        .object_store(ENTRIES)?
+        .delete(records_of(key)?)?;
+    transaction.object_store(PEOPLE)?.delete(records_of(key)?)?;
+    transaction
+        .object_store(REPLAYED)?
+        .delete(competition(key))?;
+    Ok(())
 }
 
 /// Puts `text` into `store` under `key`, without waiting for it: the transaction fails if it does.
@@ -305,38 +311,26 @@ fn put(store: &ObjectStore, text: &str, key: &JsValue) -> Result<(), idb::Error>
     Ok(())
 }
 
-/// The key of the competition `key` in the store of competitions and of what they replay into.
+/// The key of the competition `key` in the stores of competitions, saves and what they replay
+/// into.
 fn competition(key: CompetitionKey) -> JsValue {
     JsValue::from(key.to_string())
-}
-
-/// The key of the record `id` of the competition `key` in the store of entries or of people.
-fn record(key: CompetitionKey, id: JsValue) -> JsValue {
-    Array::of2(&competition(key), &id).into()
 }
 
 /// The keys of every record of the competition `key` in the store of entries or of people: those
 /// after `[key]` and before `[key, []]`, since an array is greater than any number or text.
 fn records_of(key: CompetitionKey) -> Result<Query, idb::Error> {
-    records_after(key, &Array::of1(&competition(key)))
-}
-
-/// The keys of the entries of the competition `key` from the position `first_entry` on.
-fn entries_from(key: CompetitionKey, first_entry: usize) -> Result<Query, idb::Error> {
-    records_after(key, &record(key, JsValue::from(first_entry)))
-}
-
-/// The keys of the records of the competition `key` from the key `lower` on.
-fn records_after(key: CompetitionKey, lower: &JsValue) -> Result<Query, idb::Error> {
+    let lower = Array::of1(&competition(key));
     let upper = Array::of2(&competition(key), &Array::new());
-    Ok(KeyRange::bound(lower, &upper, None, None)?.into())
+    Ok(KeyRange::bound(&lower, &upper, None, None)?.into())
+}
+
+fn text(record: &JsValue) -> Result<String, IndexedDbError> {
+    record.as_string().ok_or(IndexedDbError::Record)
 }
 
 fn parse<T: for<'de> Deserialize<'de>>(record: &JsValue) -> Result<T, IndexedDbError> {
-    record
-        .as_string()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .ok_or(IndexedDbError::Record)
+    serde_json::from_str(&text(record)?).map_err(|_| IndexedDbError::Record)
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

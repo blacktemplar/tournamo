@@ -1,22 +1,22 @@
 //! Where a [`Session`](crate::session::Session) saves its competition and loads it from.
 //!
-//! A competition is stored as records: one per entry of its transition log, one per person its
-//! entrants are, and its [`Listing`] with the competition the log replays into. The log is
-//! append-only, so a save only adds the entries appended since the last one, see [`Changes`]. What
-//! a record holds is the session's business; a storage keeps it as the text it is handed.
+//! A competition is stored as its [`Listing`] and one record, rewritten by every save, see
+//! [`Save`]. What the record holds is the session's business (its file, see [`crate::file`]); a
+//! storage keeps it as the text it is handed.
 
 use std::{
     cell::RefCell,
     convert::Infallible,
     error::Error,
     fmt::{self, Display},
+    future,
     num::NonZeroU32,
     rc::Rc,
 };
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use tournament_engine::{EntrantId, uuid::Uuid};
+use tournament_engine::uuid::Uuid;
 
 /// The key a competition is stored under, independent of its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -90,64 +90,30 @@ pub enum Progress {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stored {
     pub name: String,
-    /// The entries of the log from the position read from on, in the order they were appended.
-    pub entries: Vec<String>,
-    /// The people, in any order.
-    pub people: Vec<String>,
-    /// What the whole log replayed into when the latest changes were written, see
-    /// [`Changes::competition`]; `None` if stored before it was.
-    pub competition: Option<String>,
+    /// The record the latest save wrote, see [`Save::record`].
+    pub record: String,
 }
 
-/// What a session changed since it was last saved, to be written by [`Storage::write`].
-///
-/// Writing the same changes again, or changes overlapping them, stores the same: entries are
-/// written at their position in the log, which never changes, and people under their entrant.
+/// A competition as a session saves it, to be written by [`Storage::write`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Changes {
+pub struct Save {
     pub(crate) listing: Listing,
-    pub(crate) first_entry: usize,
-    pub(crate) entries: Vec<String>,
-    pub(crate) people: Vec<(EntrantId, String)>,
-    pub(crate) competition: String,
+    pub(crate) record: String,
+    /// The number of changes the session had made when it was taken, see
+    /// [`Session::mark_saved`](crate::session::Session::mark_saved).
+    pub(crate) changes: usize,
 }
 
-impl Changes {
-    /// The competition the changes are of. Writing them creates its listing if there is none yet,
-    /// and otherwise updates its [progress](Listing::progress) if they [reach the end of the
-    /// log](Self::reach_end).
+impl Save {
+    /// The competition saved. Writing creates its listing if there is none yet, and otherwise
+    /// updates its [progress](Listing::progress).
     pub fn listing(&self) -> &Listing {
         &self.listing
     }
 
-    /// What the log replays into with these changes, to store with the listing and under the same
-    /// condition as its progress, so that it is always that of the whole stored log.
-    pub fn competition(&self) -> &str {
-        &self.competition
-    }
-
-    /// Whether these are the latest changes of a log of which `stored` entries are stored, i.e.
-    /// their entries reach at least as far, so that the progress of their listing is not older than
-    /// what is stored. Changes written out of order must not leave the progress of older ones.
-    pub fn reach_end(&self, stored: usize) -> bool {
-        self.first_entry + self.entries.len() >= stored
-    }
-
-    /// The position in the log of the first of [`Self::entries`], which is at most the number of
-    /// entries already stored.
-    pub fn first_entry(&self) -> usize {
-        self.first_entry
-    }
-
-    /// The entries to store at the positions from [`Self::first_entry`] on, replacing what is
-    /// stored there.
-    pub fn entries(&self) -> &[String] {
-        &self.entries
-    }
-
-    /// The people to store, each replacing what is stored for the same entrant.
-    pub fn people(&self) -> &[(EntrantId, String)] {
-        &self.people
+    /// Everything stored of the competition but its listing, replacing what is stored.
+    pub fn record(&self) -> &str {
+        &self.record
     }
 }
 
@@ -164,25 +130,24 @@ pub trait Storage {
     /// Returns an error if the storage cannot be read.
     fn list(&self) -> impl Future<Output = Result<Vec<Listing>, Self::Error>>;
 
-    /// What is stored of the competition `key`, with the entries of its log from the position
-    /// `first_entry` on (none if the log is not as long), or `None` if nothing is stored of it.
-    /// Reading from 0 reads the whole log; reading from the length of a log one has catches up
-    /// with what was appended since.
+    /// What is stored of the competition `key`, or `None` if nothing is.
     ///
     /// # Errors
     /// Returns an error if the storage cannot be read.
     fn read(
         &self,
         key: CompetitionKey,
-        first_entry: usize,
     ) -> impl Future<Output = Result<Option<Stored>, Self::Error>>;
 
-    /// Stores `changes`, all of them or, if that fails, none.
+    /// Stores `save`, all of it or, if that fails, nothing. Saves are stored in the order this is
+    /// called in: a save written after another one stores over it, even if the write of the other
+    /// one finishes later. So the write starts when this is called, and the future, which only
+    /// tells when it is done, borrows neither the storage nor the save.
     ///
     /// # Errors
-    /// Returns an error if the changes cannot be stored, in which case what was stored before is
-    /// still there.
-    fn write(&self, changes: &Changes) -> impl Future<Output = Result<(), Self::Error>>;
+    /// Returns an error if the save cannot be stored, in which case what was stored before is still
+    /// there.
+    fn write(&self, save: &Save) -> impl Future<Output = Result<(), Self::Error>> + use<Self>;
 
     /// Names the competition `key` `name`, which later writes keep; nothing if nothing is stored
     /// of it. A session holding it keeps the name it had.
@@ -211,17 +176,17 @@ pub struct MemoryStorage(Rc<RefCell<IndexMap<CompetitionKey, Competition>>>);
 struct Competition {
     name: String,
     progress: Option<Progress>,
-    entries: Vec<String>,
-    people: IndexMap<EntrantId, String>,
-    competition: Option<String>,
+    record: String,
 }
 
 #[cfg(test)]
 impl MemoryStorage {
-    /// Leaves the competition `key` as a version that did not store the competition its log
-    /// replays into would have.
-    pub(crate) fn forget_competition(&self, key: CompetitionKey) {
-        self.0.borrow_mut()[&key].competition = None;
+    /// Replaces the record of the competition `key`, e.g. with one an older version wrote.
+    ///
+    /// # Panics
+    /// Panics if nothing is stored of it.
+    pub(crate) fn set_record(&self, key: CompetitionKey, record: String) {
+        self.0.borrow_mut()[&key].record = record;
     }
 }
 
@@ -241,53 +206,26 @@ impl Storage for MemoryStorage {
             .collect())
     }
 
-    async fn read(
-        &self,
-        key: CompetitionKey,
-        first_entry: usize,
-    ) -> Result<Option<Stored>, Infallible> {
+    async fn read(&self, key: CompetitionKey) -> Result<Option<Stored>, Infallible> {
         Ok(self.0.borrow().get(&key).map(|competition| Stored {
             name: competition.name.clone(),
-            entries: competition
-                .entries
-                .get(first_entry..)
-                .unwrap_or_default()
-                .to_vec(),
-            people: competition.people.values().cloned().collect(),
-            competition: competition.competition.clone(),
+            record: competition.record.clone(),
         }))
     }
 
-    /// # Panics
-    /// Panics if the changes start after the end of the stored log, which leaves a gap.
-    async fn write(&self, changes: &Changes) -> Result<(), Infallible> {
+    /// Stores when called, before the future is polled.
+    fn write(&self, save: &Save) -> impl Future<Output = Result<(), Infallible>> + use<> {
         let mut competitions = self.0.borrow_mut();
         let competition = competitions
-            .entry(changes.listing.key)
+            .entry(save.listing.key)
             .or_insert_with(|| Competition {
-                name: changes.listing.name.clone(),
+                name: save.listing.name.clone(),
                 progress: None,
-                entries: Vec::new(),
-                people: IndexMap::new(),
-                competition: None,
+                record: String::new(),
             });
-        assert!(
-            changes.first_entry <= competition.entries.len(),
-            "the changes must continue the stored log"
-        );
-        if changes.reach_end(competition.entries.len()) {
-            competition.progress.clone_from(&changes.listing.progress);
-            competition.competition = Some(changes.competition.clone());
-        }
-        // older changes written after newer ones must not cut the log short
-        for (position, entry) in (changes.first_entry..).zip(&changes.entries) {
-            match competition.entries.get_mut(position) {
-                Some(stored) => stored.clone_from(entry),
-                None => competition.entries.push(entry.clone()),
-            }
-        }
-        competition.people.extend(changes.people.iter().cloned());
-        Ok(())
+        competition.progress.clone_from(&save.listing.progress);
+        competition.record.clone_from(&save.record);
+        future::ready(Ok(()))
     }
 
     async fn rename(&self, key: CompetitionKey, name: &str) -> Result<(), Infallible> {

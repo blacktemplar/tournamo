@@ -134,9 +134,8 @@ pub struct Session {
     session: AppSession,
     storage: Box<dyn Storage>,
     name: Option<String>,
-    /// The length of the log when it was last saved or loaded. The log is append-only, so every
-    /// change since makes it longer, undo and redo included.
-    saved_log_len: usize,
+    /// [`AppSession::changes`] when the competition was last saved or loaded.
+    saved_changes: usize,
 }
 
 impl Session {
@@ -145,7 +144,7 @@ impl Session {
     pub fn new(storage: impl Storage + 'static) -> Self {
         let session = AppSession::new("");
         Self {
-            saved_log_len: session.next_entry(),
+            saved_changes: session.changes(),
             session,
             storage: Box::new(storage),
             name: None,
@@ -178,7 +177,7 @@ impl Session {
         })?;
         let session = AppSession::from_file(file, &name);
         Ok(Self {
-            saved_log_len: session.next_entry(),
+            saved_changes: session.changes(),
             session,
             storage: Box::new(storage),
             name: Some(name),
@@ -195,7 +194,7 @@ impl Session {
     }
 
     pub fn has_unsaved_changes(&self) -> bool {
-        self.session.next_entry() != self.saved_log_len
+        self.session.changes() != self.saved_changes
     }
 
     /// Executes `command`, returning what to show and whether to go on.
@@ -616,7 +615,7 @@ impl Session {
         }
         let output = format!("saved to {name}");
         self.name = Some(name);
-        self.saved_log_len = self.session.next_entry();
+        self.saved_changes = self.session.changes();
         Ok(output)
     }
 
@@ -1010,12 +1009,12 @@ mod tests {
     #[test]
     fn a_phase_edited_without_a_change_is_left_as_it_is() {
         let mut session = started("round-robin");
-        let log_len = session.session.next_entry();
+        let changes = session.session.changes();
 
         let draft = session.phase_draft_to_edit().unwrap();
 
         assert_eq!(session.edit_phase(&draft).unwrap(), "nothing changed");
-        assert_eq!(session.session.next_entry(), log_len);
+        assert_eq!(session.session.changes(), changes);
     }
 
     /// The teams of a Monster DYP are pairs, so it never schedules the match of single entrants
@@ -1610,7 +1609,7 @@ mod tests {
     #[test]
     fn single_elimination_schedules_the_final_and_rejects_draws() {
         let mut session = started("single-elimination");
-        let log_len = session.session.next_entry();
+        let changes = session.session.changes();
 
         let draw = execute(&mut session, "report 1 draw");
 
@@ -1618,7 +1617,7 @@ mod tests {
             draw.unwrap_err().to_string(),
             "a match of this format cannot end in a draw"
         );
-        assert_eq!(session.session.next_entry(), log_len);
+        assert_eq!(session.session.changes(), changes);
         output(&mut session, "report 1 a");
         let semifinal = output(&mut session, "report 2 b");
         assert!(

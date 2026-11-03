@@ -679,7 +679,7 @@ impl Session {
         Ok(PhasePlugins::with_suggestions(
             self.competition()
                 .phase_draft()
-                .with("format", PluginConfig::new(entry.id()))?,
+                .with(PhasePlugins::FORMAT, PluginConfig::new(entry.id()))?,
         )?)
     }
 

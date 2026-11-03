@@ -126,6 +126,16 @@ pub struct PhasePlugins {
 }
 
 impl PhasePlugins {
+    /// The name of the field taking the format.
+    pub const FORMAT: &str = "format";
+    /// The name of the field taking the ranking criteria.
+    pub const RANKING: &str = "ranking";
+    /// The name of the field taking the metrics calculators.
+    pub const METRICS: &str = "metrics";
+    /// The names of the fields the format suggests answers for, see
+    /// [`PhaseFormat::suggestions`].
+    pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];
+
     /// The suggested answer for a root ranking or metrics field, otherwise its schema default.
     /// Suggestions come only from the configured format and are not filtered for compatibility.
     ///
@@ -133,15 +143,16 @@ impl PhasePlugins {
     /// Returns a configuration error if the path is unknown. An incomplete or rejected format
     /// supplies no suggestions; validation reports its problems independently.
     pub fn default_value(draft: &Draft<Self>, path: &Path) -> Result<Option<Value>, ConfigError> {
-        if (*path == Path::ROOT.field("ranking") || *path == Path::ROOT.field("metrics"))
+        let ranking = *path == Path::ROOT.field(Self::RANKING);
+        if (ranking || *path == Path::ROOT.field(Self::METRICS))
             && let Some(format) = draft
                 .answers()
-                .get("format")
+                .get(Self::FORMAT)
                 .and_then(PluginConfig::from_answer)
                 .and_then(|config| config.build::<dyn PhaseFormat>().ok())
         {
             let suggestions = format.suggestions();
-            return Ok(Some(if *path == Path::ROOT.field("ranking") {
+            return Ok(Some(if ranking {
                 suggestions.ranking.into()
             } else {
                 suggestions.metrics.into()
@@ -156,7 +167,7 @@ impl PhasePlugins {
     /// # Errors
     /// Returns a configuration error if a default or suggestion does not fit its schema.
     pub fn with_suggestions(mut draft: Draft<Self>) -> Result<Draft<Self>, ConfigError> {
-        let unanswered: Vec<_> = ["ranking", "metrics"]
+        let unanswered: Vec<_> = Self::SUGGESTED
             .into_iter()
             .filter(|field| draft.answers().get(field).is_none())
             .collect();
@@ -231,7 +242,7 @@ mod tests {
         config::PluginConfig,
         draft::{Draft, Issue, Problem},
         register,
-        schema::DependencyOrderedSetError,
+        schema::{DependencyOrderedSetError, Field},
     };
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -387,6 +398,24 @@ mod tests {
                 check_text(description, "the description");
             }
         }
+    }
+
+    #[test]
+    fn the_field_names_are_those_of_the_schema() {
+        let names: Vec<_> = PhasePlugins::schema()
+            .fields()
+            .iter()
+            .map(Field::name)
+            .collect();
+
+        assert_eq!(
+            names,
+            [
+                PhasePlugins::FORMAT,
+                PhasePlugins::RANKING,
+                PhasePlugins::METRICS
+            ]
+        );
     }
 
     /// A criterion's label says which way it sorts, but not when to choose it, which its

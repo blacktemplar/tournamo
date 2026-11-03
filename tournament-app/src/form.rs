@@ -315,7 +315,9 @@ impl PhaseForm {
             place(&mut fields, &rejected.path, &rejected.problem);
         }
         // a phase ranked by nothing is played all the same, with every entrant tied
-        if let Some(ranking) = fields.iter_mut().find(|field| field.name == "ranking")
+        if let Some(ranking) = fields
+            .iter_mut()
+            .find(|field| field.name == PhasePlugins::RANKING)
             && let Input::List(list) = &ranking.input
             && list.items.is_empty()
             && list.implied.is_empty()
@@ -755,7 +757,7 @@ fn is_suggested(path: &Path) -> bool {
     let Some(Segment::Field(name)) = path.segments().first() else {
         return false;
     };
-    name == "ranking" || name == "metrics"
+    PhasePlugins::SUGGESTED.contains(&name.as_str())
 }
 
 /// The plugins answering the fields of the phase in `completed` that need `entry` of `axis`, in
@@ -776,7 +778,7 @@ fn needed_by(entry: &PluginEntry, axis: AnyAxis, completed: &[FieldNode]) -> Vec
 }
 
 fn suggested(mut draft: Draft<PhasePlugins>) -> Result<Draft<PhasePlugins>, ConfigError> {
-    for field in ["ranking", "metrics"] {
+    for field in PhasePlugins::SUGGESTED {
         draft.unset(&Path::ROOT.field(field))?;
     }
     PhasePlugins::with_suggestions(draft)

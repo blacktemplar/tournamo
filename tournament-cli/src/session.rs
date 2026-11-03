@@ -368,7 +368,7 @@ impl Session {
             config = config.with(field, value);
         }
         let mut draft = self.competition().phase_draft();
-        draft.set(&ConfigPath::ROOT.field("format"), config)?;
+        draft.set(&ConfigPath::ROOT.field(PhasePlugins::FORMAT), config)?;
         questionnaire::fill_phase(&mut draft, &mut AcceptDefaults)?;
         self.add_phase(&draft)
     }
@@ -660,11 +660,11 @@ fn format_names() -> Vec<String> {
 /// points, then more Sonneborn-Berger".
 fn summary(answers: &Config) -> String {
     let format = answers
-        .get("format")
+        .get(PhasePlugins::FORMAT)
         .and_then(|format| questionnaire::describe(AnyAxis::of::<dyn PhaseFormat>(), format))
         .expect("a phase has a format");
     let ranked_by: Vec<_> = answers
-        .get("ranking")
+        .get(PhasePlugins::RANKING)
         .and_then(Value::as_array)
         .into_iter()
         .flatten()

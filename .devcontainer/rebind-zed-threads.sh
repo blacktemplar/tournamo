@@ -34,17 +34,21 @@ cp "$db" "$db.bak"
 count=0
 for old in $(sqlite3 "$db" "SELECT DISTINCT json_extract(remote_connection, '\$.Docker.container_id')
     FROM sidebar_threads WHERE $filter;"); do
-    # a container that still exists keeps its threads (another checkout, or the current one)
-    if docker container inspect "$old" >/dev/null 2>&1; then
+    # Zed looks a thread up by the full id, but older threads may hold the short one: a short form
+    # of the current id is rebound too, while any other container that still exists keeps its
+    # threads (another checkout)
+    if [ "$old" = "$new" ]; then
         continue
     fi
-    # Zed may keep the short id or the full one: keep the old id's form
-    current=$(printf '%s' "$new" | cut -c1-${#old})
+    case $new in
+        "$old"*) ;;
+        *) if docker container inspect "$old" >/dev/null 2>&1; then continue; fi ;;
+    esac
     rows=$(sqlite3 "$db" "UPDATE sidebar_threads
-        SET remote_connection = json_set(remote_connection, '\$.Docker.container_id', '$current')
-        WHERE $filter AND json_extract(remote_connection, '\$.Docker.container_id') = '$old';
+        SET remote_connection = json_set(remote_connection, '\$.Docker.container_id', '$new')
+                WHERE $filter AND json_extract(remote_connection, '\$.Docker.container_id') = '$old';
         SELECT changes();")
-    echo "$old -> $current: $rows threads"
+    echo "$old -> $new: $rows threads"
     count=$((count + rows))
 done
 echo "Rebound $count threads (backup: $db.bak). Archived threads stay hidden."

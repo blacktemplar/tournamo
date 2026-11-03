@@ -1,7 +1,7 @@
 //! The help, at `#help`: how a competition is run, what each format, criterion of the standings
 //! and metric is, that the competitions are kept in the browser and nowhere else, what follows
-//! from that, where the source code is, and who owns the page. `#help-<section>` opens it at the
-//! section whose heading has that id, e.g. [`RUNNING`].
+//! from that, the version, where the source code is, and who owns the page. `#help-<section>`
+//! opens it at the section whose heading has that id, e.g. [`RUNNING`].
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -16,6 +16,9 @@ use crate::{Page, REPOSITORY, capitalized, i18n::t, icons, sentence};
 /// variable `TOURNAMO_MEDIA_OWNER` at build time; without it (or with it empty) the help names
 /// none.
 const MEDIA_OWNER: Option<&str> = option_env!("TOURNAMO_MEDIA_OWNER");
+
+/// The version of Tournamo, the workspace's in `Cargo.toml`.
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The fragment of the URL of the section on running a competition.
 pub const RUNNING: &str = "help-running";
@@ -82,6 +85,7 @@ pub fn Help() -> Element {
             section { class: "card", aria_labelledby: "help-open-source",
                 h2 { id: "help-open-source", {tr.get("help-open-source")} }
                 p { {tr.get("help-open-source-text")} }
+                p { {t!(tr, "help-version", version = VERSION)} }
                 p {
                     a { href: REPOSITORY,
                         icons::GitHub {}

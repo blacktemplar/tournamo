@@ -66,6 +66,7 @@ help-tabs = If a competition is open in several tabs, it can only be edited in o
 help-open-source = Open source
 help-media-owner = Media owner (disclosure under § 25 MedienG): { $owner }, Austria.
 help-open-source-text = Tournamo is free, open-source software, licensed under MIT or Apache 2.0. The source code is available on GitHub, where you can also report bugs and suggest improvements.
+help-version = This is version { $version }.
 
 ## The competitions stored
 

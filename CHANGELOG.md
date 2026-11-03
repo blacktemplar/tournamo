@@ -12,6 +12,7 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Added
 
+- The help names the version of Tournamo.
 - An entrant is renamed in place in the list of entrants, keeping its place,
   rather than removed and added again. Renaming is not undone by Undo.
 - A list pasted into the name of a new entrant adds an entrant for each of its

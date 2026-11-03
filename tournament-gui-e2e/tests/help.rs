@@ -7,7 +7,8 @@ use tournament_gui_e2e::{
 
 const REPOSITORY: &str = "https://github.com/blacktemplar/tournamo";
 
-/// The help says that the competitions stay in the browser, leads to the source code and names the
+/// The help says that the competitions stay in the browser, names the version, leads to the
+/// source code and names the
 /// media owner (the one the gui-e2e hook builds the page with); it is a page of its own, kept by a
 /// reload, with the way back to the competitions.
 #[tokio::test]
@@ -27,6 +28,14 @@ async fn the_help_says_where_the_competitions_are_kept() {
                     "Offline use and installation",
                     "Open source",
                 ],
+            )
+            .await?;
+        // this crate has the version of the workspace, as the page has
+        let version = format!("This is version {}.", env!("CARGO_PKG_VERSION"));
+        gui.page
+            .expect_texts(
+                By::Css("main section:last-child p:nth-of-type(2)"),
+                &[&version],
             )
             .await?;
         let source = gui.driver.query(By::Css("main a")).first().await?;

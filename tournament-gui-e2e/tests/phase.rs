@@ -31,6 +31,23 @@ async fn a_format_brings_what_it_recommends() {
     .await;
 }
 
+/// A field only mattering for draws is left out of a format without draws.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_field_for_draws_is_left_out_without_draws() {
+    run_in_new_competition(async |gui| {
+        gui.expect_field_shown("Points for a draw", true).await?;
+
+        gui.choose_format("Single elimination").await?;
+        gui.toggle("Points").await?;
+
+        gui.expect_field_shown("Points for a win", true).await?;
+        gui.expect_field_shown("Points for a draw", false).await?;
+        gui.page.check_accessibility().await
+    })
+    .await;
+}
+
 /// Before the start, the phase says how many rounds and matches it takes with the entrants
 /// entered, a range where that depends on the results; nothing without enough entrants.
 #[tokio::test]

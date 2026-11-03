@@ -122,6 +122,46 @@ fn a_new_phase_is_answered_as_its_format_recommends() {
     assert!(view.complete && view.issues.is_empty());
 }
 
+/// A field only mattering for draws is left out where no match ends in a draw, as in an
+/// elimination, and answered all the same.
+#[test]
+fn a_field_for_draws_is_left_out_without_draws() {
+    let mut form = new_form();
+    let names = |form: &PhaseForm, id: &str| -> Vec<&'static str> {
+        form.view()
+            .fields_of(id)
+            .unwrap()
+            .iter()
+            .map(|field| field.name)
+            .collect()
+    };
+    assert_eq!(
+        names(&form, PointsCalculator::ID),
+        ["points_for_win", "points_for_draw", "points_for_bye"]
+    );
+
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    form.add(&path("metrics"), PointsCalculator::ID).unwrap();
+    form.add(&path("metrics"), SonnebornBergerCalculator::ID)
+        .unwrap();
+
+    assert_eq!(
+        names(&form, PointsCalculator::ID),
+        ["points_for_win", "points_for_bye"]
+    );
+    assert_eq!(
+        names(&form, SonnebornBergerCalculator::ID),
+        ["weight_for_win"]
+    );
+    assert!(form.view().complete);
+    let draws = form
+        .draft()
+        .answers()
+        .get_at(&path("metrics[2].points_for_draw"));
+    assert!(draws.is_some(), "{:?}", form.draft().answers());
+}
+
 /// The plugins recommended come first, the others follow by label; a plugin chosen in a list
 /// is not offered for it again.
 #[test]

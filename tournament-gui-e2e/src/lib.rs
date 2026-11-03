@@ -1599,6 +1599,30 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the form of the phase shows the field labelled `label`, if `shown`, or else
+    /// until it does not.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_field_shown(&self, label: &str, shown: bool) -> WebDriverResult<()> {
+        let field = By::XPath(format!(
+            "//form//label[{}='{label}']",
+            without_isolation_marks("normalize-space()")
+        ));
+        if shown {
+            return self
+                .page
+                .expect(field, |query| query.and_displayed(), "the field shown")
+                .await;
+        }
+        let gone = self.driver.query(field).and_displayed();
+        assert!(
+            gone.wait_until_gone().await.is_ok(),
+            "the field {label:?} must not be shown"
+        );
+        Ok(())
+    }
+
     /// Waits until the phase says how many rounds and matches it takes, `text`, ignoring
     /// [`ISOLATION_MARKS`], or says nothing for `None`.
     ///

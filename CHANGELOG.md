@@ -31,6 +31,9 @@ a file whose `"format"` changes is migrated, not refused.
   button returns to the one before; a competition opened shows its matches,
   rather than the view last chosen in another one. A URL naming no
   competition says so.
+- A phase whose matches never end in a draw, a single or double elimination,
+  no longer shows or asks for the points for a draw and the Sonneborn-Berger
+  weight of an opponent played to a draw; they keep their answers.
 - Random rounds and Monster DYP say what they are for, and the rounds of a
   Monster DYP say that all of them are drawn at the start.
 - Naming a new competition, or renaming one, as another one is named says so

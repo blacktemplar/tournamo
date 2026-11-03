@@ -568,18 +568,22 @@ impl PhaseForm {
         schema
             .fields()
             .iter()
-            .map(|field| {
-                let path = at.clone().field(field.name());
-                FormField {
-                    input: self.input(field.kind(), &path, completed),
-                    path,
-                    plugin,
-                    name: field.name(),
-                    label: field.label(),
-                    description: field.description(),
-                    issues: Vec::new(),
-                    warnings: Vec::new(),
-                }
+            .map(|field| (field, at.clone().field(field.name())))
+            // e.g. the points for a draw where no match ends in a draw; one holding a number not
+            // taken stays, as what keeps the phase from being added
+            .filter(|(_, path)| {
+                self.draft.is_relevant(path).unwrap_or(true)
+                    || self.rejected.iter().any(|rejected| rejected.path == *path)
+            })
+            .map(|(field, path)| FormField {
+                input: self.input(field.kind(), &path, completed),
+                path,
+                plugin,
+                name: field.name(),
+                label: field.label(),
+                description: field.description(),
+                issues: Vec::new(),
+                warnings: Vec::new(),
             })
             .collect()
     }

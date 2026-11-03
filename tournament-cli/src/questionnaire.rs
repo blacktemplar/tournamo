@@ -294,7 +294,9 @@ impl From<InquireError> for Error {
 ///
 /// The fields are asked in schema order, each followed by the fields of the plugin it is answered
 /// with, if any. A question starts out at the field's answer in `draft`, so that filling a draft
-/// once more only asks for changes, or else at the answer [`Draft::default_value`] offers.
+/// once more only asks for changes, or else at the answer [`Draft::default_value`] offers. A field
+/// that does not matter with the answers before it, see [`Draft::is_relevant`], e.g. the points for
+/// a draw where no match ends in a draw, is answered so without being asked.
 ///
 /// A field taking plugins offers those that fit next to the answers given before it, see
 /// [`Draft::candidates`]. A field taking an unordered list of plugins starts out with the plugins
@@ -668,6 +670,12 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
             Some(answer) => Some(answer.clone()),
             None => self.draft.default_value(&path)?,
         };
+        if !self.draft.is_relevant(&path)?
+            && let Some(default) = default
+        {
+            self.draft.set(&path, default)?;
+            return Ok(());
+        }
         // boxed, since answering a plugin asks for its fields in turn
         Box::pin(self.answer(field.kind(), &path, &question, default)).await
     }
@@ -972,7 +980,9 @@ mod tests {
     use std::{collections::VecDeque, fmt::Debug};
 
     use serde::Deserialize;
-    use tournament_engine::{Competition, PhasePlugins};
+    use tournament_engine::{
+        Competition, PhasePlugins, plugins::metrics_calculator::PointsCalculator,
+    };
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -1176,6 +1186,31 @@ mod tests {
                 "Buchholz"
             ]
         );
+    }
+
+    /// Where no match ends in a draw, a question only mattering for draws is answered as it starts
+    /// out without being asked.
+    #[test]
+    fn a_question_about_draws_is_not_asked_without_draws() {
+        let mut script = Script::new([Step::Pick("single elimination")]);
+        let mut draft = phase_draft()
+            .with("metrics", vec![PluginConfig::of::<PointsCalculator>()])
+            .unwrap();
+
+        fill(&mut draft, &mut script).unwrap();
+
+        let points: Vec<_> = script
+            .asked
+            .iter()
+            .filter(|label| label.starts_with("Points:"))
+            .collect();
+        assert_eq!(
+            points,
+            ["Points: points for a win", "Points: points for a bye"]
+        );
+        // the points are scored from the wins, draws and losses, which they imply
+        draft.add_implied();
+        assert!(draft.build().is_ok(), "{:?}", draft.issues());
     }
 
     #[test]

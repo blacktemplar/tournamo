@@ -16,6 +16,7 @@ use crate::{
 
 pub mod buchholz;
 pub mod points;
+pub mod points_balance;
 pub mod round_of_elimination;
 pub mod round_of_first_loss;
 #[cfg(test)]
@@ -27,6 +28,9 @@ pub use buchholz::{
     MoreBuchholzOfBuchholz, MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
 };
 pub use points::{MorePoints, Points, PointsCalculator};
+pub use points_balance::{
+    HigherPointsDifference, MorePointsScored, PointsBalance, PointsBalanceCalculator,
+};
 pub use round_of_elimination::{
     Eliminates, LaterElimination, RoundOfElimination, RoundOfEliminationCalculator,
 };

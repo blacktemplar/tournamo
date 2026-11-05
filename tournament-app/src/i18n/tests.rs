@@ -11,9 +11,9 @@ use tournament_engine::{
         Phrase,
         match_rules::MatchRules,
         metrics_calculator::{
-            Cell, MetricsCalculator, PointsCalculator, RoundOfElimination,
-            RoundOfEliminationCalculator, RoundOfFirstLoss, RoundOfFirstLossCalculator,
-            ToCell as _, WinsDrawsLosses, WinsDrawsLossesCalculator,
+            Cell, MetricsCalculator, PointsBalance, PointsBalanceCalculator, PointsCalculator,
+            RoundOfElimination, RoundOfEliminationCalculator, RoundOfFirstLoss,
+            RoundOfFirstLossCalculator, ToCell as _, WinsDrawsLosses, WinsDrawsLossesCalculator,
         },
         phase_format::{
             DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat,
@@ -361,6 +361,8 @@ fn phrases_in_cells(id: &str) -> Vec<Phrase> {
         ]
     } else if id == WinsDrawsLossesCalculator::ID {
         vec![WinsDrawsLosses::default().to_cell()]
+    } else if id == PointsBalanceCalculator::ID {
+        vec![PointsBalance::default().to_cell()]
     } else {
         Vec::new()
     };

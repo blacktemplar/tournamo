@@ -27,7 +27,8 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 
 ### B. The first sports
 - [x] 5. `Scored`: one game with a score, `suggest`, tally `Points`
-- [ ] 6. Score metrics: points for/against, criterion on the difference
+- [x] 6. Score metrics: `PointsBalance` (scored and conceded), criteria
+  `HigherPointsDifference` and `MorePointsScored`
 - [ ] 7. `BestOf { games }`: tallies `Games`, `Points`
 
 ### C. App
@@ -70,3 +71,5 @@ Questions and decisions put off while implementing, to bring up at the end.
   choice and the GUI shows "Results: Winner only" in every phase.
 - Step 1 was committed without running the manual-stage hooks; a browser test
   it broke was fixed in a commit of its own. Manual hooks are run per step now.
+- The GUI e2e test `the_cross_table_shows_the_results_by_rank` failed once in a
+  full run and passed alone: possibly flaky.

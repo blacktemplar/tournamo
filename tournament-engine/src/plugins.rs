@@ -279,8 +279,9 @@ mod tests {
         entities::competition::{Bye, Competition, Match, PhaseData, RankingId},
         plugins::{
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
+            match_rules::{Scored, WinnerOnly},
             metrics_calculator::{
-                Metric, OldMetrics,
+                Metric, OldMetrics, PointsBalanceCalculator,
                 buchholz::{
                     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
                     MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
@@ -661,6 +662,21 @@ mod tests {
                 fact: type_name::<Points>(),
                 required_by: format!("{MorePoints:?}"),
             })
+        );
+    }
+
+    /// The points scored and conceded are only calculated of results with a score.
+    #[test]
+    fn points_scored_and_conceded_need_results_with_a_score() {
+        let builder = PhasePluginsBuilder::new().add_metric(PointsBalanceCalculator);
+
+        assert!(matches!(
+            check(&builder.clone().results(WinnerOnly).build().unwrap()),
+            Err(Incompatibility::FactNotProvided { .. })
+        ));
+        assert_eq!(
+            check(&builder.results(Scored::default()).build().unwrap()),
+            Ok(())
         );
     }
 

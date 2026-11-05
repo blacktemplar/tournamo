@@ -81,6 +81,11 @@ plugin-tournament_engine-wins_draws_losses =
     .description = wie viele Spiele gewonnen, unentschieden gespielt und verloren wurden
     .column = S-U-N
     .cell-wins-draws-losses = { $wins }-{ $draws }-{ $losses }
+plugin-tournament_engine-points_balance =
+    .label = erzielte und erhaltene Punkte
+    .description = die Punkte oder Tore aller Spiele, wie die Ergebnisse sie angeben
+    .column = +:−
+    .cell-scored-conceded = { $scored }:{ $conceded }
 plugin-tournament_engine-buchholz =
     .label = Buchholz
     .description = die Punkte aller Gegner
@@ -111,6 +116,13 @@ plugin-tournament_engine-round_of_elimination =
     .cell-still-in = -
 
 ## Ranking criteria
+
+plugin-tournament_engine-higher_points_difference =
+    .label = höhere Punktedifferenz
+    .description = die erzielten Punkte oder Tore abzüglich der erhaltenen
+plugin-tournament_engine-more_points_scored =
+    .label = mehr erzielte Punkte
+    .description = eine Feinwertung, die Angreifen über Verteidigen stellt
 
 plugin-tournament_engine-more_points =
     .label = mehr Punkte

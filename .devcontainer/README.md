@@ -21,10 +21,12 @@ image, so it applies only inside the container. In a terminal, `claude` does the
 Zed does not notice changes to these files: after one, remove the containers
 (`docker compose -p tournamo-<hash> down`, the name is in `.env`) and open the project again.
 
-A new container has a new id, and Zed files its agent threads under the container's id: after it
-creates one, the threads of the old container neither show in the sidebar nor open
-([zed#56576](https://github.com/zed-industries/zed/issues/56576)). To get them back, quit Zed,
-run `.devcontainer/rebind-zed-threads.sh` on the host, and start Zed again.
+A new container has a new id, and Zed files its agent threads and project groups under the
+container's id: after it creates one, the threads of the old container neither show in the sidebar
+nor open, and the old group stays in the window without opening
+([zed#56576](https://github.com/zed-industries/zed/issues/56576)). To move the threads to the new
+container and remove the old group, quit Zed, run `.devcontainer/rebind-zed-threads.sh` on the host
+(from a terminal outside Zed), and start Zed again.
 
 ## GitHub CLI
 

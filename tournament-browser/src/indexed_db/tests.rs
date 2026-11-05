@@ -238,6 +238,8 @@ async fn a_database_of_version_2_is_read_and_moved_over_by_the_next_save() {
     assert!(!loaded.has_unsaved_changes(), "nothing is missing");
     let mut file: Value = serde_json::from_str(&session.export()).unwrap();
     file.as_object_mut().unwrap().remove("name");
+    // version 2 stored the first format, which this session's log fits, holding no result
+    file["format"] = 1.into();
     assert_eq!(stored_record(&storage, session.key()).await, file);
     loaded.add_entrant("Bob").unwrap();
     loaded.save(&storage).await.unwrap();

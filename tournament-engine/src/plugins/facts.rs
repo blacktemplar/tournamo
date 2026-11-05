@@ -99,3 +99,14 @@ type_fact!(
     MatchAnnotation<A>,
     "The fact that the matches of the phase carry an `A` annotation."
 );
+
+type_fact!(
+    /// Every finished match of the phase holds the tally `T`.
+    ///
+    /// Provided by the [`MatchRules`] tallying it, and required by everything reading it, e.g. a
+    /// calculator of the points scored.
+    ///
+    /// [`MatchRules`]: crate::plugins::match_rules::MatchRules
+    MatchTally<T>,
+    "The fact that every finished match of the phase holds the tally `T`."
+);

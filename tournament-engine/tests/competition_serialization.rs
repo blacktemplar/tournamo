@@ -423,12 +423,13 @@ fn a_round_trip_does_not_change_the_serialized_form() {
 }
 
 /// Matches saved by 0.3.0 and earlier hold a `result` and their `annotations` where their
-/// `contest` is now.
+/// `contest` is now, and no `tallies`.
 #[test]
 fn a_competition_saved_before_contests_still_loads() {
     fn to_results(value: &mut Value, matches: &mut usize) {
         match value {
             Value::Object(object) if object.contains_key("team_a") => {
+                assert_eq!(object.remove("tallies").unwrap(), json!([]));
                 let contest = object.remove("contest").unwrap();
                 assert_eq!(contest["values"], json!([]));
                 assert_eq!(contest["parts"], json!([]));

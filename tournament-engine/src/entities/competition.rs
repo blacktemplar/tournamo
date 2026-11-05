@@ -533,6 +533,10 @@ impl Phase {
         let r#match = self.data.matches.get_mut(&match_id).unwrap();
         assert!(!r#match.is_finished());
         r#match.contest.decide(decision, values, parts);
+        let tallies = self
+            .match_rules
+            .tally(&self.data, &self.data.matches[&match_id]);
+        self.data.matches.get_mut(&match_id).unwrap().tallies = tallies;
         for ranking_id in self.data.matches[&match_id].rankings() {
             let ranking = self.data.rankings.get_mut(ranking_id).unwrap();
             ranking.played_matches.push(match_id);
@@ -787,6 +791,7 @@ pub struct Match {
     round: NonZeroU32,
     number: NonZeroU32,
     contest: Part,
+    tallies: TypeMap,
 }
 
 impl<'de> Deserialize<'de> for Match {
@@ -800,9 +805,10 @@ impl<'de> Deserialize<'de> for Match {
             round: NonZeroU32,
             number: NonZeroU32,
             contest: Part,
+            tallies: TypeMap,
         }
         // Saved in JSON by 0.3.0 and earlier: a `result` and the `annotations` in place of the
-        // `contest`.
+        // `contest`, and no `tallies`, which their rules did not have.
         #[derive(Deserialize)]
         #[serde(rename = "Match")]
         struct Saved {
@@ -816,6 +822,8 @@ impl<'de> Deserialize<'de> for Match {
             result: Option<MatchResult>,
             #[serde(default)]
             annotations: TypeMap,
+            #[serde(default)]
+            tallies: TypeMap,
         }
 
         let current = if deserializer.is_human_readable() {
@@ -834,6 +842,7 @@ impl<'de> Deserialize<'de> for Match {
                 round: saved.round,
                 number: saved.number,
                 contest,
+                tallies: saved.tallies,
             }
         } else {
             Current::deserialize(deserializer)?
@@ -845,6 +854,7 @@ impl<'de> Deserialize<'de> for Match {
             round: current.round,
             number: current.number,
             contest: current.contest,
+            tallies: current.tallies,
         })
     }
 }
@@ -920,6 +930,7 @@ impl NewMatch {
             round: self.round,
             number,
             contest: Part::new().with_annotations(self.annotations),
+            tallies: TypeMap::new(),
         }
     }
 }
@@ -1041,6 +1052,12 @@ impl Match {
 
     pub fn is_finished(&self) -> bool {
         self.decision().is_some()
+    }
+
+    /// The tally `T` of this match, see [`MatchRules::tally`]: `None` while it is not finished, or
+    /// if its rules do not tally `T`.
+    pub fn tally<T: TypeMapValue>(&self) -> Option<&T> {
+        self.tallies.get::<T>()
     }
 }
 

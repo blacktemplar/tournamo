@@ -21,8 +21,9 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
   plugin `WinnerOnly`; `PhasePlugins.results` (old phases load as `WinnerOnly`);
   `ReportMatchResult` checks the structure against the template; questionnaire
   and `PhaseForm` show the rules
-- [ ] 4. Tallies: `Match::tally`, `MatchRules::tally` in `apply`, `Points` and
-  `Games` with compatibility facts
+- [x] 4. Tallies: `Match::tally`, `MatchRules::tally` in `apply`, the fact
+  `MatchTally<T>`; the engine's tallies (`PointsScored`, `GamesWon`) come with
+  the rules producing them
 
 ### B. The first sports
 - [ ] 5. `Scored`: one game with a score, `suggest`, tally `Points`

@@ -12,6 +12,7 @@ use crate::{
         details::{Decision, FieldKey, Part, ResultReason, Value, Values},
     },
     plugins::Phrase,
+    type_map::TypeMap,
 };
 
 /// What is entered for the matches of a phase, and what it means.
@@ -23,6 +24,14 @@ use crate::{
 pub trait MatchRules: Plugin + DynClone {
     /// What a result of `match` looks like. May depend on the match, e.g. on its stage.
     fn template(&self, phase_data: &PhaseData, r#match: &Match) -> Template;
+
+    /// What the metrics read of `match`, which has just been decided: its tallies, e.g. the points
+    /// each side scored, from its [contest](Match::contest). Each tally is declared as a
+    /// [`MatchTally`](crate::plugins::facts::MatchTally) the rules provide.
+    ///
+    /// The contest fits the [`template`](Self::template), but is not checked against the rules of
+    /// any sport: a tally takes what was entered, as it was entered.
+    fn tally(&self, phase_data: &PhaseData, r#match: &Match) -> TypeMap;
 }
 
 dyn_clone::clone_trait_object!(MatchRules);
@@ -196,5 +205,9 @@ impl MatchRules for WinnerOnly {
         Template {
             root: Level::new(Phrase::new("match", "match")),
         }
+    }
+
+    fn tally(&self, _: &PhaseData, _: &Match) -> TypeMap {
+        TypeMap::new()
     }
 }

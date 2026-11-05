@@ -489,6 +489,74 @@ a bye's worth (the points calculator's concern); a default no-op hook; counting
 a bye when scheduled (a round robin's odd field led with future byes); hiding
 unreached byes only in the standings (metrics stay wrong).
 
+## Match details
+
+*Planned* (issue #5, `plans/match-details.md`). A result is more than who won:
+a score (21–17), games of a best of three, rubbers of a league fixture each with
+games of points, legs of a relay whose score carries over. Some rankings read
+these details (goal difference, sets won, fair-play cards), and a UI must show
+and enter them for sports it does not know.
+
+**One generic shape, interpreted by a plugin.** What was played is a tree of
+`Part`s with a fixed shape; what it means is the business of the phase's
+`MatchRules`, a fourth plugin of `PhasePlugins` (default `Outcome`: who won,
+nothing more):
+
+```rust
+pub struct Part {                      // a match, or a game, set, rubber, leg of one
+    decision: Option<Decision>,        // Some ⇔ decided
+    values: Vec<(FieldKey, Sides<Option<Value>>)>, // goals, games, cards, …
+    parts: Vec<Part>,                  // in playing order, as deep as entered
+    annotations: TypeMap,
+}
+pub struct Decision { result: MatchResult, reason: Option<ResultReason> }
+pub enum Value { Count(u32), Decimal(Score), Duration(Millis) }
+```
+
+- **A match is a part**: `Match::contest`, holding the match's annotations too.
+  A match is finished if and only if its decision is `Some`; finished and open
+  matches have one type. `ReportMatchResult` carries a `Decision` (not an
+  `Option`), so reporting always decides; the decision is set once, and
+  formats and rankers never see a result change (a correction undoes the
+  report, as before).
+- **The decision is stored, not derived.** The log says who won, so replay does
+  not depend on a plugin's reading of the values, and changing a plugin cannot
+  change a saved winner. A part without a winner of its own (a relay leg, an
+  unfinished set) has none. `ResultReason` names a decision not reached by
+  play (walkover, retired, overtime).
+- **The engine trusts what is reported.** 25–21 in a game to 21, or values
+  disagreeing with the decision, are accepted: the referee is the authority,
+  and rules vary from tournament to tournament. The engine refuses only what it
+  cannot use: a draw where the format allows none, a field, reason or kind of
+  value the template does not declare.
+- **The rules plugin** gives per match a `Template` (levels with their names,
+  their parts, fields with kind, range, better direction and `Hints` like a
+  target score, reasons), `suggest`s a decision from a part's values for the
+  app filling in a result, says how a score reads (`show`: "40–30", "3&2"),
+  and derives **tallies** when a match is decided: typed `TypeMapValue`s
+  (`Points`, `Games`, …) stored on the match, which metrics read with one
+  lookup. Tallies are facts in the compatibility check: a calculator requiring
+  `Points` needs rules providing it. The template sees the match, so it may
+  depend on the stage or on annotations.
+- **Hints are not rules**: the app turns them into warnings ("23–19 in a game
+  to 21?"), never refusals.
+- **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
+  template and checked on report, as a config's field names are: a generic UI
+  needs keys it can list. What the engine reads, the tallies, stays typed.
+- **Counts, not events**: cards or tries that a ranking reads are fields. A
+  timeline of goals, assists or a chess game's moves is no ranking's business
+  and stays outside, keyed by match id, or in annotations.
+
+*Later:* lineups on parts (with rosters of players), league fixtures nesting
+the rules of their rubbers, live reporting (an `UpdatePlay` on open matches
+carrying the whole play, a plain assignment no format or metric reacts to).
+
+Rejected: a plugin-defined details type (metrics and UIs could not read it
+without knowing the plugin); events (no ranking needs more than counts); an
+optional decision on a reported match, or one derived from the values (replay
+would depend on plugin code); a separate type for the match level (two places
+for the match's decision); checking the rules of a sport in the engine.
+
 ## Persistence
 
 ### Snapshots

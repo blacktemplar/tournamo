@@ -71,6 +71,17 @@ pub(crate) fn result_of(score: Sides<u32>) -> MatchResult {
     }
 }
 
+/// The result the score of `part` suggests, once each side has one.
+pub(crate) fn suggest_by_score(part: &Part) -> Option<MatchResult> {
+    match *part.value(SCORE.key())? {
+        Sides {
+            a: Some(Value::Count(a)),
+            b: Some(Value::Count(b)),
+        } => Some(result_of(Sides::new(a, b))),
+        _ => None,
+    }
+}
+
 /// The field of a score, pointing out one higher than `usual_top_score`.
 pub(crate) fn score_field(usual_top_score: Option<u32>) -> FieldSpec {
     FieldSpec {
@@ -101,13 +112,7 @@ impl MatchRules for Scored {
     }
 
     fn suggest(&self, _: &Level, part: &Part) -> Option<MatchResult> {
-        match *part.value(SCORE.key())? {
-            Sides {
-                a: Some(Value::Count(a)),
-                b: Some(Value::Count(b)),
-            } => Some(result_of(Sides::new(a, b))),
-            _ => None,
-        }
+        suggest_by_score(part)
     }
 }
 

@@ -29,7 +29,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [x] 5. `Scored`: one game with a score, `suggest`, tally `Points`
 - [x] 6. Score metrics: `PointsBalance` (scored and conceded), criteria
   `HigherPointsDifference` and `MorePointsScored`
-- [ ] 7. `BestOf { games }`: tallies `Games`, `Points`
+- [x] 7. `BestOf { games }`: tallies `Games`, `Points`
 
 ### C. App
 - [ ] 8. `ResultForm`: view from the template, entering values and parts,
@@ -73,3 +73,9 @@ Questions and decisions put off while implementing, to bring up at the end.
   it broke was fixed in a commit of its own. Manual hooks are run per step now.
 - The GUI e2e test `the_cross_table_shows_the_results_by_rank` failed once in a
   full run and passed alone: possibly flaky.
+- `the_page_keeps_its_width_between_views` failed once in a full run and passed
+  alone; the phase view grew by the "Results" row, so it may be close to
+  scrolling at 1200 px.
+- `GamesWon` is tallied, but no metric reads it yet (games won and lost, as
+  badminton or volleyball rank by): a calculator like `PointsBalance` when
+  wanted.

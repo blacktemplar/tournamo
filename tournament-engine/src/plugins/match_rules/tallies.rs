@@ -11,3 +11,10 @@ pub struct PointsScored(pub Sides<u32>);
 
 #[typetag::serde(name = "tournament_engine::points_scored")]
 impl TypeMapValue for PointsScored {}
+
+/// The games each side of a match won.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct GamesWon(pub Sides<u32>);
+
+#[typetag::serde(name = "tournament_engine::games_won")]
+impl TypeMapValue for GamesWon {}

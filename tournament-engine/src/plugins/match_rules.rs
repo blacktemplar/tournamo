@@ -6,11 +6,13 @@ use plugin_factory::{Plugin, axis, register};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod best_of;
 mod scored;
 mod tallies;
 
+pub use best_of::BestOf;
 pub use scored::Scored;
-pub use tallies::PointsScored;
+pub use tallies::{GamesWon, PointsScored};
 
 use crate::{
     entities::{

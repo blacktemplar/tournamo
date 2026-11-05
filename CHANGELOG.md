@@ -13,7 +13,8 @@ a file whose `"format"` changes is migrated, not refused.
 ### Added
 
 - A phase says what is entered for its matches, its results: who won ("winner
-  only", what every phase entered before) or the score of each side.
+  only", what every phase entered before), the score of each side, or the
+  games of a best of, each with its score.
 - The points (or goals) scored and conceded, as a metric of the standings, and
   ranking by the difference or by the points scored.
 

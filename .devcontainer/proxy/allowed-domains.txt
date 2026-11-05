@@ -16,6 +16,8 @@ registry.npmjs.org
 
 # cargo: crates and the git dependencies
 crates.io
+index.crates.io
+static.crates.io
 github.com
 
 # prek: the Python hooks (pre-commit-hooks)

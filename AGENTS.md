@@ -2,8 +2,6 @@
 
 This file provides guidance to AI agents when working with code in this repository.
 
-> **Edit files only with the Edit/Write tools.** Never change files through shell scripts (`python`, `sed`, `awk`, heredocs, ...), not even for large or repetitive changes: split them into several Edit calls instead. See *Working style*.
-
 > **Commit your work, one logical unit per commit.** You may commit without being asked, and should: keep independent changes in separate commits, one feature (or fix) per commit; a big feature may be split into several commits. Every commit must be valid on its own: the pre-commit hooks and the tests pass on it (see *Commands*).
 
 ## Commands
@@ -103,7 +101,8 @@ Crates: `plugin-factory` (+ `plugin-factory-derive`: generic plugin axes, catalo
 
 ## Working style
 
-- Prefer tools and commands that are already allowed (Read/Edit/Write, the existing commands as they are) over anything that triggers a new permission prompt, e.g. the Edit tool rather than `sed` or a `python` script. Only ask for a new permission when there's no reasonable alternative.
+- Agents work in the dev container, where every edit and command is accepted: use whatever tool available there suits the task (Edit/Write, `sed`, scripts, ...). If a task calls for a tool the container lacks, don't work around it: say which tool and why, so it can be added to the container.
+- **Planned features are GitHub issues** of `blacktemplar/tournamo`. Read them with `gh` (`gh issue list`, `gh issue view <number> --comments`) when a task refers to one or touches what one plans. Write to GitHub (issues, comments, PRs) only when explicitly asked.
 
 ## Conventions
 

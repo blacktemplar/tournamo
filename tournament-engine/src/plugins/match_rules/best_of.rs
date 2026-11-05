@@ -35,7 +35,8 @@ pub struct BestOf {
     #[serde(default)]
     #[plugin(
         label = "usual top score of a game",
-        description = "a higher score is pointed out, as it may be a typo"
+        description = "a higher score is pointed out, as it may be a typo",
+        default = None
     )]
     usual_top_score: Option<u32>,
 }

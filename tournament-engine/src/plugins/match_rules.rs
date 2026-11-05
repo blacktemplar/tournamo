@@ -6,9 +6,15 @@ use plugin_factory::{Plugin, axis, register};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod scored;
+mod tallies;
+
+pub use scored::Scored;
+pub use tallies::PointsScored;
+
 use crate::{
     entities::{
-        competition::{Match, PhaseData},
+        competition::{Match, MatchResult, PhaseData},
         details::{Decision, FieldKey, Part, ResultReason, Value, Values},
     },
     plugins::Phrase,
@@ -32,6 +38,11 @@ pub trait MatchRules: Plugin + DynClone {
     /// The contest fits the [`template`](Self::template), but is not checked against the rules of
     /// any sport: a tally takes what was entered, as it was entered.
     fn tally(&self, phase_data: &PhaseData, r#match: &Match) -> TypeMap;
+
+    /// The result the values and parts of `part`, at `level` of the template, suggest, for a
+    /// consumer filling in a result: `None` if they suggest none, e.g. since they are missing.
+    /// The parts of `part` are decided, as far as they suggest.
+    fn suggest(&self, level: &Level, part: &Part) -> Option<MatchResult>;
 }
 
 dyn_clone::clone_trait_object!(MatchRules);
@@ -209,5 +220,9 @@ impl MatchRules for WinnerOnly {
 
     fn tally(&self, _: &PhaseData, _: &Match) -> TypeMap {
         TypeMap::new()
+    }
+
+    fn suggest(&self, _: &Level, _: &Part) -> Option<MatchResult> {
+        None
     }
 }

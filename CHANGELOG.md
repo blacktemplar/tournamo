@@ -12,8 +12,8 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Added
 
-- A phase says what is entered for its matches, its results: so far only who
-  won ("winner only"), what every phase entered before.
+- A phase says what is entered for its matches, its results: who won ("winner
+  only", what every phase entered before) or the score of each side.
 
 ### Changed
 

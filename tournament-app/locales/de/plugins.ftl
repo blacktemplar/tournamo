@@ -17,6 +17,11 @@ phase =
 plugin-tournament_engine-winner_only =
     .label = nur Sieger
     .description = wer ein Spiel gewonnen hat oder dass es unentschieden ausging, ohne Spielstand
+plugin-tournament_engine-scored =
+    .label = Spielstand
+    .description = die Punkte oder Tore jeder Seite
+    .field-usual_top_score = übliche Höchstpunktzahl
+    .field-usual_top_score-description = eine höhere wird angemerkt, da sie ein Tippfehler sein kann
 
 ## Phase formats
 

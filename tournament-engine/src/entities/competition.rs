@@ -1201,6 +1201,12 @@ impl PhaseBuilder {
         self
     }
 
+    /// Enters the results of matches by `rules`, see [`PhasePluginsBuilder::results`].
+    pub fn results(mut self, rules: impl MatchRules) -> Self {
+        self.plugins = self.plugins.results(rules);
+        self
+    }
+
     /// Adds `players` more rankings, each a single entrant, ranked after the rankings already
     /// added.
     pub fn add_players(mut self, players: u32) -> Self {

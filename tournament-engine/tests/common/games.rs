@@ -4,8 +4,8 @@
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant, EntrantId,
-    FieldKey, Match, MatchId, MatchResult, PhaseData, PhaseId, PhasePluginsBuilder, ResultReason,
-    Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue, Value,
+    FieldKey, Match, MatchId, MatchResult, Part, PhaseData, PhaseId, PhasePluginsBuilder,
+    ResultReason, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue, Value,
     plugin_factory::{Plugin, compatibility::Declaration, register},
     plugins::{
         Phrase,
@@ -82,6 +82,10 @@ impl MatchRules for Games {
         let mut tallies = TypeMap::new();
         tallies.insert(GamesWon(won));
         tallies
+    }
+
+    fn suggest(&self, _: &Level, _: &Part) -> Option<MatchResult> {
+        None
     }
 }
 

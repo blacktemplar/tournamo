@@ -26,7 +26,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
   the rules producing them
 
 ### B. The first sports
-- [ ] 5. `Scored`: one game with a score, `suggest`, tally `Points`
+- [x] 5. `Scored`: one game with a score, `suggest`, tally `Points`
 - [ ] 6. Score metrics: points for/against, criterion on the difference
 - [ ] 7. `BestOf { games }`: tallies `Games`, `Points`
 

@@ -5,17 +5,19 @@ use undoable_state_machine::{Transition, TransitionError};
 use crate::{
     entities::{
         competition::{Competition, MatchId, MatchResult, PhaseId},
-        details::Decision,
+        details::{Decision, FieldKey, Part, Sides, Value, Values},
     },
     transitions::CompetitionTransition,
 };
 
-/// Reports how a match was decided, which finishes it.
+/// Reports how a match was decided, which finishes it, with the values and parts entered for it.
 #[derive(Debug, Serialize)]
 pub struct ReportMatchResult {
     phase_id: PhaseId,
     match_id: MatchId,
     decision: Decision,
+    values: Values,
+    parts: Vec<Part>,
 }
 
 impl<'de> Deserialize<'de> for ReportMatchResult {
@@ -26,6 +28,8 @@ impl<'de> Deserialize<'de> for ReportMatchResult {
             phase_id: PhaseId,
             match_id: MatchId,
             decision: Decision,
+            values: Values,
+            parts: Vec<Part>,
         }
         // Logged in JSON by 0.3.0 and earlier: a `match_result` in place of the `decision`.
         #[derive(Deserialize)]
@@ -37,6 +41,10 @@ impl<'de> Deserialize<'de> for ReportMatchResult {
             decision: Option<Decision>,
             #[serde(default)]
             match_result: Option<MatchResult>,
+            #[serde(default)]
+            values: Values,
+            #[serde(default)]
+            parts: Vec<Part>,
         }
 
         if deserializer.is_human_readable() {
@@ -45,25 +53,53 @@ impl<'de> Deserialize<'de> for ReportMatchResult {
                 .decision
                 .or(saved.match_result.map(Decision::new))
                 .ok_or_else(|| serde::de::Error::missing_field("decision"))?;
-            Ok(Self::new(saved.phase_id, saved.match_id, decision))
+            Ok(Self {
+                phase_id: saved.phase_id,
+                match_id: saved.match_id,
+                decision,
+                values: saved.values,
+                parts: saved.parts,
+            })
         } else {
             let current = Current::deserialize(deserializer)?;
-            Ok(Self::new(
-                current.phase_id,
-                current.match_id,
-                current.decision,
-            ))
+            Ok(Self {
+                phase_id: current.phase_id,
+                match_id: current.match_id,
+                decision: current.decision,
+                values: current.values,
+                parts: current.parts,
+            })
         }
     }
 }
 
 impl ReportMatchResult {
+    /// Reports `decision` for the match `match_id` of the phase `phase_id`, no values or parts.
     pub fn new(phase_id: PhaseId, match_id: MatchId, decision: impl Into<Decision>) -> Self {
         Self {
             phase_id,
             match_id,
             decision: decision.into(),
+            values: Values::new(),
+            parts: Vec::new(),
         }
+    }
+
+    /// This report with `values` for `field` of the match, replacing any it had.
+    #[must_use]
+    pub fn with_value(mut self, field: FieldKey, values: Sides<Option<Value>>) -> Self {
+        match self.values.iter_mut().find(|(key, _)| *key == field) {
+            Some((_, old)) => *old = values,
+            None => self.values.push((field, values)),
+        }
+        self
+    }
+
+    /// This report with `part` as the last part of the match.
+    #[must_use]
+    pub fn with_part(mut self, part: Part) -> Self {
+        self.parts.push(part);
+        self
     }
 
     pub fn phase_id(&self) -> PhaseId {
@@ -80,6 +116,14 @@ impl ReportMatchResult {
 
     pub fn decision(&self) -> &Decision {
         &self.decision
+    }
+
+    pub fn values(&self) -> &Values {
+        &self.values
+    }
+
+    pub fn parts(&self) -> &[Part] {
+        &self.parts
     }
 }
 
@@ -120,7 +164,12 @@ impl Transition<Competition> for ReportMatchResult {
         competition: &mut Competition,
     ) -> Result<(), undoable_state_machine::TransitionError> {
         let phase = competition.phases_mut().get_mut(&self.phase_id).unwrap();
-        phase.report_match_result(self.match_id, self.decision.clone());
+        phase.report_match(
+            self.match_id,
+            self.decision.clone(),
+            self.values.clone(),
+            self.parts.clone(),
+        );
         Ok(())
     }
 }

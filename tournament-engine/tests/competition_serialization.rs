@@ -4,7 +4,7 @@
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt, Entrant, EntrantId, Match, MatchId, MatchResult, PhaseData,
@@ -422,15 +422,19 @@ fn a_round_trip_does_not_change_the_serialized_form() {
     assert_eq!(serialized(&competition), serialized(sm.current()));
 }
 
-/// Matches saved by 0.3.0 and earlier hold a `result` where a `decision` is now.
+/// Matches saved by 0.3.0 and earlier hold a `result` and their `annotations` where their
+/// `contest` is now.
 #[test]
-fn a_competition_saved_before_decisions_still_loads() {
+fn a_competition_saved_before_contests_still_loads() {
     fn to_results(value: &mut Value, matches: &mut usize) {
         match value {
             Value::Object(object) if object.contains_key("team_a") => {
-                let decision = object.remove("decision").unwrap();
-                let result = decision.get("result").cloned().unwrap_or(Value::Null);
-                object.insert("result".to_owned(), result);
+                let contest = object.remove("contest").unwrap();
+                assert_eq!(contest["values"], json!([]));
+                assert_eq!(contest["parts"], json!([]));
+                let result = contest["decision"].get("result").cloned();
+                object.insert("result".to_owned(), result.unwrap_or(Value::Null));
+                object.insert("annotations".to_owned(), contest["annotations"].clone());
                 *matches += 1;
             }
             Value::Object(object) => object.values_mut().for_each(|v| to_results(v, matches)),

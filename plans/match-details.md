@@ -13,9 +13,10 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [x] 1. `Decision` and `ResultReason`: `Match` holds `decision: Option<Decision>`
   (`result()` stays); `ReportMatchResult` carries a `Decision`; old log entries
   (`match_result`) and snapshots (`result`) still load
-- [ ] 2. `Part`, `Sides`, `Value`, `FieldKey`: `Match` holds `contest: Part`
+- [x] 2. `Part`, `Sides`, `Value`, `FieldKey`: `Match` holds `contest: Part`
   (its annotations move in); `ReportMatchResult` gets `values` and `parts`;
-  old snapshots load; benchmark `large_tournament`
+  old snapshots load; benchmark `large_tournament` (no change measured,
+  `Match` grew from 160 to 208 bytes)
 - [ ] 3. `MatchRules` axis: `Template`, `Level`, `Parts`, `FieldSpec`, `Hints`,
   plugin `Outcome`; `PhasePlugins.rules` (old phases load as `Outcome`);
   `ReportMatchResult` checks the structure against the template; questionnaire
@@ -59,3 +60,8 @@ Questions and decisions put off while implementing, to bring up at the end.
   version reads it* (`as_read`), since the serialized `Match` changed. A field
   the converter silently dropped would go unnoticed there; the engine's tests
   of the old forms cover the conversion itself.
+- `Value` is exported at the crate root and clashes with `serde_json::Value`
+  wherever both are used (tests alias it). Rename it (`EnteredValue`?) or
+  leave it?
+- `Value` has `Count` and `Decimal` only; `Duration` (times) waits for a sport
+  that needs it.

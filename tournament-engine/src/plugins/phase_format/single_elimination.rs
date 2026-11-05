@@ -426,7 +426,7 @@ mod tests {
         let value = serde_json::to_value(the_final).expect("serializing must not fail");
 
         assert_eq!(
-            value["annotations"],
+            value["contest"]["annotations"],
             serde_json::json!([{
                 "type": "tournament_engine::knockout_round",
                 "value": { "RoundOf": 2 }

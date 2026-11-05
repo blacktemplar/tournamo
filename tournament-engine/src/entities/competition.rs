@@ -11,7 +11,7 @@ use vec1::{Vec1, vec1};
 #[cfg(feature = "test-util")]
 use crate::plugins::PhasePluginsBuilder;
 use crate::{
-    entities::details::Decision,
+    entities::details::{Decision, Part, Values},
     map::{IdAble, IdMap},
     plugins::{
         PhasePlugins,
@@ -517,10 +517,23 @@ impl Phase {
         reached_any
     }
 
+    /// Reports `decision` alone for the match `match_id`, see [`Phase::report_match`].
+    #[cfg(test)]
     pub(crate) fn report_match_result(&mut self, match_id: MatchId, decision: impl Into<Decision>) {
+        self.report_match(match_id, decision.into(), Values::new(), Vec::new());
+    }
+
+    /// Decides the match `match_id` by `decision`, with the `values` and `parts` entered for it.
+    pub(crate) fn report_match(
+        &mut self,
+        match_id: MatchId,
+        decision: Decision,
+        values: Values,
+        parts: Vec<Part>,
+    ) {
         let r#match = self.data.matches.get_mut(&match_id).unwrap();
         assert!(!r#match.is_finished());
-        r#match.decide(decision.into());
+        r#match.contest.decide(decision, values, parts);
         for ranking_id in self.data.matches[&match_id].rankings() {
             let ranking = self.data.rankings.get_mut(ranking_id).unwrap();
             ranking.played_matches.push(match_id);
@@ -762,8 +775,9 @@ pub struct MatchId(Uuid);
 
 /// A match between two teams of rankings in a round of a phase, numbered within the phase.
 ///
-/// Beyond who plays it, its round, its number and its result, a match holds `annotations`: data
-/// that describes it, keyed by type, such as which stage of a knockout it belongs to. The
+/// Beyond who plays it, its round and its number, a match is its [`contest`](Self::contest): how it
+/// was decided, once it is finished, what was entered for it, and its `annotations`: data that
+/// describes it, keyed by type, such as which stage of a knockout it belongs to. The
 /// [`PhaseFormat`] scheduling the match gives them when creating it as a [`NewMatch`], with
 /// [`Annotated::with_annotation`].
 #[derive(Debug, Serialize)]
@@ -773,8 +787,7 @@ pub struct Match {
     team_b: Vec1<RankingId>,
     round: NonZeroU32,
     number: NonZeroU32,
-    decision: Option<Decision>,
-    annotations: TypeMap,
+    contest: Part,
 }
 
 impl<'de> Deserialize<'de> for Match {
@@ -787,10 +800,10 @@ impl<'de> Deserialize<'de> for Match {
             team_b: Vec1<RankingId>,
             round: NonZeroU32,
             number: NonZeroU32,
-            decision: Option<Decision>,
-            annotations: TypeMap,
+            contest: Part,
         }
-        // Saved in JSON by 0.3.0 and earlier: a `result` in place of the `decision`.
+        // Saved in JSON by 0.3.0 and earlier: a `result` and the `annotations` in place of the
+        // `contest`.
         #[derive(Deserialize)]
         #[serde(rename = "Match")]
         struct Saved {
@@ -799,23 +812,29 @@ impl<'de> Deserialize<'de> for Match {
             team_b: Vec1<RankingId>,
             round: NonZeroU32,
             number: NonZeroU32,
-            #[serde(default)]
-            decision: Option<Decision>,
+            contest: Option<Part>,
             #[serde(default)]
             result: Option<MatchResult>,
+            #[serde(default)]
             annotations: TypeMap,
         }
 
         let current = if deserializer.is_human_readable() {
             let saved = Saved::deserialize(deserializer)?;
+            let contest = saved.contest.unwrap_or_else(|| {
+                let contest = Part::new().with_annotations(saved.annotations);
+                match saved.result {
+                    Some(result) => contest.with_decision(result),
+                    None => contest,
+                }
+            });
             Current {
                 id: saved.id,
                 team_a: saved.team_a,
                 team_b: saved.team_b,
                 round: saved.round,
                 number: saved.number,
-                decision: saved.decision.or(saved.result.map(Decision::new)),
-                annotations: saved.annotations,
+                contest,
             }
         } else {
             Current::deserialize(deserializer)?
@@ -826,8 +845,7 @@ impl<'de> Deserialize<'de> for Match {
             team_b: current.team_b,
             round: current.round,
             number: current.number,
-            decision: current.decision,
-            annotations: current.annotations,
+            contest: current.contest,
         })
     }
 }
@@ -902,8 +920,7 @@ impl NewMatch {
             team_b: self.team_b,
             round: self.round,
             number,
-            decision: None,
-            annotations: self.annotations,
+            contest: Part::new().with_annotations(self.annotations),
         }
     }
 }
@@ -1010,30 +1027,31 @@ impl Match {
 
     /// The result of this match, or `None` if it is not finished.
     pub fn result(&self) -> Option<MatchResult> {
-        self.decision.as_ref().map(Decision::result)
+        self.decision().map(Decision::result)
     }
 
     /// How this match was decided, or `None` if it is not finished.
     pub fn decision(&self) -> Option<&Decision> {
-        self.decision.as_ref()
+        self.contest.decision()
+    }
+
+    /// The match as a part: its decision, the values entered for it, its parts and its annotations.
+    pub fn contest(&self) -> &Part {
+        &self.contest
     }
 
     pub fn is_finished(&self) -> bool {
-        self.decision.is_some()
-    }
-
-    pub(crate) fn decide(&mut self, decision: Decision) {
-        self.decision = Some(decision);
+        self.decision().is_some()
     }
 }
 
 impl Annotated for Match {
     fn annotations(&self) -> &TypeMap {
-        &self.annotations
+        self.contest.annotations()
     }
 
     fn annotations_mut(&mut self) -> &mut TypeMap {
-        &mut self.annotations
+        self.contest.annotations_mut()
     }
 }
 

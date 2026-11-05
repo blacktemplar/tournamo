@@ -12,7 +12,7 @@ pub use entities::{
         Annotated, Bye, ByeId, Competition, Entrant, EntrantId, Match, MatchId, MatchResult,
         NewMatch, Phase, PhaseData, PhaseId, Ranking, RankingId, ResultOfTeam, Seed, Team,
     },
-    details::{Decision, ResultReason},
+    details::{Decision, FieldKey, Part, ResultReason, Sides, Value, Values},
 };
 pub use plugins::PhasePlugins;
 #[cfg(feature = "test-util")]

@@ -101,7 +101,7 @@ Crates: `plugin-factory` (+ `plugin-factory-derive`: generic plugin axes, catalo
 
 ## Working style
 
-- Agents work in the dev container, where every edit and command is accepted: use whatever tool available there suits the task (Edit/Write, `sed`, scripts, ...). If a task calls for a tool the container lacks, don't work around it: say which tool and why, so it can be added to the container.
+- Agents work in the dev container, where every edit and command is accepted: use whatever tool available there suits the task (Edit/Write, `sed`, scripts, ...). If a task calls for a tool the container lacks, get on with the task: install the tool at runtime if possible, otherwise work around it. Either way, tell the user clearly which tool was missing and why it is needed, so it can be added to the container (that needs a rebuild, so not during the task).
 - **Planned features are GitHub issues** of `blacktemplar/tournamo`. Read them with `gh` (`gh issue list`, `gh issue view <number> --comments`) when a task refers to one or touches what one plans. Write to GitHub (issues, comments, PRs) only when explicitly asked.
 
 ## Conventions

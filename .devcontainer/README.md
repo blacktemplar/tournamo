@@ -55,7 +55,8 @@ Claude can do anything the user `dev` can do in the container. What it cannot do
   toolchains and Claude Code itself are owned by root.
 - **Touch the host beyond the checkout.** Mounted are the checkout, the git repository it belongs
   to (for a worktree, the main repository's `.git`), and volumes. No home directory, no SSH keys, no
-  git credentials (so no `git push`: push from the host), no Docker socket.
+  git credentials (so no `git push`: push from the host), no Docker socket. `git fetch` does work:
+  the image's git config turns GitHub's SSH URLs into HTTPS ones, the only way through the proxy.
 - **Plant code the host runs by itself.** Read-only: `.git/hooks`, `.git/config` (it can name
   commands), and `.devcontainer` (whose `initializeCommand` and mounts the host would use).
   `target/` is a volume of the container, so the host never runs what was built inside.

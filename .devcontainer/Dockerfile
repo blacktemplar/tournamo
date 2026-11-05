@@ -67,6 +67,11 @@ COPY managed-settings.json /etc/claude-code/managed-settings.json
 # gh with the read-only token from the host (README.md, "GitHub CLI")
 COPY --chmod=755 gh /usr/local/bin/gh
 
+# remotes keep their SSH URLs for the host (.git/config is shared and read-only here), but only HTTPS
+# gets through the proxy; without credentials this fetches and cannot push
+RUN git config --system url.https://github.com/.insteadOf git@github.com: \
+    && git config --system --add url.https://github.com/.insteadOf ssh://git@github.com/
+
 RUN useradd --create-home --uid 1000 --shell /bin/bash dev \
     && mkdir -p /home/dev/.cargo /home/dev/.claude /home/dev/.cache \
     && chown dev:dev /home/dev/.cargo /home/dev/.claude /home/dev/.cache

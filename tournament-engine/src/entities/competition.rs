@@ -4,13 +4,14 @@ use itertools::{Either, Itertools};
 use plugin_factory::{compatibility::Declaration, config::Config, draft::Draft};
 use rand::{RngExt, rngs::StdRng, seq::SliceRandom};
 use rand_seeder::Seeder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::{Uuid, uuid};
 use vec1::{Vec1, vec1};
 
 #[cfg(feature = "test-util")]
 use crate::plugins::PhasePluginsBuilder;
 use crate::{
+    entities::details::Decision,
     map::{IdAble, IdMap},
     plugins::{
         PhasePlugins,
@@ -516,10 +517,10 @@ impl Phase {
         reached_any
     }
 
-    pub(crate) fn report_match_result(&mut self, match_id: MatchId, match_result: MatchResult) {
+    pub(crate) fn report_match_result(&mut self, match_id: MatchId, decision: impl Into<Decision>) {
         let r#match = self.data.matches.get_mut(&match_id).unwrap();
         assert!(!r#match.is_finished());
-        r#match.set_result(match_result);
+        r#match.decide(decision.into());
         for ranking_id in self.data.matches[&match_id].rankings() {
             let ranking = self.data.rankings.get_mut(ranking_id).unwrap();
             ranking.played_matches.push(match_id);
@@ -765,15 +766,70 @@ pub struct MatchId(Uuid);
 /// that describes it, keyed by type, such as which stage of a knockout it belongs to. The
 /// [`PhaseFormat`] scheduling the match gives them when creating it as a [`NewMatch`], with
 /// [`Annotated::with_annotation`].
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct Match {
     id: MatchId,
     team_a: Vec1<RankingId>,
     team_b: Vec1<RankingId>,
     round: NonZeroU32,
     number: NonZeroU32,
-    result: Option<MatchResult>,
+    decision: Option<Decision>,
     annotations: TypeMap,
+}
+
+impl<'de> Deserialize<'de> for Match {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename = "Match")]
+        struct Current {
+            id: MatchId,
+            team_a: Vec1<RankingId>,
+            team_b: Vec1<RankingId>,
+            round: NonZeroU32,
+            number: NonZeroU32,
+            decision: Option<Decision>,
+            annotations: TypeMap,
+        }
+        // Saved in JSON by 0.3.0 and earlier: a `result` in place of the `decision`.
+        #[derive(Deserialize)]
+        #[serde(rename = "Match")]
+        struct Saved {
+            id: MatchId,
+            team_a: Vec1<RankingId>,
+            team_b: Vec1<RankingId>,
+            round: NonZeroU32,
+            number: NonZeroU32,
+            #[serde(default)]
+            decision: Option<Decision>,
+            #[serde(default)]
+            result: Option<MatchResult>,
+            annotations: TypeMap,
+        }
+
+        let current = if deserializer.is_human_readable() {
+            let saved = Saved::deserialize(deserializer)?;
+            Current {
+                id: saved.id,
+                team_a: saved.team_a,
+                team_b: saved.team_b,
+                round: saved.round,
+                number: saved.number,
+                decision: saved.decision.or(saved.result.map(Decision::new)),
+                annotations: saved.annotations,
+            }
+        } else {
+            Current::deserialize(deserializer)?
+        };
+        Ok(Match {
+            id: current.id,
+            team_a: current.team_a,
+            team_b: current.team_b,
+            round: current.round,
+            number: current.number,
+            decision: current.decision,
+            annotations: current.annotations,
+        })
+    }
 }
 
 /// A match a [`PhaseFormat`] schedules, see [`Schedule`]: who plays it in which round, what it is
@@ -846,7 +902,7 @@ impl NewMatch {
             team_b: self.team_b,
             round: self.round,
             number,
-            result: None,
+            decision: None,
             annotations: self.annotations,
         }
     }
@@ -924,7 +980,7 @@ impl Match {
 
     /// What the result of this match is for `team`, or `None` if it is not finished.
     pub fn result_of_team(&self, team: Team) -> Option<ResultOfTeam> {
-        self.result.map(|result| result.for_team(team))
+        self.result().map(|result| result.for_team(team))
     }
 
     pub fn rankings(&self) -> impl Iterator<Item = &RankingId> {
@@ -933,7 +989,7 @@ impl Match {
 
     pub fn non_losing_rankings(&self) -> impl Iterator<Item = &RankingId> {
         // technically no team is losing yet if result is not finished
-        match self.result.and_then(MatchResult::winner) {
+        match self.result().and_then(MatchResult::winner) {
             Some(winner) => Either::Left(self.rankings_of(winner).iter()),
             None => Either::Right(self.rankings()),
         }
@@ -954,15 +1010,20 @@ impl Match {
 
     /// The result of this match, or `None` if it is not finished.
     pub fn result(&self) -> Option<MatchResult> {
-        self.result
+        self.decision.as_ref().map(Decision::result)
+    }
+
+    /// How this match was decided, or `None` if it is not finished.
+    pub fn decision(&self) -> Option<&Decision> {
+        self.decision.as_ref()
     }
 
     pub fn is_finished(&self) -> bool {
-        self.result.is_some()
+        self.decision.is_some()
     }
 
-    pub(crate) fn set_result(&mut self, result: MatchResult) {
-        self.result = Some(result);
+    pub(crate) fn decide(&mut self, decision: Decision) {
+        self.decision = Some(decision);
     }
 }
 

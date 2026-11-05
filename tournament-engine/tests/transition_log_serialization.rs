@@ -216,6 +216,32 @@ fn a_transition_is_serialized_with_its_payload_next_to_its_tag() {
     );
 }
 
+/// Reports logged by 0.3.0 and earlier name a `match_result` where a `decision` is now.
+#[test]
+fn a_report_logged_before_decisions_still_replays() {
+    let machine = played_competition();
+    let mut log = serialized_log(&machine);
+    let Value::Array(entries) = &mut log else {
+        panic!("a log must serialize to a sequence");
+    };
+    let mut reports = 0;
+    for entry in entries {
+        let transition = &mut entry["kind"]["Apply"];
+        if transition["type"] == "tournament_engine::report_match_result" {
+            let value = transition["value"].as_object_mut().unwrap();
+            let decision = value.remove("decision").unwrap();
+            assert_eq!(decision["reason"], Value::Null);
+            value.insert("match_result".to_owned(), decision["result"].clone());
+            reports += 1;
+        }
+    }
+    assert!(reports > 0);
+
+    let replayed: CompetitionStateMachine = serde_json::from_value(log).unwrap();
+
+    assert_current_is(&replayed, machine.current());
+}
+
 /// A transition without any data of its own still carries its tag, which is all that identifies it.
 #[test]
 fn a_transition_without_data_is_serialized_as_its_tag_alone() {

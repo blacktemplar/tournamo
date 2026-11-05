@@ -25,7 +25,7 @@ use tournament_app::{
     storage::{MemoryStorage, Storage as _},
 };
 use tournament_engine::{
-    MatchResult,
+    Competition, MatchResult,
     plugins::{
         metrics_calculator::MoreWins,
         phase_format::{
@@ -75,17 +75,24 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
             .unwrap_or_else(|error| panic!("{save} does not load: {error}"));
 
         let replayed = serde_json::to_value(session.competition()).unwrap();
-        let saved: Value = serde_json::from_str(competition).unwrap();
         assert!(
-            replayed == saved,
+            replayed == as_read(competition),
             "{save} replays into another competition than it was saved as"
         );
         let file: Value = serde_json::from_str(file).unwrap();
+        let saved: Value = serde_json::from_str(competition).unwrap();
         assert!(
             file.get("competition").is_none_or(|held| *held == saved),
             "{save} holds another competition than it was saved as"
         );
     }
+}
+
+/// A saved competition as this version reads it and would save it: where the serialized form of a
+/// competition changed, an older one is read by a converter.
+fn as_read(competition: &str) -> Value {
+    let competition: Competition = serde_json::from_str(competition).unwrap();
+    serde_json::to_value(competition).unwrap()
 }
 
 /// Saves of versions that did not store the competition get it when they are stored.
@@ -99,9 +106,8 @@ fn every_golden_save_is_stored_with_the_competition_it_was_saved_as() {
 
         let stored = now(storage.read(session.key())).unwrap().unwrap();
         let stored: Value = serde_json::from_str(&stored.record).unwrap();
-        let saved: Value = serde_json::from_str(competition).unwrap();
         assert!(
-            stored["competition"] == saved,
+            stored["competition"] == as_read(competition),
             "{save} is stored with another competition than it was saved as"
         );
     }

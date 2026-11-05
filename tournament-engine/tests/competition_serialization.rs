@@ -422,6 +422,33 @@ fn a_round_trip_does_not_change_the_serialized_form() {
     assert_eq!(serialized(&competition), serialized(sm.current()));
 }
 
+/// Matches saved by 0.3.0 and earlier hold a `result` where a `decision` is now.
+#[test]
+fn a_competition_saved_before_decisions_still_loads() {
+    fn to_results(value: &mut Value, matches: &mut usize) {
+        match value {
+            Value::Object(object) if object.contains_key("team_a") => {
+                let decision = object.remove("decision").unwrap();
+                let result = decision.get("result").cloned().unwrap_or(Value::Null);
+                object.insert("result".to_owned(), result);
+                *matches += 1;
+            }
+            Value::Object(object) => object.values_mut().for_each(|v| to_results(v, matches)),
+            Value::Array(array) => array.iter_mut().for_each(|v| to_results(v, matches)),
+            _ => {}
+        }
+    }
+    let sm = competition_in_the_final();
+    let mut saved = serialized(sm.current());
+    let mut matches = 0;
+    to_results(&mut saved, &mut matches);
+    assert!(matches > 0);
+
+    let competition: Competition = serde_json::from_value(saved).unwrap();
+
+    assert_eq!(serialized(&competition), serialized(sm.current()));
+}
+
 #[test]
 fn the_competition_seed_survives_a_round_trip() {
     let sm = started_competition();

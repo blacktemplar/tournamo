@@ -7,9 +7,12 @@ pub mod type_map;
 
 #[cfg(feature = "test-util")]
 pub use entities::competition::PhaseBuilder;
-pub use entities::competition::{
-    Annotated, Bye, ByeId, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, NewMatch,
-    Phase, PhaseData, PhaseId, Ranking, RankingId, ResultOfTeam, Seed, Team,
+pub use entities::{
+    competition::{
+        Annotated, Bye, ByeId, Competition, Entrant, EntrantId, Match, MatchId, MatchResult,
+        NewMatch, Phase, PhaseData, PhaseId, Ranking, RankingId, ResultOfTeam, Seed, Team,
+    },
+    details::{Decision, ResultReason},
 };
 pub use plugins::PhasePlugins;
 #[cfg(feature = "test-util")]

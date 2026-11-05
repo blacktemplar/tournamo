@@ -1,25 +1,68 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
-    entities::competition::{Competition, MatchId, MatchResult, PhaseId},
+    entities::{
+        competition::{Competition, MatchId, MatchResult, PhaseId},
+        details::Decision,
+    },
     transitions::CompetitionTransition,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Reports how a match was decided, which finishes it.
+#[derive(Debug, Serialize)]
 pub struct ReportMatchResult {
     phase_id: PhaseId,
     match_id: MatchId,
-    match_result: MatchResult,
+    decision: Decision,
+}
+
+impl<'de> Deserialize<'de> for ReportMatchResult {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename = "ReportMatchResult")]
+        struct Current {
+            phase_id: PhaseId,
+            match_id: MatchId,
+            decision: Decision,
+        }
+        // Logged in JSON by 0.3.0 and earlier: a `match_result` in place of the `decision`.
+        #[derive(Deserialize)]
+        #[serde(rename = "ReportMatchResult")]
+        struct Saved {
+            phase_id: PhaseId,
+            match_id: MatchId,
+            #[serde(default)]
+            decision: Option<Decision>,
+            #[serde(default)]
+            match_result: Option<MatchResult>,
+        }
+
+        if deserializer.is_human_readable() {
+            let saved = Saved::deserialize(deserializer)?;
+            let decision = saved
+                .decision
+                .or(saved.match_result.map(Decision::new))
+                .ok_or_else(|| serde::de::Error::missing_field("decision"))?;
+            Ok(Self::new(saved.phase_id, saved.match_id, decision))
+        } else {
+            let current = Current::deserialize(deserializer)?;
+            Ok(Self::new(
+                current.phase_id,
+                current.match_id,
+                current.decision,
+            ))
+        }
+    }
 }
 
 impl ReportMatchResult {
-    pub fn new(phase_id: PhaseId, match_id: MatchId, match_result: MatchResult) -> Self {
+    pub fn new(phase_id: PhaseId, match_id: MatchId, decision: impl Into<Decision>) -> Self {
         Self {
             phase_id,
             match_id,
-            match_result,
+            decision: decision.into(),
         }
     }
 
@@ -32,7 +75,11 @@ impl ReportMatchResult {
     }
 
     pub fn match_result(&self) -> MatchResult {
-        self.match_result
+        self.decision.result()
+    }
+
+    pub fn decision(&self) -> &Decision {
+        &self.decision
     }
 }
 
@@ -62,7 +109,7 @@ impl Transition<Competition> for ReportMatchResult {
         if r#match.is_finished() {
             return Err(Box::new(ReportMatchResultError::MatchAlreadyFinished));
         }
-        if self.match_result == MatchResult::Draw && !phase.format().allows_draws() {
+        if self.decision.result() == MatchResult::Draw && !phase.format().allows_draws() {
             return Err(Box::new(ReportMatchResultError::DrawNotAllowed));
         }
         Ok(())
@@ -73,7 +120,7 @@ impl Transition<Competition> for ReportMatchResult {
         competition: &mut Competition,
     ) -> Result<(), undoable_state_machine::TransitionError> {
         let phase = competition.phases_mut().get_mut(&self.phase_id).unwrap();
-        phase.report_match_result(self.match_id, self.match_result);
+        phase.report_match_result(self.match_id, self.decision.clone());
         Ok(())
     }
 }

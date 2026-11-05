@@ -2021,14 +2021,14 @@ mod tests {
         let mut session = Session::new(storage.clone()).named("cup");
         output(&mut session, "save");
         let mut saved: Value = serde_json::from_slice(&storage.read("cup").unwrap()).unwrap();
-        assert_eq!(saved["format"], 1);
-        saved["format"] = 2.into();
+        assert_eq!(saved["format"], 2);
+        saved["format"] = 3.into();
         storage.write("cup", saved.to_string().as_bytes()).unwrap();
 
         let Err(Error::Load { source, .. }) = Session::load(storage, "cup") else {
             panic!("a file of a newer format must not load");
         };
-        assert!(source.to_string().contains("format 2"), "{source}");
+        assert!(source.to_string().contains("format 3"), "{source}");
     }
 
     #[test]

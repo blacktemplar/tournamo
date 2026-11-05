@@ -2453,7 +2453,7 @@ fn a_competition_imported_under_a_name_stored_already_is_numbered() {
 fn a_file_without_a_format_is_imported_as_of_the_first() {
     let session = Given::new().added();
     let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
-    assert_eq!(file["format"], 1);
+    assert_eq!(file["format"], 2);
     file.as_object_mut().unwrap().remove("format");
 
     let imported = Session::import(&file.to_string(), "cup", &[]).unwrap();
@@ -2465,14 +2465,14 @@ fn a_file_without_a_format_is_imported_as_of_the_first() {
 fn a_file_of_a_newer_format_is_not_imported_for_its_format() {
     let session = Given::new().added();
     let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
-    file["format"] = 2.into();
+    file["format"] = 3.into();
     // what a newer format might hold instead of a log
     file["log"] = serde_json::json!({ "entries": [] });
 
     let result = Session::import(&file.to_string(), "cup", &[]);
 
     assert!(
-        matches!(result, Err(ImportError::Newer(format)) if format.to_string() == "2"),
+        matches!(result, Err(ImportError::Newer(format)) if format.to_string() == "3"),
         "{:?}",
         result.err()
     );

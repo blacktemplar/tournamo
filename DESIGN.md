@@ -618,7 +618,7 @@ replay it to show it read-only instead (*planned*), and to tell a replay that
 comes out otherwise. The log stays what
 is loaded; the competition is only read in place of it. Its serialized form is
 a persistence contract too, kept loading by converters where it changes.
-Older versions ignore it, so the file's format stays 1.
+Older versions ignore it, so it does not raise the file's format.
 
 Rejected: every version of every transition (unbounded, and keeps old bugs);
 only the competition (no undo, no history); a smaller, display-only archive

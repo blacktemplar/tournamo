@@ -10,7 +10,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [x] DESIGN.md section *Match details* (*planned*)
 
 ### A. Engine groundwork (behaviour unchanged)
-- [ ] 1. `Decision` and `ResultReason`: `Match` holds `decision: Option<Decision>`
+- [x] 1. `Decision` and `ResultReason`: `Match` holds `decision: Option<Decision>`
   (`result()` stays); `ReportMatchResult` carries a `Decision`; old log entries
   (`match_result`) and snapshots (`result`) still load
 - [ ] 2. `Part`, `Sides`, `Value`, `FieldKey`: `Match` holds `contest: Part`
@@ -51,3 +51,11 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 
 ## Notes for the user
 Questions and decisions put off while implementing, to bring up at the end.
+- Step 1 raised the file format to 2 (as AGENTS.md demands of any change older
+  versions cannot read): 0.3.0 refuses every file of this version, even one
+  without any details. Writing the old form while a log has no details would
+  keep those readable, at the cost of two forms to write.
+- The golden saves now compare a replay with the saved competition *as this
+  version reads it* (`as_read`), since the serialized `Match` changed. A field
+  the converter silently dropped would go unnoticed there; the engine's tests
+  of the old forms cover the conversion itself.

@@ -10,6 +10,13 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Changed
+
+- A competition is saved in format 2: a reported result is saved as a decision,
+  so that it can later say why a match was decided and hold its score.
+  Competitions of format 1 open unchanged; earlier versions refuse format 2 as
+  a file of a newer version.
+
 ## [0.3.0] - 2026-11-03
 
 Competitions saved with 0.2.0 and earlier open unchanged. Once a browser has

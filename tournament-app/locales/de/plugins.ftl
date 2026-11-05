@@ -9,6 +9,14 @@ phase =
     .field-ranking-description = die Besten zuerst; jedes Kriterium entscheidet nur, wo die vor ihm gleich sind
     .field-metrics = Kennzahlen
     .field-metrics-description = für jeden Teilnehmer berechnet
+    .field-results = Ergebnisse
+    .field-results-description = was zu einem Spiel eingetragen wird
+
+## Match rules
+
+plugin-tournament_engine-winner_only =
+    .label = nur Sieger
+    .description = wer ein Spiel gewonnen hat oder dass es unentschieden ausging, ohne Spielstand
 
 ## Phase formats
 

@@ -17,8 +17,8 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
   (its annotations move in); `ReportMatchResult` gets `values` and `parts`;
   old snapshots load; benchmark `large_tournament` (no change measured,
   `Match` grew from 160 to 208 bytes)
-- [ ] 3. `MatchRules` axis: `Template`, `Level`, `Parts`, `FieldSpec`, `Hints`,
-  plugin `Outcome`; `PhasePlugins.rules` (old phases load as `Outcome`);
+- [x] 3. `MatchRules` axis: `Template`, `Level`, `Parts`, `FieldSpec`, `Hints`,
+  plugin `WinnerOnly`; `PhasePlugins.results` (old phases load as `WinnerOnly`);
   `ReportMatchResult` checks the structure against the template; questionnaire
   and `PhaseForm` show the rules
 - [ ] 4. Tallies: `Match::tally`, `MatchRules::tally` in `apply`, `Points` and
@@ -65,3 +65,7 @@ Questions and decisions put off while implementing, to bring up at the end.
   leave it?
 - `Value` has `Count` and `Decimal` only; `Duration` (times) waits for a sport
   that needs it.
+- Until a second rules plugin exists (step 5), the CLI asks "Results" with one
+  choice and the GUI shows "Results: Winner only" in every phase.
+- Step 1 was committed without running the manual-stage hooks; a browser test
+  it broke was fixed in a commit of its own. Manual hooks are run per step now.

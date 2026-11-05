@@ -499,7 +499,7 @@ and enter them for sports it does not know.
 
 **One generic shape, interpreted by a plugin.** What was played is a tree of
 `Part`s with a fixed shape; what it means is the business of the phase's
-`MatchRules`, a fourth plugin of `PhasePlugins` (default `Outcome`: who won,
+`MatchRules`, the `results` of `PhasePlugins` (default `WinnerOnly`: who won,
 nothing more):
 
 ```rust

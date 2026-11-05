@@ -14,10 +14,15 @@ use serde_json::{Value, json};
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt, Decision, Entrant, EntrantId, FieldKey, Match, MatchId,
-    MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant, ReportMatchResult,
-    ResultReason, Score, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMapValue,
-    Value as Entered,
+    MatchResult, Part, Phase, PhaseData, PhaseId, PhasePluginsBuilder, RemoveEntrant,
+    ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, StartCompetition,
+    TypeMapValue, Value as Entered,
+    plugin_factory::{Plugin, register},
     plugins::{
+        Phrase,
+        match_rules::{
+            FieldSpec, Hints, Level, MatchRules, Parts, ReasonSpec, Template, ValueKind,
+        },
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MorePoints, Points, PointsCalculator,
             RoundOfFirstLossCalculator, WinsDrawsLossesCalculator,
@@ -245,18 +250,75 @@ fn a_report_logged_before_decisions_still_replays() {
     assert_current_is(&replayed, machine.current());
 }
 
+/// Rules entering the games won by each side, with the points of each of up to three games.
+#[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
+#[plugin(id = "log_test::games", label = "games")]
+struct Games;
+
+#[register]
+impl MatchRules for Games {
+    fn template(&self, _: &PhaseData, _: &Match) -> Template {
+        let points = FieldSpec {
+            key: FieldKey::new("points"),
+            label: Phrase::new("points", "points"),
+            kind: ValueKind::Count,
+            hints: Hints::default(),
+        };
+        let game = Level {
+            fields: vec![points],
+            ..Level::new(Phrase::new("game", "game"))
+        };
+        Template {
+            root: Level {
+                fields: vec![FieldSpec {
+                    key: FieldKey::new("games"),
+                    label: Phrase::new("games", "games"),
+                    kind: ValueKind::Count,
+                    hints: Hints::default(),
+                }],
+                reasons: vec![ReasonSpec {
+                    reason: ResultReason::new("retired"),
+                    label: Phrase::new("retired", "retired"),
+                }],
+                parts: Parts::Same {
+                    level: Box::new(game),
+                    max: 3,
+                },
+                ..Level::new(Phrase::new("match", "match"))
+            },
+        }
+    }
+}
+
+/// A competition of two entrants whose single match is open, its results entered by [`Games`].
+fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
+    let mut machine = CompetitionStateMachine::default();
+    machine
+        .apply_transition(SetCompetitionSeed::new(SEED))
+        .unwrap();
+    for entrant in 0..2 {
+        machine
+            .apply_transition(AddEntrant::new(Entrant::new(entrant_id(entrant))))
+            .unwrap();
+    }
+    let plugins = PhasePluginsBuilder::new().results(Games).build().unwrap();
+    machine
+        .apply_transition(AddPhase::new(phase_id(), plugins))
+        .unwrap();
+    machine.apply_transition(StartCompetition).unwrap();
+    let open = matches_of_round(&machine.current().phases()[&phase_id()], 1)[0];
+    (machine, open)
+}
+
+fn count(a: u32, b: u32) -> Sides<Option<Entered>> {
+    Sides::new(Some(Entered::Count(a)), Some(Entered::Count(b)))
+}
+
 /// What a report says of how a match was played reaches the match, through any log format.
 #[test]
 fn a_reported_contest_survives_a_round_trip() {
-    let mut machine = played_competition();
-    let open = matches_of_round(&machine.current().phases()[&phase_id()], 2)[0];
+    let (mut machine, open) = competition_entering_games();
     let points = FieldKey::new("points");
-    let game = |a, b| {
-        Part::new().with_decision(MatchResult::AWins).with_value(
-            points.clone(),
-            Sides::new(Some(Entered::Count(a)), Some(Entered::Count(b))),
-        )
-    };
     machine
         .apply_transition(
             ReportMatchResult::new(
@@ -268,11 +330,12 @@ fn a_reported_contest_survives_a_round_trip() {
                 FieldKey::new("games"),
                 Sides::new(Some(Entered::Count(1)), None),
             )
-            .with_part(game(21, 17))
-            .with_part(Part::new().with_value(
-                points.clone(),
-                Sides::new(Some(Entered::Count(3)), Some(Entered::Count(1))),
-            )),
+            .with_part(
+                Part::new()
+                    .with_decision(MatchResult::AWins)
+                    .with_value(points.clone(), count(21, 17)),
+            )
+            .with_part(Part::new().with_value(points, count(3, 1))),
         )
         .unwrap();
     let contest = machine.current().phases()[&phase_id()].data().matches()[&open].contest();
@@ -293,6 +356,45 @@ fn a_reported_contest_survives_a_round_trip() {
 
     assert_current_is(&round_trip(&machine), machine.current());
     assert_current_is(&binary_round_trip(&machine), machine.current());
+}
+
+/// The engine refuses only what does not fit what the rules say a result looks like.
+#[test]
+fn a_report_not_fitting_the_match_rules_is_refused() {
+    let (mut machine, open) = competition_entering_games();
+    let report = || ReportMatchResult::new(phase_id(), open, MatchResult::AWins);
+    let game = || Part::new().with_value(FieldKey::new("points"), count(21, 3));
+
+    let misfits = [
+        report().with_value(FieldKey::new("goals"), count(1, 0)),
+        report().with_value(
+            FieldKey::new("games"),
+            Sides::new(Some(Entered::Decimal(Score::new(1.5))), None),
+        ),
+        ReportMatchResult::new(
+            phase_id(),
+            open,
+            Decision::new(MatchResult::AWins).with_reason(ResultReason::new("walkover")),
+        ),
+        report()
+            .with_part(game())
+            .with_part(game())
+            .with_part(game())
+            .with_part(game()),
+        report().with_part(game().with_part(game())),
+    ];
+    for misfit in misfits {
+        assert!(machine.apply_transition(misfit).is_err());
+    }
+
+    // a result breaking the rules of a sport fits, though: the referee decides
+    machine
+        .apply_transition(
+            ReportMatchResult::new(phase_id(), open, MatchResult::BWins)
+                .with_value(FieldKey::new("games"), count(0, 0))
+                .with_part(game()),
+        )
+        .unwrap();
 }
 
 /// A transition without any data of its own still carries its tag, which is all that identifies it.
@@ -503,6 +605,7 @@ fn every_plugin_is_serialized_under_its_id() {
         plugins["format"]["type"],
         "tournament_engine::single_elimination"
     );
+    assert_eq!(plugins["results"]["type"], "tournament_engine::winner_only");
     assert_eq!(
         ids(&plugins["ranking"]),
         [

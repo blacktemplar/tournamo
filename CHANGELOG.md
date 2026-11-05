@@ -10,6 +10,11 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Added
+
+- A phase says what is entered for its matches, its results: so far only who
+  won ("winner only"), what every phase entered before.
+
 ### Changed
 
 - A competition is saved in format 2: a reported result is saved as a decision,

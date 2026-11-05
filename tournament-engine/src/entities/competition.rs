@@ -16,6 +16,7 @@ use crate::{
     plugins::{
         PhasePlugins,
         facts::EntrantsPerRanking,
+        match_rules::{self, MatchRules},
         metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
         ranker::{HierarchicalRanker, SliceRanker},
@@ -90,15 +91,8 @@ impl Competition {
     }
 
     pub(crate) fn add_phase(&mut self, id: PhaseId, plugins: PhasePlugins) {
-        let (phase_format, ranker, metrics_calculators) = plugins.into_parts();
         let seed = Seed(self.seed.rng(id).random());
-        self.phases.insert(Phase::new(
-            id,
-            phase_format,
-            ranker,
-            metrics_calculators,
-            seed,
-        ));
+        self.phases.insert(Phase::new(id, plugins, seed));
     }
 
     /// Declares the facts that hold for a phase added to this competition before any of its
@@ -257,6 +251,9 @@ pub struct Phase {
     phase_format: Box<dyn PhaseFormat>,
     ranker: HierarchicalRanker,
     metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
+    // phases saved by 0.3.0 and earlier knew only who won
+    #[serde(default = "match_rules::default")]
+    match_rules: Box<dyn MatchRules>,
     data: PhaseData,
 }
 
@@ -318,13 +315,8 @@ impl PhaseData {
 
 impl Phase {
     /// A phase without rankings, matches and byes yet.
-    fn new(
-        id: PhaseId,
-        phase_format: Box<dyn PhaseFormat>,
-        ranker: HierarchicalRanker,
-        metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
-        seed: Seed,
-    ) -> Self {
+    fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
+        let (phase_format, ranker, metrics_calculators, match_rules) = plugins.into_parts();
         Self {
             id,
             data: PhaseData {
@@ -337,6 +329,7 @@ impl Phase {
             phase_format,
             ranker,
             metrics_calculators,
+            match_rules,
         }
     }
 
@@ -364,6 +357,11 @@ impl Phase {
         &*self.phase_format
     }
 
+    /// The rules of what is entered for a match of this phase.
+    pub fn match_rules(&self) -> &dyn MatchRules {
+        &*self.match_rules
+    }
+
     /// The answers to a [`Competition::phase_draft`] the plugins of this phase are built from,
     /// without their runtime state, see [`PhasePlugins::config`]. Put back into a draft with
     /// [`Draft::with_answers`], they are changed and built into the plugins the phase is
@@ -374,6 +372,7 @@ impl Phase {
             self.phase_format.clone(),
             self.ranker.slice_rankers().to_vec(),
             self.metrics_calculators.clone(),
+            self.match_rules.clone(),
         )
         .expect("the calculators of a phase are in running order")
         .config()
@@ -1197,18 +1196,11 @@ impl PhaseBuilder {
     /// # Panics
     /// Panics if building its plugins fails, see [`PhasePluginsBuilder::build`].
     pub fn build(self) -> Phase {
-        let (format, ranker, metrics) = self
+        let plugins = self
             .plugins
             .build()
-            .expect("the plugins of the phase can be ordered")
-            .into_parts();
-        let mut phase = Phase::new(
-            PhaseId::new(Uuid::nil()),
-            format,
-            ranker,
-            metrics,
-            Seed::default(),
-        );
+            .expect("the plugins of the phase can be ordered");
+        let mut phase = Phase::new(PhaseId::new(Uuid::nil()), plugins, Seed::default());
         let rankings: Vec<_> = (0..self.players)
             .map(|index| {
                 let entrant_id = EntrantId::new(Uuid::from_u128(index.into()));

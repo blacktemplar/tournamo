@@ -9,6 +9,7 @@ use tournament_engine::{
     PhasePlugins, Score,
     plugins::{
         Phrase,
+        match_rules::MatchRules,
         metrics_calculator::{
             Cell, MetricsCalculator, PointsCalculator, RoundOfElimination,
             RoundOfEliminationCalculator, RoundOfFirstLoss, RoundOfFirstLossCalculator,
@@ -314,6 +315,7 @@ fn engine_plugins() -> Vec<&'static PluginEntry> {
         AnyAxis::of::<dyn PhaseFormat>(),
         AnyAxis::of::<dyn SliceRanker>(),
         AnyAxis::of::<dyn MetricsCalculator>(),
+        AnyAxis::of::<dyn MatchRules>(),
     ]
     .iter()
     .flat_map(AnyAxis::entries)

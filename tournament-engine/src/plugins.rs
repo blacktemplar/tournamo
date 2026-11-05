@@ -51,6 +51,7 @@ use serde::{Deserialize, Serialize};
 pub use crate::plugins::builder::PhasePluginsBuilder;
 pub use crate::plugins::phrase::Phrase;
 use crate::plugins::{
+    match_rules::MatchRules,
     metrics_calculator::MetricsCalculator,
     phase_format::PhaseFormat,
     ranker::{HierarchicalRanker, SliceRanker},
@@ -59,6 +60,7 @@ use crate::plugins::{
 #[cfg(feature = "test-util")]
 mod builder;
 pub mod facts;
+pub mod match_rules;
 pub mod metrics_calculator;
 pub mod phase_format;
 mod phrase;
@@ -123,6 +125,14 @@ pub struct PhasePlugins {
     #[serde(default)]
     #[plugin(label = "metrics", description = "calculated for every entrant")]
     metrics: DependencyOrderedSet<dyn MetricsCalculator>,
+    // phases added by 0.3.0 and earlier knew only who won
+    #[serde(default = "match_rules::default")]
+    #[plugin(
+        label = "results",
+        description = "what is entered for a match",
+        default = match_rules::default()
+    )]
+    results: Box<dyn MatchRules>,
 }
 
 impl PhasePlugins {
@@ -132,6 +142,8 @@ impl PhasePlugins {
     pub const RANKING: &str = "ranking";
     /// The name of the field taking the metrics calculators.
     pub const METRICS: &str = "metrics";
+    /// The name of the field taking the match rules.
+    pub const RESULTS: &str = "results";
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
     pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];
@@ -181,17 +193,19 @@ impl PhasePlugins {
         draft.with_defaults()
     }
 
-    /// The plugins of a phase played in `format`, ranked by `ranking` and calculating the metrics
-    /// of `metrics`, put into the order they run in.
+    /// The plugins of a phase played in `format`, ranked by `ranking`, calculating the metrics of
+    /// `metrics`, put into the order they run in, and entering results by `results`.
     pub(crate) fn from_parts(
         format: Box<dyn PhaseFormat>,
         ranking: Vec<Box<dyn SliceRanker>>,
         metrics: Vec<Box<dyn MetricsCalculator>>,
+        results: Box<dyn MatchRules>,
     ) -> Result<Self, plugin_factory::schema::DependencyOrderedSetError> {
         Ok(Self {
             format,
             ranking,
             metrics: DependencyOrderedSet::new(metrics)?,
+            results,
         })
     }
 
@@ -209,18 +223,31 @@ impl PhasePlugins {
         &self.metrics
     }
 
+    /// The rules of what is entered for a match.
+    pub fn results(&self) -> &dyn MatchRules {
+        &*self.results
+    }
+
     /// The answers to a [`Competition::phase_draft`](crate::Competition::phase_draft) these
     /// plugins are built from, without their runtime state, see [`Config::of`].
     pub fn config(&self) -> Config {
         Config::of(self).expect("every plugin serializes as it is configured")
     }
 
-    /// The format, the ranker and the metrics calculators a phase is run with.
-    pub(crate) fn into_parts(self) -> (Box<dyn PhaseFormat>, HierarchicalRanker, Metrics) {
+    /// The format, the ranker, the metrics calculators and the match rules a phase is run with.
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        Box<dyn PhaseFormat>,
+        HierarchicalRanker,
+        Metrics,
+        Box<dyn MatchRules>,
+    ) {
         (
             self.format,
             HierarchicalRanker::new(self.ranking),
             self.metrics.into_iter().collect(),
+            self.results,
         )
     }
 }
@@ -413,7 +440,8 @@ mod tests {
             [
                 PhasePlugins::FORMAT,
                 PhasePlugins::RANKING,
-                PhasePlugins::METRICS
+                PhasePlugins::METRICS,
+                PhasePlugins::RESULTS,
             ]
         );
     }

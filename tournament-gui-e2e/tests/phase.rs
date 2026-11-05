@@ -25,6 +25,7 @@ async fn a_format_brings_what_it_recommends() {
             "Single elimination",
             "Later first loss, fewer losses",
             "Round of the first loss, win-draw-loss record",
+            "Winner only",
         ])
         .await
     })
@@ -152,6 +153,7 @@ async fn enter_in_a_number_takes_it_without_adding_the_phase() {
             "More points",
             "Win-draw-loss record",
             "Points",
+            "Winner only",
         ])
         .await
     })
@@ -220,6 +222,7 @@ async fn a_number_not_taken_keeps_the_phase_from_being_added() {
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
+            "Winner only",
         ])
         .await
     })
@@ -443,6 +446,7 @@ async fn a_ranking_of_nothing_is_warned_about() {
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
+            "Winner only",
         ])
         .await
     })
@@ -637,6 +641,7 @@ async fn the_phase_is_edited_after_the_start_in_a_dialog() {
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
+            "Winner only",
         ])
         .await?;
         gui.click("Undo").await?;
@@ -646,6 +651,7 @@ async fn the_phase_is_edited_after_the_start_in_a_dialog() {
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
+            "Winner only",
         ])
         .await?;
         gui.click("Matches & standings").await?;
@@ -681,6 +687,7 @@ async fn an_edit_a_result_does_not_fit_is_refused_in_the_dialog() {
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
+            "Winner only",
         ])
         .await
     })
@@ -719,6 +726,7 @@ async fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
+            "Winner only",
         ])
         .await?;
         gui.click("Matches & standings").await?;

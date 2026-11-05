@@ -710,6 +710,7 @@ mod tests {
     use plugin_factory::{PluginType, draft::Problem};
     use tournament_app::error::{AddEntrantError, EditPhaseError, ReportError, StartError};
     use tournament_engine::plugins::{
+        match_rules::WinnerOnly,
         metrics_calculator::{
             FewerMatchesPlayed, MorePoints, MoreWins, PointsCalculator, SonnebornBergerCalculator,
             WinsDrawsLossesCalculator,
@@ -739,6 +740,7 @@ mod tests {
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))
+            .and_then(|draft| draft.with("results", plugin::<WinnerOnly>()))
             .unwrap()
     }
 

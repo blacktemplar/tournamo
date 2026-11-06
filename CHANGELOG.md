@@ -17,8 +17,10 @@ a file whose `"format"` changes is migrated, not refused.
   the score of each side, or the games of a best of, each with its score.
 - The points (or goals) scored and conceded, as a metric of the standings, and
   ranking by the difference or by the points scored.
-- In the browser, a match whose results hold more than who won is entered in a
-  dialog: the score of each side, and of each game of a best of. What looks
+- In the browser, a match whose results hold more than who won is entered in
+  the row of the match: the score of each side, or of each game of a best of,
+  side by side, reported by Enter or the button beside them. Its details
+  button opens a dialog with what the row holds, for more. What looks
   like a typo is pointed out but taken, such as a score unlike one with the
   winning score of the match format (21–17, 22–20 or 30–29 in a game to 21).
   The dialog shows who wins each game and the match by the scores entered;

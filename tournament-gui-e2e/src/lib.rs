@@ -2001,6 +2001,88 @@ impl Gui {
         Ok(())
     }
 
+    /// Reports the result entered in the dialog open, by its button, rather than by that of the
+    /// row of the match below it.
+    pub async fn report_in_dialog(&self) -> WebDriverResult<()> {
+        let button = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//button[{}='Report']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .and_enabled()
+            .first()
+            .await?;
+        self.click_in_sight(&button).await
+    }
+
+    /// Types `text` into the value of a result in the row of its match labelled `label`, e.g.
+    /// `"Score of Alice, match 1"`, in place of what it shows.
+    pub async fn enter_in_row(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        let input = self.value_in_row(label).first().await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Presses Enter in the value of a result in the row of its match labelled `label`, which
+    /// reports what the row shows.
+    pub async fn press_enter_in_row(&self, label: &str) -> WebDriverResult<()> {
+        self.value_in_row(label)
+            .first()
+            .await?
+            .send_keys(Key::Enter)
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the rows of results entered say the results their values suggest,
+    /// `outcomes`, e.g. `"Alice wins"`; none where nothing is entered.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_row_outcomes(&self, outcomes: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".quick-result output:not(:empty)"), outcomes)
+            .await
+    }
+
+    /// Waits until the rows of results entered point out `warnings`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they point out instead.
+    pub async fn expect_row_warnings(&self, warnings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".quick-result .warnings"), warnings)
+            .await
+    }
+
+    /// Waits until the row of a result says why it was not reported, `text`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_row_error(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(
+                By::Css(".quick-result .error[role=alert]:not(:empty)"),
+                &[text],
+            )
+            .await
+    }
+
+    /// The value of a result in the row of its match labelled `label`.
+    fn value_in_row(
+        &self,
+        label: &str,
+    ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
+        self.driver.query(By::XPath(format!(
+            "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
+            without_isolation_marks("@aria-label")
+        )))
+    }
+
     /// Chooses `option` in the choice labelled `label` of the result in the dialog open, e.g.
     /// `"Alice wins"` for `"Result: Match"`.
     pub async fn choose_result(&self, label: &str, option: &str) -> WebDriverResult<()> {

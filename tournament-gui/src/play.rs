@@ -22,7 +22,7 @@ use crate::{
     i18n::t,
     icons,
     phase::answer,
-    result::EnterResult,
+    result::ResultOf,
     result_text, result_with_scores, team_name,
     toggletip::Toggletip,
 };
@@ -39,7 +39,8 @@ enum Shown {
 /// What gets the focus once the page shows a result reported or reopened by its buttons.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Focus {
-    /// The first button reporting a result of the match.
+    /// The first button reporting a result of the match, or the first value of its result entered
+    /// in its row.
     Report(MatchId),
     /// The heading of the matches shown, once none of them is left without a result.
     Heading,
@@ -542,7 +543,7 @@ fn MatchLine(
                 if row.result.is_some() {
                     ReportedResult { row: row.clone(), draws, focus }
                 } else if row.details {
-                    EnterResult { row: row.clone(), focus, after_report }
+                    ResultOf { row: row.clone(), focus, after_report }
                 } else {
                     ReportButtons {
                         row: row.clone(),

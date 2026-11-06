@@ -1481,6 +1481,79 @@ ul.summary-items {
   justify-self: center;
 }
 
+/* a result entered below the pairing: the values of each part side by side, wrapping where they do
+ * not fit, then the buttons, and what they say below them */
+.match .quick-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  grid-column: 1 / -1;
+}
+
+.quick-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* the values of a part close together, apart from those of the next */
+.quick-value {
+  display: grid;
+  align-items: center;
+  column-gap: 2px;
+  grid-template-columns: auto auto auto;
+}
+
+/* wide enough for three digits, without the spin buttons, which have no room: a best of five
+ * fits a card beside the standings */
+.quick-value input {
+  width: 2.5rem;
+  padding-inline: var(--space-1);
+  appearance: textfield;
+  text-align: center;
+}
+
+.quick-value input::-webkit-inner-spin-button,
+.quick-value input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+/* the number of the part, e.g. of the game, above its values */
+.quick-part {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  grid-column: 1 / -1;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.quick-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.quick-outcome,
+.quick-result .warnings,
+.quick-result .error[role="alert"] {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.quick-outcome {
+  color: var(--text-muted);
+}
+
+/* said while empty too, without taking room */
+.quick-outcome:empty,
+.quick-result .error[role="alert"]:empty {
+  display: contents;
+}
+
 /* the fields of a result entered in a dialog: a part's values side by side, its parts nested */
 .result-part {
   display: grid;
@@ -1633,6 +1706,11 @@ ul.summary-items {
   .match .enter-result {
     grid-column: 3;
     grid-row: 1 / span 2;
+  }
+
+  /* below the pairing, across the card */
+  .match .quick-result {
+    grid-column: 1 / -1;
   }
 
   /* the names on the whole line, which no button takes once the match is played */

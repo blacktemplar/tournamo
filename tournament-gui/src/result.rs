@@ -2,11 +2,15 @@
 //! score: the [`ResultForm`] of its result, every part with the values of each side and its result,
 //! the one the values suggest. Overriding it is rare, so a result is chosen only after asking to
 //! override, except for a part that only a choice decides.
+//!
+//! A match whose result takes no more than a row ([`ResultForm::quick_entry`]), e.g. a score or the
+//! score of each game, is entered in the row below its pairing instead, the dialog a button away
+//! for anything more, e.g. overriding the result.
 
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::{PluginText, Text},
-    result_form::{FieldView, PartView, ResultForm},
+    result_form::{FieldView, PartView, QuickEntry, QuickField, ResultForm},
     view::MatchRow,
 };
 use tournament_engine::{EnteredValue, MatchResult, Score, Team, plugins::match_format::ValueKind};
@@ -22,10 +26,239 @@ use crate::{
     team_name,
 };
 
-/// The button entering the result of the match `row`, and the dialog it opens; once reported, the
-/// focus moves to `after_report`.
+/// What enters the result of the match `row`, whose match format enters more than who won: the row
+/// of its values if it takes no more, else the button opening the dialog; once reported, the focus
+/// moves to `after_report`.
 #[component]
-pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Focus) -> Element {
+pub fn ResultOf(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Focus) -> Element {
+    let ctx = use_context::<Ctx>();
+    let id = row.id;
+    let mut form = use_signal(|| ctx.session.peek().result_form(id).ok());
+    // what the result looks like, changing only with the match format, e.g. when the phase is
+    // edited; what was entered for another one is dropped then
+    let template = use_memo(move || {
+        let session = ctx.session.read();
+        session
+            .result_form(id)
+            .ok()
+            .map(|form| form.template().clone())
+    });
+    use_effect(move || {
+        let template = template();
+        if form.peek().as_ref().map(|form| form.template().clone()) != template {
+            form.set(ctx.session.peek().result_form(id).ok());
+        }
+    });
+    let quick = form.read().as_ref().and_then(ResultForm::quick_entry);
+    match quick {
+        Some(quick) => rsx! {
+            QuickResult {
+                row,
+                form,
+                quick,
+                focus,
+                after_report,
+            }
+        },
+        None => rsx! {
+            EnterResult { row, focus, after_report }
+        },
+    }
+}
+
+/// The values of the result of the match `row` in one row, `quick` of `form`, reported by Enter or
+/// its button as they suggest, with the button opening the dialog with them for anything more.
+#[component]
+fn QuickResult(
+    row: MatchRow,
+    form: Signal<Option<ResultForm>>,
+    quick: QuickEntry,
+    focus: Signal<Option<Focus>>,
+    after_report: Focus,
+) -> Element {
+    let ctx = use_context::<Ctx>();
+    let mut error = use_signal(|| None::<Text>);
+    let id = row.id;
+    // the first value, where a result is entered first
+    let on_mounted = EventHandler::new(crate::play::use_focus(focus, Focus::Report(id)));
+    // only reported by the tab that changes the competition
+    let disabled = !ctx.changes();
+    let tr = ctx.translator.read();
+    let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
+    let entered = quick
+        .fields
+        .iter()
+        .any(|quick| quick.field.values.a.is_some() || quick.field.values.b.is_some());
+    let outcome = match quick.result {
+        _ if !entered => None,
+        Some(MatchResult::AWins) => Some(t!(tr, "wins", team = a.as_str())),
+        Some(MatchResult::BWins) => Some(t!(tr, "wins", team = b.as_str())),
+        Some(MatchResult::Draw) => Some(tr.get("draw")),
+        None => Some(tr.get("result-open")),
+    };
+    let match_format = quick.match_format;
+    let form_id = format!("quick-result-{}", row.number);
+    rsx! {
+        // the dialog is a form of its own, so beside this form rather than in it
+        div { class: "quick-result",
+            form {
+                id: "{form_id}",
+                class: "quick-values",
+                onsubmit: move |event| {
+                    event.prevent_default();
+                    let Some(entered) = form.read().clone() else {
+                        return;
+                    };
+                    match ctx.try_act(|session| session.report_form(&entered)) {
+                        Ok(reported) => {
+                            ctx.announce(Announcement::Reported(reported));
+                            move_focus(focus, after_report);
+                        }
+                        Err(refused) => error.set(Some(refused)),
+                    }
+                },
+                for (index, quick) in quick.fields.into_iter().enumerate() {
+                    QuickValues {
+                        key: "{index}",
+                        form,
+                        quick,
+                        match_format,
+                        number: row.number,
+                        disabled,
+                        a: a.clone(),
+                        b: b.clone(),
+                        on_mounted: (index == 0).then_some(on_mounted),
+                        on_input: move |()| error.set(None),
+                    }
+                }
+            }
+            div { class: "quick-buttons",
+                button {
+                    class: "primary small",
+                    r#type: "submit",
+                    form: "{form_id}",
+                    disabled,
+                    aria_label: t!(tr, "report-match", number = row.number),
+                    {tr.get("report")}
+                }
+                EnterResult {
+                    row: row.clone(),
+                    focus,
+                    after_report,
+                    from: form,
+                }
+            }
+            // read out as it changes with the values
+            output { class: "quick-outcome", {outcome} }
+            for warning in &quick.warnings {
+                p { class: "warnings", role: "status", {tr.sentence(warning)} }
+            }
+            p { class: "error", role: "alert",
+                if let Some(error) = error() {
+                    {tr.sentence(&error)}
+                }
+            }
+        }
+    }
+}
+
+/// The values of `quick`, a field of `form`, one for each side, of the match `number` between `a`
+/// and `b`; the first value of a match is mounted with `on_mounted`.
+#[component]
+fn QuickValues(
+    form: Signal<Option<ResultForm>>,
+    quick: QuickField,
+    match_format: &'static str,
+    number: usize,
+    disabled: bool,
+    a: String,
+    b: String,
+    on_mounted: Option<EventHandler<MountedEvent>>,
+    on_input: EventHandler<()>,
+) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let field = quick.field;
+    let label = capitalized(&tr.plugin_phrase(
+        match_format,
+        PluginText::EnteredValue(field.label.key()),
+        &field.label,
+    ));
+    let part = quick.part.as_ref().map(|(name, number)| {
+        let name =
+            capitalized(&tr.plugin_phrase(match_format, PluginText::Level(name.key()), name));
+        t!(tr, "part-numbered", name = name.as_str(), number = *number)
+    });
+    let kind = field.kind;
+    let input = |team: Team, name: &str, value: Option<EnteredValue>| {
+        let (path, key) = (quick.path.clone(), field.key.clone());
+        let value_of = label.as_str();
+        let aria_label = match &part {
+            Some(part) => t!(
+                tr,
+                "quick-value-of-in",
+                value = value_of,
+                team = name,
+                part = part.as_str(),
+                number = number
+            ),
+            None => t!(
+                tr,
+                "quick-value-of",
+                value = value_of,
+                team = name,
+                number = number
+            ),
+        };
+        rsx! {
+            input {
+                r#type: "number",
+                min: "0",
+                inputmode: if kind == ValueKind::Count { "numeric" } else { "decimal" },
+                step: if kind == ValueKind::Count { "1" } else { "any" },
+                disabled,
+                aria_label,
+                value: shown(value),
+                onmounted: move |event| {
+                    if team == Team::A
+                        && let Some(on_mounted) = on_mounted
+                    {
+                        on_mounted.call(event);
+                    }
+                },
+                oninput: move |event: FormEvent| {
+                    let value = entered(&event.value(), kind);
+                    if let Some(form) = form.write().as_mut() {
+                        form.set_value(&path, &key, team, value);
+                    }
+                    on_input.call(());
+                },
+            }
+        }
+    };
+    rsx! {
+        span { class: "quick-value",
+            // the inputs say which part, for screen readers
+            if let Some((_, number)) = quick.part {
+                span { class: "quick-part", aria_hidden: "true", "{number}" }
+            }
+            {input(Team::A, &a, field.values.a)}
+            span { aria_hidden: "true", "–" }
+            {input(Team::B, &b, field.values.b)}
+        }
+    }
+}
+
+/// The button entering the result of the match `row` in a dialog, and the dialog; once reported,
+/// the focus moves to `after_report`. Beside the values of a [`QuickResult`], it opens with them,
+/// `from`, and only offers more, not taking the focus once a result is reported.
+#[component]
+pub fn EnterResult(
+    row: MatchRow,
+    focus: Signal<Option<Focus>>,
+    after_report: Focus,
+    from: Option<Signal<Option<ResultForm>>>,
+) -> Element {
     let ctx = use_context::<Ctx>();
     // the form while the dialog is open
     let mut entering = use_signal(|| None::<Signal<ResultForm>>);
@@ -37,22 +270,40 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
     // only reported by the tab that changes the competition
     let disabled = !ctx.changes();
-    let on_mounted = crate::play::use_focus(focus, Focus::Report(id));
+    let mut on_mounted = crate::play::use_focus(focus, Focus::Report(id));
+    let more = from.is_some();
+    let (label, aria_label) = if more {
+        (
+            "result-details",
+            t!(tr, "result-details-of", number = row.number),
+        )
+    } else {
+        ("open-result", t!(tr, "open-result-of", number = row.number))
+    };
     rsx! {
         button {
-            class: "enter-result",
+            class: if more { "details quiet small" } else { "enter-result" },
+            r#type: "button",
             disabled,
-            aria_label: t!(tr, "open-result-of", number = row.number),
-            onmounted: on_mounted,
+            aria_label,
+            onmounted: move |event| {
+                if !more {
+                    on_mounted(event);
+                }
+            },
             onclick: move |_| {
-                if let Ok(form) = ctx.session.peek().result_form(id) {
+                let form = match from {
+                    Some(from) => from.peek().clone().ok_or(()),
+                    None => ctx.session.peek().result_form(id).map_err(drop),
+                };
+                if let Ok(form) = form {
                     error.set(None);
                     overriding.set(false);
                     entering.set(Some(Signal::new(form)));
                     focus_later(&["#result-form input", "#result-form select"]);
                 }
             },
-            {tr.get("open-result")}
+            {tr.get(label)}
         }
         Dialog {
             open: Some(entering.read().is_some()),
@@ -113,7 +364,9 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
                             }
                         }
                         button { class: "primary", r#type: "submit", {tr.get("report")} }
-                        button { r#type: "button", onclick: move |_| entering.set(None),
+                        button {
+                            r#type: "button",
+                            onclick: move |_| entering.set(None),
                             {tr.get("cancel")}
                         }
                     }
@@ -213,11 +466,6 @@ fn ResultField(
         &field.label,
     ));
     let kind = field.kind;
-    let shown = |value: Option<EnteredValue>| match value {
-        Some(EnteredValue::Count(count)) => count.to_string(),
-        Some(EnteredValue::Decimal(decimal)) => decimal.get().to_string(),
-        None => String::new(),
-    };
     let input = |team: Team, name: &str, value: Option<EnteredValue>| {
         let (path, key) = (path.clone(), field.key.clone());
         rsx! {
@@ -229,11 +477,8 @@ fn ResultField(
                 aria_label: match &within {
                     Some(part) => {
                         t!(
-                            tr,
-                            "value-of-in",
-                            value = label.as_str(),
-                            team = name,
-                            part = part.as_str()
+                            tr, "value-of-in", value = label.as_str(), team = name, part = part
+                            .as_str()
                         )
                     }
                     None => t!(tr, "value-of", value = label.as_str(), team = name),
@@ -259,6 +504,15 @@ fn ResultField(
                 p { class: "warnings", role: "status", {tr.sentence(warning)} }
             }
         }
+    }
+}
+
+/// What `value` is entered as into a field.
+fn shown(value: Option<EnteredValue>) -> String {
+    match value {
+        Some(EnteredValue::Count(count)) => count.to_string(),
+        Some(EnteredValue::Decimal(decimal)) => decimal.get().to_string(),
+        None => String::new(),
     }
 }
 
@@ -345,7 +599,9 @@ fn ResultChoice(
                 },
                 option { value: "", selected: chosen.is_none(), {suggested} }
                 for result in [MatchResult::AWins, MatchResult::Draw, MatchResult::BWins] {
-                    option { value: value(Some(result)), selected: chosen == Some(result),
+                    option {
+                        value: value(Some(result)),
+                        selected: chosen == Some(result),
                         {said(result)}
                     }
                 }

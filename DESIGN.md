@@ -559,6 +559,16 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   timeline of goals, assists or a chess game's moves is no ranking's business
   and stays outside, keyed by match id, or in annotations.
 
+- **A result in one row where it fits** (`ResultForm::quick_entry`): read from
+  the shape of the template, not from a list of match formats or a flag one
+  declares: a match with one field and no parts (a score), or with no field of
+  its own and parts of one level with one field each (the games of a best of).
+  The GUI enters it below the pairing, its parts side by side and wrapping on a
+  phone rather than dropped there; the dialog is a button away (*Details*,
+  starting from what the row holds) for overriding, reasons and what a row
+  cannot hold, such as a fixture's rubbers. The row never chooses a result: it
+  reports what the values suggest, or says that they decide nothing.
+
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the match formats of their rubbers, live reporting (an `UpdatePlay` on open
 matches carrying the whole play, a plain assignment no format or metric reacts

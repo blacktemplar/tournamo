@@ -179,6 +179,11 @@ impl ResultForm {
         self.match_id
     }
 
+    /// What the result of the match looks like, which changes with the match format of its phase.
+    pub fn template(&self) -> &Template {
+        &self.template
+    }
+
     /// Enters `value` for `team` into the field `field` of the part at `path`, or clears it.
     ///
     /// # Panics

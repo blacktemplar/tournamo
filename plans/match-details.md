@@ -37,14 +37,15 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [x] 9. Views show the play: `MatchRow::scores` (the match's score, else its
   parts'), in rounds, bracket and cross table; `Translator::scores` writes them.
   `MatchRules::show` waits for a sport writing scores its own way (tennis)
-- [ ] 10. (optional) `report_entered` reads scores
+- [ ] 10. (optional, left open) `report_entered` reads scores
 
 ### D. Frontends
 - [x] 11. GUI: result dialog from `ResultForm`, scores shown; e2e tests
 - [x] 12. CLI and web: reporting with scores (`report 3 21-17 19-21 [a|b|draw]`)
 
 ### E. Release
-- [ ] CHANGELOG entries; golden saves of scored and best-of competitions
+- [x] CHANGELOG entries; golden-save scripts `scored` and `best-of` (their
+  saves are written at the release, `every_script_plays` keeps them playing)
 
 ## Later (separate issues)
 - Rosters and players; `lineup` on `Part`

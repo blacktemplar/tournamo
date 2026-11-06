@@ -491,7 +491,7 @@ unreached byes only in the standings (metrics stay wrong).
 
 ## Match details
 
-*Planned* (issue #5, `plans/match-details.md`). A result is more than who won:
+A result is more than who won:
 a score (21–17), games of a best of three, rubbers of a league fixture each with
 games of points, legs of a relay whose score carries over. Some rankings read
 these details (goal difference, sets won, fair-play cards), and a UI must show
@@ -510,7 +510,7 @@ pub struct Part {                      // a match, or a game, set, rubber, leg o
     annotations: TypeMap,
 }
 pub struct Decision { result: MatchResult, reason: Option<ResultReason> }
-pub enum Value { Count(u32), Decimal(Score), Duration(Millis) }
+pub enum Value { Count(u32), Decimal(Score) }  // durations when a sport needs them
 ```
 
 - **A match is a part**: `Match::contest`, holding the match's annotations too.
@@ -530,14 +530,18 @@ pub enum Value { Count(u32), Decimal(Score), Duration(Millis) }
   cannot use: a draw where the format allows none, a field, reason or kind of
   value the template does not declare.
 - **The rules plugin** gives per match a `Template` (levels with their names,
-  their parts, fields with kind, range, better direction and `Hints` like a
-  target score, reasons), `suggest`s a decision from a part's values for the
-  app filling in a result, says how a score reads (`show`: "40–30", "3&2"),
-  and derives **tallies** when a match is decided: typed `TypeMapValue`s
-  (`Points`, `Games`, …) stored on the match, which metrics read with one
-  lookup. Tallies are facts in the compatibility check: a calculator requiring
-  `Points` needs rules providing it. The template sees the match, so it may
-  depend on the stage or on annotations.
+  their parts, fields with kind and `Hints` like the usual top score, reasons),
+  `suggest`s a result from a part's values for a consumer filling one in (the
+  app's `ResultForm`), and derives **tallies** when a match is decided: typed
+  `TypeMapValue`s (`PointsScored`, `GamesWon`, …) stored on the match, which
+  metrics read with one lookup (`PointsBalanceCalculator`). A tally is a fact
+  in the compatibility check (`MatchTally<T>`): a calculator requiring
+  `PointsScored` needs rules providing it. The template sees the match, so it
+  may depend on the stage or on annotations. Rules: `WinnerOnly`, `Scored`,
+  `BestOf`.
+- **Scores are shown generically**: a match's own score, else those of its
+  parts in order (`MatchRow::scores`). A `MatchRules::show` for a sport writing
+  its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a sport.
 - **Hints are not rules**: the app turns them into warnings ("23–19 in a game
   to 21?"), never refusals.
 - **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
@@ -547,7 +551,7 @@ pub enum Value { Count(u32), Decimal(Score), Duration(Millis) }
   timeline of goals, assists or a chess game's moves is no ranking's business
   and stays outside, keyed by match id, or in annotations.
 
-*Later:* lineups on parts (with rosters of players), league fixtures nesting
+*Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the rules of their rubbers, live reporting (an `UpdatePlay` on open matches
 carrying the whole play, a plain assignment no format or metric reacts to).
 

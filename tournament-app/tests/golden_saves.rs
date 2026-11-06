@@ -21,13 +21,17 @@ use plugin_factory::{
 };
 use serde_json::Value;
 use tournament_app::{
+    result_form::ResultForm,
     session::Session,
     storage::{MemoryStorage, Storage as _},
 };
 use tournament_engine::{
-    Competition, MatchResult,
+    Competition, FieldKey, MatchResult, Team, Value as Entered,
     plugins::{
-        metrics_calculator::MoreWins,
+        match_rules::{BestOf, Scored},
+        metrics_calculator::{
+            HigherPointsDifference, MorePointsScored, MoreWins, PointsBalanceCalculator,
+        },
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
@@ -164,6 +168,14 @@ fn every_golden_save_is_listed() {
     assert_eq!(written, listed);
 }
 
+/// The scripts play until a release writes its saves, so a change that breaks one shows now.
+#[test]
+fn every_script_plays() {
+    for &(name, script) in SCRIPTS {
+        script(&mut Session::new(name));
+    }
+}
+
 /// Writes the golden saves of this version, see the module docs.
 #[test]
 #[ignore = "writes the golden saves of this version, once before its release"]
@@ -200,6 +212,8 @@ const SCRIPTS: &[(&str, Script)] = &[
     ("single-elimination", single_elimination),
     ("double-elimination", double_elimination),
     ("monster-dyp", monster_dyp),
+    ("scored", scored),
+    ("best-of", best_of),
 ];
 
 /// Entrants renamed and removed, a phase added, undone, added again and edited, not started.
@@ -302,6 +316,95 @@ fn monster_dyp(session: &mut Session) {
     add_phase(session, MonsterDyp::ID);
     session.start().unwrap();
     play(session, &[MatchResult::AWins, MatchResult::BWins], 5);
+}
+
+/// Scores entered, ranked by the points difference, one result chosen against its score, played to
+/// the end.
+fn scored(session: &mut Session) {
+    enter(session, &["Alice", "Bob", "Carol", "Dave"]);
+    let mut draft = session.phase_draft(RoundRobin::ID).unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("ranking"),
+            vec![
+                PluginConfig::of::<HigherPointsDifference>(),
+                PluginConfig::of::<MorePointsScored>(),
+            ],
+        )
+        .unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("metrics"),
+            vec![PluginConfig::of::<PointsBalanceCalculator>()],
+        )
+        .unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("results"),
+            PluginConfig::of::<Scored>().with("usual_top_score", 10),
+        )
+        .unwrap();
+    session.add_phase(&draft).unwrap();
+    session.start().unwrap();
+    play_scores(session, &[&[(10, 7)], &[(3, 10)], &[(10, 10)]], 4);
+    let open = session.playable()[0].id;
+    let mut form = session.result_form(open).unwrap();
+    enter_scores(&mut form, &[(2, 10)]);
+    form.choose(&[], Some(MatchResult::AWins));
+    session.report_form(&form).unwrap();
+    play_scores(session, &[&[(12, 10)]], usize::MAX);
+}
+
+/// The games of a best of three entered, some matches in two games, a result reopened and entered
+/// anew, played to the end.
+fn best_of(session: &mut Session) {
+    enter(session, &["A", "B", "C", "D", "E", "F", "G", "H"]);
+    let mut draft = session.phase_draft(SingleElimination::ID).unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("results"),
+            PluginConfig::of::<BestOf>().with("games", 3),
+        )
+        .unwrap();
+    session.add_phase(&draft.with_defaults().unwrap()).unwrap();
+    session.start().unwrap();
+    play_scores(
+        session,
+        &[&[(21, 17), (21, 9)], &[(15, 21), (21, 19), (18, 21)]],
+        2,
+    );
+    let first = session.round(round(1)).unwrap().matches[0].id;
+    session.undo_report(first).unwrap();
+    play_scores(session, &[&[(21, 23), (21, 15), (21, 19)]], 1);
+    play_scores(session, &[&[(21, 11), (30, 29)]], usize::MAX);
+}
+
+/// Reports up to `matches` of the playable matches, one at a time, with the scores of `played` in
+/// turn, each the scores of a match or of its games.
+fn play_scores(session: &mut Session, played: &[&[(u32, u32)]], matches: usize) {
+    for scores in played.iter().cycle().take(matches) {
+        let Some(row) = session.playable().into_iter().next() else {
+            return;
+        };
+        let mut form = session.result_form(row.id).unwrap();
+        enter_scores(&mut form, scores);
+        session.report_form(&form).unwrap();
+    }
+}
+
+/// Enters `scores` into `form`: the match's, if it has a field, or else those of its games.
+fn enter_scores(form: &mut ResultForm, scores: &[(u32, u32)]) {
+    let root = form.view().root;
+    let places: Vec<_> = if root.fields.is_empty() {
+        root.parts.iter().map(|part| part.path.clone()).collect()
+    } else {
+        vec![Vec::new()]
+    };
+    let score = FieldKey::new("score");
+    for (path, (a, b)) in places.iter().zip(scores) {
+        form.set_value(path, &score, Team::A, Some(Entered::Count(*a)));
+        form.set_value(path, &score, Team::B, Some(Entered::Count(*b)));
+    }
 }
 
 /// Enters entrants named `names`, returning their ids.

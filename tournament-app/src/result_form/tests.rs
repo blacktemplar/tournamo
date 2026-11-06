@@ -539,3 +539,75 @@ fn a_result_reported_against_the_score_shows_as_chosen() {
     assert!(root.chosen);
     assert_eq!(root.warnings, [Text::new("warning-result-disagrees")]);
 }
+
+/// What `complete_score` does after entering `entered` for the first side of the score of a match
+/// to 21, with `other` already entered for the second: whether it completed it, and the score.
+fn completed(entered: u32, other: Option<EnteredValue>) -> (bool, Sides<Option<EnteredValue>>) {
+    let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
+    let mut form = session.result_form(id).unwrap();
+    form.set_value(&[], &SCORE, Team::B, other);
+    form.set_value(&[], &SCORE, Team::A, count(entered));
+
+    let completed = form.complete_score(&[], &SCORE, Team::A);
+
+    (completed, form.view().root.fields[0].values)
+}
+
+#[test]
+fn a_score_two_or_more_below_the_winning_score_completes_the_other_side_as_winning() {
+    for entered in [0, 15, 19] {
+        assert_eq!(
+            completed(entered, None),
+            (true, Sides::new(count(entered), count(21))),
+            "{entered}"
+        );
+    }
+}
+
+#[test]
+fn a_score_from_one_below_the_winning_score_on_completes_nothing() {
+    for entered in [20, 21, 25] {
+        assert_eq!(
+            completed(entered, None),
+            (false, Sides::new(count(entered), None)),
+            "{entered}"
+        );
+    }
+}
+
+#[test]
+fn a_score_entered_on_both_sides_is_not_completed() {
+    assert_eq!(
+        completed(15, count(17)),
+        (false, Sides::new(count(15), count(17)))
+    );
+}
+
+#[test]
+fn a_score_without_a_winning_score_is_not_completed() {
+    let (session, id) = started(PluginConfig::of::<Scored>());
+    let mut form = session.result_form(id).unwrap();
+    form.set_value(&[], &SCORE, Team::B, count(3));
+
+    assert!(!form.complete_score(&[], &SCORE, Team::B));
+    assert_eq!(
+        form.view().root.fields[0].values,
+        Sides::new(None, count(3))
+    );
+}
+
+#[test]
+fn the_score_of_a_game_is_completed_in_its_game() {
+    let (session, id) = started(
+        PluginConfig::of::<BestOf>()
+            .with("games", 3)
+            .with("winning_score", 11),
+    );
+    let mut form = session.result_form(id).unwrap();
+    form.set_value(&[1], &SCORE, Team::B, count(4));
+
+    assert!(form.complete_score(&[1], &SCORE, Team::B));
+    let games = form.view().root.parts;
+    assert_eq!(games[0].fields[0].values, Sides::new(None, None));
+    assert_eq!(games[1].fields[0].values, Sides::new(count(11), count(4)));
+}

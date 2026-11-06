@@ -560,6 +560,14 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   varying it game by game (a fifth game won by two where the others end at
   5–4). A draw needs no check of its own: with a winning score every drawn
   score is warned of, and without one (football) draws are usual.
+- **A score far below the winning score completes the other side**
+  (`ResultForm::complete_score`): with at most two below it (19 in a game to
+  21), the winner can only have the winning score itself, as more would lead by
+  three or more. From one below on it cannot be told (20: 21–20 or 22–20; 21 or
+  more: either side may have won), so nothing is filled in. The GUI completes
+  a value once it is left, not while it is typed (the 1 of 15 would complete
+  it too early), only when the other side is empty, and selects what it filled
+  in when Tab moves there, so that typing replaces it.
 - **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
   template and checked on report, as a config's field names are: a generic UI
   needs keys it can list. What the engine reads, the tallies, stays typed.

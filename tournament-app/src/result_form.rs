@@ -12,6 +12,9 @@
 //! A match whose result takes no more than a row, e.g. a score or the score of each game, may be
 //! entered beside it instead ([`ResultForm::quick_entry`]), into the same form.
 //!
+//! A score at least two below the one its winner usually has completes the other side's, once a
+//! screen asks ([`ResultForm::complete_score`]).
+//!
 //! A finished match is shown as it was reported by the view of a form of it
 //! ([`Session::reported_result`](crate::session::Session::reported_result)).
 //!
@@ -260,6 +263,51 @@ impl ResultForm {
         if sides.a.is_none() && sides.b.is_none() {
             entry.values.remove(index);
         }
+    }
+
+    /// Completes the score of a part won as usual: if `team` has a count in the field `field` of
+    /// the part at `path` at least two below the score its winner usually has
+    /// ([`Hints::winning_score`](tournament_engine::plugins::match_format::Hints::winning_score)),
+    /// and the other side has none, the other side is entered as winning with that score, the only
+    /// one it can win with by the usual lead, e.g. 21 for 19 or less in a game to 21. Returns
+    /// whether it entered it.
+    ///
+    /// # Panics
+    /// Panics if `path` is no path of a part of the [view](Self::view).
+    pub fn complete_score(&mut self, path: &[usize], field: &FieldKey, team: Team) -> bool {
+        let level = path.iter().fold(&self.template.root, |level, &index| {
+            level
+                .level_of_part(index)
+                .expect("a path of a part of the view")
+        });
+        let Some(winning) = level
+            .fields
+            .iter()
+            .find(|spec| spec.key == *field)
+            .and_then(|spec| spec.hints.winning_score)
+        else {
+            return false;
+        };
+        let values = self
+            .root
+            .at(path)
+            .values
+            .iter()
+            .find(|(key, _)| key == field)
+            .map_or(Sides::new(None, None), |(_, values)| *values);
+        let (entered, other) = (*values.of(team), *values.of(team.opponent()));
+        // from one below the winning score on, the other side may win by more or lose
+        let completes = matches!(entered, Some(EnteredValue::Count(count)) if count + 2 <= winning);
+        if !completes || other.is_some() {
+            return false;
+        }
+        self.set_value(
+            path,
+            field,
+            team.opponent(),
+            Some(EnteredValue::Count(winning)),
+        );
+        true
     }
 
     /// Enters `scores` as [`MatchRow::scores`](crate::view::MatchRow::scores) shows them: the one

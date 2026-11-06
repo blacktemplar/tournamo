@@ -8,9 +8,9 @@
 //! hands what the operator does back to the form, by the path of the part it was done to; once
 //! done, it hands the form to [`Session::report_form`](crate::session::Session::report_form).
 //!
-//! Nothing entered is refused for breaking the rules of a sport: the form only warns of a value
-//! beyond what the match format calls usual, and of a result chosen against the one the values
-//! suggest.
+//! Nothing entered is refused for breaking the rules of a sport: the form only warns of a score
+//! unlike those the match format hints a winner usually has, and of a result chosen against the one
+//! the values suggest.
 
 use tournament_engine::{
     Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Sides, Team,
@@ -263,24 +263,21 @@ impl ResultForm {
     }
 }
 
-/// The view of `field`, with its values among `values`.
+/// The view of `field`, with its values among `values`, warning of a score unlike one the winner
+/// of the part usually has.
 fn field_view(field: &FieldSpec, values: &Values) -> FieldView {
     let values = values
         .iter()
         .find(|(key, _)| *key == field.key)
         .map_or(Sides::new(None, None), |(_, values)| *values);
-    let warnings = [values.a, values.b]
-        .into_iter()
-        .flatten()
-        .filter_map(|value| {
-            let max = field.hints.max?;
-            above(value, max).then(|| {
-                Text::new("warning-above-usual-top")
-                    .with("value", number(value))
-                    .with("top", number(max))
-            })
-        })
-        .collect();
+    let warnings = match (field.hints.winning_score, values.a, values.b) {
+        (Some(winning), Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b))) => {
+            winning_score_warning(winning, a.max(b), a.min(b))
+                .into_iter()
+                .collect()
+        }
+        _ => Vec::new(),
+    };
     FieldView {
         key: field.key.clone(),
         label: field.label.clone(),
@@ -290,20 +287,16 @@ fn field_view(field: &FieldSpec, values: &Values) -> FieldView {
     }
 }
 
-/// Whether `value` is above `max`, both of the same kind.
-fn above(value: EnteredValue, max: EnteredValue) -> bool {
-    match (value, max) {
-        (EnteredValue::Count(value), EnteredValue::Count(max)) => value > max,
-        (EnteredValue::Decimal(value), EnteredValue::Decimal(max)) => value > max,
-        _ => false,
-    }
-}
-
-/// `value` as a number of a message.
-fn number(value: EnteredValue) -> f64 {
-    match value {
-        EnteredValue::Count(count) => count.into(),
-        EnteredValue::Decimal(decimal) => decimal.get(),
+/// The warning of a score of `high` to `low` in a part usually won with `winning`, or more than
+/// it, then by one or two, if it is no such score.
+fn winning_score_warning(winning: u32, high: u32, low: u32) -> Option<Text> {
+    let lead = high - low;
+    if high < winning {
+        Some(Text::new("warning-below-winning-score").with("winning", winning))
+    } else if (high > winning && !(1..=2).contains(&lead)) || lead == 0 {
+        Some(Text::new("warning-winning-lead").with("winning", winning))
+    } else {
+        None
     }
 }
 

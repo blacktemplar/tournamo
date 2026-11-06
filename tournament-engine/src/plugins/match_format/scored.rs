@@ -31,20 +31,22 @@ pub(crate) const SCORE: FieldKey = FieldKey::new("score");
 pub struct Scored {
     #[serde(default)]
     #[plugin(
-        label = "usual top score",
-        description = "a higher score is pointed out, as it may be a typo",
+        label = "winning score",
+        description = "what a winner usually has, or more, then winning by one or two; any other \
+                       score is pointed out, as it may be a typo",
+        min = 1,
         default = None
     )]
-    usual_top_score: Option<u32>,
+    winning_score: Option<u32>,
 }
 
 impl Scored {
-    /// A match format pointing out a score higher than `usual_top_score`, if any.
+    /// A match format pointing out a score other than one of `winning_score`, if any.
     ///
     /// Requires the `test-util` feature.
     #[cfg(feature = "test-util")]
-    pub const fn new(usual_top_score: Option<u32>) -> Self {
-        Self { usual_top_score }
+    pub const fn new(winning_score: Option<u32>) -> Self {
+        Self { winning_score }
     }
 
     fn declare_static(declaration: &mut Declaration) {
@@ -83,15 +85,13 @@ pub(crate) fn suggest_by_score(part: &Part) -> Option<MatchResult> {
     }
 }
 
-/// The field of a score, pointing out one higher than `usual_top_score`.
-pub(crate) fn score_field(usual_top_score: Option<u32>) -> FieldSpec {
+/// The field of a score, pointing out one other than one of `winning_score`.
+pub(crate) fn score_field(winning_score: Option<u32>) -> FieldSpec {
     FieldSpec {
         key: SCORE,
         label: Phrase::new("score", "score"),
         kind: ValueKind::Count,
-        hints: Hints {
-            max: usual_top_score.map(EnteredValue::Count),
-        },
+        hints: Hints { winning_score },
     }
 }
 
@@ -100,7 +100,7 @@ impl MatchFormat for Scored {
     fn template(&self, _: &PhaseData, _: &Match) -> Template {
         Template {
             root: Level {
-                fields: vec![score_field(self.usual_top_score)],
+                fields: vec![score_field(self.winning_score)],
                 ..Level::new(Phrase::new("match", "match"))
             },
         }
@@ -194,15 +194,15 @@ mod tests {
     }
 
     #[test]
-    fn a_score_above_the_usual_top_score_is_hinted_at() {
+    fn the_winning_score_is_hinted_at() {
         let phase = phase(Scored::new(Some(21)));
         let r#match = phase.data().matches().values().next().unwrap();
 
         let template = phase.match_format().template(phase.data(), r#match);
 
         assert_eq!(
-            template.root.field(&SCORE).unwrap().hints.max,
-            Some(EnteredValue::Count(21))
+            template.root.field(&SCORE).unwrap().hints.winning_score,
+            Some(21)
         );
     }
 

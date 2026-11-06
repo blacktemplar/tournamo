@@ -72,7 +72,9 @@ number-range = { $whole ->
 # what an answer leads to that the operator may not want, although the phase can be played so
 warning-unranked = ranked by nothing, every entrant is tied in the standings
 # what looks like a typo in a result entered, though it is taken
-warning-above-usual-top = { $value } is more than the usual { $top }
+# $winning: the score a winner usually has
+warning-below-winning-score = neither side has { $winning }, which a winner usually has
+warning-winning-lead = at { $winning } or more, a winner usually leads by one or two
 warning-result-disagrees = this is not the result the score suggests
 # what is wrong with the answer of a field, or with a plugin chosen
 issue-unanswered = this needs an answer

@@ -530,7 +530,7 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   cannot use: a draw where the format allows none, a field, reason or kind of
   value the template does not declare.
 - **The match format** gives per match a `Template` (levels with their names,
-  their parts, fields with kind and `Hints` like the usual top score, reasons),
+  their parts, fields with kind and `Hints` like the winning score, reasons),
   `suggest`s a result from a part's values for a consumer filling one in (the
   app's `ResultForm`), and derives **tallies** when a match is decided: typed
   `TypeMapValue`s (`PointsScored`, `GamesWon`, …) stored on the match, which
@@ -544,6 +544,14 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a sport.
 - **Hints are not rules**: the app turns them into warnings ("23–19 in a game
   to 21?"), never refusals.
+- **The winning score is what a winner has, not a maximum**: in a game to 21
+  the winner has 21, or more when winning by one or two (22–20, 30–29). Both
+  sides below it, or a lead other than one or two from it on, is warned of.
+  Whether a game needs a lead of two, and where it is capped, is not
+  configured: the warning takes either, which covers sports and tournaments
+  varying it game by game (a fifth game won by two where the others end at
+  5–4). A draw needs no check of its own: with a winning score every drawn
+  score is warned of, and without one (football) draws are usual.
 - **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
   template and checked on report, as a config's field names are: a generic UI
   needs keys it can list. What the engine reads, the tallies, stays typed.

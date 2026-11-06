@@ -19,7 +19,8 @@ a file whose `"format"` changes is migrated, not refused.
   ranking by the difference or by the points scored.
 - In the browser, a match whose results hold more than who won is entered in a
   dialog: the score of each side, and of each game of a best of. What looks
-  like a typo is pointed out but taken. Finished matches show their scores, in
+  like a typo is pointed out but taken, such as a score unlike one with the
+  winning score of the match format (21–17, 22–20 or 30–29 in a game to 21). Finished matches show their scores, in
   the list of matches and in the bracket.
 - The command line reports scores, e.g. `report 3 21-17 19-21 21-15`, and
   lists them with each finished match.

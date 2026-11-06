@@ -184,11 +184,12 @@ impl ValueKind {
     }
 }
 
-/// What a value of a field is likely to be: a consumer warns of a value beyond, never refuses it.
+/// What the values of a field are likely to be: a consumer warns of others, never refuses them.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Hints {
-    /// The most a side usually has.
-    pub max: Option<EnteredValue>,
+    /// The count the winner of a part usually has, or more than it, then leading by one or two:
+    /// e.g. 21–17, 22–20 or 30–29 in a game to 21.
+    pub winning_score: Option<u32>,
 }
 
 /// A reason a part may be decided for other than in the usual way.

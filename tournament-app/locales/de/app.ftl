@@ -60,7 +60,8 @@ number-range = { $whole ->
        *[other] , die ein Vielfaches von { $multiple } ist
     }
 warning-unranked = ohne Kriterium sind in der Tabelle alle Teilnehmer gleichauf
-warning-above-usual-top = { $value } ist mehr als die üblichen { $top }
+warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger üblicherweise hat
+warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt
 issue-unanswered = das braucht eine Antwort
 issue-out-of-range = das muss { number-range } sein

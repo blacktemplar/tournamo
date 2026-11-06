@@ -94,22 +94,54 @@ fn a_result_chosen_against_the_score_is_taken_with_a_warning() {
     );
 }
 
+/// The warnings of the score `a` to `b` in a match to 21.
+fn warnings_of(a: u32, b: u32) -> Vec<Text> {
+    let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[], a, b);
+    form.view().root.fields[0].warnings.clone()
+}
+
 #[test]
-fn a_score_above_the_usual_top_is_taken_with_a_warning() {
-    let format = PluginConfig::of::<Scored>().with("usual_top_score", 21);
-    let (session, id) = started(format);
+fn a_score_a_winner_usually_has_is_taken_without_a_warning() {
+    for (a, b) in [(21, 0), (19, 21), (22, 20), (30, 29)] {
+        assert_eq!(warnings_of(a, b), [], "{a}–{b}");
+    }
+}
+
+#[test]
+fn a_score_where_neither_side_has_the_winning_score_is_taken_with_a_warning() {
+    let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
     let mut form = session.result_form(id).unwrap();
 
-    score(&mut form, &[], 23, 21);
+    score(&mut form, &[], 12, 19);
 
-    let field = &form.view().root.fields[0];
     assert_eq!(
-        field.warnings,
-        [Text::new("warning-above-usual-top")
-            .with("value", 23.0)
-            .with("top", 21.0)]
+        form.view().root.fields[0].warnings,
+        [Text::new("warning-below-winning-score").with("winning", 21_u32)]
     );
-    assert_eq!(form.result(), Some(MatchResult::AWins));
+    assert_eq!(form.result(), Some(MatchResult::BWins));
+}
+
+#[test]
+fn a_score_from_the_winning_score_on_without_a_lead_of_one_or_two_is_taken_with_a_warning() {
+    for (a, b) in [(23, 19), (21, 21), (25, 25), (24, 21)] {
+        assert_eq!(
+            warnings_of(a, b),
+            [Text::new("warning-winning-lead").with("winning", 21_u32)],
+            "{a}–{b}"
+        );
+    }
+}
+
+#[test]
+fn a_score_of_one_side_alone_is_not_warned_of() {
+    let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
+    let mut form = session.result_form(id).unwrap();
+
+    form.set_value(&[], &SCORE, Team::A, count(30));
+
+    assert_eq!(form.view().root.fields[0].warnings, []);
 }
 
 #[test]

@@ -34,11 +34,13 @@ pub struct BestOf {
     games: u32,
     #[serde(default)]
     #[plugin(
-        label = "usual top score of a game",
-        description = "a higher score is pointed out, as it may be a typo",
+        label = "winning score of a game",
+        description = "what the winner of a game usually has, or more, then winning by one or \
+                       two; any other score is pointed out, as it may be a typo",
+        min = 1,
         default = None
     )]
-    usual_top_score: Option<u32>,
+    winning_score: Option<u32>,
 }
 
 impl BestOf {
@@ -49,7 +51,7 @@ impl BestOf {
     pub const fn new(games: u32) -> Self {
         Self {
             games,
-            usual_top_score: None,
+            winning_score: None,
         }
     }
 
@@ -62,7 +64,7 @@ impl BestOf {
     /// The level of a game.
     fn game(&self) -> Level {
         Level {
-            fields: vec![score_field(self.usual_top_score)],
+            fields: vec![score_field(self.winning_score)],
             ..Level::new(Phrase::new("game", "game"))
         }
     }

@@ -23,8 +23,8 @@ plugin-tournament_engine-scored =
     .description = die Punkte oder Tore jeder Seite
     .level-match = Spiel
     .value-score = Punkte
-    .field-usual_top_score = übliche Höchstpunktzahl
-    .field-usual_top_score-description = eine höhere wird angemerkt, da sie ein Tippfehler sein kann
+    .field-winning_score = Gewinnpunktzahl
+    .field-winning_score-description = was ein Sieger üblicherweise hat, oder mehr, dann mit einem oder zwei Punkten Vorsprung; jeder andere Spielstand wird angemerkt, da er ein Tippfehler sein kann
 plugin-tournament_engine-best_of =
     .label = Gewinnsätze
     .description = wer die meisten Sätze gewinnt, gewinnt; jeder Satz nach seinem Spielstand
@@ -32,8 +32,8 @@ plugin-tournament_engine-best_of =
     .level-game = Satz
     .value-score = Punkte
     .field-games = Sätze
-    .field-usual_top_score = übliche Höchstpunktzahl eines Satzes
-    .field-usual_top_score-description = eine höhere wird angemerkt, da sie ein Tippfehler sein kann
+    .field-winning_score = Gewinnpunktzahl eines Satzes
+    .field-winning_score-description = was der Sieger eines Satzes üblicherweise hat, oder mehr, dann mit einem oder zwei Punkten Vorsprung; jeder andere Spielstand wird angemerkt, da er ein Tippfehler sein kann
 
 ## Phase formats
 

@@ -341,7 +341,7 @@ fn scored(session: &mut Session) {
     draft
         .set(
             &ConfigPath::ROOT.field("match_format"),
-            PluginConfig::of::<Scored>().with("usual_top_score", 10),
+            PluginConfig::of::<Scored>().with("winning_score", 10),
         )
         .unwrap();
     session.add_phase(&draft).unwrap();

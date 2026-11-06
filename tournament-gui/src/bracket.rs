@@ -21,6 +21,7 @@ use crate::{
     competition::Ctx,
     i18n::t,
     play::{move_focus, use_focus},
+    result::ResultDetails,
     result_text, scores_text, team_name,
 };
 
@@ -299,6 +300,13 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
                 }
                 if pairing.only_if_needed {
                     span { class: "if-needed", {tr.get("if-needed")} }
+                }
+                if let Some(row) = pairing
+                    .r#match
+                    .clone()
+                    .filter(|row| row.result.is_some() && row.details)
+                {
+                    ResultDetails { row }
                 }
             }
         }

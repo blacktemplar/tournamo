@@ -2246,7 +2246,7 @@ impl Gui {
             .expect_texts_of(By::Css("#result-details tbody td"), alternatives)
             .await?;
         self.page
-            .expect_texts(By::Css("#result-details tbody td.winner"), winners)
+            .expect_texts(By::Css("#result-details tbody td.won"), winners)
             .await?;
         self.page
             .expect_texts_of(

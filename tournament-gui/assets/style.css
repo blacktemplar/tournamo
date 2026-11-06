@@ -1643,12 +1643,42 @@ ul.summary-items {
   grid-row: 1;
 }
 
-/* the buttons showing and reopening a finished match */
+/* the button reopening a finished match, above the one showing its details */
 .finished-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: end;
   gap: var(--space-2);
+}
+
+/* the button showing the details of a finished match: the whole card or pairing, without a look
+ * of its own but a tint on hover, and the focus ring around it */
+.match-details {
+  position: absolute;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+  inset: 0;
+}
+
+/* the tint on the card, as the button lies above what it shows */
+button.match-details:hover {
+  background: none;
+}
+
+.match:has(> .report .match-details:hover),
+.pairing:has(> .match-details:hover) {
+  background: var(--accent-subtle);
+}
+
+/* the pairing it covers */
+.pairing:has(> .match-details) {
+  position: relative;
 }
 
 /* the parts of a finished match in its dialog, e.g. its games, a row each; names wrap rather than
@@ -1662,17 +1692,17 @@ ul.summary-items {
 
 /* the names heading the columns of their values, and who won where it has a column, wrap
  * between words */
-.reported-parts td:not(.number),
+.reported-parts td:not(.value),
 .reported-parts thead th {
   white-space: normal;
 }
 
 /* the values of the winner of a part, marked as the winner of a match is */
-.reported-parts .winner {
+.reported-parts .won {
   font-weight: 600;
 }
 
-.reported-parts .winner::before {
+.reported-parts .won::before {
   color: var(--accent);
   content: "✓ ";
 }
@@ -1684,7 +1714,7 @@ ul.summary-items {
   font-weight: 400;
 }
 
-.reported-parts .number {
+.reported-parts .value {
   font-variant-numeric: tabular-nums;
   text-align: end;
 }

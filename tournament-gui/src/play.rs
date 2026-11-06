@@ -679,10 +679,10 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
         if draws && !shown && !scored {
             span { class: "result-room", aria_hidden: "true", {tr.get("draw")} }
         }
+        if row.details {
+            ResultDetails { row: row.clone() }
+        }
         div { class: "finished-actions",
-            if row.details {
-                ResultDetails { row: row.clone() }
-            }
             button {
                 class: "small",
                 disabled,

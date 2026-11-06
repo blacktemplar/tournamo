@@ -634,7 +634,9 @@ fn with_parts_won(tr: &Translator, said: String, parts_won: Option<Sides<u32>>) 
 
 /// The button showing the result of the finished match `row` as it was reported, and the dialog
 /// showing it, read-only: a row of each of its parts, e.g. its games, with their values and who
-/// won them, then the match's own values and result.
+/// won them, then the match's own values and result. The button has no text: it covers the
+/// nearest positioned element around it, the match's card or pairing, so that a click anywhere on
+/// it opens the dialog, and is named for screen readers.
 #[component]
 pub fn ResultDetails(row: MatchRow) -> Element {
     let ctx = use_context::<Ctx>();
@@ -645,14 +647,13 @@ pub fn ResultDetails(row: MatchRow) -> Element {
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
     rsx! {
         button {
-            class: "details quiet small",
+            class: "match-details",
             r#type: "button",
             aria_label: t!(tr, "result-details-of", number = row.number),
             onclick: move |_| {
                 shown.set(ctx.session.peek().reported_result(id));
                 focus_later(&["#result-details button"]);
             },
-            {tr.get("result-details")}
         }
         Dialog {
             open: Some(shown.read().is_some()),
@@ -798,7 +799,7 @@ fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String
                     tr {
                         th { scope: "col", {level_name(&first.name)} }
                         for header in headers {
-                            th { scope: "col", class: "number", {header} }
+                            th { scope: "col", class: "value", {header} }
                         }
                         if result_column {
                             th { scope: "col", {tr.get("result-column")} }
@@ -817,7 +818,7 @@ fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String
                                 }
                             }
                             for (value, won) in values {
-                                td { class: if won { "number winner" } else { "number" }, {value} }
+                                td { class: if won { "value won" } else { "value" }, {value} }
                             }
                             if result_column {
                                 td { {result} }

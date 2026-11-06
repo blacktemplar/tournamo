@@ -299,7 +299,12 @@ async fn a_knockout_shows_the_score_in_its_bracket() {
         gui.click("Bracket").await?;
 
         gui.expect_bracket_scores_either_way("3–1").await?;
-        gui.page.check_accessibility().await
+        gui.page.check_accessibility().await?;
+        // the pairing shows what was reported for it
+        gui.click_labelled("Details of the result of match 1")
+            .await?;
+        gui.expect_reported_result(&[&[]], &[], "Match: Alice wins")
+            .await
     })
     .await;
 }
@@ -312,6 +317,7 @@ async fn the_details_of_a_finished_match_show_its_games() {
         start(&gui, "Best of games").await?;
         gui.enter_result("ali 21-17 19-21 21-15").await?;
 
+        // the match itself is the button
         gui.click_labelled("Details of the result of match 1")
             .await?;
 

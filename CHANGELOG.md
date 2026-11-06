@@ -35,9 +35,9 @@ a file whose `"format"` changes is migrated, not refused.
   the result of a match being entered does from the first game decided on
   (Not decided yet (1–0), Bob wins (1–3)), always in the order of the sides,
   and a game entered after the match was decided says at which games it was
-  (3–0). A finished match with more than who won has a details button
-  showing what was reported for it: each game with each side's score, the
-  winner's marked, and the result of the match.
+  (3–0). A click on a finished match with more than who won, in the list of
+  matches or in the bracket, shows what was reported for it: each game with
+  each side's score, the winner's marked, and the result of the match.
 - The command line reports scores, e.g. `report 3 21-17 19-21 21-15`, and
   lists them with each finished match, a best of with its games won.
 - In the browser, scores are typed in as well: after the number of the match,

@@ -593,10 +593,12 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
 - **A finished match is shown as reported** (`Session::reported_result`): the
   view of a `ResultForm` rebuilt from the match's contest, a result chosen
   where the values do not suggest it, so that a result reported against them
-  shows with its warning. The GUI shows it read-only in a dialog behind
-  *Details* beside *Reopen*, on every screen alike, rather than in a second
-  row on a phone: a finished match keeps to one row, and a fixture's rubbers
-  would not fit one. Its parts are a table, a row each, the winner's values
+  shows with its warning. The GUI shows it read-only in a dialog opened by a
+  click anywhere on the finished match, in the list or the bracket, but its
+  *Reopen*: a button without text covering the card, named for screen readers
+  ("Details of the result of match 1"), its focus ring around the card. On
+  every screen alike, rather than in a second row on a phone: a finished match
+  keeps to one row, and a fixture's rubbers would not fit one. Its parts are a table, a row each, the winner's values
   marked with ✓ as in the list of matches, rather than a column naming the
   winner, which long names would push off a phone.
 

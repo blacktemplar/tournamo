@@ -1475,6 +1475,65 @@ ul.summary-items {
   justify-self: start;
 }
 
+/* a match whose result is entered in a dialog: one button below the pairing */
+.match .enter-result {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+/* the fields of a result entered in a dialog: a part's values side by side, its parts nested */
+.result-part {
+  display: grid;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: var(--space-2);
+}
+
+.result-part legend {
+  font-weight: 600;
+}
+
+.result-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* the scores of a finished match in the bracket, below its pairing */
+.pairing .scores {
+  color: var(--text-muted);
+  grid-column: 2;
+  font-size: 0.9em;
+}
+
+.result-field input {
+  width: 5rem;
+}
+
+.result-field .result-label {
+  min-width: 4rem;
+}
+
+.result-team {
+  font-weight: 600;
+}
+
+.result-field .warnings,
+.result-choice .warnings {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.result-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* a match with a result on one line, so that the list of a round is mostly those still to play:
  * the pairing, then a draw said and the button reopening it */
 .match.finished {
@@ -1555,6 +1614,11 @@ ul.summary-items {
   .match .draw {
     grid-column: 3;
     grid-row: 3;
+  }
+
+  .match .enter-result {
+    grid-column: 3;
+    grid-row: 1 / span 2;
   }
 
   /* the names on the whole line, which no button takes once the match is played */

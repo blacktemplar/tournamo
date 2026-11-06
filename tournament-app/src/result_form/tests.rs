@@ -174,10 +174,9 @@ fn a_match_shows_its_score_or_else_those_of_its_games() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
     let mut form = session.result_form(id).unwrap();
     score(&mut form, &[], 3, 1);
-    assert_eq!(
-        session.report_form(&form).unwrap().row.scores,
-        [Sides::new(count(3), count(1))]
-    );
+    let row = session.report_form(&form).unwrap().row;
+    assert_eq!(row.scores, [Sides::new(count(3), count(1))]);
+    assert!(row.details);
 
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
     let mut form = session.result_form(id).unwrap();
@@ -201,4 +200,8 @@ fn a_match_with_a_winner_alone_shows_no_score() {
     let reported = session.report(id, MatchResult::AWins).unwrap();
 
     assert!(reported.row.scores.is_empty());
+    assert!(
+        !reported.row.details,
+        "the winner is entered by the row itself"
+    );
 }

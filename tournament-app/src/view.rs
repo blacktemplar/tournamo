@@ -102,6 +102,9 @@ pub struct MatchRow {
     /// order, e.g. the games of a best of; none if it has none. Said in the operator's language by
     /// [`Translator::scores`](crate::i18n::Translator::scores).
     pub scores: Vec<Sides<Option<Value>>>,
+    /// Whether its rules enter more than who won, e.g. a score, which a
+    /// [`ResultForm`](crate::result_form::ResultForm) enters.
+    pub details: bool,
 }
 
 /// What an operator typed to find entrants by their name: it finds those whose name contains it,

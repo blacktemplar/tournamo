@@ -1080,6 +1080,35 @@ impl Gui {
             .await
     }
 
+    /// Waits until the match of the round shown that has a result has the scores `scores`, read
+    /// from either side, e.g. `"21–17 19–21"` or `"17–21 21–19"`: a test must not depend on the
+    /// sides.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the results shown instead.
+    pub async fn expect_scores_either_way(&self, scores: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts_of(
+                By::Css("#match-list .result"),
+                &[&[scores], &[&mirrored(scores)]],
+            )
+            .await
+    }
+
+    /// Waits until the bracket shows the scores `scores` of its one finished match, read from
+    /// either side, as [`Self::expect_scores_either_way`] does in the list of matches.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the scores shown instead.
+    pub async fn expect_bracket_scores_either_way(&self, scores: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts_of(
+                By::Css(".bracket .scores"),
+                &[&[scores], &[&mirrored(scores)]],
+            )
+            .await
+    }
+
     /// Waits until the matches of the list shown that have a result are those numbered `numbers`,
     /// in this order, whoever won them.
     ///
@@ -1955,12 +1984,75 @@ impl Gui {
     }
 
     /// The button whose accessible name, its `aria-label`, is `label`.
+    /// Types `text` into the value of a result in the dialog open labelled `label`, e.g.
+    /// `"Score of Alice"`, in place of what it shows.
+    pub async fn enter_value(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//input[{}='{label}']",
+                without_isolation_marks("@aria-label")
+            )))
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Chooses `option` in the choice labelled `label` of the result in the dialog open, e.g.
+    /// `"Alice wins"` for `"Result: Match"`.
+    pub async fn choose_result(&self, label: &str, option: &str) -> WebDriverResult<()> {
+        let select = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//div[@class='result-choice'][label[{}='{label}']]/select",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        let option = select
+            .find(By::XPath(format!(
+                "option[{}='{option}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .await?;
+        option.click().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the dialog of a result open points out `warnings`, in the order of its fields.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it points out instead.
+    pub async fn expect_result_warnings(&self, warnings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .warnings"), warnings)
+            .await
+    }
+
     fn labelled(&self, label: &str) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
         self.driver.query(By::XPath(format!(
             "//button[{}='{label}']",
             without_isolation_marks("@aria-label")
         )))
     }
+}
+
+/// `scores` read from the other side, e.g. `"17–21 21–19"` of `"21–17 19–21"`.
+fn mirrored(scores: &str) -> String {
+    scores
+        .split(' ')
+        .map(|score| {
+            let (a, b) = score
+                .split_once('–')
+                .expect("a score is two numbers and an en dash");
+            format!("{b}–{a}")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The id of the element of the field at `path` of the form of a phase, as the GUI makes it, e.g.

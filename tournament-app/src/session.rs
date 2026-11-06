@@ -24,7 +24,7 @@ use tournament_engine::{
     RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap,
     Value, Values,
     plugins::{
-        match_rules::Level,
+        match_rules::{Level, Parts},
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
         ranker::SliceRanker,
@@ -1424,8 +1424,15 @@ impl Session {
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
             scores: scores(phase, r#match),
+            details: details(phase, r#match),
         }
     }
+}
+
+/// Whether the rules of `r#match` enter more than who won, see [`MatchRow::details`].
+fn details(phase: &Phase, r#match: &Match) -> bool {
+    let root = phase.match_rules().template(phase.data(), r#match).root;
+    !root.fields.is_empty() || !matches!(root.parts, Parts::None)
 }
 
 /// The scores of `r#match`, as [`MatchRow::scores`] shows them.

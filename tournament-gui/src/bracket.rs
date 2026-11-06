@@ -240,10 +240,17 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
     } else {
         ""
     };
-    // only reported by the tab that changes the competition
+    // only reported by the tab that changes the competition, and only by who won: a result with
+    // more, e.g. a score, is entered in the list of matches
     let to_report = (result.is_none() && ctx.changes())
         .then(|| pairing.r#match.clone())
-        .flatten();
+        .flatten()
+        .filter(|row| !row.details);
+    let scores = pairing
+        .r#match
+        .as_ref()
+        .filter(|row| !row.scores.is_empty())
+        .map(|row| tr.scores(&row.scores));
     let side = |side: usize| {
         let entry = &pairing.sides[side];
         let class = if result == Some([MatchResult::AWins, MatchResult::BWins][side]) {
@@ -287,6 +294,9 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
                 }
                 if let Some(text) = pairing.r#match.as_ref().and_then(|row| result_text(&tr, row)) {
                     span { class: "visually-hidden", ", {text}" }
+                }
+                if let Some(scores) = scores {
+                    span { class: "scores", {scores} }
                 }
                 if pairing.only_if_needed {
                     span { class: "if-needed", {tr.get("if-needed")} }

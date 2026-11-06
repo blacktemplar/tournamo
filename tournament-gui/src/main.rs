@@ -26,6 +26,7 @@ mod install;
 mod notices;
 mod phase;
 mod play;
+mod result;
 mod setup;
 mod theme;
 mod toggletip;

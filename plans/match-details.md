@@ -40,7 +40,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [ ] 10. (optional) `report_entered` reads scores
 
 ### D. Frontends
-- [ ] 11. GUI: result dialog from `ResultForm`, scores shown; e2e tests
+- [x] 11. GUI: result dialog from `ResultForm`, scores shown; e2e tests
 - [ ] 12. CLI and web: reporting with scores
 
 ### E. Release
@@ -81,3 +81,10 @@ Questions and decisions put off while implementing, to bring up at the end.
 - `GamesWon` is tallied, but no metric reads it yet (games won and lost, as
   badminton or volleyball rank by): a calculator like `PointsBalance` when
   wanted.
+- The bracket reports only who won: a match with details (a score) is entered
+  in the list of matches, the bracket shows its scores. Entering it from the
+  bracket would need the dialog to take the bracket's focus.
+- The cross table shows no scores yet: they would have to be read from the
+  side of each row's team.
+- Choosing a score as the results does not suggest the score metrics
+  (`PointsBalance`): suggestions come from the format alone.

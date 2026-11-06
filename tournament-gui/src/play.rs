@@ -22,6 +22,7 @@ use crate::{
     i18n::t,
     icons,
     phase::answer,
+    result::EnterResult,
     result_text, team_name,
     toggletip::Toggletip,
 };
@@ -37,7 +38,7 @@ enum Shown {
 
 /// What gets the focus once the page shows a result reported or reopened by its buttons.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Focus {
+pub enum Focus {
     /// The first button reporting a result of the match.
     Report(MatchId),
     /// The heading of the matches shown, once none of them is left without a result.
@@ -528,6 +529,8 @@ fn MatchLine(
             div { class: "report",
                 if row.result.is_some() {
                     ReportedResult { row: row.clone(), draws, focus }
+                } else if row.details {
+                    EnterResult { row: row.clone(), focus, after_report }
                 } else {
                     ReportButtons {
                         row: row.clone(),
@@ -629,12 +632,18 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
     // not read the mark; a draw has no such mark
     let shown = row.result == Some(MatchResult::Draw);
     rsx! {
-        span { class: if shown { "result" } else { "result visually-hidden" },
-            {result_text(&tr, &row)}
+        if !row.scores.is_empty() {
+            // the scores say how it ended; who won is said to screen readers as well
+            span { class: "visually-hidden", {result_text(&tr, &row)} }
+            span { class: "result scores", {tr.scores(&row.scores)} }
+        } else {
+            span { class: if shown { "result" } else { "result visually-hidden" },
+                {result_text(&tr, &row)}
+            }
         }
         // where a match may end in a draw, a win keeps the draw's room, so that the pairings of
         // every finished match line up
-        if draws && !shown {
+        if draws && !shown && row.scores.is_empty() {
             span { class: "result-room", aria_hidden: "true", {tr.get("draw")} }
         }
         button {

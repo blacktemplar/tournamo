@@ -223,6 +223,17 @@ draw-of = { $a } – { $b }: draw
 won = { $team } won
 reopen = Reopen
 reopen-match = Reopen match { $number }
+# the result of a match whose rules enter more than who won, e.g. a score, in a dialog
+open-result = Enter result
+open-result-of = Enter result of match { $number }
+result-title = Result of match { $number }
+result-description = { $a } against { $b }. Each value is taken as entered; what looks like a typo is pointed out.
+part-numbered = { $name } { $number }
+value-of = { $value } of { $team }
+value-of-in = { $value } of { $team } in { $part }
+result-of = Result: { $part }
+result-as-entered = As entered: { $result }
+result-open = Not decided yet
 bye = Bye: { $team }
 bye-in-stage = Bye: { $team } ({ $stage })
 standings = Standings

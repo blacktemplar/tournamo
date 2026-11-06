@@ -17,6 +17,10 @@ a file whose `"format"` changes is migrated, not refused.
   games of a best of, each with its score.
 - The points (or goals) scored and conceded, as a metric of the standings, and
   ranking by the difference or by the points scored.
+- In the browser, a match whose results hold more than who won is entered in a
+  dialog: the score of each side, and of each game of a best of. What looks
+  like a typo is pointed out but taken. Finished matches show their scores, in
+  the list of matches and in the bracket.
 
 ### Changed
 

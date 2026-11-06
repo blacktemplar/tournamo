@@ -993,6 +993,15 @@ impl Page {
     /// # Panics
     /// Panics if they do not in time, with the texts they have instead.
     pub async fn expect_texts(&self, by: By, texts: &[&str]) -> WebDriverResult<()> {
+        self.expect_texts_of(by, &[texts]).await
+    }
+
+    /// Waits until the elements `by` finds have one of `alternatives` as their texts, as
+    /// [`Self::expect_texts`] does with one, e.g. a result read from either side of a match.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the texts they have instead.
+    pub async fn expect_texts_of(&self, by: By, alternatives: &[&[&str]]) -> WebDriverResult<()> {
         let start = Instant::now();
         loop {
             let mut found = Vec::new();
@@ -1009,11 +1018,14 @@ impl Page {
                     Err(error) => return Err(error),
                 }
             }
-            if found == texts {
+            if alternatives.iter().any(|texts| found == *texts) {
                 return Ok(());
             }
             if start.elapsed() > TIMEOUT {
-                panic!("{by} must find the texts {texts:?}, but finds {found:?}");
+                match alternatives {
+                    [texts] => panic!("{by} must find the texts {texts:?}, but finds {found:?}"),
+                    _ => panic!("{by} must find one of {alternatives:?}, but finds {found:?}"),
+                }
             }
             tokio::time::sleep(INTERVAL).await;
         }

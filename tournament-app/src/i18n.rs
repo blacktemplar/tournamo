@@ -21,7 +21,7 @@ use std::{
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use fluent_syntax::{ast, parser};
 use tournament_engine::{
-    Sides, Value,
+    EnteredValue, Sides,
     plugins::{Phrase, metrics_calculator::Cell},
 };
 
@@ -232,7 +232,7 @@ pub enum PluginText<'a> {
     Level(&'a str),
     /// The label of a value of this key that match rules enter for each side, e.g. the score,
     /// `.value-<key>`.
-    Value(&'a str),
+    EnteredValue(&'a str),
     /// A reason of this key match rules give for a decision, e.g. a walkover, `.reason-<key>`.
     Reason(&'a str),
 }
@@ -254,7 +254,7 @@ impl PluginText<'_> {
             Self::Stage(key) => format!("stage-{key}"),
             Self::Cell(key) => format!("cell-{key}"),
             Self::Level(key) => format!("level-{key}"),
-            Self::Value(key) => format!("value-{key}"),
+            Self::EnteredValue(key) => format!("value-{key}"),
             Self::Reason(key) => format!("reason-{key}"),
         }
     }
@@ -377,10 +377,10 @@ impl Translator {
 
     /// `scores` as the language writes them, e.g. `21–17 19–21`: each the numbers of its sides
     /// joined by an en dash, a side without one shown as `-`, separated by spaces.
-    pub fn scores(&self, scores: &[Sides<Option<Value>>]) -> String {
-        let side = |value: Option<Value>| match value {
-            Some(Value::Count(count)) => self.number(count.into()),
-            Some(Value::Decimal(decimal)) => self.number(decimal.get()),
+    pub fn scores(&self, scores: &[Sides<Option<EnteredValue>>]) -> String {
+        let side = |value: Option<EnteredValue>| match value {
+            Some(EnteredValue::Count(count)) => self.number(count.into()),
+            Some(EnteredValue::Decimal(decimal)) => self.number(decimal.get()),
             None => "-".to_owned(),
         };
         scores

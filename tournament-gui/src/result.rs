@@ -8,7 +8,7 @@ use tournament_app::{
     result_form::{FieldView, PartView, ResultForm},
     view::MatchRow,
 };
-use tournament_engine::{MatchResult, Score, Team, Value, plugins::match_rules::ValueKind};
+use tournament_engine::{EnteredValue, MatchResult, Score, Team, plugins::match_rules::ValueKind};
 
 use crate::{
     announcement::Announcement,
@@ -176,15 +176,18 @@ fn ResultField(
 ) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    let label =
-        capitalized(&tr.plugin_phrase(rules, PluginText::Value(field.label.key()), &field.label));
+    let label = capitalized(&tr.plugin_phrase(
+        rules,
+        PluginText::EnteredValue(field.label.key()),
+        &field.label,
+    ));
     let kind = field.kind;
-    let shown = |value: Option<Value>| match value {
-        Some(Value::Count(count)) => count.to_string(),
-        Some(Value::Decimal(decimal)) => decimal.get().to_string(),
+    let shown = |value: Option<EnteredValue>| match value {
+        Some(EnteredValue::Count(count)) => count.to_string(),
+        Some(EnteredValue::Decimal(decimal)) => decimal.get().to_string(),
         None => String::new(),
     };
-    let input = |team: Team, name: &str, value: Option<Value>| {
+    let input = |team: Team, name: &str, value: Option<EnteredValue>| {
         let (path, key) = (path.clone(), field.key.clone());
         rsx! {
             input {
@@ -229,16 +232,16 @@ fn ResultField(
 }
 
 /// The value `text` entered into a field of `kind` stands for, `None` if none.
-fn entered(text: &str, kind: ValueKind) -> Option<Value> {
+fn entered(text: &str, kind: ValueKind) -> Option<EnteredValue> {
     let text = text.trim();
     match kind {
-        ValueKind::Count => text.parse().ok().map(Value::Count),
+        ValueKind::Count => text.parse().ok().map(EnteredValue::Count),
         ValueKind::Decimal => text
             .replace(',', ".")
             .parse::<f64>()
             .ok()
             .filter(|number| number.is_finite())
-            .map(|number| Value::Decimal(Score::new(number))),
+            .map(|number| EnteredValue::Decimal(Score::new(number))),
     }
 }
 

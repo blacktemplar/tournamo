@@ -90,7 +90,7 @@ impl Part {
 
     /// This part with `values` for `field`, replacing any it had.
     #[must_use]
-    pub fn with_value(mut self, field: FieldKey, values: Sides<Option<Value>>) -> Self {
+    pub fn with_value(mut self, field: FieldKey, values: Sides<Option<EnteredValue>>) -> Self {
         match self.values.iter_mut().find(|(key, _)| *key == field) {
             Some((_, old)) => *old = values,
             None => self.values.push((field, values)),
@@ -116,7 +116,7 @@ impl Part {
     }
 
     /// The values entered for `field`, if any.
-    pub fn value(&self, field: &str) -> Option<&Sides<Option<Value>>> {
+    pub fn value(&self, field: &str) -> Option<&Sides<Option<EnteredValue>>> {
         self.values
             .iter()
             .find(|(key, _)| key.key() == field)
@@ -147,7 +147,7 @@ impl Annotated for Part {
 
 /// The values of a part, by field: for each side, `None` if it has none (an innings is one
 /// side's).
-pub type Values = Vec<(FieldKey, Sides<Option<Value>>)>;
+pub type Values = Vec<(FieldKey, Sides<Option<EnteredValue>>)>;
 
 /// The key of a field of a part, e.g. `points` or `yellow-cards`: declared by the match rules.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -166,7 +166,7 @@ impl FieldKey {
 
 /// A value entered for a side of a part.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Value {
+pub enum EnteredValue {
     /// A number counted: goals, points, games, cards.
     Count(u32),
     /// A number with a fraction: a judged score, victory points.

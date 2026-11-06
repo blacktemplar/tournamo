@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     entities::{
         competition::{Match, MatchResult, PhaseData},
-        details::{FieldKey, Part, Sides, Value},
+        details::{EnteredValue, FieldKey, Part, Sides},
     },
     plugins::{
         Phrase,
@@ -56,8 +56,8 @@ impl Scored {
 /// no score of either side.
 pub(crate) fn score(part: &Part) -> Option<Sides<u32>> {
     let sides = part.value(SCORE.key())?;
-    let count = |value: Option<Value>| match value {
-        Some(Value::Count(count)) => count,
+    let count = |value: Option<EnteredValue>| match value {
+        Some(EnteredValue::Count(count)) => count,
         _ => 0,
     };
     (sides.a.is_some() || sides.b.is_some()).then(|| Sides::new(count(sides.a), count(sides.b)))
@@ -76,8 +76,8 @@ pub(crate) fn result_of(score: Sides<u32>) -> MatchResult {
 pub(crate) fn suggest_by_score(part: &Part) -> Option<MatchResult> {
     match *part.value(SCORE.key())? {
         Sides {
-            a: Some(Value::Count(a)),
-            b: Some(Value::Count(b)),
+            a: Some(EnteredValue::Count(a)),
+            b: Some(EnteredValue::Count(b)),
         } => Some(result_of(Sides::new(a, b))),
         _ => None,
     }
@@ -90,7 +90,7 @@ pub(crate) fn score_field(usual_top_score: Option<u32>) -> FieldSpec {
         label: Phrase::new("score", "score"),
         kind: ValueKind::Count,
         hints: Hints {
-            max: usual_top_score.map(Value::Count),
+            max: usual_top_score.map(EnteredValue::Count),
         },
     }
 }
@@ -131,11 +131,11 @@ mod tests {
         plugins::metrics_calculator::test_utils::{match_id, phase_with},
     };
 
-    fn count(a: u32, b: u32) -> Sides<Option<Value>> {
-        Sides::new(Some(Value::Count(a)), Some(Value::Count(b)))
+    fn count(a: u32, b: u32) -> Sides<Option<EnteredValue>> {
+        Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b)))
     }
 
-    fn scored(score: Sides<Option<Value>>) -> Part {
+    fn scored(score: Sides<Option<EnteredValue>>) -> Part {
         Part::new().with_value(SCORE, score)
     }
 
@@ -165,7 +165,10 @@ mod tests {
     #[test]
     fn a_side_without_a_score_scored_none() {
         assert_eq!(
-            reported(vec![(SCORE, Sides::new(None, Some(Value::Count(3))))]),
+            reported(vec![(
+                SCORE,
+                Sides::new(None, Some(EnteredValue::Count(3)))
+            )]),
             PointsScored(Sides::new(0, 3))
         );
         assert_eq!(reported(Vec::new()), PointsScored(Sides::new(0, 0)));
@@ -179,7 +182,10 @@ mod tests {
         assert_eq!(suggest(count(21, 17)), Some(MatchResult::AWins));
         assert_eq!(suggest(count(0, 2)), Some(MatchResult::BWins));
         assert_eq!(suggest(count(1, 1)), Some(MatchResult::Draw));
-        assert_eq!(suggest(Sides::new(Some(Value::Count(1)), None)), None);
+        assert_eq!(
+            suggest(Sides::new(Some(EnteredValue::Count(1)), None)),
+            None
+        );
         assert_eq!(
             Scored::default().suggest(&level, &Part::new()),
             None,
@@ -196,7 +202,7 @@ mod tests {
 
         assert_eq!(
             template.root.field(&SCORE).unwrap().hints.max,
-            Some(Value::Count(21))
+            Some(EnteredValue::Count(21))
         );
     }
 

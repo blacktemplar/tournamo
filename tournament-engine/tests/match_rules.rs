@@ -1,8 +1,8 @@
 //! The match rules of a phase: what a report has to fit, and what they tally.
 
 use tournament_engine::{
-    CompetitionStateMachine, CompetitionStateMachineExt, Decision, FieldKey, MatchResult, Part,
-    ReportMatchResult, ResultReason, Score, Sides, Value,
+    CompetitionStateMachine, CompetitionStateMachineExt, Decision, EnteredValue, FieldKey,
+    MatchResult, Part, ReportMatchResult, ResultReason, Score, Sides,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -22,7 +22,7 @@ fn a_report_not_fitting_the_match_rules_is_refused() {
         report().with_value(FieldKey::new("goals"), games::count(1, 0)),
         report().with_value(
             FieldKey::new("games"),
-            Sides::new(Some(Value::Decimal(Score::new(1.5))), None),
+            Sides::new(Some(EnteredValue::Decimal(Score::new(1.5))), None),
         ),
         ReportMatchResult::new(
             games::phase_id(),

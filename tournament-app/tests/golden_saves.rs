@@ -26,7 +26,7 @@ use tournament_app::{
     storage::{MemoryStorage, Storage as _},
 };
 use tournament_engine::{
-    Competition, FieldKey, MatchResult, Team, Value as Entered,
+    Competition, EnteredValue, FieldKey, MatchResult, Team,
     plugins::{
         match_rules::{BestOf, Scored},
         metrics_calculator::{
@@ -402,8 +402,8 @@ fn enter_scores(form: &mut ResultForm, scores: &[(u32, u32)]) {
     };
     let score = FieldKey::new("score");
     for (path, (a, b)) in places.iter().zip(scores) {
-        form.set_value(path, &score, Team::A, Some(Entered::Count(*a)));
-        form.set_value(path, &score, Team::B, Some(Entered::Count(*b)));
+        form.set_value(path, &score, Team::A, Some(EnteredValue::Count(*a)));
+        form.set_value(path, &score, Team::B, Some(EnteredValue::Count(*b)));
     }
 }
 

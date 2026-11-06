@@ -505,12 +505,12 @@ nothing more):
 ```rust
 pub struct Part {                      // a match, or a game, set, rubber, leg of one
     decision: Option<Decision>,        // Some ⇔ decided
-    values: Vec<(FieldKey, Sides<Option<Value>>)>, // goals, games, cards, …
+    values: Vec<(FieldKey, Sides<Option<EnteredValue>>)>, // goals, games, cards, …
     parts: Vec<Part>,                  // in playing order, as deep as entered
     annotations: TypeMap,
 }
 pub struct Decision { result: MatchResult, reason: Option<ResultReason> }
-pub enum Value { Count(u32), Decimal(Score) }  // durations when a sport needs them
+pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport needs them
 ```
 
 - **A match is a part**: `Match::contest`, holding the match's annotations too.

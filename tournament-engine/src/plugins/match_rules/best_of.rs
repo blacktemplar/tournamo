@@ -134,7 +134,7 @@ mod tests {
     use crate::{
         entities::{
             competition::{Phase, PhaseBuilder},
-            details::{Decision, Value, Values},
+            details::{Decision, EnteredValue, Values},
         },
         plugins::{
             match_rules::scored::SCORE,
@@ -144,7 +144,7 @@ mod tests {
 
     /// A game `a` to `b`, decided by its score.
     fn game(a: u32, b: u32) -> Part {
-        let score = Sides::new(Some(Value::Count(a)), Some(Value::Count(b)));
+        let score = Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b)));
         Part::new()
             .with_decision(result_of(Sides::new(a, b)))
             .with_value(SCORE, score)

@@ -7,7 +7,7 @@ use plugin_factory::{
     schema::{Configurable as _, Schema},
 };
 use tournament_engine::{
-    PhasePlugins, Score, Sides, Value,
+    EnteredValue, PhasePlugins, Score, Sides,
     plugins::{
         Phrase,
         match_rules::MatchRules,
@@ -362,7 +362,7 @@ fn phrases_of_rules(id: &str) -> BTreeSet<String> {
     fn collect(part: &PartView, attributes: &mut BTreeSet<String>) {
         attributes.insert(PluginText::Level(part.name.key()).attribute());
         for field in &part.fields {
-            attributes.insert(PluginText::Value(field.label.key()).attribute());
+            attributes.insert(PluginText::EnteredValue(field.label.key()).attribute());
         }
         for (_, label) in &part.reasons {
             attributes.insert(PluginText::Reason(label.key()).attribute());
@@ -530,8 +530,8 @@ fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
 fn scores_are_written_as_the_language_writes_their_numbers() {
     let translator = Translator::new(Language::German, &[]);
     let scores = [
-        Sides::new(Some(Value::Count(21)), Some(Value::Count(17))),
-        Sides::new(Some(Value::Decimal(Score::new(1.5))), None),
+        Sides::new(Some(EnteredValue::Count(21)), Some(EnteredValue::Count(17))),
+        Sides::new(Some(EnteredValue::Decimal(Score::new(1.5))), None),
     ];
 
     assert_eq!(translator.scores(&scores), "21–17 1,5–-");

@@ -28,8 +28,8 @@ use tournament_app::{
     view,
 };
 use tournament_engine::{
-    Annotated as _, Competition, Entrant, EntrantId, FieldKey, Match, MatchId, MatchResult, Phase,
-    PhaseData, PhasePlugins, RankingId, Team, TypeMap, Value as Entered,
+    Annotated as _, Competition, EnteredValue, Entrant, EntrantId, FieldKey, Match, MatchId,
+    MatchResult, Phase, PhaseData, PhasePlugins, RankingId, Team, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
@@ -699,8 +699,8 @@ fn fill_scores(form: &mut ResultForm, scores: &[(u32, u32)]) -> Option<()> {
         return None;
     }
     for ((path, key), (a, b)) in places.iter().zip(scores) {
-        form.set_value(path, key, Team::A, Some(Entered::Count(*a)));
-        form.set_value(path, key, Team::B, Some(Entered::Count(*b)));
+        form.set_value(path, key, Team::A, Some(EnteredValue::Count(*a)));
+        form.set_value(path, key, Team::B, Some(EnteredValue::Count(*b)));
     }
     Some(())
 }

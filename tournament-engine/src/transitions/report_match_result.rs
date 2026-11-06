@@ -5,7 +5,7 @@ use undoable_state_machine::{Transition, TransitionError};
 use crate::{
     entities::{
         competition::{Competition, MatchId, MatchResult, PhaseId},
-        details::{Decision, FieldKey, Part, Sides, Value, Values},
+        details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
     },
     plugins::match_rules::Misfit,
     transitions::CompetitionTransition,
@@ -88,7 +88,7 @@ impl ReportMatchResult {
 
     /// This report with `values` for `field` of the match, replacing any it had.
     #[must_use]
-    pub fn with_value(mut self, field: FieldKey, values: Sides<Option<Value>>) -> Self {
+    pub fn with_value(mut self, field: FieldKey, values: Sides<Option<EnteredValue>>) -> Self {
         match self.values.iter_mut().find(|(key, _)| *key == field) {
             Some((_, old)) => *old = values,
             None => self.values.push((field, values)),

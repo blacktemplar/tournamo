@@ -4,7 +4,7 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides, Value,
+    EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides,
     plugins::{match_rules::Level, metrics_calculator::Cell, phase_format::Stage},
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
@@ -101,7 +101,7 @@ pub struct MatchRow {
     /// The scores of the match once finished, as entered: its own, or else those of its parts in
     /// order, e.g. the games of a best of; none if it has none. Said in the operator's language by
     /// [`Translator::scores`](crate::i18n::Translator::scores).
-    pub scores: Vec<Sides<Option<Value>>>,
+    pub scores: Vec<Sides<Option<EnteredValue>>>,
     /// Whether its rules enter more than who won, e.g. a score, which a
     /// [`ResultForm`](crate::result_form::ResultForm) enters.
     pub details: bool,
@@ -475,7 +475,7 @@ pub enum Action {
 }
 
 /// The scores of `r#match`, as [`MatchRow::scores`] shows them.
-pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<Value>>> {
+pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>> {
     if !r#match.is_finished() {
         return Vec::new();
     }

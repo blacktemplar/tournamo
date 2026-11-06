@@ -153,7 +153,7 @@ mod tests {
     use crate::{
         entities::{
             competition::{MatchResult, Phase, PhaseBuilder},
-            details::{Decision, FieldKey, Sides, Value},
+            details::{Decision, EnteredValue, FieldKey, Sides},
         },
         plugins::{
             match_rules::Scored,
@@ -176,7 +176,10 @@ mod tests {
         let id = match_id(phase, round, a, b);
         let values = vec![(
             FieldKey::new("score"),
-            Sides::new(Some(Value::Count(score.0)), Some(Value::Count(score.1))),
+            Sides::new(
+                Some(EnteredValue::Count(score.0)),
+                Some(EnteredValue::Count(score.1)),
+            ),
         )];
         let result = if score.0 > score.1 {
             MatchResult::AWins

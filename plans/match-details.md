@@ -57,21 +57,12 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 
 ## Notes for the user
 Questions and decisions put off while implementing, to bring up at the end.
-- Step 1 raised the file format to 2 (as AGENTS.md demands of any change older
-  versions cannot read): 0.3.0 refuses every file of this version, even one
-  without any details. Writing the old form while a log has no details would
-  keep those readable, at the cost of two forms to write.
+Decided: every save is of format 2, also without details; `Value` is
+`EnteredValue`; `Duration` waits for a sport that needs it.
 - The golden saves now compare a replay with the saved competition *as this
   version reads it* (`as_read`), since the serialized `Match` changed. A field
   the converter silently dropped would go unnoticed there; the engine's tests
   of the old forms cover the conversion itself.
-- `Value` is exported at the crate root and clashes with `serde_json::Value`
-  wherever both are used (tests alias it). Rename it (`EnteredValue`?) or
-  leave it?
-- `Value` has `Count` and `Decimal` only; `Duration` (times) waits for a sport
-  that needs it.
-- Until a second rules plugin exists (step 5), the CLI asks "Results" with one
-  choice and the GUI shows "Results: Winner only" in every phase.
 - Step 1 was committed without running the manual-stage hooks; a browser test
   it broke was fixed in a commit of its own. Manual hooks are run per step now.
 - The GUI e2e test `the_cross_table_shows_the_results_by_rank` failed once in a

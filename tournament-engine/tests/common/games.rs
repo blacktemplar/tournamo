@@ -3,9 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant, EntrantId,
-    FieldKey, Match, MatchId, MatchResult, Part, PhaseData, PhaseId, PhasePluginsBuilder,
-    ResultReason, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue, Value,
+    AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, EnteredValue,
+    Entrant, EntrantId, FieldKey, Match, MatchId, MatchResult, Part, PhaseData, PhaseId,
+    PhasePluginsBuilder, ResultReason, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap,
+    TypeMapValue,
     plugin_factory::{Plugin, compatibility::Declaration, register},
     plugins::{
         Phrase,
@@ -124,6 +125,6 @@ pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
 }
 
 /// A count for each side.
-pub fn count(a: u32, b: u32) -> Sides<Option<Value>> {
-    Sides::new(Some(Value::Count(a)), Some(Value::Count(b)))
+pub fn count(a: u32, b: u32) -> Sides<Option<EnteredValue>> {
+    Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b)))
 }

@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt, Decision, Entrant, EntrantId, FieldKey, Match, MatchId,
-    MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant, ReportMatchResult,
-    ResultReason, Score, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMapValue,
-    Value as Entered,
+    CompetitionStateMachineExt, Decision, EnteredValue, Entrant, EntrantId, FieldKey, Match,
+    MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant,
+    ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, StartCompetition,
+    TypeMapValue,
     plugins::{
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MorePoints, Points, PointsCalculator,
@@ -263,7 +263,7 @@ fn a_reported_contest_survives_a_round_trip() {
             )
             .with_value(
                 FieldKey::new("games"),
-                Sides::new(Some(Entered::Count(1)), None),
+                Sides::new(Some(EnteredValue::Count(1)), None),
             )
             .with_part(
                 Part::new()
@@ -283,7 +283,7 @@ fn a_reported_contest_survives_a_round_trip() {
     );
     assert_eq!(
         contest.value("games"),
-        Some(&Sides::new(Some(Entered::Count(1)), None))
+        Some(&Sides::new(Some(EnteredValue::Count(1)), None))
     );
     assert_eq!(contest.parts().len(), 2);
     assert_eq!(

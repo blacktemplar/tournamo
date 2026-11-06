@@ -45,8 +45,8 @@ fn the_match(competition: &Competition) -> &Match {
         .unwrap()
 }
 
-fn count(count: u32) -> Option<Value> {
-    Some(Value::Count(count))
+fn count(count: u32) -> Option<EnteredValue> {
+    Some(EnteredValue::Count(count))
 }
 
 /// Enters `a` to `b` into the score of the part at `path`.

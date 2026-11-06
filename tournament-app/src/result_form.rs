@@ -12,7 +12,8 @@
 //! beyond what the rules call usual, and of a result chosen against the one the values suggest.
 
 use tournament_engine::{
-    Decision, FieldKey, MatchId, MatchResult, Part, ResultReason, Sides, Team, Value, Values,
+    Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Sides, Team,
+    Values,
     plugins::{
         Phrase,
         match_rules::{FieldSpec, Level, MatchRules, Parts, Template, ValueKind},
@@ -110,7 +111,7 @@ pub struct FieldView {
     pub key: FieldKey,
     pub label: Phrase,
     pub kind: ValueKind,
-    pub values: Sides<Option<Value>>,
+    pub values: Sides<Option<EnteredValue>>,
     /// What looks like a typo, though it is taken.
     pub warnings: Vec<Text>,
 }
@@ -142,7 +143,7 @@ impl ResultForm {
         path: &[usize],
         field: &FieldKey,
         team: Team,
-        value: Option<Value>,
+        value: Option<EnteredValue>,
     ) {
         let entry = self.root.at(path);
         let index = match entry.values.iter().position(|(key, _)| key == field) {
@@ -289,19 +290,19 @@ fn field_view(field: &FieldSpec, values: &Values) -> FieldView {
 }
 
 /// Whether `value` is above `max`, both of the same kind.
-fn above(value: Value, max: Value) -> bool {
+fn above(value: EnteredValue, max: EnteredValue) -> bool {
     match (value, max) {
-        (Value::Count(value), Value::Count(max)) => value > max,
-        (Value::Decimal(value), Value::Decimal(max)) => value > max,
+        (EnteredValue::Count(value), EnteredValue::Count(max)) => value > max,
+        (EnteredValue::Decimal(value), EnteredValue::Decimal(max)) => value > max,
         _ => false,
     }
 }
 
 /// `value` as a number of a message.
-fn number(value: Value) -> f64 {
+fn number(value: EnteredValue) -> f64 {
     match value {
-        Value::Count(count) => count.into(),
-        Value::Decimal(decimal) => decimal.get(),
+        EnteredValue::Count(count) => count.into(),
+        EnteredValue::Decimal(decimal) => decimal.get(),
     }
 }
 

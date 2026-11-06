@@ -17,7 +17,7 @@ pub use tallies::{GamesWon, PointsScored};
 use crate::{
     entities::{
         competition::{Match, MatchResult, PhaseData},
-        details::{Decision, FieldKey, Part, ResultReason, Value, Values},
+        details::{Decision, EnteredValue, FieldKey, Part, ResultReason, Values},
     },
     plugins::Phrase,
     type_map::TypeMap,
@@ -165,21 +165,21 @@ pub struct FieldSpec {
     pub hints: Hints,
 }
 
-/// What kind of [`Value`] a field takes.
+/// What kind of [`EnteredValue`] a field takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValueKind {
-    /// [`Value::Count`].
+    /// [`EnteredValue::Count`].
     Count,
-    /// [`Value::Decimal`].
+    /// [`EnteredValue::Decimal`].
     Decimal,
 }
 
 impl ValueKind {
     /// Whether `value` is of this kind.
-    pub fn admits(self, value: Value) -> bool {
+    pub fn admits(self, value: EnteredValue) -> bool {
         matches!(
             (self, value),
-            (Self::Count, Value::Count(_)) | (Self::Decimal, Value::Decimal(_))
+            (Self::Count, EnteredValue::Count(_)) | (Self::Decimal, EnteredValue::Decimal(_))
         )
     }
 }
@@ -188,7 +188,7 @@ impl ValueKind {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Hints {
     /// The most a side usually has.
-    pub max: Option<Value>,
+    pub max: Option<EnteredValue>,
 }
 
 /// A reason a part may be decided for other than in the usual way.

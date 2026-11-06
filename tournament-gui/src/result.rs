@@ -1,6 +1,6 @@
-//! The dialog entering the result of a match whose rules enter more than who won, e.g. a score:
-//! the [`ResultForm`] of its result, every part with the values of each side and its result, the
-//! one the values suggest unless another is chosen.
+//! The dialog entering the result of a match whose match format enters more than who won, e.g. a
+//! score: the [`ResultForm`] of its result, every part with the values of each side and its result,
+//! the one the values suggest unless another is chosen.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -8,7 +8,7 @@ use tournament_app::{
     result_form::{FieldView, PartView, ResultForm},
     view::MatchRow,
 };
-use tournament_engine::{EnteredValue, MatchResult, Score, Team, plugins::match_rules::ValueKind};
+use tournament_engine::{EnteredValue, MatchResult, Score, Team, plugins::match_format::ValueKind};
 
 use crate::{
     announcement::Announcement,
@@ -77,7 +77,7 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
                     ResultPart {
                         form,
                         part: form.read().view().root,
-                        rules: form.read().view().rules,
+                        match_format: form.read().view().match_format,
                         a: a.clone(),
                         b: b.clone(),
                     }
@@ -98,20 +98,23 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
     }
 }
 
-/// The part `part` of the result of `form` entered by the rules `rules`, between `a` and `b`: its
-/// values, its parts, then its result.
+/// The part `part` of the result of `form` entered by the match format `match_format`, between `a`
+/// and `b`: its values, its parts, then its result.
 #[component]
 fn ResultPart(
     form: Signal<ResultForm>,
     part: PartView,
-    rules: &'static str,
+    match_format: &'static str,
     a: String,
     b: String,
 ) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    let name =
-        capitalized(&tr.plugin_phrase(rules, PluginText::Level(part.name.key()), &part.name));
+    let name = capitalized(&tr.plugin_phrase(
+        match_format,
+        PluginText::Level(part.name.key()),
+        &part.name,
+    ));
     let legend = match part.path.last() {
         Some(index) => t!(
             tr,
@@ -136,7 +139,7 @@ fn ResultPart(
                     path: part.path.clone(),
                     field,
                     within: within.clone(),
-                    rules,
+                    match_format,
                     a: a.clone(),
                     b: b.clone(),
                 }
@@ -145,7 +148,7 @@ fn ResultPart(
                 ResultPart {
                     form,
                     part: child,
-                    rules,
+                    match_format,
                     a: a.clone(),
                     b: b.clone(),
                 }
@@ -170,14 +173,14 @@ fn ResultField(
     path: Vec<usize>,
     field: FieldView,
     within: Option<String>,
-    rules: &'static str,
+    match_format: &'static str,
     a: String,
     b: String,
 ) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let label = capitalized(&tr.plugin_phrase(
-        rules,
+        match_format,
         PluginText::EnteredValue(field.label.key()),
         &field.label,
     ));

@@ -775,7 +775,7 @@ mod tests {
     use plugin_factory::{PluginType, draft::Problem};
     use tournament_app::error::{AddEntrantError, EditPhaseError, ReportError, StartError};
     use tournament_engine::plugins::{
-        match_rules::{BestOf, WinnerOnly},
+        match_format::{BestOf, WinnerOnly},
         metrics_calculator::{
             FewerMatchesPlayed, MorePoints, MoreWins, PointsCalculator, SonnebornBergerCalculator,
             WinsDrawsLossesCalculator,

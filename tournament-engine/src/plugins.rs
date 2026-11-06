@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 pub use crate::plugins::builder::PhasePluginsBuilder;
 pub use crate::plugins::phrase::Phrase;
 use crate::plugins::{
-    match_rules::MatchRules,
+    match_format::MatchFormat,
     metrics_calculator::MetricsCalculator,
     phase_format::PhaseFormat,
     ranker::{HierarchicalRanker, SliceRanker},
@@ -60,7 +60,7 @@ use crate::plugins::{
 #[cfg(feature = "test-util")]
 mod builder;
 pub mod facts;
-pub mod match_rules;
+pub mod match_format;
 pub mod metrics_calculator;
 pub mod phase_format;
 mod phrase;
@@ -126,13 +126,13 @@ pub struct PhasePlugins {
     #[plugin(label = "metrics", description = "calculated for every entrant")]
     metrics: DependencyOrderedSet<dyn MetricsCalculator>,
     // phases added by 0.3.0 and earlier knew only who won
-    #[serde(default = "match_rules::default")]
+    #[serde(default = "match_format::default")]
     #[plugin(
         label = "results",
         description = "what is entered for a match",
-        default = match_rules::default()
+        default = match_format::default()
     )]
-    results: Box<dyn MatchRules>,
+    results: Box<dyn MatchFormat>,
 }
 
 impl PhasePlugins {
@@ -142,7 +142,7 @@ impl PhasePlugins {
     pub const RANKING: &str = "ranking";
     /// The name of the field taking the metrics calculators.
     pub const METRICS: &str = "metrics";
-    /// The name of the field taking the match rules.
+    /// The name of the field taking the match format.
     pub const RESULTS: &str = "results";
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
@@ -199,7 +199,7 @@ impl PhasePlugins {
         format: Box<dyn PhaseFormat>,
         ranking: Vec<Box<dyn SliceRanker>>,
         metrics: Vec<Box<dyn MetricsCalculator>>,
-        results: Box<dyn MatchRules>,
+        results: Box<dyn MatchFormat>,
     ) -> Result<Self, plugin_factory::schema::DependencyOrderedSetError> {
         Ok(Self {
             format,
@@ -223,8 +223,8 @@ impl PhasePlugins {
         &self.metrics
     }
 
-    /// The rules of what is entered for a match.
-    pub fn results(&self) -> &dyn MatchRules {
+    /// The match format: what is entered for a match.
+    pub fn results(&self) -> &dyn MatchFormat {
         &*self.results
     }
 
@@ -234,14 +234,14 @@ impl PhasePlugins {
         Config::of(self).expect("every plugin serializes as it is configured")
     }
 
-    /// The format, the ranker, the metrics calculators and the match rules a phase is run with.
+    /// The format, the ranker, the metrics calculators and the match format a phase is run with.
     pub(crate) fn into_parts(
         self,
     ) -> (
         Box<dyn PhaseFormat>,
         HierarchicalRanker,
         Metrics,
-        Box<dyn MatchRules>,
+        Box<dyn MatchFormat>,
     ) {
         (
             self.format,
@@ -279,7 +279,7 @@ mod tests {
         entities::competition::{Bye, Competition, Match, PhaseData, RankingId},
         plugins::{
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
-            match_rules::{Scored, WinnerOnly},
+            match_format::{Scored, WinnerOnly},
             metrics_calculator::{
                 Metric, OldMetrics, PointsBalanceCalculator,
                 buchholz::{

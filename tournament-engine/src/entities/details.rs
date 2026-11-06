@@ -49,8 +49,8 @@ impl From<MatchResult> for Decision {
     }
 }
 
-/// Why a decision was reached other than in the usual way, e.g. `walkover` or `retired`: a key the
-/// match rules declare.
+/// Why a decision was reached other than in the usual way, e.g. `walkover` or `retired`: a key
+/// a match format declares.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ResultReason(Cow<'static, str>);
@@ -66,7 +66,7 @@ impl ResultReason {
 }
 
 /// A match, or a game, set, rubber or leg of one: how it was decided, if it was, the values entered
-/// for it and its parts, as deep as they were entered. Their meaning is the match rules'.
+/// for it and its parts, as deep as they were entered. Their meaning is the match format's.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Part {
     decision: Option<Decision>,
@@ -149,7 +149,7 @@ impl Annotated for Part {
 /// side's).
 pub type Values = Vec<(FieldKey, Sides<Option<EnteredValue>>)>;
 
-/// The key of a field of a part, e.g. `points` or `yellow-cards`: declared by the match rules.
+/// The key of a field of a part, e.g. `points` or `yellow-cards`: declared by the match format.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct FieldKey(Cow<'static, str>);

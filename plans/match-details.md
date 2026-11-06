@@ -17,13 +17,13 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
   (its annotations move in); `ReportMatchResult` gets `values` and `parts`;
   old snapshots load; benchmark `large_tournament` (no change measured,
   `Match` grew from 160 to 208 bytes)
-- [x] 3. `MatchRules` axis: `Template`, `Level`, `Parts`, `FieldSpec`, `Hints`,
+- [x] 3. `MatchFormat` axis: `Template`, `Level`, `Parts`, `FieldSpec`, `Hints`,
   plugin `WinnerOnly`; `PhasePlugins.results` (old phases load as `WinnerOnly`);
   `ReportMatchResult` checks the structure against the template; questionnaire
-  and `PhaseForm` show the rules
-- [x] 4. Tallies: `Match::tally`, `MatchRules::tally` in `apply`, the fact
+  and `PhaseForm` show the match format
+- [x] 4. Tallies: `Match::tally`, `MatchFormat::tally` in `apply`, the fact
   `MatchTally<T>`; the engine's tallies (`PointsScored`, `GamesWon`) come with
-  the rules producing them
+  the match format producing them
 
 ### B. The first sports
 - [x] 5. `Scored`: one game with a score, `suggest`, tally `Points`
@@ -36,7 +36,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
   suggested decision, hints and disagreements as warnings, `report` with the play
 - [x] 9. Views show the play: `MatchRow::scores` (the match's score, else its
   parts'), in rounds, bracket and cross table; `Translator::scores` writes them.
-  `MatchRules::show` waits for a sport writing scores its own way (tennis)
+  `MatchFormat::show` waits for a sport writing scores its own way (tennis)
 - [ ] 10. (optional, left open) `report_entered` reads scores
 
 ### D. Frontends
@@ -49,7 +49,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 
 ## Later (separate issues)
 - Rosters and players; `lineup` on `Part`
-- `Fixture` (leagues) with nested rules
+- `Fixture` (leagues) with nested match formats
 - `Tennis`, `Relay`
 - `Advantage` and best-of per stage (Berliner Zeitmodell)
 - Result reasons in the UI (walkover, retired)

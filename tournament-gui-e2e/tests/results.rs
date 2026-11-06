@@ -1,9 +1,9 @@
-//! Results entered in a dialog, by the match rules of the phase: a score, the games of a best of.
+//! Results entered in a dialog, by the match format of the phase: a score, the games of a best of.
 
 use tournament_gui_e2e::{Gui, run_in_new_competition, thirtyfour::error::WebDriverResult};
 
-/// Enters Alice and Bob and starts a round robin of them whose results are entered by the rules
-/// labelled `results`.
+/// Enters Alice and Bob and starts a round robin of them whose results are entered by the match
+/// format labelled `results`.
 async fn start(gui: &Gui, results: &str) -> WebDriverResult<()> {
     for name in ["Alice", "Bob"] {
         gui.add_entrant(name).await?;

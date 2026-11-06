@@ -227,13 +227,13 @@ pub enum PluginText<'a> {
     /// The phrase of this key in a cell of a calculator's column, `.cell-<key>`, with the phrase's
     /// numbers as its variables, see [`Translator::cell`].
     Cell(&'a str),
-    /// What match rules call a part of a match at the level of this key, e.g. a game,
+    /// What a match format calls a part of a match at the level of this key, e.g. a game,
     /// `.level-<key>`.
     Level(&'a str),
-    /// The label of a value of this key that match rules enter for each side, e.g. the score,
+    /// The label of a value of this key that a match format enters for each side, e.g. the score,
     /// `.value-<key>`.
     EnteredValue(&'a str),
-    /// A reason of this key match rules give for a decision, e.g. a walkover, `.reason-<key>`.
+    /// A reason of this key a match format gives for a decision, e.g. a walkover, `.reason-<key>`.
     Reason(&'a str),
 }
 
@@ -396,7 +396,7 @@ impl Translator {
     }
 
     /// `phrase` of the plugin `id` as its `text` with the phrase's numbers set, or else in English,
-    /// e.g. a level of the match rules `id` as [`PluginText::Level`] of the phrase's key.
+    /// e.g. a level of the match format `id` as [`PluginText::Level`] of the phrase's key.
     pub fn plugin_phrase(&self, id: &str, text: PluginText<'_>, phrase: &Phrase) -> String {
         let mut args = FluentArgs::new();
         for (name, value) in phrase.numbers() {

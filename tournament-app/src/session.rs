@@ -23,7 +23,7 @@ use tournament_engine::{
     MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId,
     RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap, Values,
     plugins::{
-        match_rules::Parts,
+        match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
         ranker::SliceRanker,
@@ -1138,9 +1138,9 @@ impl Session {
         if r#match.is_finished() {
             return Err(ReportError::AlreadyFinished);
         }
-        let rules = phase.match_rules();
-        let template = rules.template(phase.data(), r#match);
-        Ok(ResultForm::new(id, dyn_clone::clone_box(rules), template))
+        let format = phase.match_format();
+        let template = format.template(phase.data(), r#match);
+        Ok(ResultForm::new(id, dyn_clone::clone_box(format), template))
     }
 
     /// Reports the result entered into `form`.
@@ -1428,9 +1428,9 @@ impl Session {
     }
 }
 
-/// Whether the rules of `r#match` enter more than who won, see [`MatchRow::details`].
+/// Whether the match format of `r#match` enters more than who won, see [`MatchRow::details`].
 fn details(phase: &Phase, r#match: &Match) -> bool {
-    let root = phase.match_rules().template(phase.data(), r#match).root;
+    let root = phase.match_format().template(phase.data(), r#match).root;
     !root.fields.is_empty() || !matches!(root.parts, Parts::None)
 }
 

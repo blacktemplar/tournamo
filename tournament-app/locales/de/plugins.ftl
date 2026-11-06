@@ -12,7 +12,7 @@ phase =
     .field-results = Ergebnisse
     .field-results-description = was zu einem Spiel eingetragen wird
 
-## Match rules
+## Match formats
 
 plugin-tournament_engine-winner_only =
     .label = nur Sieger

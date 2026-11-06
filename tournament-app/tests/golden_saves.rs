@@ -28,7 +28,7 @@ use tournament_app::{
 use tournament_engine::{
     Competition, EnteredValue, FieldKey, MatchResult, Team,
     plugins::{
-        match_rules::{BestOf, Scored},
+        match_format::{BestOf, Scored},
         metrics_calculator::{
             HigherPointsDifference, MorePointsScored, MoreWins, PointsBalanceCalculator,
         },

@@ -1,4 +1,4 @@
-//! The match rules of a phase: what a report has to fit, and what they tally.
+//! The match format of a phase: what a report has to fit, and what it tallies.
 
 use tournament_engine::{
     CompetitionStateMachine, CompetitionStateMachineExt, Decision, EnteredValue, FieldKey,
@@ -11,9 +11,9 @@ use crate::common::games::{self, GamesWon};
 
 mod common;
 
-/// The engine refuses only what does not fit what the rules say a result looks like.
+/// The engine refuses only what does not fit what the match format says a result looks like.
 #[test]
-fn a_report_not_fitting_the_match_rules_is_refused() {
+fn a_report_not_fitting_the_match_format_is_refused() {
     let (mut machine, open) = games::competition_entering_games();
     let report = || ReportMatchResult::new(games::phase_id(), open, MatchResult::AWins);
     let game = || Part::new().with_value(FieldKey::new("points"), games::count(21, 3));
@@ -50,7 +50,7 @@ fn a_report_not_fitting_the_match_rules_is_refused() {
         .unwrap();
 }
 
-/// The tallies of a match are what its rules read of it once it is decided.
+/// The tallies of a match are what its match format reads of it once it is decided.
 #[test]
 fn a_decided_match_holds_the_tallies_of_its_rules() {
     let (mut machine, open) = games::competition_entering_games();

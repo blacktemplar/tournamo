@@ -103,10 +103,10 @@ type_fact!(
 type_fact!(
     /// Every finished match of the phase holds the tally `T`.
     ///
-    /// Provided by the [`MatchRules`] tallying it, and required by everything reading it, e.g. a
+    /// Provided by the [`MatchFormat`] tallying it, and required by everything reading it, e.g. a
     /// calculator of the points scored.
     ///
-    /// [`MatchRules`]: crate::plugins::match_rules::MatchRules
+    /// [`MatchFormat`]: crate::plugins::match_format::MatchFormat
     MatchTally<T>,
     "The fact that every finished match of the phase holds the tally `T`."
 );

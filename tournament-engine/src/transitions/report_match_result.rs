@@ -7,7 +7,7 @@ use crate::{
         competition::{Competition, MatchId, MatchResult, PhaseId},
         details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
     },
-    plugins::match_rules::Misfit,
+    plugins::match_format::Misfit,
     transitions::CompetitionTransition,
 };
 
@@ -138,7 +138,7 @@ pub enum ReportMatchResultError {
     MatchAlreadyFinished,
     #[error("the phase format does not allow draws")]
     DrawNotAllowed,
-    #[error("the result does not fit the match rules: {0}")]
+    #[error("the result does not fit the match format: {0}")]
     Misfit(#[from] Misfit),
 }
 
@@ -160,7 +160,7 @@ impl Transition<Competition> for ReportMatchResult {
             return Err(Box::new(ReportMatchResultError::DrawNotAllowed));
         }
         phase
-            .match_rules()
+            .match_format()
             .template(phase.data(), r#match)
             .root
             .check(Some(&self.decision), &self.values, &self.parts)

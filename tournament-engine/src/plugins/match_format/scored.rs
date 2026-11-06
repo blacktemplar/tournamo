@@ -1,4 +1,4 @@
-//! The rules of a match decided by a score, e.g. 21–17 or 3–1.
+//! The match format of a match decided by a score, e.g. 21–17 or 3–1.
 
 use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use crate::{
     plugins::{
         Phrase,
         facts::MatchTally,
-        match_rules::{FieldSpec, Hints, Level, MatchRules, PointsScored, Template, ValueKind},
+        match_format::{FieldSpec, Hints, Level, MatchFormat, PointsScored, Template, ValueKind},
     },
     type_map::TypeMap,
 };
@@ -19,8 +19,8 @@ use crate::{
 /// The field of the score of each side.
 pub(crate) const SCORE: FieldKey = FieldKey::new("score");
 
-/// The rules of a match decided by its score: the points or goals each side scored. More wins, the
-/// same is a draw.
+/// The match format of a match decided by its score: the points or goals each side scored. More
+/// wins, the same is a draw.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::scored",
@@ -39,7 +39,7 @@ pub struct Scored {
 }
 
 impl Scored {
-    /// Rules pointing out a score higher than `usual_top_score`, if any.
+    /// A match format pointing out a score higher than `usual_top_score`, if any.
     ///
     /// Requires the `test-util` feature.
     #[cfg(feature = "test-util")]
@@ -96,7 +96,7 @@ pub(crate) fn score_field(usual_top_score: Option<u32>) -> FieldSpec {
 }
 
 #[register]
-impl MatchRules for Scored {
+impl MatchFormat for Scored {
     fn template(&self, _: &PhaseData, _: &Match) -> Template {
         Template {
             root: Level {
@@ -139,10 +139,10 @@ mod tests {
         Part::new().with_value(SCORE, score)
     }
 
-    /// A phase of two players, with one match in round 1, its results entered by `rules`.
-    fn phase(rules: Scored) -> Phase {
+    /// A phase of two players, with one match in round 1, its results entered by `format`.
+    fn phase(format: Scored) -> Phase {
         phase_with(
-            PhaseBuilder::new().results(rules).add_players(2),
+            PhaseBuilder::new().results(format).add_players(2),
             vec![(1, vec![0], vec![1])],
         )
     }
@@ -198,7 +198,7 @@ mod tests {
         let phase = phase(Scored::new(Some(21)));
         let r#match = phase.data().matches().values().next().unwrap();
 
-        let template = phase.match_rules().template(phase.data(), r#match);
+        let template = phase.match_format().template(phase.data(), r#match);
 
         assert_eq!(
             template.root.field(&SCORE).unwrap().hints.max,
@@ -209,12 +209,12 @@ mod tests {
     /// The tags are part of every log and snapshot written, see `transition_log_serialization.rs`.
     #[test]
     fn the_rules_and_their_tally_are_serialized_under_their_tags() {
-        let rules: Box<dyn MatchRules> = Box::new(Scored::default());
+        let format: Box<dyn MatchFormat> = Box::new(Scored::default());
         let mut tallies = TypeMap::new();
         tallies.insert(PointsScored::default());
 
         assert_eq!(
-            serde_json::to_value(&rules).unwrap()["type"],
+            serde_json::to_value(&format).unwrap()["type"],
             "tournament_engine::scored"
         );
         assert_eq!(

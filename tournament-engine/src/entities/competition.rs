@@ -16,7 +16,7 @@ use crate::{
     plugins::{
         PhasePlugins,
         facts::EntrantsPerRanking,
-        match_rules::{self, MatchRules},
+        match_format::{self, MatchFormat},
         metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
         ranker::{HierarchicalRanker, SliceRanker},
@@ -252,8 +252,8 @@ pub struct Phase {
     ranker: HierarchicalRanker,
     metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
     // phases saved by 0.3.0 and earlier knew only who won
-    #[serde(default = "match_rules::default")]
-    match_rules: Box<dyn MatchRules>,
+    #[serde(default = "match_format::default")]
+    match_format: Box<dyn MatchFormat>,
     data: PhaseData,
 }
 
@@ -316,7 +316,7 @@ impl PhaseData {
 impl Phase {
     /// A phase without rankings, matches and byes yet.
     fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
-        let (phase_format, ranker, metrics_calculators, match_rules) = plugins.into_parts();
+        let (phase_format, ranker, metrics_calculators, match_format) = plugins.into_parts();
         Self {
             id,
             data: PhaseData {
@@ -329,7 +329,7 @@ impl Phase {
             phase_format,
             ranker,
             metrics_calculators,
-            match_rules,
+            match_format,
         }
     }
 
@@ -357,9 +357,9 @@ impl Phase {
         &*self.phase_format
     }
 
-    /// The rules of what is entered for a match of this phase.
-    pub fn match_rules(&self) -> &dyn MatchRules {
-        &*self.match_rules
+    /// The match format of this phase: what is entered for its matches.
+    pub fn match_format(&self) -> &dyn MatchFormat {
+        &*self.match_format
     }
 
     /// The answers to a [`Competition::phase_draft`] the plugins of this phase are built from,
@@ -372,7 +372,7 @@ impl Phase {
             self.phase_format.clone(),
             self.ranker.slice_rankers().to_vec(),
             self.metrics_calculators.clone(),
-            self.match_rules.clone(),
+            self.match_format.clone(),
         )
         .expect("the calculators of a phase are in running order")
         .config()
@@ -534,7 +534,7 @@ impl Phase {
         assert!(!r#match.is_finished());
         r#match.contest.decide(decision, values, parts);
         let tallies = self
-            .match_rules
+            .match_format
             .tally(&self.data, &self.data.matches[&match_id]);
         self.data.matches.get_mut(&match_id).unwrap().tallies = tallies;
         for ranking_id in self.data.matches[&match_id].rankings() {
@@ -808,7 +808,7 @@ impl<'de> Deserialize<'de> for Match {
             tallies: TypeMap,
         }
         // Saved in JSON by 0.3.0 and earlier: a `result` and the `annotations` in place of the
-        // `contest`, and no `tallies`, which their rules did not have.
+        // `contest`, and no `tallies`, which their match format did not have.
         #[derive(Deserialize)]
         #[serde(rename = "Match")]
         struct Saved {
@@ -1054,8 +1054,8 @@ impl Match {
         self.decision().is_some()
     }
 
-    /// The tally `T` of this match, see [`MatchRules::tally`]: `None` while it is not finished, or
-    /// if its rules do not tally `T`.
+    /// The tally `T` of this match, see [`MatchFormat::tally`]: `None` while it is not finished, or
+    /// if its match format does not tally `T`.
     pub fn tally<T: TypeMapValue>(&self) -> Option<&T> {
         self.tallies.get::<T>()
     }
@@ -1201,9 +1201,9 @@ impl PhaseBuilder {
         self
     }
 
-    /// Enters the results of matches by `rules`, see [`PhasePluginsBuilder::results`].
-    pub fn results(mut self, rules: impl MatchRules) -> Self {
-        self.plugins = self.plugins.results(rules);
+    /// Enters the results of matches by `format`, see [`PhasePluginsBuilder::results`].
+    pub fn results(mut self, format: impl MatchFormat) -> Self {
+        self.plugins = self.plugins.results(format);
         self
     }
 

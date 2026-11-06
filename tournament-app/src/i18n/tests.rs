@@ -10,7 +10,7 @@ use tournament_engine::{
     EnteredValue, PhasePlugins, Score, Sides,
     plugins::{
         Phrase,
-        match_rules::MatchRules,
+        match_format::MatchFormat,
         metrics_calculator::{
             Cell, MetricsCalculator, PointsBalance, PointsBalanceCalculator, PointsCalculator,
             RoundOfElimination, RoundOfEliminationCalculator, RoundOfFirstLoss,
@@ -320,7 +320,7 @@ fn engine_plugins() -> Vec<&'static PluginEntry> {
         AnyAxis::of::<dyn PhaseFormat>(),
         AnyAxis::of::<dyn SliceRanker>(),
         AnyAxis::of::<dyn MetricsCalculator>(),
-        AnyAxis::of::<dyn MatchRules>(),
+        AnyAxis::of::<dyn MatchFormat>(),
     ]
     .iter()
     .flat_map(AnyAxis::entries)
@@ -347,17 +347,18 @@ fn translatable(entry: &PluginEntry) -> BTreeSet<String> {
             .iter()
             .map(|phrase| PluginText::Cell(phrase.key()).attribute()),
     );
-    if AnyAxis::of::<dyn MatchRules>()
+    if AnyAxis::of::<dyn MatchFormat>()
         .entries()
-        .any(|rules| rules.id() == entry.id())
+        .any(|format| format.id() == entry.id())
     {
         attributes.extend(phrases_of_rules(entry.id()));
     }
     attributes
 }
 
-/// What the result of a match entered by the rules `id` names, as attributes: found from a form to
-/// enter it, in a round robin of two whose results are entered by the rules with their defaults.
+/// What the result of a match entered by the match format `id` names, as attributes: found from a
+/// form to enter it, in a round robin of two whose results are entered by the match format with
+/// their defaults.
 fn phrases_of_rules(id: &str) -> BTreeSet<String> {
     fn collect(part: &PartView, attributes: &mut BTreeSet<String>) {
         attributes.insert(PluginText::Level(part.name.key()).attribute());

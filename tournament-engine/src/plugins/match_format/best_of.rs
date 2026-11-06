@@ -1,5 +1,5 @@
-//! The rules of a match played in games, the first side winning most of them winning the match,
-//! e.g. a best of three games of badminton.
+//! The match format of a match played in games, the first side winning most of them winning the
+//! match, e.g. a best of three games of badminton.
 
 use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
@@ -12,16 +12,16 @@ use crate::{
     plugins::{
         Phrase,
         facts::MatchTally,
-        match_rules::{
-            GamesWon, Level, MatchRules, Parts, PointsScored, Template,
+        match_format::{
+            GamesWon, Level, MatchFormat, Parts, PointsScored, Template,
             scored::{result_of, score, score_field, suggest_by_score},
         },
     },
     type_map::TypeMap,
 };
 
-/// The rules of a match played in up to `games` games, each decided by its score: the side winning
-/// most of them wins the match.
+/// The match format of a match played in up to `games` games, each decided by its score: the side
+/// winning most of them wins the match.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::best_of",
@@ -42,7 +42,7 @@ pub struct BestOf {
 }
 
 impl BestOf {
-    /// Rules of up to `games` games, pointing out no score.
+    /// A match format of up to `games` games, pointing out no score.
     ///
     /// Requires the `test-util` feature.
     #[cfg(feature = "test-util")]
@@ -82,7 +82,7 @@ impl BestOf {
 }
 
 #[register]
-impl MatchRules for BestOf {
+impl MatchFormat for BestOf {
     fn template(&self, _: &PhaseData, _: &Match) -> Template {
         Template {
             root: Level {
@@ -137,7 +137,7 @@ mod tests {
             details::{Decision, EnteredValue, Values},
         },
         plugins::{
-            match_rules::scored::SCORE,
+            match_format::scored::SCORE,
             metrics_calculator::test_utils::{match_id, phase_with},
         },
     };
@@ -150,9 +150,9 @@ mod tests {
             .with_value(SCORE, score)
     }
 
-    fn phase(rules: BestOf) -> Phase {
+    fn phase(format: BestOf) -> Phase {
         phase_with(
-            PhaseBuilder::new().results(rules).add_players(2),
+            PhaseBuilder::new().results(format).add_players(2),
             vec![(1, vec![0], vec![1])],
         )
     }
@@ -178,11 +178,11 @@ mod tests {
 
     #[test]
     fn a_match_is_suggested_won_by_the_side_winning_most_games() {
-        let rules = BestOf::new(3);
+        let format = BestOf::new(3);
         let level = Level::new(Phrase::new("match", "match"));
         let suggest = |games: Vec<Part>| {
             let part = games.into_iter().fold(Part::new(), Part::with_part);
-            rules.suggest(&level, &part)
+            format.suggest(&level, &part)
         };
 
         assert_eq!(
@@ -203,11 +203,11 @@ mod tests {
 
     #[test]
     fn an_even_number_of_games_can_end_in_a_draw() {
-        let rules = BestOf::new(2);
+        let format = BestOf::new(2);
         let level = Level::new(Phrase::new("match", "match"));
         let part = Part::new().with_part(game(21, 3)).with_part(game(3, 21));
 
-        assert_eq!(rules.suggest(&level, &part), Some(MatchResult::Draw));
+        assert_eq!(format.suggest(&level, &part), Some(MatchResult::Draw));
     }
 
     #[test]
@@ -220,12 +220,12 @@ mod tests {
     /// The tags are part of every log and snapshot written, see `transition_log_serialization.rs`.
     #[test]
     fn the_rules_and_their_tally_are_serialized_under_their_tags() {
-        let rules: Box<dyn MatchRules> = Box::new(BestOf::new(3));
+        let format: Box<dyn MatchFormat> = Box::new(BestOf::new(3));
         let mut tallies = TypeMap::new();
         tallies.insert(GamesWon::default());
 
         assert_eq!(
-            serde_json::to_value(&rules).unwrap()["type"],
+            serde_json::to_value(&format).unwrap()["type"],
             "tournament_engine::best_of"
         );
         assert_eq!(

@@ -499,7 +499,7 @@ and enter them for sports it does not know.
 
 **One generic shape, interpreted by a plugin.** What was played is a tree of
 `Part`s with a fixed shape; what it means is the business of the phase's
-`MatchRules`, the `results` of `PhasePlugins` (default `WinnerOnly`: who won,
+`MatchFormat`, the `results` of `PhasePlugins` (default `WinnerOnly`: who won,
 nothing more):
 
 ```rust
@@ -529,18 +529,18 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   and rules vary from tournament to tournament. The engine refuses only what it
   cannot use: a draw where the format allows none, a field, reason or kind of
   value the template does not declare.
-- **The rules plugin** gives per match a `Template` (levels with their names,
+- **The match format** gives per match a `Template` (levels with their names,
   their parts, fields with kind and `Hints` like the usual top score, reasons),
   `suggest`s a result from a part's values for a consumer filling one in (the
   app's `ResultForm`), and derives **tallies** when a match is decided: typed
   `TypeMapValue`s (`PointsScored`, `GamesWon`, …) stored on the match, which
   metrics read with one lookup (`PointsBalanceCalculator`). A tally is a fact
   in the compatibility check (`MatchTally<T>`): a calculator requiring
-  `PointsScored` needs rules providing it. The template sees the match, so it
-  may depend on the stage or on annotations. Rules: `WinnerOnly`, `Scored`,
-  `BestOf`.
+  `PointsScored` needs a match format providing it. The template sees the
+  match, so it may depend on the stage or on annotations. Match formats:
+  `WinnerOnly`, `Scored`, `BestOf`.
 - **Scores are shown generically**: a match's own score, else those of its
-  parts in order (`MatchRow::scores`). A `MatchRules::show` for a sport writing
+  parts in order (`MatchRow::scores`). A `MatchFormat::show` for a sport writing
   its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a sport.
 - **Hints are not rules**: the app turns them into warnings ("23–19 in a game
   to 21?"), never refusals.
@@ -552,14 +552,17 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   and stays outside, keyed by match id, or in annotations.
 
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
-the rules of their rubbers, live reporting (an `UpdatePlay` on open matches
-carrying the whole play, a plain assignment no format or metric reacts to).
+the match formats of their rubbers, live reporting (an `UpdatePlay` on open
+matches carrying the whole play, a plain assignment no format or metric reacts
+to).
 
 Rejected: a plugin-defined details type (metrics and UIs could not read it
 without knowing the plugin); events (no ranking needs more than counts); an
 optional decision on a reported match, or one derived from the values (replay
 would depend on plugin code); a separate type for the match level (two places
-for the match's decision); checking the rules of a sport in the engine.
+for the match's decision); checking the rules of a sport in the engine; the
+name `MatchRules` (the plugin describes the shape of a match, as a
+`PhaseFormat` does of a phase, not the rules of a sport).
 
 ## Persistence
 

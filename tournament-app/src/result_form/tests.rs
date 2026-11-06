@@ -2,7 +2,7 @@ use plugin_factory::{PluginType as _, config::PluginConfig};
 use tournament_engine::{
     Competition, Match,
     plugins::{
-        match_rules::{BestOf, Scored, WinnerOnly},
+        match_format::{BestOf, Scored, WinnerOnly},
         phase_format::RoundRobin,
     },
 };
@@ -96,8 +96,8 @@ fn a_result_chosen_against_the_score_is_taken_with_a_warning() {
 
 #[test]
 fn a_score_above_the_usual_top_is_taken_with_a_warning() {
-    let rules = PluginConfig::of::<Scored>().with("usual_top_score", 21);
-    let (session, id) = started(rules);
+    let format = PluginConfig::of::<Scored>().with("usual_top_score", 21);
+    let (session, id) = started(format);
     let mut form = session.result_form(id).unwrap();
 
     score(&mut form, &[], 23, 21);

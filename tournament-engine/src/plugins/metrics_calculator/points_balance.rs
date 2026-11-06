@@ -1,4 +1,4 @@
-//! The points, or goals, a ranking scored and conceded, as the match rules tallied them.
+//! The points, or goals, a ranking scored and conceded, as the match format tallied them.
 
 use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use crate::{
     plugins::{
         Phrase,
         facts::{CalculatesMetric, MatchTally},
-        match_rules::PointsScored,
+        match_format::PointsScored,
         metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
@@ -112,7 +112,7 @@ impl MetricsCalculator for PointsBalanceCalculator {
     ) -> Vec<(RankingId, Metric)> {
         let PointsScored(points) = *r#match
             .tally::<PointsScored>()
-            .expect("the match rules tally the points scored");
+            .expect("the match format tallies the points scored");
         [Team::A, Team::B]
             .into_iter()
             .flat_map(|team| {
@@ -156,7 +156,7 @@ mod tests {
             details::{Decision, EnteredValue, FieldKey, Sides},
         },
         plugins::{
-            match_rules::Scored,
+            match_format::Scored,
             metrics_calculator::test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
         },
     };

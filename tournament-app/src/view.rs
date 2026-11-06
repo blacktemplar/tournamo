@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 use tournament_engine::{
     EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides,
-    plugins::{match_rules::Level, metrics_calculator::Cell, phase_format::Stage},
+    plugins::{match_format::Level, metrics_calculator::Cell, phase_format::Stage},
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
 
@@ -102,7 +102,7 @@ pub struct MatchRow {
     /// order, e.g. the games of a best of; none if it has none. Said in the operator's language by
     /// [`Translator::scores`](crate::i18n::Translator::scores).
     pub scores: Vec<Sides<Option<EnteredValue>>>,
-    /// Whether its rules enter more than who won, e.g. a score, which a
+    /// Whether its match format enters more than who won, e.g. a score, which a
     /// [`ResultForm`](crate::result_form::ResultForm) enters.
     pub details: bool,
 }
@@ -486,7 +486,7 @@ pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>
             .iter()
             .find_map(|field| part.value(field.key.key()).copied())
     };
-    let template = phase.match_rules().template(phase.data(), r#match);
+    let template = phase.match_format().template(phase.data(), r#match);
     let contest = r#match.contest();
     match score(&template.root, contest) {
         Some(score) => vec![score],

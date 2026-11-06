@@ -1,4 +1,5 @@
-//! The tallies of the engine's match rules, see [`MatchRules::tally`](super::MatchRules::tally).
+//! The tallies of the engine's match formats, see
+//! [`MatchFormat::tally`](super::MatchFormat::tally).
 
 use serde::{Deserialize, Serialize};
 

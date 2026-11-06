@@ -223,7 +223,7 @@ draw-of = { $a } – { $b }: draw
 won = { $team } won
 reopen = Reopen
 reopen-match = Reopen match { $number }
-# the result of a match whose rules enter more than who won, e.g. a score, in a dialog
+# the result of a match whose match format enters more than who won, e.g. a score, in a dialog
 open-result = Enter result
 open-result-of = Enter result of match { $number }
 result-title = Result of match { $number }

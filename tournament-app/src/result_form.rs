@@ -1,22 +1,23 @@
 //! The result of a match being entered on a screen, as a form generated from the template of its
-//! match rules.
+//! match format.
 //!
 //! A [`ResultForm`] holds what was entered for each part of a match: the match itself, and its
-//! games, sets or rubbers, as deep as the rules divide it. It hands out a [`ResultView`]: every
-//! part with its fields and their values, the result chosen or else the one the rules suggest from
-//! what was entered, and warnings of what looks like a typo. A screen lays it out and hands what
-//! the operator does back to the form, by the path of the part it was done to; once done, it hands
-//! the form to [`Session::report_form`](crate::session::Session::report_form).
+//! games, sets or rubbers, as deep as the match format divides it. It hands out a [`ResultView`]:
+//! every part with its fields and their values, the result chosen or else the one the match format
+//! suggests from what was entered, and warnings of what looks like a typo. A screen lays it out and
+//! hands what the operator does back to the form, by the path of the part it was done to; once
+//! done, it hands the form to [`Session::report_form`](crate::session::Session::report_form).
 //!
 //! Nothing entered is refused for breaking the rules of a sport: the form only warns of a value
-//! beyond what the rules call usual, and of a result chosen against the one the values suggest.
+//! beyond what the match format calls usual, and of a result chosen against the one the values
+//! suggest.
 
 use tournament_engine::{
     Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Sides, Team,
     Values,
     plugins::{
         Phrase,
-        match_rules::{FieldSpec, Level, MatchRules, Parts, Template, ValueKind},
+        match_format::{FieldSpec, Level, MatchFormat, Parts, Template, ValueKind},
     },
 };
 
@@ -26,7 +27,7 @@ use crate::i18n::Text;
 #[derive(Clone)]
 pub struct ResultForm {
     match_id: MatchId,
-    rules: Box<dyn MatchRules>,
+    format: Box<dyn MatchFormat>,
     template: Template,
     root: Entry,
 }
@@ -76,9 +77,9 @@ impl Entry {
 /// What a [`ResultForm`] shows: plain data for a screen to lay out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResultView {
-    /// The id of the match rules, whose message translates the phrases of the parts, see
+    /// The id of the match format, whose message translates the phrases of the parts, see
     /// [`Translator::plugin_phrase`](crate::i18n::Translator::plugin_phrase).
-    pub rules: &'static str,
+    pub match_format: &'static str,
     /// The match itself.
     pub root: PartView,
 }
@@ -118,12 +119,12 @@ pub struct FieldView {
 
 impl ResultForm {
     /// A form with nothing entered for the match `match_id`, whose result looks like `template`,
-    /// entered by `rules`.
-    pub(crate) fn new(match_id: MatchId, rules: Box<dyn MatchRules>, template: Template) -> Self {
+    /// entered by `format`.
+    pub(crate) fn new(match_id: MatchId, format: Box<dyn MatchFormat>, template: Template) -> Self {
         let root = Entry::empty(&template.root);
         Self {
             match_id,
-            rules,
+            format,
             template,
             root,
         }
@@ -188,7 +189,7 @@ impl ResultForm {
 
     pub fn view(&self) -> ResultView {
         ResultView {
-            rules: plugin_factory::id_of(&*self.rules),
+            match_format: plugin_factory::id_of(&*self.format),
             root: self
                 .part_view(&self.template.root, &self.root, Vec::new())
                 .0,
@@ -223,7 +224,7 @@ impl ResultForm {
         for child in children.into_iter().take(last.map_or(0, |last| last + 1)) {
             part = part.with_part(child);
         }
-        let suggested = self.rules.suggest(level, &part);
+        let suggested = self.format.suggest(level, &part);
         let result = entry.chosen.or(suggested);
         let mut warnings = Vec::new();
         if let (Some(chosen), Some(suggested)) = (entry.chosen, suggested)

@@ -1,4 +1,4 @@
-//! The match rules of a phase: what is entered for its matches and what it means, see DESIGN.md,
+//! The match format of a phase: what is entered for its matches and what it means, see DESIGN.md,
 //! *Match details*.
 
 use dyn_clone::DynClone;
@@ -25,17 +25,17 @@ use crate::{
 
 /// What is entered for the matches of a phase, and what it means.
 ///
-/// The engine trusts what is reported: rules describe what a result looks like, so that a consumer
-/// can show and enter it, and refuse only what does not fit that description, never a result
-/// breaking the rules of a sport.
+/// The engine trusts what is reported: a match format describes what a result looks like, so that a
+/// consumer can show and enter it, and refuse only what does not fit that description, never a
+/// result breaking the rules of a sport.
 #[axis]
-pub trait MatchRules: Plugin + DynClone {
+pub trait MatchFormat: Plugin + DynClone {
     /// What a result of `match` looks like. May depend on the match, e.g. on its stage.
     fn template(&self, phase_data: &PhaseData, r#match: &Match) -> Template;
 
     /// What the metrics read of `match`, which has just been decided: its tallies, e.g. the points
     /// each side scored, from its [contest](Match::contest). Each tally is declared as a
-    /// [`MatchTally`](crate::plugins::facts::MatchTally) the rules provide.
+    /// [`MatchTally`](crate::plugins::facts::MatchTally) the match format provides.
     ///
     /// The contest fits the [`template`](Self::template), but is not checked against the rules of
     /// any sport: a tally takes what was entered, as it was entered.
@@ -47,7 +47,7 @@ pub trait MatchRules: Plugin + DynClone {
     fn suggest(&self, level: &Level, part: &Part) -> Option<MatchResult>;
 }
 
-dyn_clone::clone_trait_object!(MatchRules);
+dyn_clone::clone_trait_object!(MatchFormat);
 
 /// What a result of a match looks like: the match as its root level.
 #[derive(Debug, Clone, PartialEq)]
@@ -198,12 +198,12 @@ pub struct ReasonSpec {
     pub label: Phrase,
 }
 
-/// The rules of a phase that does not choose any: [`WinnerOnly`].
-pub(crate) fn default() -> Box<dyn MatchRules> {
+/// The match format of a phase that does not choose one: [`WinnerOnly`].
+pub(crate) fn default() -> Box<dyn MatchFormat> {
     Box::new(WinnerOnly)
 }
 
-/// The rules of a match decided by its winner alone, or drawn, with nothing else entered.
+/// The match format of a match decided by its winner alone, or drawn, with nothing else entered.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::winner_only",
@@ -213,7 +213,7 @@ pub(crate) fn default() -> Box<dyn MatchRules> {
 pub struct WinnerOnly;
 
 #[register]
-impl MatchRules for WinnerOnly {
+impl MatchFormat for WinnerOnly {
     fn template(&self, _: &PhaseData, _: &Match) -> Template {
         Template {
             root: Level::new(Phrase::new("match", "match")),

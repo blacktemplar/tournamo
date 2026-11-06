@@ -1,4 +1,4 @@
-//! Match rules of games, standing in for those of a third party: who won how many games, each of
+//! A match format of games, standing in for those of a third party: who won how many games, each of
 //! up to three games scored in points.
 
 use serde::{Deserialize, Serialize};
@@ -11,8 +11,8 @@ use tournament_engine::{
     plugins::{
         Phrase,
         facts::MatchTally,
-        match_rules::{
-            FieldSpec, Hints, Level, MatchRules, Parts, ReasonSpec, Template, ValueKind,
+        match_format::{
+            FieldSpec, Hints, Level, MatchFormat, Parts, ReasonSpec, Template, ValueKind,
         },
     },
     uuid::Uuid,
@@ -25,8 +25,8 @@ pub struct GamesWon(pub Sides<u32>);
 #[typetag::serde(name = "test::games_won")]
 impl TypeMapValue for GamesWon {}
 
-/// Rules entering the games won by each side, with the points of each of up to three games, and
-/// tallying the games each side won.
+/// A match format entering the games won by each side, with the points of each of up to three
+/// games, and tallying the games each side won.
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(id = "test::games", label = "games", declare_static = Self::declare_static)]
 pub struct Games;
@@ -38,7 +38,7 @@ impl Games {
 }
 
 #[register]
-impl MatchRules for Games {
+impl MatchFormat for Games {
     fn template(&self, _: &PhaseData, _: &Match) -> Template {
         let points = FieldSpec {
             key: FieldKey::new("points"),

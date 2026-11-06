@@ -3,7 +3,7 @@ use plugin_factory::schema::DependencyOrderedSetError;
 use crate::{
     PhasePlugins,
     plugins::{
-        match_rules::{self, MatchRules},
+        match_format::{self, MatchFormat},
         metrics_calculator::MetricsCalculator,
         phase_format::{PhaseFormat, RoundRobin},
         ranker::SliceRanker,
@@ -52,7 +52,7 @@ pub struct PhasePluginsBuilder {
     format: Option<Box<dyn PhaseFormat>>,
     ranking: Vec<Box<dyn SliceRanker>>,
     metrics: Vec<Box<dyn MetricsCalculator>>,
-    results: Option<Box<dyn MatchRules>>,
+    results: Option<Box<dyn MatchFormat>>,
 }
 
 impl PhasePluginsBuilder {
@@ -75,9 +75,9 @@ impl PhasePluginsBuilder {
         self
     }
 
-    /// Enters the results of matches by `rules`, replacing rules given before.
-    pub fn results(mut self, rules: impl MatchRules) -> Self {
-        self.results = Some(Box::new(rules));
+    /// Enters the results of matches by `format`, replacing a match format given before.
+    pub fn results(mut self, format: impl MatchFormat) -> Self {
+        self.results = Some(Box::new(format));
         self
     }
 
@@ -97,7 +97,7 @@ impl PhasePluginsBuilder {
     /// [`DependencyOrderedSet::new`]: plugin_factory::schema::DependencyOrderedSet::new
     pub fn build(self) -> Result<PhasePlugins, DependencyOrderedSetError> {
         let format = self.format.unwrap_or_else(|| Box::new(RoundRobin));
-        let results = self.results.unwrap_or_else(match_rules::default);
+        let results = self.results.unwrap_or_else(match_format::default);
         PhasePlugins::from_parts(format, self.ranking, self.metrics, results)
     }
 }

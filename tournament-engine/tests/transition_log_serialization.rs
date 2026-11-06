@@ -504,7 +504,10 @@ fn every_plugin_is_serialized_under_its_id() {
         plugins["format"]["type"],
         "tournament_engine::single_elimination"
     );
-    assert_eq!(plugins["results"]["type"], "tournament_engine::winner_only");
+    assert_eq!(
+        plugins["match_format"]["type"],
+        "tournament_engine::winner_only"
+    );
     assert_eq!(
         ids(&plugins["ranking"]),
         [

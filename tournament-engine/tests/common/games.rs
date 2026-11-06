@@ -109,7 +109,10 @@ pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
             ))))
             .unwrap();
     }
-    let plugins = PhasePluginsBuilder::new().results(Games).build().unwrap();
+    let plugins = PhasePluginsBuilder::new()
+        .match_format(Games)
+        .build()
+        .unwrap();
     machine
         .apply_transition(AddPhase::new(phase_id(), plugins))
         .unwrap();

@@ -379,7 +379,7 @@ fn phrases_of_rules(id: &str) -> BTreeSet<String> {
     let draft = session
         .phase_draft(RoundRobin::ID)
         .unwrap()
-        .with("results", PluginConfig::new(id))
+        .with("match_format", PluginConfig::new(id))
         .and_then(|draft| draft.with_defaults())
         .unwrap();
     session.add_phase(&draft).unwrap();

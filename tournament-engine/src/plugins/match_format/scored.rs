@@ -142,7 +142,7 @@ mod tests {
     /// A phase of two players, with one match in round 1, its results entered by `format`.
     fn phase(format: Scored) -> Phase {
         phase_with(
-            PhaseBuilder::new().results(format).add_players(2),
+            PhaseBuilder::new().match_format(format).add_players(2),
             vec![(1, vec![0], vec![1])],
         )
     }

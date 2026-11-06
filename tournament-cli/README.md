@@ -94,6 +94,10 @@ tournament*> add-phase
   random rounds — for many entrants and little time: some rounds of a round robin, chosen at random, so that nobody meets anyone twice
 > round robin — everyone plays everyone
   single elimination — the loser of a match is out, draws are not allowed
+? Match format
+> winner only — who won a match, or that it was drawn, without a score
+  best of games — the side winning most games wins, each game decided by its score
+  score — the points or goals each side scored
 ? Ranked by
 > more points
   more Sonneborn-Berger

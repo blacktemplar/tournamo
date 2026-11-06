@@ -18,7 +18,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
   old snapshots load; benchmark `large_tournament` (no change measured,
   `Match` grew from 160 to 208 bytes)
 - [x] 3. `MatchFormat` axis: `Template`, `Level`, `Parts`, `FieldSpec`, `Hints`,
-  plugin `WinnerOnly`; `PhasePlugins.results` (old phases load as `WinnerOnly`);
+  plugin `WinnerOnly`; `PhasePlugins.match_format` (old phases load as `WinnerOnly`);
   `ReportMatchResult` checks the structure against the template; questionnaire
   and `PhaseForm` show the match format
 - [x] 4. Tallies: `Match::tally`, `MatchFormat::tally` in `apply`, the fact

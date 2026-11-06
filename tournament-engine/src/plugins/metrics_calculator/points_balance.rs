@@ -164,7 +164,7 @@ mod tests {
     fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Phase {
         phase_with_byes(
             PhaseBuilder::new()
-                .results(Scored::default())
+                .match_format(Scored::default())
                 .add_metric(PointsBalanceCalculator)
                 .add_players(players),
             matches,

@@ -116,6 +116,14 @@ pub struct PhasePlugins {
         default = Box::new(phase_format::RoundRobin)
     )]
     format: Box<dyn PhaseFormat>,
+    // phases added by 0.3.0 and earlier knew only who won
+    #[serde(default = "match_format::default")]
+    #[plugin(
+        label = "match format",
+        description = "what is entered for a match",
+        default = match_format::default()
+    )]
+    match_format: Box<dyn MatchFormat>,
     #[serde(default)]
     #[plugin(
         label = "ranked by",
@@ -125,25 +133,17 @@ pub struct PhasePlugins {
     #[serde(default)]
     #[plugin(label = "metrics", description = "calculated for every entrant")]
     metrics: DependencyOrderedSet<dyn MetricsCalculator>,
-    // phases added by 0.3.0 and earlier knew only who won
-    #[serde(default = "match_format::default")]
-    #[plugin(
-        label = "results",
-        description = "what is entered for a match",
-        default = match_format::default()
-    )]
-    results: Box<dyn MatchFormat>,
 }
 
 impl PhasePlugins {
     /// The name of the field taking the format.
     pub const FORMAT: &str = "format";
+    /// The name of the field taking the match format.
+    pub const MATCH_FORMAT: &str = "match_format";
     /// The name of the field taking the ranking criteria.
     pub const RANKING: &str = "ranking";
     /// The name of the field taking the metrics calculators.
     pub const METRICS: &str = "metrics";
-    /// The name of the field taking the match format.
-    pub const RESULTS: &str = "results";
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
     pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];
@@ -193,19 +193,19 @@ impl PhasePlugins {
         draft.with_defaults()
     }
 
-    /// The plugins of a phase played in `format`, ranked by `ranking`, calculating the metrics of
-    /// `metrics`, put into the order they run in, and entering results by `results`.
+    /// The plugins of a phase played in `format`, entering results by `match_format`, ranked by
+    /// `ranking`, calculating the metrics of `metrics`, put into the order they run in.
     pub(crate) fn from_parts(
         format: Box<dyn PhaseFormat>,
+        match_format: Box<dyn MatchFormat>,
         ranking: Vec<Box<dyn SliceRanker>>,
         metrics: Vec<Box<dyn MetricsCalculator>>,
-        results: Box<dyn MatchFormat>,
     ) -> Result<Self, plugin_factory::schema::DependencyOrderedSetError> {
         Ok(Self {
             format,
+            match_format,
             ranking,
             metrics: DependencyOrderedSet::new(metrics)?,
-            results,
         })
     }
 
@@ -224,8 +224,8 @@ impl PhasePlugins {
     }
 
     /// The match format: what is entered for a match.
-    pub fn results(&self) -> &dyn MatchFormat {
-        &*self.results
+    pub fn match_format(&self) -> &dyn MatchFormat {
+        &*self.match_format
     }
 
     /// The answers to a [`Competition::phase_draft`](crate::Competition::phase_draft) these
@@ -234,20 +234,20 @@ impl PhasePlugins {
         Config::of(self).expect("every plugin serializes as it is configured")
     }
 
-    /// The format, the ranker, the metrics calculators and the match format a phase is run with.
+    /// The format, the match format, the ranker and the metrics calculators a phase is run with.
     pub(crate) fn into_parts(
         self,
     ) -> (
         Box<dyn PhaseFormat>,
+        Box<dyn MatchFormat>,
         HierarchicalRanker,
         Metrics,
-        Box<dyn MatchFormat>,
     ) {
         (
             self.format,
+            self.match_format,
             HierarchicalRanker::new(self.ranking),
             self.metrics.into_iter().collect(),
-            self.results,
         )
     }
 }
@@ -440,9 +440,9 @@ mod tests {
             names,
             [
                 PhasePlugins::FORMAT,
+                PhasePlugins::MATCH_FORMAT,
                 PhasePlugins::RANKING,
                 PhasePlugins::METRICS,
-                PhasePlugins::RESULTS,
             ]
         );
     }
@@ -671,11 +671,11 @@ mod tests {
         let builder = PhasePluginsBuilder::new().add_metric(PointsBalanceCalculator);
 
         assert!(matches!(
-            check(&builder.clone().results(WinnerOnly).build().unwrap()),
+            check(&builder.clone().match_format(WinnerOnly).build().unwrap()),
             Err(Incompatibility::FactNotProvided { .. })
         ));
         assert_eq!(
-            check(&builder.results(Scored::default()).build().unwrap()),
+            check(&builder.match_format(Scored::default()).build().unwrap()),
             Ok(())
         );
     }

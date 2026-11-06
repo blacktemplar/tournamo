@@ -316,7 +316,7 @@ impl PhaseData {
 impl Phase {
     /// A phase without rankings, matches and byes yet.
     fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
-        let (phase_format, ranker, metrics_calculators, match_format) = plugins.into_parts();
+        let (phase_format, match_format, ranker, metrics_calculators) = plugins.into_parts();
         Self {
             id,
             data: PhaseData {
@@ -370,9 +370,9 @@ impl Phase {
     pub fn config(&self) -> Config {
         PhasePlugins::from_parts(
             self.phase_format.clone(),
+            self.match_format.clone(),
             self.ranker.slice_rankers().to_vec(),
             self.metrics_calculators.clone(),
-            self.match_format.clone(),
         )
         .expect("the calculators of a phase are in running order")
         .config()
@@ -1201,9 +1201,9 @@ impl PhaseBuilder {
         self
     }
 
-    /// Enters the results of matches by `format`, see [`PhasePluginsBuilder::results`].
-    pub fn results(mut self, format: impl MatchFormat) -> Self {
-        self.plugins = self.plugins.results(format);
+    /// Enters the results of matches by `format`, see [`PhasePluginsBuilder::match_format`].
+    pub fn match_format(mut self, format: impl MatchFormat) -> Self {
+        self.plugins = self.plugins.match_format(format);
         self
     }
 

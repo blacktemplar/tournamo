@@ -805,7 +805,7 @@ mod tests {
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))
-            .and_then(|draft| draft.with("results", plugin::<WinnerOnly>()))
+            .and_then(|draft| draft.with("match_format", plugin::<WinnerOnly>()))
             .unwrap()
     }
 
@@ -1254,7 +1254,7 @@ mod tests {
         let mut session = Session::new(MemoryStorage::default());
         output(&mut session, "add Alice Bob");
         let draft = draft(&session, plugin::<RoundRobin>(), Vec::new(), Vec::new())
-            .with("results", plugin::<BestOf>().with("games", 3))
+            .with("match_format", plugin::<BestOf>().with("games", 3))
             .and_then(|draft| draft.with_defaults())
             .unwrap();
         session.add_phase(&draft).unwrap();

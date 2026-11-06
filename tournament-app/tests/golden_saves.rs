@@ -340,7 +340,7 @@ fn scored(session: &mut Session) {
         .unwrap();
     draft
         .set(
-            &ConfigPath::ROOT.field("results"),
+            &ConfigPath::ROOT.field("match_format"),
             PluginConfig::of::<Scored>().with("usual_top_score", 10),
         )
         .unwrap();
@@ -362,7 +362,7 @@ fn best_of(session: &mut Session) {
     let mut draft = session.phase_draft(SingleElimination::ID).unwrap();
     draft
         .set(
-            &ConfigPath::ROOT.field("results"),
+            &ConfigPath::ROOT.field("match_format"),
             PluginConfig::of::<BestOf>().with("games", 3),
         )
         .unwrap();

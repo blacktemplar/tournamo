@@ -23,7 +23,7 @@ fn started(results: PluginConfig) -> (Session, MatchId) {
     let draft = session
         .phase_draft(RoundRobin::ID)
         .unwrap()
-        .with("results", results)
+        .with("match_format", results)
         .and_then(|draft| draft.with_defaults())
         .unwrap();
     session.add_phase(&draft).unwrap();

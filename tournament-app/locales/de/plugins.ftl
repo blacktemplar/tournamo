@@ -5,12 +5,12 @@
 phase =
     .field-format = Format
     .field-format-description = wie die Spiele angesetzt werden
+    .field-match_format = Spielformat
+    .field-match_format-description = was zu einem Spiel eingetragen wird
     .field-ranking = Reihenfolge der Tabelle
     .field-ranking-description = die Besten zuerst; jedes Kriterium entscheidet nur, wo die vor ihm gleich sind
     .field-metrics = Kennzahlen
     .field-metrics-description = für jeden Teilnehmer berechnet
-    .field-results = Ergebnisse
-    .field-results-description = was zu einem Spiel eingetragen wird
 
 ## Match formats
 

@@ -50,9 +50,9 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct PhasePluginsBuilder {
     format: Option<Box<dyn PhaseFormat>>,
+    match_format: Option<Box<dyn MatchFormat>>,
     ranking: Vec<Box<dyn SliceRanker>>,
     metrics: Vec<Box<dyn MetricsCalculator>>,
-    results: Option<Box<dyn MatchFormat>>,
 }
 
 impl PhasePluginsBuilder {
@@ -68,16 +68,16 @@ impl PhasePluginsBuilder {
         self
     }
 
+    /// Enters the results of matches by `format`, replacing a match format given before.
+    pub fn match_format(mut self, format: impl MatchFormat) -> Self {
+        self.match_format = Some(Box::new(format));
+        self
+    }
+
     /// Ranks the phase by `criterion` after the criteria given before, i.e. `criterion` breaks the
     /// ties those leave.
     pub fn add_ranking(mut self, criterion: impl SliceRanker) -> Self {
         self.ranking.push(Box::new(criterion));
-        self
-    }
-
-    /// Enters the results of matches by `format`, replacing a match format given before.
-    pub fn results(mut self, format: impl MatchFormat) -> Self {
-        self.results = Some(Box::new(format));
         self
     }
 
@@ -97,8 +97,8 @@ impl PhasePluginsBuilder {
     /// [`DependencyOrderedSet::new`]: plugin_factory::schema::DependencyOrderedSet::new
     pub fn build(self) -> Result<PhasePlugins, DependencyOrderedSetError> {
         let format = self.format.unwrap_or_else(|| Box::new(RoundRobin));
-        let results = self.results.unwrap_or_else(match_format::default);
-        PhasePlugins::from_parts(format, self.ranking, self.metrics, results)
+        let match_format = self.match_format.unwrap_or_else(match_format::default);
+        PhasePlugins::from_parts(format, match_format, self.ranking, self.metrics)
     }
 }
 

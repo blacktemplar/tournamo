@@ -3,13 +3,13 @@
 use tournament_gui_e2e::{Gui, run_in_new_competition, thirtyfour::error::WebDriverResult};
 
 /// Enters Alice and Bob and starts a round robin of them whose results are entered by the match
-/// format labelled `results`.
-async fn start(gui: &Gui, results: &str) -> WebDriverResult<()> {
+/// format labelled `match_format`.
+async fn start(gui: &Gui, match_format: &str) -> WebDriverResult<()> {
     for name in ["Alice", "Bob"] {
         gui.add_entrant(name).await?;
     }
     gui.choose_format("Round robin").await?;
-    gui.choose_plugin("results", results).await?;
+    gui.choose_plugin("match_format", match_format).await?;
     gui.click("Add phase").await?;
     gui.click("Start").await
 }
@@ -82,7 +82,7 @@ async fn a_knockout_shows_the_score_in_its_bracket() {
             gui.add_entrant(name).await?;
         }
         gui.choose_format("Single elimination").await?;
-        gui.choose_plugin("results", "Score").await?;
+        gui.choose_plugin("match_format", "Score").await?;
         gui.click("Add phase").await?;
         gui.click("Start").await?;
         gui.click_labelled("Enter result of match 1").await?;

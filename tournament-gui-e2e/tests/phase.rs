@@ -23,9 +23,9 @@ async fn a_format_brings_what_it_recommends() {
         gui.click("Add phase").await?;
         gui.expect_phase(&[
             "Single elimination",
+            "Winner only",
             "Later first loss, fewer losses",
             "Round of the first loss, win-draw-loss record",
-            "Winner only",
         ])
         .await
     })
@@ -150,10 +150,10 @@ async fn enter_in_a_number_takes_it_without_adding_the_phase() {
         gui.click("Add phase").await?;
         gui.expect_phase(&[
             "Monster DYP",
+            "Winner only",
             "More points",
             "Win-draw-loss record",
             "Points",
-            "Winner only",
         ])
         .await
     })
@@ -218,11 +218,11 @@ async fn a_number_not_taken_keeps_the_phase_from_being_added() {
         gui.click("Add phase").await?;
         gui.expect_phase(&[
             "Round robin",
+            "Winner only",
             "More points, more Sonneborn-Berger",
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
-            "Winner only",
         ])
         .await
     })
@@ -442,11 +442,11 @@ async fn a_ranking_of_nothing_is_warned_about() {
         gui.click("Add phase").await?;
         gui.expect_phase(&[
             "Round robin",
+            "Winner only",
             "(none)",
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
-            "Winner only",
         ])
         .await
     })
@@ -637,21 +637,21 @@ async fn the_phase_is_edited_after_the_start_in_a_dialog() {
             .await?;
         gui.expect_phase(&[
             "Round robin",
+            "Winner only",
             "More Sonneborn-Berger, more points",
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
-            "Winner only",
         ])
         .await?;
         gui.click("Undo").await?;
         gui.expect_phase(&[
             "Round robin",
+            "Winner only",
             "More points, more Sonneborn-Berger",
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
-            "Winner only",
         ])
         .await?;
         gui.click("Matches & standings").await?;
@@ -683,11 +683,11 @@ async fn an_edit_a_result_does_not_fit_is_refused_in_the_dialog() {
         gui.expect_no_dialog().await?;
         gui.expect_phase(&[
             "Round robin",
+            "Winner only",
             "More points, more Sonneborn-Berger",
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
-            "Winner only",
         ])
         .await
     })
@@ -722,11 +722,11 @@ async fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
             .await?;
         gui.expect_phase(&[
             "Round robin",
+            "Winner only",
             "More points, more Sonneborn-Berger",
             "Win-draw-loss record",
             "Points",
             "Sonneborn-Berger",
-            "Winner only",
         ])
         .await?;
         gui.click("Matches & standings").await?;

@@ -247,7 +247,7 @@ result-of = Result: { $part }
 result-as-entered = As entered: { $result }
 result-open = Not decided yet
 result-is = { $part }: { $result }
-# a result with the parts each side won, the winner's first, e.g. 2–1 in games; $result: what `wins` or `draw` say
+# a result, or that there is none yet, with the parts each side won in the order of the sides, e.g. 2–1 in games; $result: what `wins`, `draw` or `result-open` say
 result-with-parts-won = { $result } ({ $won })
 # a button, rarely used: choosing results other than those the values suggest
 result-override = Override result

@@ -100,7 +100,7 @@ async fn the_games_of_a_best_of_decide_the_match() {
             gui.enter_value(&format!("Score of Bob in Game {game}"), bob)
                 .await?;
         }
-        gui.expect_result_outcomes(&[
+        gui.expect_result_outcomes_either_way(&[
             "Game 1: Alice wins",
             "Game 2: Bob wins",
             "Game 3: Alice wins",
@@ -150,7 +150,8 @@ async fn the_games_of_a_best_of_are_entered_in_the_row_of_the_match() {
             gui.enter_in_row(&format!("Score of Bob in Game {game}, match 1"), bob)
                 .await?;
         }
-        gui.expect_row_outcomes(&["Alice wins (2–1)"]).await?;
+        gui.expect_row_outcomes_either_way(&["Alice wins (2–1)"])
+            .await?;
         gui.press_enter_in_row("Score of Bob in Game 3, match 1")
             .await?;
 
@@ -195,7 +196,8 @@ async fn a_result_the_row_does_not_decide_is_not_reported() {
             .await?;
         gui.enter_in_row("Score of Bob in Game 1, match 1", "17")
             .await?;
-        gui.expect_row_outcomes(&["Not decided yet"]).await?;
+        gui.expect_row_outcomes_either_way(&["Not decided yet (1–0)"])
+            .await?;
 
         gui.click_labelled("Report match 1").await?;
 
@@ -228,7 +230,8 @@ async fn the_row_of_a_match_follows_the_phase_edited() {
                 .await?;
         }
         // two games of five
-        gui.expect_row_outcomes(&["Not decided yet"]).await?;
+        gui.expect_row_outcomes_either_way(&["Not decided yet (2–0)"])
+            .await?;
         gui.enter_in_row("Score of Alice in Game 3, match 1", "21")
             .await
     })

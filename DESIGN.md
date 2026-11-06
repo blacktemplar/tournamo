@@ -545,8 +545,11 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   match played in parts at one level (`MatchRow::parts_won`: 2–1 in games),
   counted from the parts' decisions rather than read from a tally, so that a
   form shows them before the match is decided too, and a warning of parts
-  entered after the match was decided says where it was (3–0). A `MatchFormat::show` for a sport writing
-  its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a sport.
+  entered after the match was decided says where it was (3–0). Always in the
+  order of the sides, as the scores beside them, also after who won (Bob wins
+  (1–3)), rather than the winner's first. A `MatchFormat::show` for a sport
+  writing its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a
+  sport.
 - **Hints are not rules**: the app turns them into warnings ("23–19 in a game
   to 21?"), never refusals.
 - **The winning score is what a winner has, not a maximum**: in a game to 21

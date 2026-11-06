@@ -98,7 +98,7 @@ fn QuickResult(
         Some(MatchResult::Draw) => Some(tr.get("draw")),
         None => Some(tr.get("result-open")),
     }
-    .map(|outcome| with_parts_won(&tr, outcome, quick.result, quick.parts_won));
+    .map(|outcome| with_parts_won(&tr, outcome, quick.parts_won));
     let match_format = quick.match_format;
     let form_id = format!("quick-result-{}", row.number);
     rsx! {
@@ -569,7 +569,7 @@ fn ResultChoice(
             Some(result) => said(result),
             None => tr.get("result-open"),
         };
-        let result = with_parts_won(&tr, result, part.result, part.parts_won);
+        let result = with_parts_won(&tr, result, part.parts_won);
         let outcome = t!(
             tr,
             "result-is",
@@ -617,23 +617,16 @@ fn ResultChoice(
     }
 }
 
-/// `said`, what a part's `result` says, with the parts each side won once it has one, the winner's
-/// first, e.g. "Bob wins (3–1)". Without a result, `said` alone, which the values entered show.
-fn with_parts_won(
-    tr: &Translator,
-    said: String,
-    result: Option<MatchResult>,
-    parts_won: Option<Sides<u32>>,
-) -> String {
-    let won = match (result, parts_won) {
-        (Some(MatchResult::BWins), Some(won)) => Sides::new(won.b, won.a),
-        (Some(_), Some(won)) => won,
-        _ => return said,
-    };
-    t!(
-        tr,
-        "result-with-parts-won",
-        result = said,
-        won = tr.score(won)
-    )
+/// `said`, what is said of a part's result, with the parts each side won, if any, in the order of
+/// the sides, e.g. "Bob wins (1–3)" or "Not decided yet (1–1)".
+fn with_parts_won(tr: &Translator, said: String, parts_won: Option<Sides<u32>>) -> String {
+    match parts_won {
+        Some(won) => t!(
+            tr,
+            "result-with-parts-won",
+            result = said,
+            won = tr.score(won)
+        ),
+        None => said,
+    }
 }

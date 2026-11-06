@@ -2049,6 +2049,23 @@ impl Gui {
             .await
     }
 
+    /// Waits until the rows of results entered say `outcomes`, as [`Self::expect_row_outcomes`]
+    /// does, with each score in them read from either side, e.g. `"Alice wins (2–1)"` or
+    /// `"Alice wins (1–2)"`: a test must not depend on the sides.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_row_outcomes_either_way(&self, outcomes: &[&str]) -> WebDriverResult<()> {
+        let mirrored: Vec<String> = outcomes.iter().map(|outcome| mirrored(outcome)).collect();
+        let mirrored: Vec<&str> = mirrored.iter().map(String::as_str).collect();
+        self.page
+            .expect_texts_of(
+                By::Css(".quick-result output:not(:empty)"),
+                &[outcomes, &mirrored],
+            )
+            .await
+    }
+
     /// Waits until the value of a result labelled `label` is in the row of its match, e.g. a game
     /// of a best of once the match needs it, or is not there, as `shown` says.
     ///
@@ -2190,6 +2207,26 @@ impl Gui {
             .await
     }
 
+    /// Waits until the dialog of a result open shows `outcomes`, as
+    /// [`Self::expect_result_outcomes`] does, with each score in them read from either side, e.g.
+    /// `"Match: Alice wins (2–1)"` or `"Match: Alice wins (1–2)"`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_result_outcomes_either_way(
+        &self,
+        outcomes: &[&str],
+    ) -> WebDriverResult<()> {
+        let mirrored: Vec<String> = outcomes.iter().map(|outcome| mirrored(outcome)).collect();
+        let mirrored: Vec<&str> = mirrored.iter().map(String::as_str).collect();
+        self.page
+            .expect_texts_of(
+                By::Css("[role=dialog] .result-outcome output"),
+                &[outcomes, &mirrored],
+            )
+            .await
+    }
+
     /// Waits until the dialog of a result open offers to choose the results labelled `labels`,
     /// e.g. `"Result: Match"`, as while overriding them; none if not overriding.
     ///
@@ -2219,20 +2256,17 @@ impl Gui {
     }
 }
 
-/// `scores` read from the other side, e.g. `"17–21 21–19"` of `"21–17 19–21"`, or
-/// `"1–2 (17–21 21–19 15–21)"` of `"2–1 (21–17 19–21 21–15)"`.
-fn mirrored(scores: &str) -> String {
-    scores
-        .split(' ')
-        .map(|score| {
-            let open = if score.starts_with('(') { "(" } else { "" };
-            let close = if score.ends_with(')') { ")" } else { "" };
-            let (a, b) = score
-                .trim_start_matches('(')
-                .trim_end_matches(')')
-                .split_once('–')
-                .expect("a score is two numbers and an en dash");
-            format!("{open}{b}–{a}{close}")
+/// `text` with each score in it read from the other side, e.g. `"17–21 21–19"` of `"21–17 19–21"`,
+/// `"1–2 (17–21 21–19 15–21)"` of `"2–1 (21–17 19–21 21–15)"`, or `"Alice wins (1–2)"` of
+/// `"Alice wins (2–1)"`; words without an en dash stay.
+fn mirrored(text: &str) -> String {
+    text.split(' ')
+        .map(|word| {
+            let score = word.trim_start_matches('(').trim_end_matches(')');
+            match score.split_once('–') {
+                Some((a, b)) => word.replacen(score, &format!("{b}–{a}"), 1),
+                None => word.to_owned(),
+            }
         })
         .collect::<Vec<_>>()
         .join(" ")

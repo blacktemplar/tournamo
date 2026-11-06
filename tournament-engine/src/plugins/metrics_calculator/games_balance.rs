@@ -1,0 +1,282 @@
+//! The games a ranking won and lost, as the match format tallied them.
+
+use plugin_factory::{Plugin, compatibility::Declaration, register};
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    entities::competition::{Bye, Match, PhaseData, RankingId, Team},
+    plugins::{
+        Phrase,
+        facts::{CalculatesMetric, MatchTally},
+        match_format::GamesWon,
+        metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
+        ranker::{Comparison, RankingCriterion, requires_metric},
+    },
+    type_map::TypeMapValue,
+};
+
+/// The games a ranking won and lost in all its matches.
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub struct GamesBalance {
+    pub won: u32,
+    pub lost: u32,
+}
+
+impl GamesBalance {
+    /// The games won minus those lost.
+    pub fn difference(&self) -> i64 {
+        i64::from(self.won) - i64::from(self.lost)
+    }
+}
+
+impl ToCell for GamesBalance {
+    fn to_cell(&self) -> Cell {
+        let english = format!("{}:{}", self.won, self.lost);
+        Cell::Text(
+            Phrase::new("won-lost", english)
+                .with("won", self.won)
+                .with("lost", self.lost),
+        )
+    }
+}
+
+#[typetag::serde(name = "tournament_engine::games_balance")]
+impl TypeMapValue for GamesBalance {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::higher_games_difference",
+    label = "higher games difference",
+    description = "the games won minus those lost",
+    declare_static = requires_metric::<Self>
+)]
+pub struct HigherGamesDifference;
+
+impl RankingCriterion for HigherGamesDifference {
+    type Metric = GamesBalance;
+
+    fn compare(&self, first: &GamesBalance, second: &GamesBalance) -> Comparison {
+        Comparison::greater_is_better(first.difference().cmp(&second.difference()))
+    }
+}
+
+crate::register_criterion!(HigherGamesDifference);
+
+#[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::more_games_won",
+    label = "more games won",
+    description = "a tie break counting the games won, not those lost",
+    declare_static = requires_metric::<Self>
+)]
+pub struct MoreGamesWon;
+
+impl RankingCriterion for MoreGamesWon {
+    type Metric = GamesBalance;
+
+    fn compare(&self, first: &GamesBalance, second: &GamesBalance) -> Comparison {
+        Comparison::greater_is_better(first.won.cmp(&second.won))
+    }
+}
+
+crate::register_criterion!(MoreGamesWon);
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::games_balance",
+    label = "games won and lost",
+    description = "the games, or sets, of all matches, as the results say",
+    declare_static = Self::declare_static
+)]
+pub struct GamesBalanceCalculator;
+
+impl GamesBalanceCalculator {
+    fn declare_static(declaration: &mut Declaration) {
+        declaration
+            .provide(CalculatesMetric::<GamesBalance>::new())
+            .require::<MatchTally<GamesWon>>("the games won");
+    }
+}
+
+#[register]
+impl MetricsCalculator for GamesBalanceCalculator {
+    fn default_metric_value(&self) -> Metric {
+        Box::new(GamesBalance::default())
+    }
+
+    fn update_after_match_result(
+        &mut self,
+        phase_data: &PhaseData,
+        r#match: &Match,
+        _: &OldMetrics,
+    ) -> Vec<(RankingId, Metric)> {
+        let GamesWon(games) = *r#match
+            .tally::<GamesWon>()
+            .expect("the match format tallies the games won");
+        [Team::A, Team::B]
+            .into_iter()
+            .flat_map(|team| {
+                let (won, lost) = (*games.of(team), *games.of(team.opponent()));
+                r#match.rankings_of(team).iter().map(move |r_id| {
+                    let mut metric = *phase_data.rankings()[r_id]
+                        .metric::<GamesBalance>()
+                        .unwrap();
+                    metric.won += won;
+                    metric.lost += lost;
+                    (*r_id, Box::new(metric) as Metric)
+                })
+            })
+            .collect()
+    }
+
+    /// A bye has no games.
+    fn update_after_bye(
+        &mut self,
+        _: &PhaseData,
+        _: &Bye,
+        _: &OldMetrics,
+    ) -> Vec<(RankingId, Metric)> {
+        Vec::new()
+    }
+
+    fn column(&self) -> Option<MetricColumn> {
+        Some(MetricColumn::new::<GamesBalance>("games"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+    use crate::{
+        entities::{
+            competition::{MatchResult, Phase, PhaseBuilder},
+            details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
+        },
+        plugins::{
+            match_format::BestOf,
+            metrics_calculator::test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
+        },
+        type_map::TypeMap,
+    };
+
+    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Phase {
+        phase_with_byes(
+            PhaseBuilder::new()
+                .match_format(BestOf::new(5))
+                .add_metric(GamesBalanceCalculator)
+                .add_players(players),
+            matches,
+            byes,
+        )
+    }
+
+    /// Reports the match of `a` and `b` in `round` as games, each won by side A if `true`.
+    fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], games: &[bool]) {
+        let id = match_id(phase, round, a, b);
+        let game = |a_wins: bool| {
+            let (result, score) = if a_wins {
+                (MatchResult::AWins, (11, 5))
+            } else {
+                (MatchResult::BWins, (5, 11))
+            };
+            Part::new().with_decision(result).with_value(
+                FieldKey::new("score"),
+                Sides::new(
+                    Some(EnteredValue::Count(score.0)),
+                    Some(EnteredValue::Count(score.1)),
+                ),
+            )
+        };
+        let won_by_a = games.iter().filter(|&&a_wins| a_wins).count();
+        let result = if 2 * won_by_a > games.len() {
+            MatchResult::AWins
+        } else {
+            MatchResult::BWins
+        };
+        let games = games.iter().map(|&a_wins| game(a_wins)).collect();
+        phase.report_match(id, Decision::new(result), Values::new(), games);
+    }
+
+    fn balance(won: u32, lost: u32) -> GamesBalance {
+        GamesBalance { won, lost }
+    }
+
+    #[test]
+    fn the_games_of_every_match_add_up() {
+        let matches = vec![(1, vec![0], vec![1]), (2, vec![0], vec![2])];
+        let mut phase = phase(3, matches, Vec::new());
+
+        report(&mut phase, 1, &[0], &[1], &[true, true, true]);
+        report(
+            &mut phase,
+            2,
+            &[0],
+            &[2],
+            &[true, false, false, true, false],
+        );
+
+        assert_eq!(metric_of::<GamesBalance>(&phase, 0), balance(5, 3));
+        assert_eq!(metric_of::<GamesBalance>(&phase, 1), balance(0, 3));
+        assert_eq!(metric_of::<GamesBalance>(&phase, 2), balance(3, 2));
+    }
+
+    #[test]
+    fn every_player_of_a_team_wins_what_the_team_won() {
+        let mut phase = phase(4, vec![(1, vec![0, 1], vec![2, 3])], Vec::new());
+
+        report(&mut phase, 1, &[0, 1], &[2, 3], &[false, true, true, true]);
+
+        for player in [0, 1] {
+            assert_eq!(metric_of::<GamesBalance>(&phase, player), balance(3, 1));
+        }
+        for player in [2, 3] {
+            assert_eq!(metric_of::<GamesBalance>(&phase, player), balance(1, 3));
+        }
+    }
+
+    #[test]
+    fn a_bye_wins_no_game() {
+        let phase = phase(1, Vec::new(), vec![(1, 0)]);
+
+        assert_eq!(metric_of::<GamesBalance>(&phase, 0), balance(0, 0));
+    }
+
+    #[test]
+    fn the_difference_and_the_games_won_rank_differently() {
+        let (more_won, better_difference) = (balance(6, 4), balance(4, 0));
+
+        assert_eq!(
+            HigherGamesDifference.compare(&better_difference, &more_won),
+            Comparison::Better
+        );
+        assert_eq!(
+            MoreGamesWon.compare(&better_difference, &more_won),
+            Comparison::Worse
+        );
+    }
+
+    #[test]
+    fn the_column_shows_won_to_lost() {
+        assert_eq!(balance(5, 3).to_cell().to_string(), "5:3");
+    }
+
+    /// The tags are part of every log and snapshot written, see `transition_log_serialization.rs`.
+    #[test]
+    fn the_calculator_and_its_metric_are_serialized_under_their_tags() {
+        let calculator: Box<dyn MetricsCalculator> = Box::new(GamesBalanceCalculator);
+        let mut metrics = TypeMap::new();
+        metrics.insert(GamesBalance::default());
+
+        assert_eq!(
+            serde_json::to_value(&calculator).unwrap()["type"],
+            "tournament_engine::games_balance"
+        );
+        assert_eq!(
+            serde_json::to_value(&metrics).unwrap()[0]["type"],
+            "tournament_engine::games_balance"
+        );
+    }
+}

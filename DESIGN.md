@@ -534,9 +534,10 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   `suggest`s a result from a part's values for a consumer filling one in (the
   app's `ResultForm`), and derives **tallies** when a match is decided: typed
   `TypeMapValue`s (`PointsScored`, `GamesWon`, …) stored on the match, which
-  metrics read with one lookup (`PointsBalanceCalculator`). A tally is a fact
-  in the compatibility check (`MatchTally<T>`): a calculator requiring
-  `PointsScored` needs a match format providing it. The template sees the
+  metrics read with one lookup (`PointsBalanceCalculator`,
+  `GamesBalanceCalculator`). A tally is a fact in the compatibility check
+  (`MatchTally<T>`): a calculator requiring `PointsScored` needs a match
+  format providing it. The template sees the
   match, so it may depend on the stage or on annotations. Match formats:
   `WinnerOnly`, `Scored`, `BestOf`.
 - **Scores are shown generically**: a match's own score, else those of its

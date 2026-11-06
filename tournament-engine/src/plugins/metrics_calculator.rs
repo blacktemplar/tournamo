@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub mod buchholz;
+pub mod games_balance;
 pub mod points;
 pub mod points_balance;
 pub mod round_of_elimination;
@@ -26,6 +27,9 @@ pub mod wins_draws_losses;
 pub use buchholz::{
     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator, MoreBuchholz,
     MoreBuchholzOfBuchholz, MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
+};
+pub use games_balance::{
+    GamesBalance, GamesBalanceCalculator, HigherGamesDifference, MoreGamesWon,
 };
 pub use points::{MorePoints, Points, PointsCalculator};
 pub use points_balance::{

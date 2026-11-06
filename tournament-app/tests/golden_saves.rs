@@ -30,7 +30,8 @@ use tournament_engine::{
     plugins::{
         match_format::{BestOf, Scored},
         metrics_calculator::{
-            HigherPointsDifference, MorePointsScored, MoreWins, PointsBalanceCalculator,
+            GamesBalanceCalculator, HigherGamesDifference, HigherPointsDifference, MoreGamesWon,
+            MorePointsScored, MoreWins, PointsBalanceCalculator, WinsDrawsLossesCalculator,
         },
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
@@ -214,6 +215,7 @@ const SCRIPTS: &[(&str, Script)] = &[
     ("monster-dyp", monster_dyp),
     ("scored", scored),
     ("best-of", best_of),
+    ("games", games),
 ];
 
 /// Entrants renamed and removed, a phase added, undone, added again and edited, not started.
@@ -377,6 +379,51 @@ fn best_of(session: &mut Session) {
     session.undo_report(first).unwrap();
     play_scores(session, &[&[(21, 23), (21, 15), (21, 19)]], 1);
     play_scores(session, &[&[(21, 11), (30, 29)]], usize::MAX);
+}
+
+/// The games of a best of five entered, ranked by the wins, then the games difference and the
+/// games won, played to the end.
+fn games(session: &mut Session) {
+    enter(session, &["Alice", "Bob", "Carol", "Dave"]);
+    let mut draft = session.phase_draft(RoundRobin::ID).unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("ranking"),
+            vec![
+                PluginConfig::of::<MoreWins>(),
+                PluginConfig::of::<HigherGamesDifference>(),
+                PluginConfig::of::<MoreGamesWon>(),
+            ],
+        )
+        .unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("metrics"),
+            vec![
+                PluginConfig::of::<WinsDrawsLossesCalculator>(),
+                PluginConfig::of::<GamesBalanceCalculator>(),
+            ],
+        )
+        .unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("match_format"),
+            PluginConfig::of::<BestOf>()
+                .with("games", 5)
+                .with("winning_score", 11),
+        )
+        .unwrap();
+    session.add_phase(&draft).unwrap();
+    session.start().unwrap();
+    play_scores(
+        session,
+        &[
+            &[(11, 3), (11, 5), (11, 7)],
+            &[(9, 11), (11, 8), (5, 11), (11, 9), (12, 14)],
+            &[(11, 6), (8, 11), (11, 4), (11, 13), (11, 2)],
+        ],
+        usize::MAX,
+    );
 }
 
 /// Reports up to `matches` of the playable matches, one at a time, with the scores of `played` in

@@ -17,6 +17,8 @@ a file whose `"format"` changes is migrated, not refused.
   the score of each side, or the games of a best of, each with its score.
 - The points (or goals) scored and conceded, as a metric of the standings, and
   ranking by the difference or by the points scored.
+- The games (or sets) won and lost in the matches of a best of, as a metric of
+  the standings, and ranking by the difference or by the games won.
 - In the browser, a match whose results hold more than who won is entered in
   the row of the match: the score of each side, or of each game of a best of,
   side by side, reported by Enter or the button beside them. A best of shows

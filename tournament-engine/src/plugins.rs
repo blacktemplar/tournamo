@@ -279,9 +279,9 @@ mod tests {
         entities::competition::{Bye, Competition, Match, PhaseData, RankingId},
         plugins::{
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
-            match_format::{Scored, WinnerOnly},
+            match_format::{BestOf, Scored, WinnerOnly},
             metrics_calculator::{
-                Metric, OldMetrics, PointsBalanceCalculator,
+                GamesBalanceCalculator, Metric, OldMetrics, PointsBalanceCalculator,
                 buchholz::{
                     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
                     MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
@@ -676,6 +676,27 @@ mod tests {
         ));
         assert_eq!(
             check(&builder.match_format(Scored::default()).build().unwrap()),
+            Ok(())
+        );
+    }
+
+    /// The games won and lost are only calculated of results with games.
+    #[test]
+    fn games_won_and_lost_need_results_with_games() {
+        let builder = PhasePluginsBuilder::new().add_metric(GamesBalanceCalculator);
+
+        assert!(matches!(
+            check(
+                &builder
+                    .clone()
+                    .match_format(Scored::default())
+                    .build()
+                    .unwrap()
+            ),
+            Err(Incompatibility::FactNotProvided { .. })
+        ));
+        assert_eq!(
+            check(&builder.match_format(BestOf::new(3)).build().unwrap()),
             Ok(())
         );
     }

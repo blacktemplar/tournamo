@@ -71,9 +71,8 @@ Decided: every save is of format 2, also without details; `Value` is
 - `the_page_keeps_its_width_between_views` failed once in a full run and passed
   alone; the phase view grew by the "Results" row, so it may be close to
   scrolling at 1200 px.
-- `GamesWon` is tallied, but no metric reads it yet (games won and lost, as
-  badminton or volleyball rank by): a calculator like `PointsBalance` when
-  wanted.
+- `GamesWon` is read by `GamesBalanceCalculator` (games won and lost), ranked by
+  `HigherGamesDifference` and `MoreGamesWon`.
 - The bracket reports only who won: a match with details (a score) is entered
   in the list of matches, the bracket shows its scores. Entering it from the
   bracket would need the dialog to take the bracket's focus.

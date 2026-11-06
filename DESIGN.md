@@ -1156,7 +1156,10 @@ pairing (every slot grows); the bracket in half the width.
 
 - **A phase whose teams stay the same shows a cross table** in the bracket's
   place: a row and column per team, each cell the matches between them from the
-  row's side (`1`, `½`, `0`, said as won/drawn/lost). `Session::cross_table`
+  row's side, each at the highest level of its result (`CrossMatch::score`: its
+  own score, else the parts won, so `3–2` for a best of five rather than its
+  games), or else `1`, `½`, `0`; said as won/drawn/lost. A click on a match
+  with more than who won opens its details, as in the list. `Session::cross_table`
   offers it where every match is between two single rankings and the format
   plays no bracket (round robin, random rounds; not Monster DYP or knockouts),
   so no table of formats beyond the bracket's.
@@ -1168,7 +1171,8 @@ pairing (every slot grows); the bracket in half the width.
   many teams.
 - **A total last** (`CrossRow::total`), the sum of the row's `1`, `½`, `0`, as
   published tables have, whatever the points of the phase; wins and losses
-  are tinted (`--win-subtle`, `--error-subtle`), the number saying it too.
+  are tinted (`--win-subtle`, `--error-subtle`), a win also bold, so that it
+  reads without colours where a score does not say who won.
 
 Rejected: rows in entry or draw order (stable, but an order seen nowhere else);
 open matches shown by number (wider columns, the list tells it anyway).

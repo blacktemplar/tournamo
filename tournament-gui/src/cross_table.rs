@@ -1,12 +1,12 @@
 //! The cross table of a phase whose teams stay the same, e.g. a round robin: a row and a column
 //! per team in the order of the standings, each cell the matches of the row's team against the
-//! column's, seen from the row, and last what the row's results add up to. It only shows them;
-//! results are reported in the list of matches.
+//! column's, seen from the row, and last what the row's results add up to. It only shows them,
+//! and the details of a match on a click; results are reported in the list of matches.
 
 use dioxus::prelude::*;
 use tournament_app::view::{CrossMatch, Outcome};
 
-use crate::{competition::Ctx, team_name};
+use crate::{competition::Ctx, result::ResultDetails, team_name};
 
 /// The cross table, if the phase has one.
 #[component]
@@ -73,22 +73,33 @@ pub fn CrossTable() -> Element {
     }
 }
 
-/// A match in a cell: how it ended for the row's team, nothing while it has no result.
+/// A match in a cell: how it ended for the row's team, nothing while it has no result. It shows
+/// the result at its highest level, the row's team first, e.g. the games won of a best of, or else
+/// `1`, `½`, `0`; a click on a match entered in more detail than who won opens its details.
 #[component]
 fn Cell(played: CrossMatch) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    // tinted by how it ended, which the number says as well
-    let (shown, said, class) = match played.outcome {
+    // tinted by how it ended, a win also bold, which screen readers are told
+    let (number, said, class) = match played.outcome {
         Some(Outcome::Win) => ("1", "outcome-win", "win"),
         Some(Outcome::Draw) => ("½", "outcome-draw", "draw"),
         Some(Outcome::Loss) => ("0", "outcome-loss", "loss"),
         None => return rsx! {},
     };
+    let shown = played
+        .score
+        .map_or_else(|| number.to_owned(), |score| tr.scores(&[score]));
+    let row = played.row;
     rsx! {
-        span { class: "outcome {class}",
-            span { aria_hidden: "true", "{shown}" }
-            span { class: "visually-hidden", {tr.get(said)} }
+        span { class: "played",
+            span { class: "outcome {class}",
+                span { aria_hidden: "true", "{shown}" }
+                span { class: "visually-hidden", {tr.get(said)} }
+            }
+            if row.details {
+                ResultDetails { row }
+            }
         }
     }
 }

@@ -336,3 +336,41 @@ async fn the_details_of_a_finished_match_show_its_games() {
     })
     .await;
 }
+
+/// The cross table shows the games each side won of a best of, from the row's side, a win in
+/// bold, and a click on a match opens its details.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_cross_table_shows_the_games_won_and_opens_the_details() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Best of games").await?;
+        gui.enter_result("ali 21-17 19-21 21-15").await?;
+        gui.click("Cross table").await?;
+
+        gui.expect_cross_table_row(1, &["", "2–1\nwon", "1"])
+            .await?;
+        gui.expect_cross_table_row(2, &["1–2\nlost", "", "0"])
+            .await?;
+        let win = gui.page.style_of(".outcome.win", "font-weight").await?;
+        let loss = gui.page.style_of(".outcome.loss", "font-weight").await?;
+        assert!(win > loss, "{win} {loss}");
+        gui.page.check_accessibility().await?;
+
+        gui.click_labelled("Details of the result of match 1")
+            .await?;
+
+        gui.expect_reported_result(
+            &[
+                &["21", "17", "19", "21", "21", "15"],
+                &["17", "21", "21", "19", "15", "21"],
+            ],
+            &["21", "21", "21"],
+            "Match: Alice wins (2–1)",
+        )
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Close").await?;
+        gui.expect_no_dialog().await
+    })
+    .await;
+}

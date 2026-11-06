@@ -2323,8 +2323,8 @@ td.name {
 /* The cross table (cross_table.rs): narrow cells, so that a table of many teams fits, centred
  * under the numbers of the columns, a cell's matches side by side, the row's number before its
  * name as the columns name it */
-.cross-table td,
-.cross-table thead th:not(.name) {
+.cross-table > * > tr > td,
+.cross-table > thead > tr > th:not(.name) {
   /* holding what only screen readers get, which would otherwise widen the page, not the table */
   position: relative;
   min-width: 1.75rem;
@@ -2333,7 +2333,7 @@ td.name {
   text-align: center;
 }
 
-.cross-table td > * + * {
+.cross-table > tbody > tr > td > * + * {
   margin-left: var(--space-1);
 }
 
@@ -2346,19 +2346,33 @@ td.name {
 }
 
 /* a team against itself */
-.cross-table td.self {
+.cross-table > tbody > tr > td.self {
   background: var(--hover);
+}
+
+/* a match, which its details button covers */
+.cross-table .played {
+  position: relative;
+  display: inline-block;
+  border-radius: var(--radius);
 }
 
 .cross-table .outcome {
   padding: 0 var(--space-1);
   border-radius: var(--radius);
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* a win and a loss tinted, so that the table reads at a glance; the number says it as well */
+.cross-table .played:has(> .match-details:hover) {
+  outline: 2px solid var(--accent);
+}
+
+/* a win and a loss tinted, so that the table reads at a glance, and a win bold, so that it reads
+ * without the colours too */
 .cross-table .outcome.win {
   background: var(--win-subtle);
+  font-weight: 700;
 }
 
 .cross-table .outcome.loss {

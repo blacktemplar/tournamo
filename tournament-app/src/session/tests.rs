@@ -1350,6 +1350,76 @@ fn a_draw_adds_a_half_to_the_cross_table() {
     assert_eq!(halves, 2);
 }
 
+/// A cell of the cross table has the result at its highest level, seen from the row's team: the
+/// games won of a best of, not their scores.
+#[test]
+fn the_cross_table_has_the_games_won_from_the_side_of_the_row() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+    session.report_entered("1 21-17 19-21 21-15").unwrap();
+
+    let table = session.cross_table().unwrap();
+
+    let mut played: Vec<_> = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flatten()
+        .filter_map(|played| Some((played.outcome?, played.score?)))
+        .collect();
+    played.sort_by_key(|(outcome, _)| *outcome != Outcome::Win);
+    assert_eq!(
+        played,
+        [
+            (Outcome::Win, scores([(2, 1)])[0]),
+            (Outcome::Loss, scores([(1, 2)])[0])
+        ]
+    );
+}
+
+/// A match scored as a whole has its score in the cross table, seen from the row's team.
+#[test]
+fn the_cross_table_has_the_score_of_a_match_from_the_side_of_the_row() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    session.report_entered("1 21-17").unwrap();
+
+    let table = session.cross_table().unwrap();
+
+    let mut played: Vec<_> = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flatten()
+        .filter_map(|played| Some((played.outcome?, played.score?)))
+        .collect();
+    played.sort_by_key(|(outcome, _)| *outcome != Outcome::Win);
+    assert_eq!(
+        played,
+        [
+            (Outcome::Win, scores([(21, 17)])[0]),
+            (Outcome::Loss, scores([(17, 21)])[0])
+        ]
+    );
+    let mut unscored = Given::new().started();
+    unscored
+        .report(numbered(&unscored, 1), MatchResult::AWins)
+        .unwrap();
+    assert!(
+        unscored
+            .cross_table()
+            .unwrap()
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .flatten()
+            .all(|played| played.score.is_none()),
+        "nothing but who won"
+    );
+}
+
 /// A knockout has its bracket instead, and the teams of a Monster DYP change every round.
 #[test]
 fn a_cross_table_is_only_of_teams_that_stay_the_same_without_a_bracket() {

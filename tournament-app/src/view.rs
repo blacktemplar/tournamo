@@ -330,6 +330,9 @@ pub struct CrossMatch {
     pub row: MatchRow,
     /// How it ended for the team of the cell's row, once it has a result.
     pub outcome: Option<Outcome>,
+    /// Its result at the highest level entered, the row's team first, once finished: its own
+    /// score, else the parts each side won, e.g. 3–2 in games of a best of; none if it has neither.
+    pub score: Option<Sides<Option<EnteredValue>>>,
 }
 
 /// How a match ended for one of its teams.
@@ -519,13 +522,6 @@ pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>
     if !r#match.is_finished() {
         return Vec::new();
     }
-    // the value of the first field of `level` entered for `part`
-    let score = |level: &Level, part: &Part| {
-        level
-            .fields
-            .iter()
-            .find_map(|field| part.value(field.key.key()).copied())
-    };
     let template = phase.match_format().template(phase.data(), r#match);
     let contest = r#match.contest();
     match score(&template.root, contest) {
@@ -537,4 +533,30 @@ pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>
             .filter_map(|(index, part)| score(template.root.level_of_part(index)?, part))
             .collect(),
     }
+}
+
+/// The score of `r#match` at its highest level once finished, as [`CrossMatch::score`] has it,
+/// side A's first.
+pub(crate) fn top_score(phase: &Phase, r#match: &Match) -> Option<Sides<Option<EnteredValue>>> {
+    if !r#match.is_finished() {
+        return None;
+    }
+    let template = phase.match_format().template(phase.data(), r#match);
+    let contest = r#match.contest();
+    score(&template.root, contest).or_else(|| {
+        parts_won_of(&template.root, contest).map(|won| {
+            Sides::new(
+                Some(EnteredValue::Count(won.a)),
+                Some(EnteredValue::Count(won.b)),
+            )
+        })
+    })
+}
+
+/// The value of the first field of `level` entered for `part`.
+fn score(level: &Level, part: &Part) -> Option<Sides<Option<EnteredValue>>> {
+    level
+        .fields
+        .iter()
+        .find_map(|field| part.value(field.key.key()).copied())
 }

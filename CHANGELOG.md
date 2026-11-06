@@ -59,6 +59,12 @@ a file whose `"format"` changes is migrated, not refused.
   Competitions of format 1 open unchanged; earlier versions refuse format 2 as
   a file of a newer version.
 
+### Fixed
+
+- In the browser, the button reopening a match no longer takes no click for a
+  moment each time its match shows, as on going through the rounds: only right
+  after a report, against a double tap.
+
 ## [0.3.0] - 2026-11-03
 
 Competitions saved with 0.2.0 and earlier open unchanged. Once a browser has

@@ -61,6 +61,25 @@ async fn a_double_tap_reporting_a_result_does_not_reopen_it() {
     .await;
 }
 
+/// The button reopening a match takes no click only right after a report: shown again later, as on
+/// coming back to its round, it takes one at once.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_shown_again_is_reopened_at_once() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
+        gui.click("By round").await?;
+        gui.click("Draw").await?;
+        gui.expect_enabled("Reopen match 1").await?;
+
+        gui.click_labelled("Next round").await?;
+        gui.click_labelled("Previous round").await?;
+
+        gui.expect_enabled_at_once("Reopen match 1").await
+    })
+    .await;
+}
+
 /// A screen reader hears what each control is about: a draw by its match, the preview of a result
 /// typed in as it changes, the standings by their caption and each row by its name, and the
 /// switch of the matches shown by its name; the bar's buttons show their names under the pointer

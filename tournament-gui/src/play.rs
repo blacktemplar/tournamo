@@ -616,27 +616,36 @@ fn ReportButtons(
     }
 }
 
-/// How long the button reopening a match takes no click once it shows, in milliseconds: longer than
-/// the taps of a double tap are apart.
-const REOPEN_DELAY_MS: u32 = 600;
+/// How long after a report the button reopening a match takes no click, in milliseconds: longer
+/// than the taps of a double tap are apart.
+const REOPEN_DELAY_MS: f64 = 600.0;
 
 /// The result of the match `row`, of a round where a match may end in a draw if `draws`, and the
-/// button reopening it, which takes no click for [`REOPEN_DELAY_MS`] once it shows.
+/// button reopening it, which takes no click until [`REOPEN_DELAY_MS`] after this tab last reported
+/// a result.
 #[component]
 fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
     let id = row.id;
-    // the button shows where the result was reported, on a phone where the draw was, so it takes
-    // no click at first, which would be the second of a double tap
-    let mut settled = use_signal(|| false);
+    // the button shows where the result was reported, on a phone where the draw was, so right
+    // after a report it takes no click, which would be the second of a double tap; shown later
+    // (another round, a reload), it takes one at once
+    let wait = use_hook(|| {
+        ctx.since_report()
+            .map_or(0.0, |since| (REOPEN_DELAY_MS - since).max(0.0))
+    });
+    let mut settled = use_signal(|| wait == 0.0);
     use_hook(|| {
-        spawn(async move {
-            _ = document::eval(&format!(
-                "await new Promise((done) => setTimeout(done, {REOPEN_DELAY_MS}));"
-            ))
-            .await;
-            settled.set(true);
-        })
+        if wait > 0.0 {
+            spawn(async move {
+                _ = document::eval(&format!(
+                    "await new Promise((done) => setTimeout(done, {}));",
+                    wait.ceil()
+                ))
+                .await;
+                settled.set(true);
+            });
+        }
     });
     // only reopened by the tab that changes the competition
     let disabled = !ctx.changes() || !settled();

@@ -888,6 +888,32 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the button labelled `label` shows and takes a click.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_enabled(&self, label: &str) -> WebDriverResult<()> {
+        self.labelled(label)
+            .and_displayed()
+            .and_enabled()
+            .first()
+            .await?;
+        Ok(())
+    }
+
+    /// Waits until the button labelled `label` shows, and expects it to take a click at once.
+    ///
+    /// # Panics
+    /// Panics if it does not show in time, or takes no click when it shows.
+    pub async fn expect_enabled_at_once(&self, label: &str) -> WebDriverResult<()> {
+        let button = self.labelled(label).and_displayed().first().await?;
+        assert!(
+            button.is_enabled().await?,
+            "{label} takes no click as it shows"
+        );
+        Ok(())
+    }
+
     /// Waits until the button whose text is `text` is disabled, or says it is unavailable while
     /// staying focusable (`aria-disabled`).
     ///

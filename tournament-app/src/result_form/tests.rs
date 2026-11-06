@@ -168,3 +168,37 @@ fn a_value_cleared_on_both_sides_is_no_longer_entered() {
 
     assert_eq!(form.report().1, Values::new());
 }
+
+#[test]
+fn a_match_shows_its_score_or_else_those_of_its_games() {
+    let (mut session, id) = started(PluginConfig::of::<Scored>());
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[], 3, 1);
+    assert_eq!(
+        session.report_form(&form).unwrap().row.scores,
+        [Sides::new(count(3), count(1))]
+    );
+
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 17);
+    score(&mut form, &[1], 19, 21);
+    score(&mut form, &[2], 21, 15);
+    assert_eq!(
+        session.report_form(&form).unwrap().row.scores,
+        [
+            Sides::new(count(21), count(17)),
+            Sides::new(count(19), count(21)),
+            Sides::new(count(21), count(15)),
+        ]
+    );
+}
+
+#[test]
+fn a_match_with_a_winner_alone_shows_no_score() {
+    let (mut session, id) = started(PluginConfig::of::<WinnerOnly>());
+
+    let reported = session.report(id, MatchResult::AWins).unwrap();
+
+    assert!(reported.row.scores.is_empty());
+}

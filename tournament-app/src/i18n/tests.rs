@@ -7,7 +7,7 @@ use plugin_factory::{
     schema::{Configurable as _, Schema},
 };
 use tournament_engine::{
-    PhasePlugins, Score,
+    PhasePlugins, Score, Sides, Value,
     plugins::{
         Phrase,
         match_rules::MatchRules,
@@ -524,4 +524,15 @@ fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
         }
         assert_eq!(translated, expected, "{}", language.tag());
     }
+}
+
+#[test]
+fn scores_are_written_as_the_language_writes_their_numbers() {
+    let translator = Translator::new(Language::German, &[]);
+    let scores = [
+        Sides::new(Some(Value::Count(21)), Some(Value::Count(17))),
+        Sides::new(Some(Value::Decimal(Score::new(1.5))), None),
+    ];
+
+    assert_eq!(translator.scores(&scores), "21–17 1,5–-");
 }

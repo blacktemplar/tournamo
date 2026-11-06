@@ -21,8 +21,10 @@ use tournament_engine::{
     AddEntrant, AddPhase, Annotated as _, Bye, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt as _, CompetitionTransition, Decision, Entrant, EntrantId, Match,
     MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId,
-    RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap, Values,
+    RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap,
+    Value, Values,
     plugins::{
+        match_rules::Level,
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
         ranker::SliceRanker,
@@ -1193,6 +1195,8 @@ impl Session {
             .expect("still started")
             .data()
             .matches();
+        let phase = self.started_phase().expect("still started");
+        let row = self.match_row(phase, &phase.data().matches()[&id]);
         Ok(Reported {
             row,
             new_matches: matches.len() - matches_before,
@@ -1419,7 +1423,33 @@ impl Session {
             a: self.team(data, r#match.team_a()),
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
+            scores: scores(phase, r#match),
         }
+    }
+}
+
+/// The scores of `r#match`, as [`MatchRow::scores`] shows them.
+fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<Value>>> {
+    if !r#match.is_finished() {
+        return Vec::new();
+    }
+    // the value of the first field of `level` entered for `part`
+    let score = |level: &Level, part: &Part| {
+        level
+            .fields
+            .iter()
+            .find_map(|field| part.value(field.key.key()).copied())
+    };
+    let template = phase.match_rules().template(phase.data(), r#match);
+    let contest = r#match.contest();
+    match score(&template.root, contest) {
+        Some(score) => vec![score],
+        None => contest
+            .parts()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, part)| score(template.root.level_of_part(index)?, part))
+            .collect(),
     }
 }
 

@@ -4,7 +4,7 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    EntrantId, MatchId, MatchResult, Score,
+    EntrantId, MatchId, MatchResult, Score, Sides, Value,
     plugins::{metrics_calculator::Cell, phase_format::Stage},
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
@@ -98,6 +98,10 @@ pub struct MatchRow {
     pub a: Vec<EntrantRow>,
     pub b: Vec<EntrantRow>,
     pub result: Option<MatchResult>,
+    /// The scores of the match once finished, as entered: its own, or else those of its parts in
+    /// order, e.g. the games of a best of; none if it has none. Said in the operator's language by
+    /// [`Translator::scores`](crate::i18n::Translator::scores).
+    pub scores: Vec<Sides<Option<Value>>>,
 }
 
 /// What an operator typed to find entrants by their name: it finds those whose name contains it,

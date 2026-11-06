@@ -20,7 +20,10 @@ use std::{
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use fluent_syntax::{ast, parser};
-use tournament_engine::plugins::{Phrase, metrics_calculator::Cell};
+use tournament_engine::{
+    Sides, Value,
+    plugins::{Phrase, metrics_calculator::Cell},
+};
 
 use crate::{form::FormField, view::StageName};
 
@@ -370,6 +373,21 @@ impl Translator {
                 self.plugin_phrase(calculator, PluginText::Cell(phrase.key()), phrase)
             }
         }
+    }
+
+    /// `scores` as the language writes them, e.g. `21–17 19–21`: each the numbers of its sides
+    /// joined by an en dash, a side without one shown as `-`, separated by spaces.
+    pub fn scores(&self, scores: &[Sides<Option<Value>>]) -> String {
+        let side = |value: Option<Value>| match value {
+            Some(Value::Count(count)) => self.number(count.into()),
+            Some(Value::Decimal(decimal)) => self.number(decimal.get()),
+            None => "-".to_owned(),
+        };
+        scores
+            .iter()
+            .map(|score| format!("{}–{}", side(score.a), side(score.b)))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// `number` as the language writes it, e.g. `0,5` in German.

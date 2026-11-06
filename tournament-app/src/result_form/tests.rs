@@ -246,9 +246,33 @@ fn a_game_entered_after_the_match_was_decided_stays_with_a_warning() {
 
     let root = form.view().root;
     assert_eq!(root.parts.len(), 4, "the fourth game stays");
-    let warning = Text::new("warning-more-than-decided");
+    let warning = Text::new("warning-more-than-decided-at")
+        .with("a", 3_u32)
+        .with("b", 0_u32);
     assert_eq!(root.warnings, std::slice::from_ref(&warning));
     assert_eq!(form.quick_entry().unwrap().warnings, [warning]);
+}
+
+#[test]
+fn the_games_each_side_won_are_counted_once_one_is_decided() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
+    let mut form = session.result_form(id).unwrap();
+    assert_eq!(form.view().root.parts_won, None);
+
+    score(&mut form, &[0], 21, 3);
+    score(&mut form, &[1], 3, 21);
+    score(&mut form, &[2], 21, 3);
+
+    assert_eq!(form.view().root.parts_won, Some(Sides::new(2, 1)));
+    assert_eq!(
+        form.quick_entry().unwrap().parts_won,
+        Some(Sides::new(2, 1))
+    );
+    assert_eq!(
+        form.view().root.parts[0].parts_won,
+        None,
+        "a game is not played in parts"
+    );
 }
 
 #[test]
@@ -298,20 +322,23 @@ fn a_match_shows_its_score_or_else_those_of_its_games() {
     let row = session.report_form(&form).unwrap().row;
     assert_eq!(row.scores, [Sides::new(count(3), count(1))]);
     assert!(row.details);
+    assert_eq!(row.parts_won, None, "a score is no games");
 
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
     let mut form = session.result_form(id).unwrap();
     score(&mut form, &[0], 21, 17);
     score(&mut form, &[1], 19, 21);
     score(&mut form, &[2], 21, 15);
+    let row = session.report_form(&form).unwrap().row;
     assert_eq!(
-        session.report_form(&form).unwrap().row.scores,
+        row.scores,
         [
             Sides::new(count(21), count(17)),
             Sides::new(count(19), count(21)),
             Sides::new(count(21), count(15)),
         ]
     );
+    assert_eq!(row.parts_won, Some(Sides::new(2, 1)), "with the games won");
 }
 
 #[test]

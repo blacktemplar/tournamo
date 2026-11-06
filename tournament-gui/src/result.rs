@@ -9,11 +9,13 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    i18n::{PluginText, Text},
+    i18n::{PluginText, Text, Translator},
     result_form::{FieldView, PartView, QuickEntry, QuickField, ResultForm},
     view::MatchRow,
 };
-use tournament_engine::{EnteredValue, MatchResult, Score, Team, plugins::match_format::ValueKind};
+use tournament_engine::{
+    EnteredValue, MatchResult, Score, Sides, Team, plugins::match_format::ValueKind,
+};
 
 use crate::{
     announcement::Announcement,
@@ -95,7 +97,8 @@ fn QuickResult(
         Some(MatchResult::BWins) => Some(t!(tr, "wins", team = b.as_str())),
         Some(MatchResult::Draw) => Some(tr.get("draw")),
         None => Some(tr.get("result-open")),
-    };
+    }
+    .map(|outcome| with_parts_won(&tr, outcome, quick.result, quick.parts_won));
     let match_format = quick.match_format;
     let form_id = format!("quick-result-{}", row.number);
     rsx! {
@@ -566,6 +569,7 @@ fn ResultChoice(
             Some(result) => said(result),
             None => tr.get("result-open"),
         };
+        let result = with_parts_won(&tr, result, part.result, part.parts_won);
         let outcome = t!(
             tr,
             "result-is",
@@ -611,4 +615,25 @@ fn ResultChoice(
             }
         }
     }
+}
+
+/// `said`, what a part's `result` says, with the parts each side won once it has one, the winner's
+/// first, e.g. "Bob wins (3–1)". Without a result, `said` alone, which the values entered show.
+fn with_parts_won(
+    tr: &Translator,
+    said: String,
+    result: Option<MatchResult>,
+    parts_won: Option<Sides<u32>>,
+) -> String {
+    let won = match (result, parts_won) {
+        (Some(MatchResult::BWins), Some(won)) => Sides::new(won.b, won.a),
+        (Some(_), Some(won)) => won,
+        _ => return said,
+    };
+    t!(
+        tr,
+        "result-with-parts-won",
+        result = said,
+        won = tr.score(won)
+    )
 }

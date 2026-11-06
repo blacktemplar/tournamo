@@ -540,3 +540,25 @@ fn scores_are_written_as_the_language_writes_their_numbers() {
 
     assert_eq!(translator.scores(&scores), "21–17 1,5–-");
 }
+
+#[test]
+fn the_parts_won_go_before_the_scores_of_a_match() {
+    let translator = Translator::new(Language::English, &[]);
+    let count = |count| Some(EnteredValue::Count(count));
+    let scores = [
+        Sides::new(count(21), count(17)),
+        Sides::new(count(19), count(21)),
+        Sides::new(count(21), count(15)),
+    ];
+
+    assert_eq!(
+        translator.match_scores(Some(Sides::new(2, 1)), &scores),
+        "2–1 (21–17 19–21 21–15)"
+    );
+    assert_eq!(translator.match_scores(None, &scores[..1]), "21–17");
+    assert_eq!(
+        translator.match_scores(Some(Sides::new(1, 0)), &[]),
+        "1–0",
+        "games decided without a score"
+    );
+}

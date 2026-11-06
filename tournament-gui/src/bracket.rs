@@ -21,7 +21,7 @@ use crate::{
     competition::Ctx,
     i18n::t,
     play::{move_focus, use_focus},
-    result_text, team_name,
+    result_text, scores_text, team_name,
 };
 
 /// What gets the focus once the page shows a result reported in the bracket.
@@ -249,8 +249,7 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
     let scores = pairing
         .r#match
         .as_ref()
-        .filter(|row| !row.scores.is_empty())
-        .map(|row| tr.scores(&row.scores));
+        .and_then(|row| scores_text(&tr, row));
     let side = |side: usize| {
         let entry = &pairing.sides[side];
         let class = if result == Some([MatchResult::AWins, MatchResult::BWins][side]) {

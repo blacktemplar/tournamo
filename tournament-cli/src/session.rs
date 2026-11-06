@@ -673,15 +673,15 @@ impl Session {
             Some(MatchResult::Draw) => "draw".to_owned(),
             None => "open".to_owned(),
         };
-        let scores = view::scores(self.phase().expect("a match has a phase"), r#match);
-        if scores.is_empty() {
+        let phase = self.phase().expect("a match has a phase");
+        let scores = view::scores(phase, r#match);
+        let parts_won = view::parts_won(phase, r#match);
+        if scores.is_empty() && parts_won.is_none() {
             text
         } else {
             // in the order of the sides, as `matches` lists them
-            format!(
-                "{text} ({})",
-                Translator::new(Language::English, &[]).scores(&scores)
-            )
+            let scores = Translator::new(Language::English, &[]).match_scores(parts_won, &scores);
+            format!("{text}: {scores}")
         }
     }
 }
@@ -1251,8 +1251,8 @@ mod tests {
 
         let line = reported.lines().next().unwrap();
         assert!(line.starts_with("#1: "), "{reported}");
-        assert!(line.ends_with(" (21–17 15–21 21–9)"), "{reported}");
-        assert!(output(&mut session, "matches").contains("(21–17 15–21 21–9)"));
+        assert!(line.ends_with(": 2–1 (21–17 15–21 21–9)"), "{reported}");
+        assert!(output(&mut session, "matches").contains(": 2–1 (21–17 15–21 21–9)"));
     }
 
     #[test]

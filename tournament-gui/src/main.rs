@@ -420,19 +420,21 @@ fn result_text(tr: &Translator, row: &MatchRow) -> Option<String> {
     })
 }
 
-/// What `row` says of its result, with its scores if it has any, e.g. "Alice won, 21–17 19–21".
+/// What `row` says of its result, with its scores if it has any, e.g. "Alice won, 2–1 (21–17 19–21
+/// 21–15)".
 fn result_with_scores(tr: &Translator, row: &MatchRow) -> Option<String> {
     let result = result_text(tr, row)?;
-    Some(if row.scores.is_empty() {
-        result
-    } else {
-        t!(
-            tr,
-            "result-with-scores",
-            result = result,
-            scores = tr.scores(&row.scores)
-        )
+    Some(match scores_text(tr, row) {
+        None => result,
+        Some(scores) => t!(tr, "result-with-scores", result = result, scores = scores),
     })
+}
+
+/// The scores of `row`, after the parts each side won, if it has any, e.g. "2–1 (21–17 19–21
+/// 21–15)".
+fn scores_text(tr: &Translator, row: &MatchRow) -> Option<String> {
+    (!row.scores.is_empty() || row.parts_won.is_some())
+        .then(|| tr.match_scores(row.parts_won, &row.scores))
 }
 
 /// Has the browser download `file`, a competition's [file](tournament_app::file), named after the

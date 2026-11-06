@@ -30,9 +30,12 @@ a file whose `"format"` changes is migrated, not refused.
   winning score of the match format (21–17, 22–20 or 30–29 in a game to 21).
   The dialog shows who wins each game and the match by the scores entered;
   a different result is chosen only after asking to override it. Finished
-  matches show their scores, in the list of matches and in the bracket.
+  matches show their scores, in the list of matches and in the bracket; a best
+  of shows the games each side won before them (2–1 (21–17 19–21 21–15)), as
+  the result of a match being entered does (Alice wins (2–1)), and a game
+  entered after the match was decided says at which games it was (3–0).
 - The command line reports scores, e.g. `report 3 21-17 19-21 21-15`, and
-  lists them with each finished match.
+  lists them with each finished match, a best of with its games won.
 - In the browser, scores are typed in as well: after the number of the match,
   the left side's first (`3 21-17 19-21 21-15`), or after part of the winner's
   name, the winner's first (`ali 21-17`). A result typed against the scores is

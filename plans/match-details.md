@@ -71,6 +71,10 @@ Decided: every save is of format 2, also without details; `Value` is
 - `the_page_keeps_its_width_between_views` failed once in a full run and passed
   alone; the phase view grew by the "Results" row, so it may be close to
   scrolling at 1200 px.
+- The games won (`MatchRow::parts_won`, `PartView::parts_won`) are counted
+  by the app from the decisions of the parts, generically, not read from the
+  `GamesWon` tally (which exists only once a match is decided); for `BestOf`
+  both count the same.
 - `GamesWon` is read by `GamesBalanceCalculator` (games won and lost), ranked by
   `HigherGamesDifference` and `MoreGamesWon`.
 - The bracket reports only who won: a match with details (a score) is entered

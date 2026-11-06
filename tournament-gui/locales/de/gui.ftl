@@ -193,6 +193,7 @@ result-of = Ergebnis: { $part }
 result-as-entered = Wie eingetragen: { $result }
 result-open = Noch nicht entschieden
 result-is = { $part }: { $result }
+result-with-parts-won = { $result } ({ $won })
 result-override = Ergebnis abweichend festlegen
 result-follow-values = Ergebnis wie eingetragen übernehmen
 bye = Freilos: { $team }

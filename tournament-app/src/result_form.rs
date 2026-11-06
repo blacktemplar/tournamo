@@ -29,7 +29,7 @@ use tournament_engine::{
     },
 };
 
-use crate::i18n::Text;
+use crate::{i18n::Text, view};
 
 /// The result of a match being entered, see the [module](self).
 #[derive(Clone)]
@@ -115,6 +115,9 @@ pub struct PartView {
     pub suggested: Option<MatchResult>,
     /// Whether the result was chosen by hand rather than suggested.
     pub chosen: bool,
+    /// The parts each side won, if it is played in parts at one level, e.g. 2–1 in games of a
+    /// best of; none while no part is decided.
+    pub parts_won: Option<Sides<u32>>,
     /// Whether only a result chosen decides the part, as it has neither values nor parts that
     /// could suggest one.
     pub needs_choice: bool,
@@ -151,6 +154,8 @@ pub struct QuickEntry {
     pub fields: Vec<QuickField>,
     /// The result the values suggest, `None` while they suggest none.
     pub result: Option<MatchResult>,
+    /// The parts each side won, as in [`PartView::parts_won`].
+    pub parts_won: Option<Sides<u32>>,
     /// What looks like a typo in any field, or wrong about the match, each said once.
     pub warnings: Vec<Text>,
 }
@@ -312,6 +317,7 @@ impl ResultForm {
             match_format: plugin_factory::id_of(&*self.format),
             fields,
             result: root.result,
+            parts_won: root.parts_won,
             warnings,
         })
     }
@@ -395,13 +401,19 @@ impl ResultForm {
         {
             let decided = before.iter().cloned().fold(part.clone(), Part::with_part);
             if self.format.suggest(level, &decided).is_some() {
-                warnings.push(Text::new("warning-more-than-decided"));
+                warnings.push(match view::parts_won_of(level, &decided) {
+                    Some(won) => Text::new("warning-more-than-decided-at")
+                        .with("a", won.a)
+                        .with("b", won.b),
+                    None => Text::new("warning-more-than-decided"),
+                });
             }
         }
         for child in children {
             part = part.with_part(child);
         }
         let suggested = self.format.suggest(level, &part);
+        let parts_won = view::parts_won_of(level, &part);
         let result = entry.chosen.or(suggested);
         if let Parts::Same { min, .. } = level.parts {
             let mut shown = entered.max(min as usize).min(views.len());
@@ -436,6 +448,7 @@ impl ResultForm {
             result,
             suggested,
             chosen: entry.chosen.is_some(),
+            parts_won,
             needs_choice: level.fields.is_empty() && matches!(level.parts, Parts::None),
             reasons: level
                 .reasons

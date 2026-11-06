@@ -80,6 +80,8 @@ warning-below-winning-score = neither side has { $winning }, which a winner usua
 warning-winning-lead = at { $winning } or more, a winner usually leads by one or two
 warning-result-disagrees = this is not the result the score suggests
 warning-more-than-decided = more is entered than it took to decide the match
+# $a, $b: the parts, e.g. games, each side had won when the match was decided, side A's first
+warning-more-than-decided-at = the match was decided at { $a }–{ $b } already, yet more is entered
 # what is wrong with the answer of a field, or with a plugin chosen
 issue-unanswered = this needs an answer
 # the variables of number-range

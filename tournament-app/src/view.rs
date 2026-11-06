@@ -4,8 +4,12 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides,
-    plugins::{match_format::Level, metrics_calculator::Cell, phase_format::Stage},
+    Decision, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides,
+    plugins::{
+        match_format::{Level, Parts},
+        metrics_calculator::Cell,
+        phase_format::Stage,
+    },
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
 
@@ -102,6 +106,10 @@ pub struct MatchRow {
     /// order, e.g. the games of a best of; none if it has none. Said in the operator's language by
     /// [`Translator::scores`](crate::i18n::Translator::scores).
     pub scores: Vec<Sides<Option<EnteredValue>>>,
+    /// The parts each side won once the match is finished, if it is played in parts at one level,
+    /// e.g. 3–1 in games of a best of; none if no part was decided. Said with the scores by
+    /// [`Translator::match_scores`](crate::i18n::Translator::match_scores).
+    pub parts_won: Option<Sides<u32>>,
     /// Whether its match format enters more than who won, e.g. a score, which a
     /// [`ResultForm`](crate::result_form::ResultForm) enters.
     pub details: bool,
@@ -472,6 +480,38 @@ pub enum Action {
     Report(MatchRow),
     /// A result undone by its match, see [`Reopened::row`].
     Reopen(MatchRow),
+}
+
+/// The parts of `r#match` each side won, as [`MatchRow::parts_won`] shows them.
+pub fn parts_won(phase: &Phase, r#match: &Match) -> Option<Sides<u32>> {
+    if !r#match.is_finished() {
+        return None;
+    }
+    let template = phase.match_format().template(phase.data(), r#match);
+    parts_won_of(&template.root, r#match.contest())
+}
+
+/// The parts of `part` each side won, if it is played in parts at the same `level`, e.g. the games
+/// of a best of, and any of them is decided.
+pub(crate) fn parts_won_of(level: &Level, part: &Part) -> Option<Sides<u32>> {
+    if !matches!(level.parts, Parts::Same { .. }) {
+        return None;
+    }
+    let mut won = Sides::new(0, 0);
+    let mut decided = false;
+    for result in part
+        .parts()
+        .iter()
+        .filter_map(|part| part.decision().map(Decision::result))
+    {
+        decided = true;
+        match result {
+            MatchResult::AWins => won.a += 1,
+            MatchResult::BWins => won.b += 1,
+            MatchResult::Draw => {}
+        }
+    }
+    decided.then_some(won)
 }
 
 /// The scores of `r#match`, as [`MatchRow::scores`] shows them.

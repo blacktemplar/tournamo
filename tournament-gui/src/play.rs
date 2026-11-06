@@ -644,11 +644,31 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
     // a win is shown by the mark at the winner's name, so said only to screen readers, which may
     // not read the mark; a draw has no such mark
     let shown = row.result == Some(MatchResult::Draw);
+    let scored = row.parts_won.is_some() || !row.scores.is_empty();
+    // the games won, then the scores of the games, as `Translator::match_scores` writes them, the
+    // latter giving way where the list is narrow
+    let (won, games) = match row.parts_won {
+        Some(won) => (
+            Some(tr.score(won)),
+            (!row.scores.is_empty()).then(|| format!("({})", tr.scores(&row.scores))),
+        ),
+        None => (None, Some(tr.scores(&row.scores))),
+    };
     rsx! {
-        if !row.scores.is_empty() {
+        if scored {
             // the scores say how it ended; who won is said to screen readers as well
             span { class: "visually-hidden", {result_text(&tr, &row)} }
-            span { class: "result scores", {tr.scores(&row.scores)} }
+            span { class: "result scores",
+                if let Some(won) = won.clone() {
+                    span { class: "parts-won", {won} }
+                }
+                if won.is_some() && games.is_some() {
+                    " "
+                }
+                if let Some(games) = games {
+                    span { class: if won.is_some() { "game-scores" }, {games} }
+                }
+            }
         } else {
             span { class: if shown { "result" } else { "result visually-hidden" },
                 {result_text(&tr, &row)}
@@ -656,7 +676,7 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
         }
         // where a match may end in a draw, a win keeps the draw's room, so that the pairings of
         // every finished match line up
-        if draws && !shown && row.scores.is_empty() {
+        if draws && !shown && !scored {
             span { class: "result-room", aria_hidden: "true", {tr.get("draw")} }
         }
         button {

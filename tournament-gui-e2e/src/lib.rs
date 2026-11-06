@@ -1081,8 +1081,8 @@ impl Gui {
     }
 
     /// Waits until the match of the round shown that has a result has the scores `scores`, read
-    /// from either side, e.g. `"21–17 19–21"` or `"17–21 21–19"`: a test must not depend on the
-    /// sides.
+    /// from either side, e.g. `"21–17 19–21"` or `"17–21 21–19"`, or `"2–1 (21–17 19–21 21–15)"`
+    /// with the games won: a test must not depend on the sides.
     ///
     /// # Panics
     /// Panics if it does not in time, with the results shown instead.
@@ -2219,15 +2219,20 @@ impl Gui {
     }
 }
 
-/// `scores` read from the other side, e.g. `"17–21 21–19"` of `"21–17 19–21"`.
+/// `scores` read from the other side, e.g. `"17–21 21–19"` of `"21–17 19–21"`, or
+/// `"1–2 (17–21 21–19 15–21)"` of `"2–1 (21–17 19–21 21–15)"`.
 fn mirrored(scores: &str) -> String {
     scores
         .split(' ')
         .map(|score| {
+            let open = if score.starts_with('(') { "(" } else { "" };
+            let close = if score.ends_with(')') { ")" } else { "" };
             let (a, b) = score
+                .trim_start_matches('(')
+                .trim_end_matches(')')
                 .split_once('–')
                 .expect("a score is two numbers and an en dash");
-            format!("{b}–{a}")
+            format!("{open}{b}–{a}{close}")
         })
         .collect::<Vec<_>>()
         .join(" ")

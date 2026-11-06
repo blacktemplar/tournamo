@@ -1498,6 +1498,7 @@ impl Session {
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
             scores: view::scores(phase, r#match),
+            parts_won: view::parts_won(phase, r#match),
             details: details(phase, r#match),
         }
     }

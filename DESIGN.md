@@ -541,7 +541,11 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   match, so it may depend on the stage or on annotations. Match formats:
   `WinnerOnly`, `Scored`, `BestOf`.
 - **Scores are shown generically**: a match's own score, else those of its
-  parts in order (`MatchRow::scores`). A `MatchFormat::show` for a sport writing
+  parts in order (`MatchRow::scores`), after the parts each side won of a
+  match played in parts at one level (`MatchRow::parts_won`: 2–1 in games),
+  counted from the parts' decisions rather than read from a tally, so that a
+  form shows them before the match is decided too, and a warning of parts
+  entered after the match was decided says where it was (3–0). A `MatchFormat::show` for a sport writing
   its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a sport.
 - **Hints are not rules**: the app turns them into warnings ("23–19 in a game
   to 21?"), never refusals.
@@ -1176,6 +1180,10 @@ entrants, but any number and format.
   below its name, draw in the middle, columns aligned by subgrid; one per line,
   since a list is read to find who plays whom. With a result it shrinks to one
   row in place, so a round is mostly what is left to play without cards moving.
+  Finished matches share the columns of the list (subgrid), so their pairings
+  line up whatever their scores, as in a table; where the list is narrower
+  than 40rem, the scores of the games of a best of give way to the games won
+  (`3–1`), still read out.
 - **Names are never cut or shrunk**, they wrap: a cut name may no longer tell
   two entrants apart, and reporting for the wrong one is the worst mistake
   possible. So result buttons say only "Wins", named "Alice wins" by

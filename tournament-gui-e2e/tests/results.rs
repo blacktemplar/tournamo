@@ -104,13 +104,16 @@ async fn the_games_of_a_best_of_decide_the_match() {
             "Game 1: Alice wins",
             "Game 2: Bob wins",
             "Game 3: Alice wins",
-            "Match: Alice wins",
+            "Match: Alice wins (2–1)",
         ])
         .await?;
         gui.report_in_dialog().await?;
 
-        gui.expect_scores_either_way("21–17 19–21 21–15").await?;
-        gui.expect_standings(&["Alice", "Bob"]).await
+        gui.expect_standings(&["Alice", "Bob"]).await?;
+        // across the page, where the list has room for the scores of the games
+        gui.page.resize(900, 900).await?;
+        gui.expect_scores_either_way("2–1 (21–17 19–21 21–15)")
+            .await
     })
     .await;
 }
@@ -147,12 +150,15 @@ async fn the_games_of_a_best_of_are_entered_in_the_row_of_the_match() {
             gui.enter_in_row(&format!("Score of Bob in Game {game}, match 1"), bob)
                 .await?;
         }
-        gui.expect_row_outcomes(&["Alice wins"]).await?;
+        gui.expect_row_outcomes(&["Alice wins (2–1)"]).await?;
         gui.press_enter_in_row("Score of Bob in Game 3, match 1")
             .await?;
 
-        gui.expect_scores_either_way("21–17 19–21 21–15").await?;
-        gui.expect_standings(&["Alice", "Bob"]).await
+        gui.expect_standings(&["Alice", "Bob"]).await?;
+        // across the page, where the list has room for the scores of the games
+        gui.page.resize(900, 900).await?;
+        gui.expect_scores_either_way("2–1 (21–17 19–21 21–15)")
+            .await
     })
     .await;
 }

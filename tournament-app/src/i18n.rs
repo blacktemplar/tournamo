@@ -390,6 +390,33 @@ impl Translator {
             .join(" ")
     }
 
+    /// The scores of a match as [`scores`](Self::scores) says them, after the parts each side won,
+    /// if any, e.g. `3–1 (21–17 19–21 21–15 21–8)`.
+    pub fn match_scores(
+        &self,
+        parts_won: Option<Sides<u32>>,
+        scores: &[Sides<Option<EnteredValue>>],
+    ) -> String {
+        let Some(won) = parts_won else {
+            return self.scores(scores);
+        };
+        let won = self.score(won);
+        if scores.is_empty() {
+            won
+        } else {
+            format!("{won} ({})", self.scores(scores))
+        }
+    }
+
+    /// `score`, side A's first, e.g. `3–1`.
+    pub fn score(&self, score: Sides<u32>) -> String {
+        format!(
+            "{}–{}",
+            self.number(score.a.into()),
+            self.number(score.b.into())
+        )
+    }
+
     /// `number` as the language writes it, e.g. `0,5` in German.
     pub fn number(&self, number: f64) -> String {
         written(self.language, &number.to_string())

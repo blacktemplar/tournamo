@@ -67,6 +67,7 @@ warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger übli
 warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt
 warning-more-than-decided = es ist mehr eingetragen, als es zur Entscheidung des Spiels brauchte
+warning-more-than-decided-at = das Spiel war bei { $a }–{ $b } schon entschieden, trotzdem ist mehr eingetragen
 issue-unanswered = das braucht eine Antwort
 issue-out-of-range = das muss { number-range } sein
 issue-not-a-number = „{ $entered }“ ist keine Zahl

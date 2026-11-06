@@ -16,6 +16,7 @@ pub mod file;
 pub mod form;
 pub mod i18n;
 pub mod people;
+pub mod result_form;
 pub mod session;
 pub mod storage;
 pub mod view;

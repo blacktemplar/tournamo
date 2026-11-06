@@ -23,6 +23,7 @@ error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already
 error-draw-not-allowed = a match of this format cannot end in a draw
+error-undecided = the result does not say who won
 error-result-unreadable = enter the number of a match and its result, 1, X or 2, e.g. “3 1”, or part of the winner's name
 error-no-match-numbered = there is no match { $number }
 error-match-numbered-finished-already = match { $number } has a result already
@@ -70,6 +71,9 @@ number-range = { $whole ->
     }
 # what an answer leads to that the operator may not want, although the phase can be played so
 warning-unranked = ranked by nothing, every entrant is tied in the standings
+# what looks like a typo in a result entered, though it is taken
+warning-above-usual-top = { $value } is more than the usual { $top }
+warning-result-disagrees = this is not the result the score suggests
 # what is wrong with the answer of a field, or with a plugin chosen
 issue-unanswered = this needs an answer
 # the variables of number-range

@@ -134,6 +134,9 @@ pub enum ReportError {
     AlreadyFinished,
     #[error("a match of this format cannot end in a draw")]
     DrawNotAllowed,
+    /// A result entered that neither says nor suggests who won.
+    #[error("the result does not say who won")]
+    Undecided,
     /// The engine refused the result for a reason this crate does not know.
     #[error("{0}")]
     Rejected(TransitionError),
@@ -359,6 +362,7 @@ impl Message for ReportError {
             Self::UnknownMatch => Text::new("error-unknown-match"),
             Self::AlreadyFinished => Text::new("error-match-finished-already"),
             Self::DrawNotAllowed => Text::new("error-draw-not-allowed"),
+            Self::Undecided => Text::new("error-undecided"),
             Self::Rejected(error) => rejected(error),
         }
     }

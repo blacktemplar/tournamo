@@ -4268,6 +4268,7 @@ dependencies = [
 name = "tournament-app"
 version = "0.3.0"
 dependencies = [
+ "dyn-clone",
  "fluent-bundle",
  "fluent-syntax",
  "getrandom 0.4.3",

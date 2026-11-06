@@ -19,9 +19,9 @@ use plugin_factory::{
 };
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated as _, Bye, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt as _, CompetitionTransition, Entrant, EntrantId, Match, MatchId,
-    MatchResult, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId, RemoveEntrant,
-    ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap,
+    CompetitionStateMachineExt as _, CompetitionTransition, Decision, Entrant, EntrantId, Match,
+    MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId,
+    RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap, Values,
     plugins::{
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
@@ -47,6 +47,7 @@ use crate::{
     file::{self, File},
     form::PhaseForm,
     people::{People, Person},
+    result_form::ResultForm,
     storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
     view::{
         Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow, Medal,
@@ -1112,24 +1113,70 @@ impl Session {
         Entered { found, report }
     }
 
-    /// Reports `result` for the match `id`.
+    /// Reports `result` for the match `id`, with nothing else entered.
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, the match has a
     /// result already, or its format does not take the result.
     pub fn report(&mut self, id: MatchId, result: MatchResult) -> Result<Reported, ReportError> {
+        self.report_decision(id, Decision::new(result), Values::new(), Vec::new())
+    }
+
+    /// A form to enter the result of the match `id` into, see [`ResultForm`].
+    ///
+    /// # Errors
+    /// Returns an error if the competition has not started, has no such match, or the match has a
+    /// result already.
+    pub fn result_form(&self, id: MatchId) -> Result<ResultForm, ReportError> {
+        let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
+        let r#match = phase
+            .data()
+            .matches()
+            .get(&id)
+            .ok_or(ReportError::UnknownMatch)?;
+        if r#match.is_finished() {
+            return Err(ReportError::AlreadyFinished);
+        }
+        let rules = phase.match_rules();
+        let template = rules.template(phase.data(), r#match);
+        Ok(ResultForm::new(id, dyn_clone::clone_box(rules), template))
+    }
+
+    /// Reports the result entered into `form`.
+    ///
+    /// # Errors
+    /// Returns an error as [`Self::report`] does, and if the result neither says nor suggests who
+    /// won.
+    pub fn report_form(&mut self, form: &ResultForm) -> Result<Reported, ReportError> {
+        let (decision, values, parts) = form.report();
+        let decision = decision.ok_or(ReportError::Undecided)?;
+        self.report_decision(form.match_id(), decision, values, parts)
+    }
+
+    fn report_decision(
+        &mut self,
+        id: MatchId,
+        decision: Decision,
+        values: Values,
+        parts: Vec<Part>,
+    ) -> Result<Reported, ReportError> {
         let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
         let Some(r#match) = phase.data().matches().get(&id) else {
             return Err(ReportError::UnknownMatch);
         };
         let row = MatchRow {
-            result: Some(result),
+            result: Some(decision.result()),
             ..self.match_row(phase, r#match)
         };
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
+        let report = values.into_iter().fold(
+            ReportMatchResult::new(phase_id, id, decision),
+            |report, (key, sides)| report.with_value(key, sides),
+        );
+        let report = parts.into_iter().fold(report, ReportMatchResult::with_part);
         self.act(Action::Report(row.clone()), |machine, history| {
-            machine.apply_in(history, ReportMatchResult::new(phase_id, id, result))
+            machine.apply_in(history, report)
         })
         .map_err(|error| {
             let error = rejection(error);

@@ -8,6 +8,10 @@
 //! hands what the operator does back to the form, by the path of the part it was done to; once
 //! done, it hands the form to [`Session::report_form`](crate::session::Session::report_form).
 //!
+//! A result chosen by hand overrides the one suggested, which is rare: a screen may offer the
+//! choice only on request, except for a part that only a choice decides
+//! ([`PartView::needs_choice`]).
+//!
 //! Nothing entered is refused for breaking the rules of a sport: the form only warns of a score
 //! unlike those the match format hints a winner usually has, and of a result chosen against the one
 //! the values suggest.
@@ -64,6 +68,15 @@ impl Entry {
             && self.parts.iter().all(Self::is_empty)
     }
 
+    fn is_chosen(&self) -> bool {
+        self.chosen.is_some() || self.parts.iter().any(Self::is_chosen)
+    }
+
+    fn follow_suggestions(&mut self) {
+        self.chosen = None;
+        self.parts.iter_mut().for_each(Self::follow_suggestions);
+    }
+
     fn at(&mut self, path: &[usize]) -> &mut Self {
         path.iter().fold(self, |entry, &index| {
             entry
@@ -98,6 +111,9 @@ pub struct PartView {
     pub suggested: Option<MatchResult>,
     /// Whether the result was chosen by hand rather than suggested.
     pub chosen: bool,
+    /// Whether only a result chosen decides the part, as it has neither values nor parts that
+    /// could suggest one.
+    pub needs_choice: bool,
     /// Why the part may be decided other than in the usual way.
     pub reasons: Vec<(ResultReason, Phrase)>,
     pub reason: Option<ResultReason>,
@@ -171,6 +187,16 @@ impl ResultForm {
     /// Panics if `path` is no path of a part of the [view](Self::view).
     pub fn choose(&mut self, path: &[usize], result: Option<MatchResult>) {
         self.root.at(path).chosen = result;
+    }
+
+    /// Whether a result was chosen by hand for any part.
+    pub fn is_chosen(&self) -> bool {
+        self.root.is_chosen()
+    }
+
+    /// Follows what the values and parts suggest again, for every part.
+    pub fn follow_suggestions(&mut self) {
+        self.root.follow_suggestions();
     }
 
     /// Says why the part at `path` was decided, if not in the usual way.
@@ -250,6 +276,7 @@ impl ResultForm {
             result,
             suggested,
             chosen: entry.chosen.is_some(),
+            needs_choice: level.fields.is_empty() && matches!(level.parts, Parts::None),
             reasons: level
                 .reasons
                 .iter()

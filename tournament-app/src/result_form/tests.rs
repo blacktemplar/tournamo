@@ -94,6 +94,34 @@ fn a_result_chosen_against_the_score_is_taken_with_a_warning() {
     );
 }
 
+#[test]
+fn following_the_suggestions_again_drops_every_result_chosen() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 17);
+    form.choose(&[0], Some(MatchResult::BWins));
+    form.choose(&[], Some(MatchResult::BWins));
+    assert!(form.is_chosen());
+
+    form.follow_suggestions();
+
+    assert!(!form.is_chosen());
+    let root = form.view().root;
+    assert_eq!(root.parts[0].result, Some(MatchResult::AWins));
+    assert_eq!(root.result, None);
+}
+
+#[test]
+fn only_a_part_without_values_or_parts_needs_a_choice() {
+    let (session, id) = started(PluginConfig::of::<WinnerOnly>());
+    assert!(session.result_form(id).unwrap().view().root.needs_choice);
+
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let root = session.result_form(id).unwrap().view().root;
+    assert!(!root.needs_choice, "its games suggest a result");
+    assert!(!root.parts[0].needs_choice, "its score suggests a result");
+}
+
 /// The warnings of the score `a` to `b` in a match to 21.
 fn warnings_of(a: u32, b: u32) -> Vec<Text> {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));

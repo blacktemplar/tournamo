@@ -1,6 +1,7 @@
 //! The dialog entering the result of a match whose match format enters more than who won, e.g. a
 //! score: the [`ResultForm`] of its result, every part with the values of each side and its result,
-//! the one the values suggest unless another is chosen.
+//! the one the values suggest. Overriding it is rare, so a result is chosen only after asking to
+//! override, except for a part that only a choice decides.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -29,6 +30,8 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
     // the form while the dialog is open
     let mut entering = use_signal(|| None::<Signal<ResultForm>>);
     let mut error = use_signal(|| None::<Text>);
+    // whether results may be chosen against those the values suggest
+    let mut overriding = use_signal(|| false);
     let tr = ctx.translator.read();
     let id = row.id;
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
@@ -44,6 +47,7 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
             onclick: move |_| {
                 if let Ok(form) = ctx.session.peek().result_form(id) {
                     error.set(None);
+                    overriding.set(false);
                     entering.set(Some(Signal::new(form)));
                     focus_later(&["#result-form input", "#result-form select"]);
                 }
@@ -59,7 +63,7 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
             },
             DialogTitle { {t!(tr, "result-title", number = row.number)} }
             DialogDescription { {t!(tr, "result-description", a = a.as_str(), b = b.as_str())} }
-            if let Some(form) = entering() {
+            if let Some(mut form) = entering() {
                 form {
                     id: "result-form",
                     class: "dialog-form",
@@ -78,6 +82,7 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
                         form,
                         part: form.read().view().root,
                         match_format: form.read().view().match_format,
+                        overriding: overriding(),
                         a: a.clone(),
                         b: b.clone(),
                     }
@@ -87,6 +92,26 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
                         }
                     }
                     div { class: "dialog-buttons",
+                        if !form.read().view().root.needs_choice {
+                            button {
+                                class: "quiet small muted override",
+                                r#type: "button",
+                                onclick: move |_| {
+                                    if overriding() {
+                                        form.write().follow_suggestions();
+                                        overriding.set(false);
+                                    } else {
+                                        overriding.set(true);
+                                        focus_later(&["#result-form .result-choice select"]);
+                                    }
+                                },
+                                if overriding() {
+                                    {tr.get("result-follow-values")}
+                                } else {
+                                    {tr.get("result-override")}
+                                }
+                            }
+                        }
                         button { class: "primary", r#type: "submit", {tr.get("report")} }
                         button { r#type: "button", onclick: move |_| entering.set(None),
                             {tr.get("cancel")}
@@ -99,12 +124,13 @@ pub fn EnterResult(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Fo
 }
 
 /// The part `part` of the result of `form` entered by the match format `match_format`, between `a`
-/// and `b`: its values, its parts, then its result.
+/// and `b`: its values, its parts, then its result, to be chosen if `overriding`.
 #[component]
 fn ResultPart(
     form: Signal<ResultForm>,
     part: PartView,
     match_format: &'static str,
+    overriding: bool,
     a: String,
     b: String,
 ) -> Element {
@@ -149,6 +175,7 @@ fn ResultPart(
                     form,
                     part: child,
                     match_format,
+                    overriding,
                     a: a.clone(),
                     b: b.clone(),
                 }
@@ -157,6 +184,7 @@ fn ResultPart(
                 form,
                 part: part.clone(),
                 name: legend.clone(),
+                overriding,
                 a: a.clone(),
                 b: b.clone(),
                 id: "{id}-result",
@@ -248,12 +276,14 @@ fn entered(text: &str, kind: ValueKind) -> Option<EnteredValue> {
     }
 }
 
-/// The result of the part `part`, named `name`: the one its values suggest, or another chosen.
+/// The result of the part `part`, named `name`: the one its values suggest, or else another chosen,
+/// which is offered if `overriding` or if only a choice decides the part.
 #[component]
 fn ResultChoice(
     form: Signal<ResultForm>,
     part: PartView,
     name: String,
+    overriding: bool,
     a: String,
     b: String,
     id: String,
@@ -277,6 +307,27 @@ fn ResultChoice(
         Some(MatchResult::BWins) => "b",
     };
     let path = part.path.clone();
+    if !overriding && !part.needs_choice {
+        let result = match part.result {
+            Some(result) => said(result),
+            None => tr.get("result-open"),
+        };
+        let outcome = t!(
+            tr,
+            "result-is",
+            part = name.as_str(),
+            result = result.as_str()
+        );
+        return rsx! {
+            div { class: "result-outcome",
+                // read out as it changes with the values
+                output { id: "{id}", {outcome} }
+                for warning in &part.warnings {
+                    p { class: "warnings", role: "status", {tr.sentence(warning)} }
+                }
+            }
+        };
+    }
     rsx! {
         div { class: "result-choice",
             label { r#for: "{id}", {t!(tr, "result-of", part = name.as_str())} }

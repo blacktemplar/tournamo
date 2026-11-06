@@ -2023,6 +2023,28 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the dialog of a result open shows the results of its parts not overridden as
+    /// `outcomes`, e.g. `"Match: Bob wins"`, the parts in order and the match last.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_result_outcomes(&self, outcomes: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .result-outcome output"), outcomes)
+            .await
+    }
+
+    /// Waits until the dialog of a result open offers to choose the results labelled `labels`,
+    /// e.g. `"Result: Match"`, as while overriding them; none if not overriding.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the choices offered instead.
+    pub async fn expect_result_choices(&self, labels: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .result-choice label"), labels)
+            .await
+    }
+
     /// Waits until the dialog of a result open points out `warnings`, in the order of its fields.
     ///
     /// # Panics

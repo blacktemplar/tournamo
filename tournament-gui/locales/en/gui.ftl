@@ -234,6 +234,11 @@ value-of-in = { $value } of { $team } in { $part }
 result-of = Result: { $part }
 result-as-entered = As entered: { $result }
 result-open = Not decided yet
+result-is = { $part }: { $result }
+# a button, rarely used: choosing results other than those the values suggest
+result-override = Override result
+# a button, while overriding: dropping the results chosen
+result-follow-values = Use result as entered
 bye = Bye: { $team }
 bye-in-stage = Bye: { $team } ({ $stage })
 standings = Standings

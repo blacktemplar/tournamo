@@ -22,8 +22,12 @@ async fn a_score_entered_decides_the_match_and_shows_in_it() {
         gui.click_labelled("Enter result of match 1").await?;
         gui.page.check_accessibility().await?;
 
+        gui.expect_result_outcomes(&["Match: Not decided yet"])
+            .await?;
         gui.enter_value("Score of Alice", "17").await?;
         gui.enter_value("Score of Bob", "21").await?;
+        gui.expect_result_outcomes(&["Match: Bob wins"]).await?;
+        gui.expect_result_choices(&[]).await?;
         gui.click("Report").await?;
 
         gui.expect_no_dialog().await?;
@@ -35,19 +39,44 @@ async fn a_score_entered_decides_the_match_and_shows_in_it() {
 
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn what_looks_like_a_typo_is_pointed_out_and_taken() {
+async fn a_result_overridden_against_the_score_is_pointed_out_and_taken() {
     run_in_new_competition(async |gui| {
         start(&gui, "Score").await?;
         gui.click_labelled("Enter result of match 1").await?;
         gui.enter_value("Score of Alice", "1").await?;
         gui.enter_value("Score of Bob", "0").await?;
 
+        gui.click("Override result").await?;
+        gui.expect_result_choices(&["Result: Match"]).await?;
+        gui.page.check_accessibility().await?;
         gui.choose_result("Result: Match", "Bob wins").await?;
 
         gui.expect_result_warnings(&["This is not the result the score suggests."])
             .await?;
         gui.click("Report").await?;
         gui.expect_standings(&["Bob", "Alice"]).await
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_overridden_follows_the_score_again_on_request() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Score").await?;
+        gui.click_labelled("Enter result of match 1").await?;
+        gui.enter_value("Score of Alice", "1").await?;
+        gui.enter_value("Score of Bob", "0").await?;
+        gui.click("Override result").await?;
+        gui.choose_result("Result: Match", "Bob wins").await?;
+
+        gui.click("Use result as entered").await?;
+
+        gui.expect_result_choices(&[]).await?;
+        gui.expect_result_outcomes(&["Match: Alice wins"]).await?;
+        gui.expect_result_warnings(&[]).await?;
+        gui.click("Report").await?;
+        gui.expect_standings(&["Alice", "Bob"]).await
     })
     .await;
 }
@@ -66,6 +95,13 @@ async fn the_games_of_a_best_of_decide_the_match() {
             gui.enter_value(&format!("Score of Bob in Game {game}"), bob)
                 .await?;
         }
+        gui.expect_result_outcomes(&[
+            "Game 1: Alice wins",
+            "Game 2: Bob wins",
+            "Game 3: Alice wins",
+            "Match: Alice wins",
+        ])
+        .await?;
         gui.click("Report").await?;
 
         gui.expect_scores_either_way("21–17 19–21 21–15").await?;

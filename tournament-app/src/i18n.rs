@@ -224,6 +224,14 @@ pub enum PluginText<'a> {
     /// The phrase of this key in a cell of a calculator's column, `.cell-<key>`, with the phrase's
     /// numbers as its variables, see [`Translator::cell`].
     Cell(&'a str),
+    /// What match rules call a part of a match at the level of this key, e.g. a game,
+    /// `.level-<key>`.
+    Level(&'a str),
+    /// The label of a value of this key that match rules enter for each side, e.g. the score,
+    /// `.value-<key>`.
+    Value(&'a str),
+    /// A reason of this key match rules give for a decision, e.g. a walkover, `.reason-<key>`.
+    Reason(&'a str),
 }
 
 impl PluginText<'_> {
@@ -242,6 +250,9 @@ impl PluginText<'_> {
             Self::FieldDescription(name) => format!("field-{name}-description"),
             Self::Stage(key) => format!("stage-{key}"),
             Self::Cell(key) => format!("cell-{key}"),
+            Self::Level(key) => format!("level-{key}"),
+            Self::Value(key) => format!("value-{key}"),
+            Self::Reason(key) => format!("reason-{key}"),
         }
     }
 }
@@ -342,7 +353,7 @@ impl Translator {
     /// The name of `stage` in the language, as the [`PluginText::Stage`] of its format with its
     /// numbers set, or else in English, as the format's code names it.
     pub fn stage(&self, stage: &StageName) -> String {
-        self.phrase(
+        self.plugin_phrase(
             stage.format,
             PluginText::Stage(stage.stage.key()),
             &stage.stage,
@@ -355,7 +366,9 @@ impl Translator {
     pub fn cell(&self, calculator: &str, cell: &Cell) -> String {
         match cell {
             Cell::Number(number) => self.number(number.get()),
-            Cell::Text(phrase) => self.phrase(calculator, PluginText::Cell(phrase.key()), phrase),
+            Cell::Text(phrase) => {
+                self.plugin_phrase(calculator, PluginText::Cell(phrase.key()), phrase)
+            }
         }
     }
 
@@ -364,8 +377,9 @@ impl Translator {
         written(self.language, &number.to_string())
     }
 
-    /// `phrase` of the plugin `id` as its `text` with the phrase's numbers set, or else in English.
-    fn phrase(&self, id: &str, text: PluginText<'_>, phrase: &Phrase) -> String {
+    /// `phrase` of the plugin `id` as its `text` with the phrase's numbers set, or else in English,
+    /// e.g. a level of the match rules `id` as [`PluginText::Level`] of the phrase's key.
+    pub fn plugin_phrase(&self, id: &str, text: PluginText<'_>, phrase: &Phrase) -> String {
         let mut args = FluentArgs::new();
         for (name, value) in phrase.numbers() {
             args.set(*name, *value);

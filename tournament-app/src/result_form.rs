@@ -75,7 +75,8 @@ impl Entry {
 /// What a [`ResultForm`] shows: plain data for a screen to lay out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResultView {
-    /// The id of the match rules, whose message translates the phrases of the parts.
+    /// The id of the match rules, whose message translates the phrases of the parts, see
+    /// [`Translator::plugin_phrase`](crate::i18n::Translator::plugin_phrase).
     pub rules: &'static str,
     /// The match itself.
     pub root: PartView,

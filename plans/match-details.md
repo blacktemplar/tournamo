@@ -32,7 +32,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [x] 7. `BestOf { games }`: tallies `Games`, `Points`
 
 ### C. App
-- [ ] 8. `ResultForm`: view from the template, entering values and parts,
+- [x] 8. `ResultForm`: view from the template, entering values and parts,
   suggested decision, hints and disagreements as warnings, `report` with the play
 - [ ] 9. Views show the play (rounds, bracket, cross table) through `MatchRules::show`
 - [ ] 10. (optional) `report_entered` reads scores

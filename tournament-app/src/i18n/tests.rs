@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, fmt::Display, io};
 use plugin_factory::{
     PluginType as _,
     catalog::{AnyAxis, PluginEntry},
+    config::PluginConfig,
     schema::{Configurable as _, Schema},
 };
 use tournament_engine::{
@@ -16,7 +17,7 @@ use tournament_engine::{
             RoundOfFirstLossCalculator, ToCell as _, WinsDrawsLosses, WinsDrawsLossesCalculator,
         },
         phase_format::{
-            DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat,
+            DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat, RoundRobin,
             SingleElimination, Stage,
         },
         ranker::SliceRanker,
@@ -26,9 +27,13 @@ use tournament_engine::{
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::error::{
-    AddEntrantError, AddPhaseError, ImportError, LoadError, NoPhase, NothingToUndo,
-    PhaseDraftError, ReportEnteredError, ReportError, StartError, UndoReportError,
+use crate::{
+    error::{
+        AddEntrantError, AddPhaseError, ImportError, LoadError, NoPhase, NothingToUndo,
+        PhaseDraftError, ReportEnteredError, ReportError, StartError, UndoReportError,
+    },
+    result_form::PartView,
+    session::Session,
 };
 
 #[test]
@@ -341,6 +346,55 @@ fn translatable(entry: &PluginEntry) -> BTreeSet<String> {
         phrases_in_cells(entry.id())
             .iter()
             .map(|phrase| PluginText::Cell(phrase.key()).attribute()),
+    );
+    if AnyAxis::of::<dyn MatchRules>()
+        .entries()
+        .any(|rules| rules.id() == entry.id())
+    {
+        attributes.extend(phrases_of_rules(entry.id()));
+    }
+    attributes
+}
+
+/// What the result of a match entered by the rules `id` names, as attributes: found from a form to
+/// enter it, in a round robin of two whose results are entered by the rules with their defaults.
+fn phrases_of_rules(id: &str) -> BTreeSet<String> {
+    fn collect(part: &PartView, attributes: &mut BTreeSet<String>) {
+        attributes.insert(PluginText::Level(part.name.key()).attribute());
+        for field in &part.fields {
+            attributes.insert(PluginText::Value(field.label.key()).attribute());
+        }
+        for (_, label) in &part.reasons {
+            attributes.insert(PluginText::Reason(label.key()).attribute());
+        }
+        for part in &part.parts {
+            collect(part, attributes);
+        }
+    }
+    let mut session = Session::new("cup");
+    for name in ["Alice", "Bob"] {
+        session.add_entrant(name).unwrap();
+    }
+    let draft = session
+        .phase_draft(RoundRobin::ID)
+        .unwrap()
+        .with("results", PluginConfig::new(id))
+        .and_then(|draft| draft.with_defaults())
+        .unwrap();
+    session.add_phase(&draft).unwrap();
+    session.start().unwrap();
+    let r#match = session
+        .competition()
+        .phases()
+        .values()
+        .next()
+        .unwrap()
+        .data();
+    let id = r#match.matches().values().next().unwrap().id();
+    let mut attributes = BTreeSet::new();
+    collect(
+        &session.result_form(id).unwrap().view().root,
+        &mut attributes,
     );
     attributes
 }

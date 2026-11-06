@@ -2,7 +2,7 @@ use plugin_factory::{PluginType as _, config::PluginConfig};
 use tournament_engine::{
     Competition, Match,
     plugins::{
-        match_format::{BestOf, Scored, WinnerOnly},
+        match_format::{BestOf, Hints, Scored, WinnerOnly},
         phase_format::RoundRobin,
     },
 };
@@ -281,4 +281,139 @@ fn a_score_is_entered_as_its_field_takes_it() {
     assert_eq!(of_kind(half(2.5), ValueKind::Count), None);
     assert_eq!(of_kind(half(-1.0), ValueKind::Count), None);
     assert_eq!(of_kind(half(2.5), ValueKind::Decimal), Some(half(2.5)));
+}
+
+#[test]
+fn a_score_is_entered_in_one_row() {
+    let (session, id) = started(PluginConfig::of::<Scored>());
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[], 3, 1);
+
+    let quick = form.quick_entry().unwrap();
+
+    assert_eq!(quick.fields.len(), 1);
+    assert_eq!(quick.fields[0].path, Vec::<usize>::new());
+    assert_eq!(quick.fields[0].part, None);
+    assert_eq!(quick.fields[0].field.values, Sides::new(count(3), count(1)));
+    assert_eq!(quick.result, Some(MatchResult::AWins));
+}
+
+#[test]
+fn the_games_of_a_best_of_are_entered_in_one_row() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
+    let mut form = session.result_form(id).unwrap();
+    for game in 0..3 {
+        score(&mut form, &[game], 21, 17);
+    }
+
+    let quick = form.quick_entry().unwrap();
+
+    let parts: Vec<_> = quick
+        .fields
+        .iter()
+        .map(|field| (field.path.clone(), field.part.as_ref().unwrap().1))
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (vec![0], 1),
+            (vec![1], 2),
+            (vec![2], 3),
+            (vec![3], 4),
+            (vec![4], 5)
+        ]
+    );
+    assert_eq!(
+        quick.result,
+        Some(MatchResult::AWins),
+        "three games of five"
+    );
+}
+
+#[test]
+fn a_warning_of_several_fields_in_one_row_is_said_once() {
+    let (session, id) = started(
+        PluginConfig::of::<BestOf>()
+            .with("games", 3)
+            .with("winning_score", 21),
+    );
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 11, 7);
+    score(&mut form, &[1], 11, 9);
+
+    let warnings = form.quick_entry().unwrap().warnings;
+
+    assert_eq!(
+        warnings,
+        [Text::new("warning-below-winning-score").with("winning", 21_u32)]
+    );
+}
+
+#[test]
+fn a_winner_alone_is_not_entered_in_a_row() {
+    let (session, id) = started(PluginConfig::of::<WinnerOnly>());
+
+    assert_eq!(session.result_form(id).unwrap().quick_entry(), None);
+}
+
+/// A form of a match whose result looks like `root`.
+fn form_of(root: Level) -> ResultForm {
+    let (_, id) = started(PluginConfig::of::<WinnerOnly>());
+    ResultForm::new(id, Box::new(WinnerOnly), Template { root })
+}
+
+/// A level called `name` with a score.
+fn scored(name: &'static str) -> Level {
+    Level {
+        fields: vec![FieldSpec {
+            key: SCORE,
+            label: Phrase::new("score", "score"),
+            kind: ValueKind::Count,
+            hints: Hints::default(),
+        }],
+        ..Level::new(Phrase::new(name, name))
+    }
+}
+
+#[test]
+fn a_match_of_parts_of_several_levels_is_not_entered_in_a_row() {
+    let fixture = Level {
+        parts: Parts::Each(vec![scored("singles"), scored("doubles")]),
+        ..Level::new(Phrase::new("fixture", "fixture"))
+    };
+
+    assert_eq!(form_of(fixture).quick_entry(), None);
+}
+
+#[test]
+fn a_match_of_parts_with_parts_of_their_own_is_not_entered_in_a_row() {
+    let set = Level {
+        parts: Parts::Same {
+            level: Box::new(scored("game")),
+            max: 6,
+        },
+        ..scored("set")
+    };
+    let r#match = Level {
+        parts: Parts::Same {
+            level: Box::new(set),
+            max: 3,
+        },
+        ..Level::new(Phrase::new("match", "match"))
+    };
+
+    assert_eq!(form_of(r#match).quick_entry(), None);
+}
+
+#[test]
+fn a_match_with_a_field_of_its_own_and_parts_is_not_entered_in_a_row() {
+    let r#match = Level {
+        parts: Parts::Same {
+            level: Box::new(scored("game")),
+            max: 3,
+        },
+        ..scored("match")
+    };
+
+    assert_eq!(form_of(r#match).quick_entry(), None);
 }

@@ -8,6 +8,9 @@
 //! hands what the operator does back to the form, by the path of the part it was done to; once
 //! done, it hands the form to [`Session::report_form`](crate::session::Session::report_form).
 //!
+//! A match whose result takes no more than a row, e.g. a score or the score of each game, may be
+//! entered beside it instead ([`ResultForm::quick_entry`]), into the same form.
+//!
 //! A result chosen by hand overrides the one suggested, which is rare: a screen may offer the
 //! choice only on request, except for a part that only a choice decides
 //! ([`PartView::needs_choice`]).
@@ -133,6 +136,31 @@ pub struct FieldView {
     pub warnings: Vec<Text>,
 }
 
+/// A result entered in one row, beside the match rather than in a form of its own: a value for
+/// each side of each field, see [`ResultForm::quick_entry`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuickEntry {
+    /// The id of the match format, whose message translates the phrases, as in [`ResultView`].
+    pub match_format: &'static str,
+    /// The fields in the order they are entered: the one of the match, or the one of each of its
+    /// parts.
+    pub fields: Vec<QuickField>,
+    /// The result the values suggest, `None` while they suggest none.
+    pub result: Option<MatchResult>,
+    /// What looks like a typo in any field, each said once.
+    pub warnings: Vec<Text>,
+}
+
+/// A field of a [`QuickEntry`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuickField {
+    /// The path of its part, as in [`PartView::path`].
+    pub path: Vec<usize>,
+    /// The part it is of, unless it is the match's: its name and number, from 1, e.g. game 2.
+    pub part: Option<(Phrase, usize)>,
+    pub field: FieldView,
+}
+
 impl ResultForm {
     /// A form with nothing entered for the match `match_id`, whose result looks like `template`,
     /// entered by `format`.
@@ -222,6 +250,59 @@ impl ResultForm {
             self.set_value(&path, &key, Team::B, score.b);
         }
         true
+    }
+
+    /// What is entered of the match in one row, if its result takes no more than a row: if the
+    /// match has a single field and no parts, e.g. its score, or else no field of its own and parts
+    /// of one level with a single field and no parts of their own, e.g. the score of each game of a
+    /// best of. A match decided by its winner alone takes none, and neither does one of parts of
+    /// several levels, e.g. the rubbers of a fixture.
+    ///
+    /// What the row enters goes into this form as [`set_value`](Self::set_value) does; a result is
+    /// never chosen there, so the form is reported as it suggests.
+    pub fn quick_entry(&self) -> Option<QuickEntry> {
+        let level = &self.template.root;
+        let root = self.view().root;
+        let fields: Vec<QuickField> = match (&level.parts, level.fields.len()) {
+            (Parts::None, 1) => root
+                .fields
+                .into_iter()
+                .map(|field| QuickField {
+                    path: Vec::new(),
+                    part: None,
+                    field,
+                })
+                .collect(),
+            (Parts::Same { level, .. }, 0)
+                if level.fields.len() == 1 && matches!(level.parts, Parts::None) =>
+            {
+                root.parts
+                    .into_iter()
+                    .enumerate()
+                    .flat_map(|(index, part)| {
+                        let name = part.name;
+                        part.fields.into_iter().map(move |field| QuickField {
+                            path: part.path.clone(),
+                            part: Some((name.clone(), index + 1)),
+                            field,
+                        })
+                    })
+                    .collect()
+            }
+            _ => return None,
+        };
+        let mut warnings: Vec<Text> = Vec::new();
+        for warning in fields.iter().flat_map(|quick| &quick.field.warnings) {
+            if !warnings.contains(warning) {
+                warnings.push(warning.clone());
+            }
+        }
+        Some(QuickEntry {
+            match_format: plugin_factory::id_of(&*self.format),
+            fields,
+            result: root.result,
+            warnings,
+        })
     }
 
     /// Chooses `result` for the part at `path` by hand, or follows what its values and parts

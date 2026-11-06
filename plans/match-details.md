@@ -41,7 +41,7 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 
 ### D. Frontends
 - [x] 11. GUI: result dialog from `ResultForm`, scores shown; e2e tests
-- [ ] 12. CLI and web: reporting with scores
+- [x] 12. CLI and web: reporting with scores (`report 3 21-17 19-21 [a|b|draw]`)
 
 ### E. Release
 - [ ] CHANGELOG entries; golden saves of scored and best-of competitions

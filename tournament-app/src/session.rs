@@ -21,10 +21,9 @@ use tournament_engine::{
     AddEntrant, AddPhase, Annotated as _, Bye, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt as _, CompetitionTransition, Decision, Entrant, EntrantId, Match,
     MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId,
-    RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap,
-    Value, Values,
+    RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap, Values,
     plugins::{
-        match_rules::{Level, Parts},
+        match_rules::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
         ranker::SliceRanker,
@@ -52,8 +51,8 @@ use crate::{
     result_form::ResultForm,
     storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
     view::{
-        Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow, Medal,
-        NameSearch, Plugin, Reopened, Reported, Round, RoundSummary, Scale, StageName,
+        self, Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow,
+        Medal, NameSearch, Plugin, Reopened, Reported, Round, RoundSummary, Scale, StageName,
         StandingCell, StandingRow, Standings,
     },
 };
@@ -1423,7 +1422,7 @@ impl Session {
             a: self.team(data, r#match.team_a()),
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
-            scores: scores(phase, r#match),
+            scores: view::scores(phase, r#match),
             details: details(phase, r#match),
         }
     }
@@ -1433,31 +1432,6 @@ impl Session {
 fn details(phase: &Phase, r#match: &Match) -> bool {
     let root = phase.match_rules().template(phase.data(), r#match).root;
     !root.fields.is_empty() || !matches!(root.parts, Parts::None)
-}
-
-/// The scores of `r#match`, as [`MatchRow::scores`] shows them.
-fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<Value>>> {
-    if !r#match.is_finished() {
-        return Vec::new();
-    }
-    // the value of the first field of `level` entered for `part`
-    let score = |level: &Level, part: &Part| {
-        level
-            .fields
-            .iter()
-            .find_map(|field| part.value(field.key.key()).copied())
-    };
-    let template = phase.match_rules().template(phase.data(), r#match);
-    let contest = r#match.contest();
-    match score(&template.root, contest) {
-        Some(score) => vec![score],
-        None => contest
-            .parts()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, part)| score(template.root.level_of_part(index)?, part))
-            .collect(),
-    }
 }
 
 /// The number of `r#match`, as [`MatchRow::number`] shows it.

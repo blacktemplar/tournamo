@@ -4,8 +4,8 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    EntrantId, MatchId, MatchResult, Score, Sides, Value,
-    plugins::{metrics_calculator::Cell, phase_format::Stage},
+    EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides, Value,
+    plugins::{match_rules::Level, metrics_calculator::Cell, phase_format::Stage},
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
 
@@ -472,4 +472,29 @@ pub enum Action {
     Report(MatchRow),
     /// A result undone by its match, see [`Reopened::row`].
     Reopen(MatchRow),
+}
+
+/// The scores of `r#match`, as [`MatchRow::scores`] shows them.
+pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<Value>>> {
+    if !r#match.is_finished() {
+        return Vec::new();
+    }
+    // the value of the first field of `level` entered for `part`
+    let score = |level: &Level, part: &Part| {
+        level
+            .fields
+            .iter()
+            .find_map(|field| part.value(field.key.key()).copied())
+    };
+    let template = phase.match_rules().template(phase.data(), r#match);
+    let contest = r#match.contest();
+    match score(&template.root, contest) {
+        Some(score) => vec![score],
+        None => contest
+            .parts()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, part)| score(template.root.level_of_part(index)?, part))
+            .collect(),
+    }
 }

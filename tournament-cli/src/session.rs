@@ -19,15 +19,22 @@ use plugin_factory::{
     draft::{Draft, Issue},
 };
 use thiserror::Error;
-use tournament_app::{error as app_error, file::File, session::Session as AppSession};
+use tournament_app::{
+    error as app_error,
+    file::File,
+    i18n::{Language, Translator},
+    result_form::ResultForm,
+    session::Session as AppSession,
+    view,
+};
 use tournament_engine::{
-    Annotated as _, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseData,
-    PhasePlugins, RankingId, TypeMap,
+    Annotated as _, Competition, Entrant, EntrantId, FieldKey, Match, MatchId, MatchResult, Phase,
+    PhaseData, PhasePlugins, RankingId, Team, TypeMap, Value as Entered,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
 use crate::{
-    command::{Command, ReportedResult},
+    command::{Command, Reported, ReportedResult},
     questionnaire::{self, AcceptDefaults, IssueList},
     storage::Storage,
 };
@@ -87,6 +94,10 @@ pub enum Error {
     NotStarted,
     #[error("there is no match number {0}")]
     UnknownMatch(NonZeroUsize),
+    #[error("enter the scores first, then the result if it is not the one they give")]
+    ResultBeforeScores,
+    #[error("#{0} takes fewer scores than were entered")]
+    TooManyScores(NonZeroUsize),
     #[error("#{0} has no result that could be undone")]
     NotReported(NonZeroUsize),
     /// The match whose result depends on the undone one is scheduled because of it, e.g. the final
@@ -212,7 +223,7 @@ impl Session {
             Command::EditPhase => return Err(Error::NotEdited),
             Command::Start => self.start()?,
             Command::Matches { open, round } => self.matches(open, round)?,
-            Command::Report { number, result } => self.report(number, result)?,
+            Command::Report { number, entry } => self.report(number, entry)?,
             Command::UndoReport { number } => self.undo_report(number)?,
             Command::Ranking => self.ranking()?,
             Command::Undo => self.undo()?,
@@ -506,14 +517,35 @@ impl Session {
         Ok(match_id)
     }
 
-    fn report(&mut self, number: NonZeroUsize, result: ReportedResult) -> Result<String, Error> {
+    /// Reports `entry` for the match `number`: its scores, the match's own or else those of its
+    /// parts in order, then its result, if not the one they give.
+    fn report(&mut self, number: NonZeroUsize, entry: Vec<Reported>) -> Result<String, Error> {
         let match_id = self.match_numbered(number)?;
-        let result = match result {
+        let (scores, result) = match entry.split_last() {
+            Some((Reported::Result(result), scores)) => (scores, Some(*result)),
+            _ => (&entry[..], None),
+        };
+        let scores = scores
+            .iter()
+            .map(|reported| match reported {
+                Reported::Score(a, b) => Ok((*a, *b)),
+                Reported::Result(_) => Err(Error::ResultBeforeScores),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let result = result.map(|result| match result {
             ReportedResult::A => MatchResult::AWins,
             ReportedResult::B => MatchResult::BWins,
             ReportedResult::Draw => MatchResult::Draw,
+        });
+        let reported = if scores.is_empty() {
+            let result = result.expect("an entry is a result or scores");
+            self.session.report(match_id, result)?
+        } else {
+            let mut form = self.session.result_form(match_id)?;
+            fill_scores(&mut form, &scores).ok_or(Error::TooManyScores(number))?;
+            form.choose(&[], result);
+            self.session.report_form(&form)?
         };
-        let reported = self.session.report(match_id, result)?;
 
         let phase = self.phase()?.data();
         let mut output = format!(
@@ -631,13 +663,46 @@ impl Session {
     fn result_text(&self, phase: &PhaseData, r#match: &Match) -> String {
         let a = self.team_name(phase, r#match.team_a());
         let b = self.team_name(phase, r#match.team_b());
-        match r#match.result() {
+        let text = match r#match.result() {
             Some(MatchResult::AWins) => format!("{a} beat {b}"),
             Some(MatchResult::BWins) => format!("{b} beat {a}"),
             Some(MatchResult::Draw) => "draw".to_owned(),
             None => "open".to_owned(),
+        };
+        let scores = view::scores(self.phase().expect("a match has a phase"), r#match);
+        if scores.is_empty() {
+            text
+        } else {
+            // in the order of the sides, as `matches` lists them
+            format!(
+                "{text} ({})",
+                Translator::new(Language::English, &[]).scores(&scores)
+            )
         }
     }
+}
+
+/// Enters `scores` into `form`, the first team's first: into the first field of the match, if it
+/// has one, or else into that of each of its parts in order; `None` if there is no place for them.
+fn fill_scores(form: &mut ResultForm, scores: &[(u32, u32)]) -> Option<()> {
+    let root = form.view().root;
+    // the field of the match, or of each part, its score goes into
+    let places: Vec<(Vec<usize>, FieldKey)> = match root.fields.first() {
+        Some(field) => vec![(Vec::new(), field.key.clone())],
+        None => root
+            .parts
+            .iter()
+            .filter_map(|part| Some((part.path.clone(), part.fields.first()?.key.clone())))
+            .collect(),
+    };
+    if scores.len() > places.len() {
+        return None;
+    }
+    for ((path, key), (a, b)) in places.iter().zip(scores) {
+        form.set_value(path, key, Team::A, Some(Entered::Count(*a)));
+        form.set_value(path, key, Team::B, Some(Entered::Count(*b)));
+    }
+    Some(())
 }
 
 /// The name `add-phase` takes the format of `entry` by: its label with hyphens for spaces, e.g.
@@ -710,7 +775,7 @@ mod tests {
     use plugin_factory::{PluginType, draft::Problem};
     use tournament_app::error::{AddEntrantError, EditPhaseError, ReportError, StartError};
     use tournament_engine::plugins::{
-        match_rules::WinnerOnly,
+        match_rules::{BestOf, WinnerOnly},
         metrics_calculator::{
             FewerMatchesPlayed, MorePoints, MoreWins, PointsCalculator, SonnebornBergerCalculator,
             WinsDrawsLossesCalculator,
@@ -1182,6 +1247,57 @@ mod tests {
             "got {issues:?}"
         );
         assert!(session.competition().phases().is_empty());
+    }
+
+    /// A started round robin of Alice and Bob whose results are a best of three games.
+    fn best_of_three() -> Session {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob");
+        let draft = draft(&session, plugin::<RoundRobin>(), Vec::new(), Vec::new())
+            .with("results", plugin::<BestOf>().with("games", 3))
+            .and_then(|draft| draft.with_defaults())
+            .unwrap();
+        session.add_phase(&draft).unwrap();
+        output(&mut session, "start");
+        session
+    }
+
+    #[test]
+    fn the_scores_of_the_games_decide_a_match_and_show_with_it() {
+        let mut session = best_of_three();
+
+        let reported = output(&mut session, "report 1 21-17 15-21 21-9");
+
+        let line = reported.lines().next().unwrap();
+        assert!(line.starts_with("#1: "), "{reported}");
+        assert!(line.ends_with(" (21–17 15–21 21–9)"), "{reported}");
+        assert!(output(&mut session, "matches").contains("(21–17 15–21 21–9)"));
+    }
+
+    #[test]
+    fn a_result_after_the_scores_overrides_what_they_give() {
+        let mut session = best_of_three();
+
+        output(&mut session, "report 1 21-17 b");
+
+        let listed = output(&mut session, "matches");
+        let line = listed.lines().last().unwrap();
+        let (b, a) = line.split_once(" beat ").unwrap();
+        assert!(a.contains("(21–17)") && !b.is_empty(), "{line}");
+    }
+
+    #[test]
+    fn scores_go_before_the_result_and_no_more_than_the_games() {
+        let mut session = best_of_three();
+
+        assert!(matches!(
+            execute(&mut session, "report 1 a 21-17"),
+            Err(Error::ResultBeforeScores)
+        ));
+        assert!(matches!(
+            execute(&mut session, "report 1 1-0 1-0 1-0 1-0"),
+            Err(Error::TooManyScores(_))
+        ));
     }
 
     /// Wins, draws, losses and the matches they add up to are four criteria of a single metric, so

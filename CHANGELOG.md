@@ -21,6 +21,8 @@ a file whose `"format"` changes is migrated, not refused.
   dialog: the score of each side, and of each game of a best of. What looks
   like a typo is pointed out but taken. Finished matches show their scores, in
   the list of matches and in the bracket.
+- The command line reports scores, e.g. `report 3 21-17 19-21 21-15`, and
+  lists them with each finished match.
 
 ### Changed
 

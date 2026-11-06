@@ -1,6 +1,9 @@
 //! The commands an operator types at the prompt, and how a line of input becomes one.
 
-use std::num::{NonZeroU32, NonZeroUsize};
+use std::{
+    num::{NonZeroU32, NonZeroUsize},
+    str::FromStr,
+};
 
 use clap::{Parser, ValueEnum};
 use thiserror::Error;
@@ -52,9 +55,11 @@ pub enum Command {
     Report {
         /// The number of the match, as listed by `matches`
         number: NonZeroUsize,
-        /// Case insensitive, so that the sides can be named the way `matches` shows them
-        #[arg(ignore_case = true)]
-        result: ReportedResult,
+        /// The result, `a`, `b` or `draw` (in any case, so that the sides can be named the way
+        /// `matches` shows them); or the scores, e.g. `21-17 19-21 21-15`, followed by the result
+        /// only where it is not the one they give
+        #[arg(required = true, num_args = 1..)]
+        entry: Vec<Reported>,
     },
     /// Undo the result reported for a match, which may be any reported match rather than only the
     /// one reported last
@@ -77,6 +82,30 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+}
+
+/// What an operator reports of a match: its result, or a score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reported {
+    Result(ReportedResult),
+    /// The score of each side, the first team's first: of the match, or of its next part, e.g. a
+    /// game.
+    Score(u32, u32),
+}
+
+impl FromStr for Reported {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if let Ok(result) = ReportedResult::from_str(text, true) {
+            return Ok(Self::Result(result));
+        }
+        text.split_once(['-', ':'])
+            .and_then(|(a, b)| Some(Self::Score(a.parse().ok()?, b.parse().ok()?)))
+            .ok_or_else(|| {
+                format!("“{text}” is no result (a, b or draw) and no score (e.g. 21-17)")
+            })
+    }
 }
 
 /// The result of a match, as reported by an operator.
@@ -221,7 +250,22 @@ mod tests {
             parse("report 3 draw"),
             Command::Report {
                 number: NonZeroUsize::new(3).unwrap(),
-                result: ReportedResult::Draw
+                entry: vec![Reported::Result(ReportedResult::Draw)]
+            }
+        );
+    }
+
+    #[test]
+    fn scores_are_reported_with_a_hyphen_or_a_colon_and_a_result_after_them() {
+        assert_eq!(
+            parse("report 2 21-17 19:21 a"),
+            Command::Report {
+                number: NonZeroUsize::new(2).unwrap(),
+                entry: vec![
+                    Reported::Score(21, 17),
+                    Reported::Score(19, 21),
+                    Reported::Result(ReportedResult::A),
+                ]
             }
         );
     }
@@ -232,21 +276,21 @@ mod tests {
             parse("report 1 A"),
             Command::Report {
                 number: NonZeroUsize::new(1).unwrap(),
-                result: ReportedResult::A
+                entry: vec![Reported::Result(ReportedResult::A)]
             }
         );
         assert_eq!(
             parse("report 1 B"),
             Command::Report {
                 number: NonZeroUsize::new(1).unwrap(),
-                result: ReportedResult::B
+                entry: vec![Reported::Result(ReportedResult::B)]
             }
         );
         assert_eq!(
             parse("report 1 Draw"),
             Command::Report {
                 number: NonZeroUsize::new(1).unwrap(),
-                result: ReportedResult::Draw
+                entry: vec![Reported::Result(ReportedResult::Draw)]
             }
         );
     }

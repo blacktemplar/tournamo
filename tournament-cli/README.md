@@ -49,6 +49,7 @@ cup> exit
 | `start` | Starts the competition and schedules the first matches. Entrants cannot be changed afterwards. |
 | `matches [--open] [--round <ROUND>]` | Lists the matches with their number, round, stage (for a format that names its stages, e.g. "Quarterfinals" in a knockout) and result, followed by the byes, i.e. who has no match in which round. `--open` leaves the byes out. |
 | `report <NUMBER> <a\|b\|draw>` | Reports the result of a match: team a wins, team b wins, or a draw. |
+| `report <NUMBER> <SCORE>... [a\|b\|draw]` | Reports the scores of a match whose phase enters them (its results are a score, or a best of games), team a's first, e.g. `21-17` or `21:17`: the match's score, or that of each game in order. The result is the one they give, unless one follows them. |
 | `undo-report <NUMBER>` | Undoes the result reported for a match, however long ago it was reported, keeping every other change. |
 | `ranking` | Shows the current ranking with every metric the phase calculates. |
 | `undo` / `redo` | Undoes the last change made since the CLI was started, or redoes the last undone one. |

@@ -1,7 +1,7 @@
 //! Results entered by the match format of the phase, a score or the games of a best of: in the
 //! row of the match, in a dialog, or typed in.
 
-use tournament_gui_e2e::{Gui, run_in_new_competition, thirtyfour::error::WebDriverResult};
+use tournament_gui_e2e::{Gui, Key, run_in_new_competition, thirtyfour::error::WebDriverResult};
 
 /// Enters Alice and Bob and starts a round robin of them whose results are entered by the match
 /// format labelled `match_format`.
@@ -133,6 +133,89 @@ async fn a_score_entered_in_the_row_of_the_match_reports_it() {
 
         gui.expect_scores_either_way("17–21").await?;
         gui.expect_standings(&["Bob", "Alice"]).await
+    })
+    .await;
+}
+
+/// Starts a round robin of Alice and Bob whose results are scores usually won with 21.
+async fn start_to_21(gui: &Gui) -> WebDriverResult<()> {
+    for name in ["Alice", "Bob"] {
+        gui.add_entrant(name).await?;
+    }
+    gui.choose_format("Round robin").await?;
+    gui.choose_plugin("match_format", "Score").await?;
+    gui.toggle("Winning score").await?;
+    gui.enter("match_format.winning_score", "21").await?;
+    gui.click("Add phase").await?;
+    gui.click("Start").await
+}
+
+/// A score two or more below the winning score, once left, gives the other side the winning score,
+/// selected where Tab moves to, so that typing replaces it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_score_far_below_the_winning_score_completes_the_other_in_the_row() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+
+        gui.enter_first_in_row(1, "15").await?;
+        gui.press(Key::Tab).await?;
+
+        gui.expect_focus_value("21").await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_scores_either_way("15–21").await
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_winning_score_completed_is_replaced_by_what_is_typed() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+        gui.enter_first_in_row(1, "19").await?;
+        gui.press(Key::Tab).await?;
+        gui.expect_focus_value("21").await?;
+
+        gui.type_text("17").await?;
+
+        gui.expect_focus_value("17").await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_scores_either_way("19–17").await
+    })
+    .await;
+}
+
+/// From one below the winning score on, the other side may win by more, or lose.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_score_close_to_the_winning_score_completes_nothing() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+
+        gui.enter_first_in_row(1, "20").await?;
+        gui.press(Key::Tab).await?;
+
+        gui.expect_focus_value("").await?;
+        gui.expect_row_outcomes(&["Not decided yet"]).await
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_score_far_below_the_winning_score_completes_the_other_in_the_dialog() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+        gui.click_labelled("Details of the result of match 1")
+            .await?;
+
+        gui.enter_first_value("8").await?;
+        gui.press(Key::Tab).await?;
+
+        gui.expect_focus_value("21").await?;
+        gui.report_in_dialog().await?;
+        gui.expect_scores_either_way("8–21").await
     })
     .await;
 }

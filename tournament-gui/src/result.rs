@@ -6,6 +6,9 @@
 //! A match whose result takes no more than a row ([`ResultForm::quick_entry`]), e.g. a score or the
 //! score of each game, is entered in the row below its pairing instead, the dialog a button away
 //! for anything more, e.g. overriding the result.
+//!
+//! A value left completes the score of the other side where its winning score is the only one
+//! possible ([`ResultForm::complete_score`]), selected if the focus moves there.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -14,7 +17,7 @@ use tournament_app::{
     view::MatchRow,
 };
 use tournament_engine::{
-    EnteredValue, MatchResult, Score, Sides, Team,
+    EnteredValue, FieldKey, MatchResult, Score, Sides, Team,
     plugins::{Phrase, match_format::ValueKind},
 };
 
@@ -221,8 +224,18 @@ fn QuickValues(
                 inputmode: if kind == ValueKind::Count { "numeric" } else { "decimal" },
                 step: if kind == ValueKind::Count { "1" } else { "any" },
                 disabled,
+                id: value_id(&format!("quick-value-{number}"), &quick.path, &field.key, team),
                 aria_label,
                 value: shown(value),
+                onblur: {
+                    let (path, key) = (path.clone(), key.clone());
+                    move |_| {
+                        let prefix = format!("quick-value-{number}");
+                        if let Some(form) = form.write().as_mut() {
+                            complete_score(form, &prefix, &path, &key, team);
+                        }
+                    }
+                },
                 onmounted: move |event| {
                     if team == Team::A
                         && let Some(on_mounted) = on_mounted
@@ -487,7 +500,12 @@ fn ResultField(
                     }
                     None => t!(tr, "value-of", value = label.as_str(), team = name),
                 },
+                id: value_id("result-value", &path, &field.key, team),
                 value: shown(value),
+                onblur: {
+                    let (path, key) = (path.clone(), key.clone());
+                    move |_| complete_score(&mut form.write(), "result-value", &path, &key, team)
+                },
                 oninput: move |event: FormEvent| {
                     let value = entered(&event.value(), kind);
                     form.write().set_value(&path, &key, team, value);
@@ -508,6 +526,39 @@ fn ResultField(
                 p { class: "warnings", role: "status", {tr.sentence(warning)} }
             }
         }
+    }
+}
+
+/// The id of the input of `team`'s value of the field `key` of the part at `path`, among the inputs
+/// whose ids start with `prefix`.
+fn value_id(prefix: &str, path: &[usize], key: &FieldKey, team: Team) -> String {
+    let path: String = path.iter().map(|index| format!("-{index}")).collect();
+    let side = match team {
+        Team::A => "a",
+        Team::B => "b",
+    };
+    format!("{prefix}{path}-{}-{side}", key.key())
+}
+
+/// Completes the score of the field `key` of the part at `path` once `team`'s value is left
+/// ([`ResultForm::complete_score`]); if the focus moved to the value completed, among the inputs
+/// whose ids start with `prefix`, it is selected, so that typing replaces it.
+fn complete_score(form: &mut ResultForm, prefix: &str, path: &[usize], key: &FieldKey, team: Team) {
+    if form.complete_score(path, key, team) {
+        // an id made of the page's prefixes, indices and field keys, which a JavaScript string
+        // reads as Rust does
+        let other = format!("{:?}", value_id(prefix, path, key, team.opponent()));
+        // the second frame is after the page rendered the value, and the focus moved on
+        _ = document::eval(&format!(
+            r#"
+            requestAnimationFrame(() => requestAnimationFrame(() => {{
+                const element = document.activeElement;
+                if (element?.id === {other}) {{
+                    element.select();
+                }}
+            }}));
+            "#
+        ));
     }
 }
 

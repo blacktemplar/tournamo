@@ -1682,6 +1682,27 @@ impl Gui {
         Ok(())
     }
 
+    /// Types `text` where the focus is, e.g. into a value whose text is selected, replacing it.
+    pub async fn type_text(&self, text: &str) -> WebDriverResult<()> {
+        self.driver.active_element().await?.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the field with the focus has the value `text`, e.g. the value of a result.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_focus_value(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(":focus"),
+                |query| query.with_value(text.to_owned()),
+                &format!("the focus on the value {text:?}"),
+            )
+            .await
+    }
+
     /// Waits until the element with the focus shows `text`, e.g. a button.
     ///
     /// # Panics
@@ -2026,6 +2047,33 @@ impl Gui {
         Ok(())
     }
 
+    /// Types `text` into the first value of the result of the match `number` in its row, whichever
+    /// side it is of, in place of what it shows, and stays there, e.g. to press Tab next.
+    pub async fn enter_first_in_row(&self, number: usize, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .values_in_row_ending(&format!(", match {number}"))
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Types `text` into the first value of a result in the dialog open, whichever side it is
+    /// of, in place of what it shows, and stays there, e.g. to press Tab next.
+    pub async fn enter_first_value(&self, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::Css("[role=dialog] input[type=number]"))
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Presses Enter in the value of a result in the row of its match labelled `label`, which
     /// reports what the row shows.
     pub async fn press_enter_in_row(&self, label: &str) -> WebDriverResult<()> {
@@ -2164,9 +2212,17 @@ impl Gui {
         &self,
         part: &str,
     ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
+        self.values_in_row_ending(&format!(" in {part}"))
+    }
+
+    /// The values of results in the rows of their matches whose labels end with `suffix`, in the
+    /// order shown.
+    fn values_in_row_ending(
+        &self,
+        suffix: &str,
+    ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
         // XPath 1.0 has no ends-with
         let label = without_isolation_marks("@aria-label");
-        let suffix = format!(" in {part}");
         let length = suffix.chars().count();
         self.driver.query(By::XPath(format!(
             "//*[contains(@class, 'quick-result')]//input[substring({label}, \

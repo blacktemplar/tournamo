@@ -49,7 +49,7 @@ use crate::{
     file::{self, File},
     form::PhaseForm,
     people::{People, Person},
-    result_form::ResultForm,
+    result_form::{ResultForm, ResultView},
     storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
     view::{
         self, Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow,
@@ -1216,6 +1216,26 @@ impl Session {
         let format = phase.match_format();
         let template = format.template(phase.data(), r#match);
         Ok(ResultForm::new(id, dyn_clone::clone_box(format), template))
+    }
+
+    /// The result of the finished match `id` as it was reported, to be shown, not changed: as a
+    /// [`ResultForm`] shows it, a result reported against the values that suggest another one
+    /// shown as chosen, with its warning. `None` if there is no such match or it is not finished.
+    pub fn reported_result(&self, id: MatchId) -> Option<ResultView> {
+        let phase = self.started_phase()?;
+        let r#match = phase.data().matches().get(&id)?;
+        if !r#match.is_finished() {
+            return None;
+        }
+        let format = phase.match_format();
+        let template = format.template(phase.data(), r#match);
+        let form = ResultForm::reported(
+            id,
+            dyn_clone::clone_box(format),
+            template,
+            r#match.contest(),
+        );
+        Some(form.view())
     }
 
     /// Reports the result entered into `form`.

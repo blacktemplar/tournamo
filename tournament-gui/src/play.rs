@@ -22,7 +22,7 @@ use crate::{
     i18n::t,
     icons,
     phase::answer,
-    result::ResultOf,
+    result::{ResultDetails, ResultOf},
     result_text, result_with_scores, team_name,
     toggletip::Toggletip,
 };
@@ -679,17 +679,22 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
         if draws && !shown && !scored {
             span { class: "result-room", aria_hidden: "true", {tr.get("draw")} }
         }
-        button {
-            class: "small",
-            disabled,
-            aria_label: t!(tr, "reopen-match", number = row.number),
-            onclick: move |_| {
-                if let Some(reopened) = ctx.act(move |session| session.undo_report(id)) {
-                    ctx.announce(Announcement::Reopened(reopened));
-                    move_focus(focus, Focus::Report(id));
-                }
-            },
-            {tr.get("reopen")}
+        div { class: "finished-actions",
+            if row.details {
+                ResultDetails { row: row.clone() }
+            }
+            button {
+                class: "small",
+                disabled,
+                aria_label: t!(tr, "reopen-match", number = row.number),
+                onclick: move |_| {
+                    if let Some(reopened) = ctx.act(move |session| session.undo_report(id)) {
+                        ctx.announce(Announcement::Reopened(reopened));
+                        move_focus(focus, Focus::Report(id));
+                    }
+                },
+                {tr.get("reopen")}
+            }
         }
     }
 }

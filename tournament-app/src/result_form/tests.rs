@@ -499,3 +499,43 @@ fn a_match_with_a_field_of_its_own_and_parts_is_not_entered_in_a_row() {
 
     assert_eq!(form_of(r#match).quick_entry(), None);
 }
+
+#[test]
+fn a_finished_match_shows_its_result_as_reported() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
+    assert_eq!(session.reported_result(id), None, "not finished yet");
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 17);
+    score(&mut form, &[1], 15, 21);
+    score(&mut form, &[2], 21, 9);
+    score(&mut form, &[3], 21, 19);
+    session.report_form(&form).unwrap();
+
+    let root = session.reported_result(id).unwrap().root;
+
+    assert_eq!(root.parts.len(), 4);
+    assert_eq!(
+        root.parts[1].fields[0].values,
+        Sides::new(count(15), count(21))
+    );
+    assert_eq!(root.parts[1].result, Some(MatchResult::BWins));
+    assert_eq!(root.result, Some(MatchResult::AWins));
+    assert_eq!(root.parts_won, Some(Sides::new(3, 1)));
+    assert!(!root.chosen, "the games decide the match");
+    assert_eq!(root.warnings, []);
+}
+
+#[test]
+fn a_result_reported_against_the_score_shows_as_chosen() {
+    let (mut session, id) = started(PluginConfig::of::<Scored>());
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[], 3, 1);
+    form.choose(&[], Some(MatchResult::BWins));
+    session.report_form(&form).unwrap();
+
+    let root = session.reported_result(id).unwrap().root;
+
+    assert_eq!(root.result, Some(MatchResult::BWins));
+    assert!(root.chosen);
+    assert_eq!(root.warnings, [Text::new("warning-result-disagrees")]);
+}

@@ -2227,6 +2227,35 @@ impl Gui {
             .await
     }
 
+    /// Waits until the dialog of a finished match, opened by its details, shows the values of its
+    /// parts as one of `alternatives`, those of each part in turn, each side's in the order of the
+    /// sides, e.g. `["21", "17", "19", "21"]` of two games; those of the winner of each part
+    /// marked as `winners`, in the same order; and its result `outcome`, e.g. `"Match: Alice wins
+    /// (2–1)"`, with each score in it read from either side. Take one alternative for each side
+    /// Alice may be on.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_reported_result(
+        &self,
+        alternatives: &[&[&str]],
+        winners: &[&str],
+        outcome: &str,
+    ) -> WebDriverResult<()> {
+        self.page
+            .expect_texts_of(By::Css("#result-details tbody td"), alternatives)
+            .await?;
+        self.page
+            .expect_texts(By::Css("#result-details tbody td.winner"), winners)
+            .await?;
+        self.page
+            .expect_texts_of(
+                By::Css("#result-details .reported-outcome"),
+                &[&[outcome], &[&mirrored(outcome)]],
+            )
+            .await
+    }
+
     /// Waits until the dialog of a result open offers to choose the results labelled `labels`,
     /// e.g. `"Result: Match"`, as while overriding them; none if not overriding.
     ///

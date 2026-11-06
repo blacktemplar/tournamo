@@ -1643,6 +1643,62 @@ ul.summary-items {
   grid-row: 1;
 }
 
+/* the buttons showing and reopening a finished match */
+.finished-actions {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: var(--space-2);
+}
+
+/* the parts of a finished match in its dialog, e.g. its games, a row each; names wrap rather than
+ * widen it beyond a phone */
+.reported-parts th,
+.reported-parts td {
+  padding: var(--space-1) var(--space-2);
+  overflow-wrap: break-word;
+  text-align: start;
+}
+
+/* the names heading the columns of their values, and who won where it has a column, wrap
+ * between words */
+.reported-parts td:not(.number),
+.reported-parts thead th {
+  white-space: normal;
+}
+
+/* the values of the winner of a part, marked as the winner of a match is */
+.reported-parts .winner {
+  font-weight: 600;
+}
+
+.reported-parts .winner::before {
+  color: var(--accent);
+  content: "✓ ";
+}
+
+/* the name of a part heads its row, without the look of a column's header */
+.reported-parts tbody th {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.reported-parts .number {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.reported-parts .warnings,
+#result-details .warnings {
+  margin: 0;
+}
+
+.reported-field,
+.reported-outcome {
+  margin: 0;
+}
+
 /* where the list is too narrow for the scores of every game on the line, the games won alone; the
  * scores of the games are still read out */
 @container match-list (width < 40rem) {
@@ -1748,7 +1804,7 @@ ul.summary-items {
     grid-row: 4;
   }
 
-  .match.finished button {
+  .match.finished .finished-actions {
     grid-column: 3;
     grid-row: 3;
   }

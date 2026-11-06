@@ -303,3 +303,30 @@ async fn a_knockout_shows_the_score_in_its_bracket() {
     })
     .await;
 }
+
+/// A finished match shows what was reported for it in a dialog of its own, read-only.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_details_of_a_finished_match_show_its_games() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Best of games").await?;
+        gui.enter_result("ali 21-17 19-21 21-15").await?;
+
+        gui.click_labelled("Details of the result of match 1")
+            .await?;
+
+        gui.expect_reported_result(
+            &[
+                &["21", "17", "19", "21", "21", "15"],
+                &["17", "21", "21", "19", "15", "21"],
+            ],
+            &["21", "21", "21"],
+            "Match: Alice wins (2–1)",
+        )
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Close").await?;
+        gui.expect_no_dialog().await
+    })
+    .await;
+}

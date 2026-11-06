@@ -239,6 +239,15 @@ quick-value-of = { $value } of { $team }, match { $number }
 # the same of a part of the match; $part: e.g. Game 2
 quick-value-of-in = { $value } of { $team } in { $part }, match { $number }
 result-title = Result of match { $number }
+# the dialog showing the result of a finished match as it was reported
+result-details-description = { $a } against { $b }, as reported.
+# the header of the column saying who won each part, e.g. each game, where it has no values
+result-column = Result
+# a warning of a part, e.g. of game 2; $warning: a sentence
+part-warning = { $part }: { $warning }
+# a value of the match itself; $value: e.g. Score; $score: e.g. 21–17, $a's first
+reported-value = { $value }: { $a } { $score } { $b }
+close = Close
 result-description = { $a } against { $b }. Each value is taken as entered; what looks like a typo is pointed out.
 part-numbered = { $name } { $number }
 value-of = { $value } of { $team }

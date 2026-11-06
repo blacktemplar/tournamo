@@ -10,11 +10,12 @@
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::{PluginText, Text, Translator},
-    result_form::{FieldView, PartView, QuickEntry, QuickField, ResultForm},
+    result_form::{FieldView, PartView, QuickEntry, QuickField, ResultForm, ResultView},
     view::MatchRow,
 };
 use tournament_engine::{
-    EnteredValue, MatchResult, Score, Sides, Team, plugins::match_format::ValueKind,
+    EnteredValue, MatchResult, Score, Sides, Team,
+    plugins::{Phrase, match_format::ValueKind},
 };
 
 use crate::{
@@ -629,4 +630,229 @@ fn with_parts_won(tr: &Translator, said: String, parts_won: Option<Sides<u32>>) 
         ),
         None => said,
     }
+}
+
+/// The button showing the result of the finished match `row` as it was reported, and the dialog
+/// showing it, read-only: a row of each of its parts, e.g. its games, with their values and who
+/// won them, then the match's own values and result.
+#[component]
+pub fn ResultDetails(row: MatchRow) -> Element {
+    let ctx = use_context::<Ctx>();
+    // the result while the dialog is open
+    let mut shown = use_signal(|| None::<ResultView>);
+    let tr = ctx.translator.read();
+    let id = row.id;
+    let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
+    rsx! {
+        button {
+            class: "details quiet small",
+            r#type: "button",
+            aria_label: t!(tr, "result-details-of", number = row.number),
+            onclick: move |_| {
+                shown.set(ctx.session.peek().reported_result(id));
+                focus_later(&["#result-details button"]);
+            },
+            {tr.get("result-details")}
+        }
+        Dialog {
+            open: Some(shown.read().is_some()),
+            on_open_change: move |open: bool| {
+                if !open {
+                    shown.set(None);
+                }
+            },
+            DialogTitle { {t!(tr, "result-title", number = row.number)} }
+            DialogDescription {
+                {t!(tr, "result-details-description", a = a.as_str(), b = b.as_str())}
+            }
+            if let Some(view) = shown() {
+                div { id: "result-details", class: "dialog-form",
+                    ReportedPart {
+                        part: view.root,
+                        match_format: view.match_format,
+                        a: a.clone(),
+                        b: b.clone(),
+                    }
+                    div { class: "dialog-buttons",
+                        button { r#type: "button", onclick: move |_| shown.set(None),
+                            {tr.get("close")}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The part `part` of a finished match between `a` and `b` as it was reported: a table of its
+/// parts, each with the values of each side and who won it, then its own values and its result.
+/// Parts of its parts are not shown, as no match format has them yet.
+#[component]
+fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let level_name = |phrase: &Phrase| {
+        capitalized(&tr.plugin_phrase(match_format, PluginText::Level(phrase.key()), phrase))
+    };
+    let field_label = |field: &FieldView| {
+        capitalized(&tr.plugin_phrase(
+            match_format,
+            PluginText::EnteredValue(field.label.key()),
+            &field.label,
+        ))
+    };
+    let said = |result: Option<MatchResult>| match result {
+        Some(MatchResult::AWins) => t!(tr, "wins", team = a.as_str()),
+        Some(MatchResult::BWins) => t!(tr, "wins", team = b.as_str()),
+        Some(MatchResult::Draw) => tr.get("draw"),
+        None => tr.get("result-open"),
+    };
+    let value = |value: Option<EnteredValue>| match value {
+        Some(EnteredValue::Count(count)) => tr.number(count.into()),
+        Some(EnteredValue::Decimal(decimal)) => tr.number(decimal.get()),
+        None => "–".to_owned(),
+    };
+    // the columns of the parts: those of the fields of the first, which every part at one level
+    // shares, each side's value in a column of its own, named by the side, and by the field if
+    // there are several
+    let fields: Vec<FieldView> = part
+        .parts
+        .first()
+        .map(|first| first.fields.clone())
+        .unwrap_or_default();
+    let several = fields.len() > 1;
+    let column = |field: &FieldView, name: &str| {
+        if several {
+            format!("{} {name}", field_label(field))
+        } else {
+            name.to_owned()
+        }
+    };
+    let headers: Vec<String> = fields
+        .iter()
+        .flat_map(|field| [column(field, &a), column(field, &b)])
+        .collect();
+    // each part's name, its values in the columns' order, who won it and its warnings
+    // without values, who won a part is said in a column of its own
+    let result_column = fields.is_empty();
+    let rows: Vec<ReportedRow> = part
+        .parts
+        .iter()
+        .enumerate()
+        .map(|(index, child)| {
+            let name = t!(
+                tr,
+                "part-numbered",
+                name = level_name(&child.name),
+                number = index + 1
+            );
+            let (a_won, b_won) = (
+                child.result == Some(MatchResult::AWins),
+                child.result == Some(MatchResult::BWins),
+            );
+            let values = fields
+                .iter()
+                .flat_map(|field| {
+                    let values = child
+                        .fields
+                        .iter()
+                        .find(|of_child| of_child.key == field.key)
+                        .map(|of_child| of_child.values);
+                    [
+                        (value(values.and_then(|values| values.a)), a_won),
+                        (value(values.and_then(|values| values.b)), b_won),
+                    ]
+                })
+                .collect();
+            let warnings = child
+                .warnings
+                .iter()
+                .map(|warning| {
+                    t!(
+                        tr,
+                        "part-warning",
+                        part = name.as_str(),
+                        warning = tr.sentence(warning)
+                    )
+                })
+                .collect();
+            ReportedRow {
+                result: said(child.result),
+                name,
+                values,
+                warnings,
+            }
+        })
+        .collect();
+    let warnings: Vec<String> = rows
+        .iter()
+        .flat_map(|row| row.warnings.clone())
+        .chain(part.warnings.iter().map(|warning| tr.sentence(warning)))
+        .collect();
+    let name = level_name(&part.name);
+    let outcome = with_parts_won(&tr, said(part.result), part.parts_won);
+    rsx! {
+        if let Some(first) = part.parts.first() {
+            table { class: "reported-parts",
+                thead {
+                    tr {
+                        th { scope: "col", {level_name(&first.name)} }
+                        for header in headers {
+                            th { scope: "col", class: "number", {header} }
+                        }
+                        if result_column {
+                            th { scope: "col", {tr.get("result-column")} }
+                        }
+                    }
+                }
+                tbody {
+                    for ReportedRow { name, result, values, .. } in rows {
+                        tr {
+                            th { scope: "row",
+                                {name}
+                                // the winner's values are marked, which screen readers may not
+                                // read
+                                if !result_column {
+                                    span { class: "visually-hidden", ", {result}" }
+                                }
+                            }
+                            for (value, won) in values {
+                                td { class: if won { "number winner" } else { "number" }, {value} }
+                            }
+                            if result_column {
+                                td { {result} }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for field in &part.fields {
+            p { class: "reported-field",
+                {
+                    t!(
+                        tr, "reported-value", value = field_label(field), a = a.as_str(), b = b
+                        .as_str(), score = tr.scores(&[field.values])
+                    )
+                }
+            }
+        }
+        p { class: "reported-outcome",
+            {t!(tr, "result-is", part = name.as_str(), result = outcome.as_str())}
+        }
+        for warning in warnings {
+            p { class: "warnings", {warning} }
+        }
+    }
+}
+
+/// A part of a finished match as a row of [`ReportedPart`].
+struct ReportedRow {
+    /// e.g. Game 2
+    name: String,
+    /// who won it
+    result: String,
+    /// in the order of the columns, each marked if it is of the winner
+    values: Vec<(String, bool)>,
+    warnings: Vec<String>,
 }

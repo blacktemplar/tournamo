@@ -12,6 +12,9 @@
 //! A match whose result takes no more than a row, e.g. a score or the score of each game, may be
 //! entered beside it instead ([`ResultForm::quick_entry`]), into the same form.
 //!
+//! A finished match is shown as it was reported by the view of a form of it
+//! ([`Session::reported_result`](crate::session::Session::reported_result)).
+//!
 //! A result chosen by hand overrides the one suggested, which is rare: a screen may offer the
 //! choice only on request, except for a part that only a choice decides
 //! ([`PartView::needs_choice`]).
@@ -63,6 +66,25 @@ impl Entry {
             parts,
             ..Self::default()
         }
+    }
+
+    /// The entry of `part`, reported at `level` and read by `format`: its values, reason and
+    /// parts, and its result chosen where the values and parts do not suggest it.
+    fn reported(format: &dyn MatchFormat, level: &Level, part: &Part) -> Self {
+        let mut entry = Self::empty(level);
+        for (index, reported) in part.parts().iter().enumerate() {
+            let level = level
+                .level_of_part(index)
+                .expect("a reported part fits the template");
+            entry.parts[index] = Self::reported(format, level, reported);
+        }
+        entry.values = part.values().clone();
+        if let Some(decision) = part.decision() {
+            entry.reason = decision.reason().cloned();
+            let result = decision.result();
+            entry.chosen = (format.suggest(level, part) != Some(result)).then_some(result);
+        }
+        entry
     }
 
     fn is_empty(&self) -> bool {
@@ -175,6 +197,24 @@ impl ResultForm {
     /// entered by `format`.
     pub(crate) fn new(match_id: MatchId, format: Box<dyn MatchFormat>, template: Template) -> Self {
         let root = Entry::empty(&template.root);
+        Self {
+            match_id,
+            format,
+            template,
+            root,
+        }
+    }
+
+    /// The form of the match `match_id` as it was reported, `contest`, whose result looks like
+    /// `template`, entered by `format`: the result of a part is chosen where its values and parts
+    /// do not suggest it.
+    pub(crate) fn reported(
+        match_id: MatchId,
+        format: Box<dyn MatchFormat>,
+        template: Template,
+        contest: &Part,
+    ) -> Self {
+        let root = Entry::reported(&*format, &template.root, contest);
         Self {
             match_id,
             format,

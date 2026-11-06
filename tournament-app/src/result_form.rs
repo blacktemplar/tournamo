@@ -17,7 +17,7 @@
 //! the values suggest.
 
 use tournament_engine::{
-    Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Sides, Team,
+    Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Score, Sides, Team,
     Values,
     plugins::{
         Phrase,
@@ -180,6 +180,50 @@ impl ResultForm {
         }
     }
 
+    /// Enters `scores` as [`MatchRow::scores`](crate::view::MatchRow::scores) shows them: the one
+    /// of the match into its first field, if it has one, or else one into the first field of each
+    /// part in order, e.g. the games of a best of; a count goes into a field of decimals as its
+    /// number. Returns whether the match takes them, having entered nothing if not: it does not if
+    /// they are more than its parts, a score is of a part without a field, or a decimal is of a
+    /// field of counts.
+    pub fn enter_scores(&mut self, scores: &[Sides<Option<EnteredValue>>]) -> bool {
+        let root = self.view().root;
+        // where each score goes: the path of its part and its field, none for a part without one
+        let places: Vec<Option<(Vec<usize>, FieldView)>> = match root.fields.into_iter().next() {
+            Some(field) => vec![Some((Vec::new(), field))],
+            None => root
+                .parts
+                .into_iter()
+                .map(|part| Some((part.path, part.fields.into_iter().next()?)))
+                .collect(),
+        };
+        if scores.len() > places.len() {
+            return false;
+        }
+        let Some(entries) = places
+            .into_iter()
+            .zip(scores)
+            .map(|(place, score)| {
+                let (path, field) = place?;
+                // `None` if the value does not fit the field, `Some(None)` for no value
+                let fit = |value: Option<EnteredValue>| match value {
+                    Some(value) => of_kind(value, field.kind).map(Some),
+                    None => Some(None),
+                };
+                let (a, b) = (fit(score.a)?, fit(score.b)?);
+                Some((path, field.key, Sides::new(a, b)))
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        for (path, key, score) in entries {
+            self.set_value(path.as_slice(), &key, Team::A, score.a);
+            self.set_value(&path, &key, Team::B, score.b);
+        }
+        true
+    }
+
     /// Chooses `result` for the part at `path` by hand, or follows what its values and parts
     /// suggest again, with `None`.
     ///
@@ -287,6 +331,22 @@ impl ResultForm {
             parts: views,
         };
         (view, part)
+    }
+}
+
+/// `value` as a value of `kind`: a count as a decimal of its number, a decimal as a count only if
+/// it is a whole number.
+fn of_kind(value: EnteredValue, kind: ValueKind) -> Option<EnteredValue> {
+    match (value, kind) {
+        (EnteredValue::Count(count), ValueKind::Decimal) => {
+            Some(EnteredValue::Decimal(Score::from(count)))
+        }
+        (EnteredValue::Decimal(decimal), ValueKind::Count) => {
+            let number = decimal.get();
+            (number.fract() == 0.0 && (0.0..=f64::from(u32::MAX)).contains(&number))
+                .then_some(EnteredValue::Count(number as u32))
+        }
+        (value, _) => Some(value),
     }
 }
 

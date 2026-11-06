@@ -26,6 +26,10 @@ a file whose `"format"` changes is migrated, not refused.
   matches show their scores, in the list of matches and in the bracket.
 - The command line reports scores, e.g. `report 3 21-17 19-21 21-15`, and
   lists them with each finished match.
+- In the browser, scores are typed in as well: after the number of the match,
+  the left side's first (`3 21-17 19-21 21-15`), or after part of the winner's
+  name, the winner's first (`ali 21-17`). A result typed against the scores is
+  refused; that takes the dialog.
 
 ### Changed
 

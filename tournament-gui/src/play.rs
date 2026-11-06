@@ -23,7 +23,7 @@ use crate::{
     icons,
     phase::answer,
     result::EnterResult,
-    result_text, team_name,
+    result_text, result_with_scores, team_name,
     toggletip::Toggletip,
 };
 
@@ -111,6 +111,9 @@ pub fn Rounds() -> Element {
         .unwrap_or(Shown::Round(current));
     let playable = session.playable();
     let draws = session.round(current).is_some_and(|round| round.draws);
+    let scores = session
+        .round(current)
+        .is_some_and(|round| round.matches.iter().any(|row| row.details));
     // once every match has a result, there is nothing left to type in until one is reopened
     let finished = rounds.iter().all(|summary| summary.open == 0);
     let entered = entry.read().trim().to_owned();
@@ -176,7 +179,7 @@ pub fn Rounds() -> Element {
                 }
             }
             if typing() && !finished {
-                ResultEntry { draws, entry, focus }
+                ResultEntry { draws, scores, entry, focus }
             }
             // out of the way while the matches shown are those the entry fits, which they would not
             // change
@@ -353,7 +356,12 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
 /// part of the winner's name, saying while it is typed what it would report, or why nothing. Its
 /// hint folds behind a toggletip once a result typed in was reported in this browser.
 #[component]
-fn ResultEntry(draws: bool, entry: Signal<String>, focus: Signal<Option<Focus>>) -> Element {
+fn ResultEntry(
+    draws: bool,
+    scores: bool,
+    entry: Signal<String>,
+    focus: Signal<Option<Focus>>,
+) -> Element {
     let ctx = use_context::<Ctx>();
     // why what was entered last was not reported, until it is changed
     let mut error = use_signal(|| None::<Text>);
@@ -371,16 +379,20 @@ fn ResultEntry(draws: bool, entry: Signal<String>, focus: Signal<Option<Focus>>)
                 tr,
                 "result-entry-preview",
                 number = row.number,
-                result = result_text(&tr, &row).unwrap_or_default(),
+                result = result_with_scores(&tr, &row).unwrap_or_default(),
             ),
         ),
         Err(why) => ("preview hint", tr.sentence(&why.text())),
     });
-    let hint = t!(
+    let mut hint = t!(
         tr,
         "enter-result-hint",
         draws = if draws { "yes" } else { "no" }
     );
+    if scores {
+        hint.push(' ');
+        hint.push_str(&tr.get("enter-scores-hint"));
+    }
     rsx! {
         form {
             class: "result-entry",

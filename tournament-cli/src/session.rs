@@ -23,13 +23,12 @@ use tournament_app::{
     error as app_error,
     file::File,
     i18n::{Language, Translator},
-    result_form::ResultForm,
     session::Session as AppSession,
     view,
 };
 use tournament_engine::{
-    Annotated as _, Competition, EnteredValue, Entrant, EntrantId, FieldKey, Match, MatchId,
-    MatchResult, Phase, PhaseData, PhasePlugins, RankingId, Team, TypeMap,
+    Annotated as _, Competition, EnteredValue, Entrant, EntrantId, Match, MatchId, MatchResult,
+    Phase, PhaseData, PhasePlugins, RankingId, Sides, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
@@ -96,8 +95,8 @@ pub enum Error {
     UnknownMatch(NonZeroUsize),
     #[error("enter the scores first, then the result if it is not the one they give")]
     ResultBeforeScores,
-    #[error("#{0} takes fewer scores than were entered")]
-    TooManyScores(NonZeroUsize),
+    #[error("#{0} does not take the scores entered")]
+    ScoresNotTaken(NonZeroUsize),
     #[error("#{0} has no result that could be undone")]
     NotReported(NonZeroUsize),
     /// The match whose result depends on the undone one is scheduled because of it, e.g. the final
@@ -528,7 +527,10 @@ impl Session {
         let scores = scores
             .iter()
             .map(|reported| match reported {
-                Reported::Score(a, b) => Ok((*a, *b)),
+                Reported::Score(a, b) => Ok(Sides::new(
+                    Some(EnteredValue::Count(*a)),
+                    Some(EnteredValue::Count(*b)),
+                )),
                 Reported::Result(_) => Err(Error::ResultBeforeScores),
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -542,7 +544,9 @@ impl Session {
             self.session.report(match_id, result)?
         } else {
             let mut form = self.session.result_form(match_id)?;
-            fill_scores(&mut form, &scores).ok_or(Error::TooManyScores(number))?;
+            if !form.enter_scores(&scores) {
+                return Err(Error::ScoresNotTaken(number));
+            }
             form.choose(&[], result);
             self.session.report_form(&form)?
         };
@@ -680,29 +684,6 @@ impl Session {
             )
         }
     }
-}
-
-/// Enters `scores` into `form`, the first team's first: into the first field of the match, if it
-/// has one, or else into that of each of its parts in order; `None` if there is no place for them.
-fn fill_scores(form: &mut ResultForm, scores: &[(u32, u32)]) -> Option<()> {
-    let root = form.view().root;
-    // the field of the match, or of each part, its score goes into
-    let places: Vec<(Vec<usize>, FieldKey)> = match root.fields.first() {
-        Some(field) => vec![(Vec::new(), field.key.clone())],
-        None => root
-            .parts
-            .iter()
-            .filter_map(|part| Some((part.path.clone(), part.fields.first()?.key.clone())))
-            .collect(),
-    };
-    if scores.len() > places.len() {
-        return None;
-    }
-    for ((path, key), (a, b)) in places.iter().zip(scores) {
-        form.set_value(path, key, Team::A, Some(EnteredValue::Count(*a)));
-        form.set_value(path, key, Team::B, Some(EnteredValue::Count(*b)));
-    }
-    Some(())
 }
 
 /// The name `add-phase` takes the format of `entry` by: its label with hyphens for spaces, e.g.
@@ -1296,7 +1277,7 @@ mod tests {
         ));
         assert!(matches!(
             execute(&mut session, "report 1 1-0 1-0 1-0 1-0"),
-            Err(Error::TooManyScores(_))
+            Err(Error::ScoresNotTaken(_))
         ));
     }
 

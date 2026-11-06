@@ -1,4 +1,5 @@
-//! Results entered in a dialog, by the match format of the phase: a score, the games of a best of.
+//! Results entered by the match format of the phase, a score or the games of a best of: in a
+//! dialog, or typed in.
 
 use tournament_gui_e2e::{Gui, run_in_new_competition, thirtyfour::error::WebDriverResult};
 
@@ -106,6 +107,27 @@ async fn the_games_of_a_best_of_decide_the_match() {
 
         gui.expect_scores_either_way("21–17 19–21 21–15").await?;
         gui.expect_standings(&["Alice", "Bob"]).await
+    })
+    .await;
+}
+
+/// Scores typed in after part of the winner's name are the winner's first, and must say the
+/// result the name does.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_score_is_typed_in_after_the_name_of_the_winner() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Score").await?;
+
+        gui.type_result("ali 17-21").await?;
+        gui.expect_result_preview(Some(
+            "The result entered for match 1 is not the one its scores say.",
+        ))
+        .await?;
+        gui.enter_result("bob 21-17").await?;
+
+        gui.expect_scores_either_way("17–21").await?;
+        gui.expect_standings(&["Bob", "Alice"]).await
     })
     .await;
 }

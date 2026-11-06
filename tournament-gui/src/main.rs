@@ -420,6 +420,21 @@ fn result_text(tr: &Translator, row: &MatchRow) -> Option<String> {
     })
 }
 
+/// What `row` says of its result, with its scores if it has any, e.g. "Alice won, 21–17 19–21".
+fn result_with_scores(tr: &Translator, row: &MatchRow) -> Option<String> {
+    let result = result_text(tr, row)?;
+    Some(if row.scores.is_empty() {
+        result
+    } else {
+        t!(
+            tr,
+            "result-with-scores",
+            result = result,
+            scores = tr.scores(&row.scores)
+        )
+    })
+}
+
 /// Has the browser download `file`, a competition's [file](tournament_app::file), named after the
 /// competition `name`; shows why if it cannot.
 fn download(mut page: Page, name: &str, file: &str) {

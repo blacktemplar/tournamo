@@ -175,6 +175,17 @@ pub enum ReportEnteredError {
     /// The name entered is found on both sides of the match `number`, so it names no winner.
     #[error("“{name}” fits both sides of match {number}; enter more of the name")]
     BothSides { name: String, number: usize },
+    /// The match of this number does not take the scores entered: they are more than its parts,
+    /// one is of a part without a score, or a decimal is of a score of whole numbers, see
+    /// [`ResultForm::enter_scores`](crate::result_form::ResultForm::enter_scores).
+    #[error("match {0} does not take the scores entered")]
+    ScoresNotTaken(usize),
+    /// The scores entered for the match of this number say no result, and none was entered.
+    #[error("the scores entered do not say who won match {0}; add the result: 1, X or 2")]
+    Undecided(usize),
+    /// The result entered for the match of this number is not the one its scores entered say.
+    #[error("the result entered for match {0} is not the one its scores say")]
+    AgainstScores(usize),
     #[error(transparent)]
     Report(#[from] ReportError),
 }
@@ -396,6 +407,13 @@ impl Message for ReportEnteredError {
             Self::BothSides { name, number } => Text::new("error-name-on-both-sides")
                 .with("name", name.as_str())
                 .with("number", *number),
+            Self::ScoresNotTaken(number) => {
+                Text::new("error-scores-not-taken").with("number", *number)
+            }
+            Self::Undecided(number) => Text::new("error-scores-undecided").with("number", *number),
+            Self::AgainstScores(number) => {
+                Text::new("error-result-against-scores").with("number", *number)
+            }
             Self::Report(error) => error.text(),
         }
     }

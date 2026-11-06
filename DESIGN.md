@@ -1032,7 +1032,11 @@ other changes); native selects (no descriptions where the choice is made).
   reports only what fits one side of one open match and **never guesses** among
   several, not even the one playable now: a wrong match reported is worse than a
   number typed. A trailing number or `X` is part of the name while a name
-  contains it (`Malcolm X`, `Team 7`). While typing, the list shows the matches
+  contains it (`Malcolm X`, `Team 7`). Scores follow the number, side A's first
+  (`3 21-17 19-21 21-15`), or the name, the named side's first (`ali 21-17`),
+  as an entrant says them; the match's own or else one per part, as the CLI
+  takes them. A result typed must be the one they say, if any: overriding the
+  scores, rare, belongs in the result dialog. While typing, the list shows the matches
   it fits and the field says what Enter does (`Session::read_entered`). Result
   buttons move the focus to the next match without a result, so it never falls
   back to the page's start.

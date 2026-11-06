@@ -221,6 +221,8 @@ draw = Draw
 # the button reporting a draw, for screen readers
 draw-of = { $a } – { $b }: draw
 won = { $team } won
+# a result and the scores it was reported with; $result: what `won` or `draw` say
+result-with-scores = { $result }, { $scores }
 reopen = Reopen
 reopen-match = Reopen match { $number }
 # the result of a match whose match format enters more than who won, e.g. a score, in a dialog
@@ -291,6 +293,7 @@ enter-result-hint = Type the number of the match, then 1 if the side on the left
        *[no] , e.g. “ali” or “ali 5”.
     }
 # what the entry reports if submitted now; $result: what the message won or draw says
+enter-scores-hint = Scores follow the number, the left side’s first, or the name, the winner’s first, e.g. “3 21-17 19-21” or “ali 21-17”.
 result-entry-preview = Reports match { $number }: { $result }.
 # the heading of the matches while the entry of results has text; $text: the text
 entry-found = Matches fitting “{ $text }”

@@ -173,6 +173,8 @@ wins-short = Gewinnt
 draw = Unentschieden
 draw-of = { $a } – { $b }: Unentschieden
 won = { $team } hat gewonnen
+# a result and the scores it was reported with; $result: what `won` or `draw` say
+result-with-scores = { $result }, { $scores }
 reopen = Wieder öffnen
 reopen-match = Spiel { $number } wieder öffnen
 open-result = Ergebnis eintragen
@@ -222,6 +224,7 @@ enter-result-hint = Tippe die Nummer des Spiels, dann 1, wenn die linke Seite ge
         [yes] {" "}und X für ein Unentschieden, z. B. „ali“, „ali 5“ oder „ali X“.
        *[no] , z. B. „ali“ oder „ali 5“.
     }
+enter-scores-hint = Spielstände folgen der Nummer, der der linken Seite zuerst, oder dem Namen, der des Siegers zuerst, z. B. „3 21-17 19-21“ oder „ali 21-17“.
 result-entry-preview = Meldet Spiel { $number }: { $result }.
 entry-found = Spiele zu „{ $text }“
 entry-nothing-found = Kein Spiel passt zu „{ $text }“.

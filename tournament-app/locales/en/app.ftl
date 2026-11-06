@@ -34,6 +34,9 @@ error-name-not-in-match = no open match { $number } has an entrant whose name co
 # $matches: how many open matches have an entrant whose name contains $name; $number: one of them
 error-name-in-several-matches = “{ $name }” fits { $matches } open matches; add the number of one, e.g. “{ $name } { $number }”
 error-name-on-both-sides = “{ $name }” fits both sides of match { $number }; enter more of the name
+error-scores-not-taken = match { $number } does not take the scores entered
+error-scores-undecided = the scores entered do not say who won match { $number }; add the result: 1, X or 2
+error-result-against-scores = the result entered for match { $number } is not the one its scores say
 error-match-not-reported = the match has no result that could be undone
 error-result-depended-on = a later result depends on this one; undo that one first
 # $number: the number of the match whose result depends on the one to reopen

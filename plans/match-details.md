@@ -37,7 +37,8 @@ Tick a step in the commit finishing it. Delete this file when the plan is done.
 - [x] 9. Views show the play: `MatchRow::scores` (the match's score, else its
   parts'), in rounds, bracket and cross table; `Translator::scores` writes them.
   `MatchFormat::show` waits for a sport writing scores its own way (tennis)
-- [ ] 10. (optional, left open) `report_entered` reads scores
+- [x] 10. `report_entered` reads scores: after the number, side A's first, or after the
+  name, the named side's first; a result against them is refused
 
 ### D. Frontends
 - [x] 11. GUI: result dialog from `ResultForm`, scores shown; e2e tests

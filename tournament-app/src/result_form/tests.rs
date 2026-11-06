@@ -265,3 +265,20 @@ fn a_match_with_a_winner_alone_shows_no_score() {
         "the winner is entered by the row itself"
     );
 }
+
+#[test]
+fn a_score_is_entered_as_its_field_takes_it() {
+    let half = |number| EnteredValue::Decimal(Score::new(number));
+
+    assert_eq!(
+        of_kind(EnteredValue::Count(3), ValueKind::Decimal),
+        Some(half(3.0))
+    );
+    assert_eq!(
+        of_kind(half(3.0), ValueKind::Count),
+        Some(EnteredValue::Count(3))
+    );
+    assert_eq!(of_kind(half(2.5), ValueKind::Count), None);
+    assert_eq!(of_kind(half(-1.0), ValueKind::Count), None);
+    assert_eq!(of_kind(half(2.5), ValueKind::Decimal), Some(half(2.5)));
+}

@@ -13,6 +13,7 @@ use plugin_factory::{
 use tournament_engine::{
     Score,
     plugins::{
+        match_format::{BestOf, Scored},
         metrics_calculator::{Cell as MetricCell, MoreWins, RoundOfFirstLossCalculator},
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
@@ -45,6 +46,8 @@ fn now<T>(future: impl Future<Output = T>) -> T {
 struct Given {
     entrants: Vec<&'static str>,
     format: &'static str,
+    /// The format's suggestion if `None`.
+    match_format: Option<PluginConfig>,
 }
 
 impl Given {
@@ -52,6 +55,7 @@ impl Given {
         Self {
             entrants: vec!["Alice", "Bob", "Carol", "Dave"],
             format: RoundRobin::ID,
+            match_format: None,
         }
     }
 
@@ -66,13 +70,26 @@ impl Given {
         Self { format, ..self }
     }
 
+    fn match_format(self, match_format: PluginConfig) -> Self {
+        Self {
+            match_format: Some(match_format),
+            ..self
+        }
+    }
+
     /// The session with the entrants and the phase added, not started.
     fn added(self) -> Session {
         let mut session = Session::new("cup");
         for name in self.entrants {
             session.add_entrant(name).unwrap();
         }
-        let draft = session.phase_draft(self.format).unwrap();
+        let mut draft = session.phase_draft(self.format).unwrap();
+        if let Some(match_format) = self.match_format {
+            draft = draft
+                .with(PhasePlugins::MATCH_FORMAT, match_format)
+                .and_then(|draft| draft.with_defaults())
+                .unwrap();
+        }
         session.add_phase(&draft).unwrap();
         session
     }
@@ -1688,6 +1705,143 @@ fn a_result_entered_is_refused_unless_it_reads_as_one_of_a_match() {
         Err(ReportEnteredError::Report(ReportError::DrawNotAllowed))
     ));
     assert!(matches(&session).iter().all(|row| row.result.is_none()));
+}
+
+fn count(count: u32) -> Option<EnteredValue> {
+    Some(EnteredValue::Count(count))
+}
+
+/// The scores of `a` to `b`, each pair one.
+fn scores<const N: usize>(scores: [(u32, u32); N]) -> Vec<Sides<Option<EnteredValue>>> {
+    scores
+        .into_iter()
+        .map(|(a, b)| Sides::new(count(a), count(b)))
+        .collect()
+}
+
+#[test]
+fn scores_are_entered_after_the_number_of_a_match_and_say_its_result() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+
+    let entered = session
+        .read_entered(" 1  21-17 19:21 21–15 ")
+        .report
+        .unwrap();
+    assert_eq!(entered.result, Some(MatchResult::AWins));
+    assert_eq!(entered.scores, scores([(21, 17), (19, 21), (21, 15)]));
+    let reported = session.report_entered("1 21-17 19:21 21–15").unwrap();
+    assert_eq!(reported.row.scores, entered.scores);
+    assert_eq!(reported.row.result, Some(MatchResult::AWins));
+    let reported = session.report_entered("2 17-21 21-17 2").unwrap();
+    assert_eq!(
+        reported.row.result,
+        Some(MatchResult::BWins),
+        "the result entered decides where the scores do not"
+    );
+    assert_eq!(reported.row.scores, scores([(17, 21), (21, 17)]));
+}
+
+#[test]
+fn scores_entered_are_refused_unless_they_fit_the_result() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+
+    assert!(matches!(
+        session.report_entered("1 21-17"),
+        Err(ReportEnteredError::Undecided(1))
+    ));
+    assert!(matches!(
+        session.report_entered("1 21-17 21-19 2"),
+        Err(ReportEnteredError::AgainstScores(1))
+    ));
+    assert!(matches!(
+        session.report_entered("1 1-0 1-0 1-0 1-0"),
+        Err(ReportEnteredError::ScoresNotTaken(1))
+    ));
+    assert!(matches(&session).iter().all(|row| row.result.is_none()));
+
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    assert!(matches!(
+        session.report_entered("1 21.5-17"),
+        Err(ReportEnteredError::ScoresNotTaken(1))
+    ));
+    assert_eq!(
+        session.report_entered("1 21,0-17").unwrap().row.scores,
+        scores([(21, 17)]),
+        "a whole number in a score of counts"
+    );
+
+    let mut session = Given::new().started();
+    assert!(matches!(
+        session.report_entered("1 3-1"),
+        Err(ReportEnteredError::ScoresNotTaken(1))
+    ));
+    assert!(
+        session.report_entered("1-1").is_ok(),
+        "a win of side A, as without scores"
+    );
+}
+
+#[test]
+fn scores_entered_after_a_name_are_the_named_sides() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob"])
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    let the_match = &matches(&session)[0];
+    let alice = win_of(the_match, "Alice");
+    let alices_side = |a, b| {
+        if alice == MatchResult::AWins {
+            scores([(a, b)])
+        } else {
+            scores([(b, a)])
+        }
+    };
+
+    assert!(matches!(
+        session.read_entered("ali 17-21").report,
+        Err(ReportEnteredError::AgainstScores(1))
+    ));
+    let won = session.read_entered("ali 1 21-17").report.unwrap();
+    assert_eq!(won.result, Some(alice));
+    assert_eq!(won.scores, alices_side(21, 17));
+    let reported = session.report_entered("bob 21-19").unwrap();
+    assert_eq!(reported.row.scores, alices_side(19, 21));
+    assert_ne!(reported.row.result, Some(alice));
+}
+
+#[test]
+fn a_draw_entered_with_scores_needs_them_to_say_it() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob"])
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+
+    assert!(matches!(
+        session.read_entered("ali x 2-1").report,
+        Err(ReportEnteredError::AgainstScores(1))
+    ));
+    let drawn = session.report_entered("Alice X 2:2").unwrap();
+    assert_eq!(drawn.row.result, Some(MatchResult::Draw));
+    assert_eq!(drawn.row.scores, scores([(2, 2)]));
+}
+
+#[test]
+fn a_drawn_score_is_refused_where_there_are_no_draws() {
+    let mut session = Given::new()
+        .format(SingleElimination::ID)
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+
+    assert!(matches!(
+        session.report_entered("1 2-2"),
+        Err(ReportEnteredError::Report(ReportError::DrawNotAllowed))
+    ));
 }
 
 /// The numbers of `rows`, in order.

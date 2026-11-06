@@ -125,7 +125,7 @@ impl Level {
     pub fn level_of_part(&self, index: usize) -> Option<&Level> {
         match &self.parts {
             Parts::None => None,
-            Parts::Same { level, max } => (index < *max as usize).then_some(&**level),
+            Parts::Same { level, max, .. } => (index < *max as usize).then_some(&**level),
             Parts::Each(levels) => levels.get(index),
         }
     }
@@ -149,8 +149,14 @@ pub enum Misfit {
 pub enum Parts {
     /// None: the part is not divided.
     None,
-    /// Up to `max` parts at the same `level`, e.g. the games of a best of three.
-    Same { level: Box<Level>, max: u32 },
+    /// Up to `max` parts at the same `level`, e.g. the games of a best of three; `min` of them,
+    /// at most `max`, are the fewest that may decide the part when played, e.g. two of a best of
+    /// three. Fewer are taken: a part may be decided otherwise, e.g. by a walkover.
+    Same {
+        level: Box<Level>,
+        min: u32,
+        max: u32,
+    },
     /// One part at each of the `levels`, in order, e.g. the rubbers of a league fixture.
     Each(Vec<Level>),
 }

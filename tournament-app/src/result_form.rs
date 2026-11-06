@@ -55,7 +55,7 @@ impl Entry {
     fn empty(level: &Level) -> Self {
         let parts = match &level.parts {
             Parts::None => Vec::new(),
-            Parts::Same { level, max } => (0..*max).map(|_| Self::empty(level)).collect(),
+            Parts::Same { level, max, .. } => (0..*max).map(|_| Self::empty(level)).collect(),
             Parts::Each(levels) => levels.iter().map(Self::empty).collect(),
         };
         Self {

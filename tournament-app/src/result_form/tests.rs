@@ -390,6 +390,7 @@ fn a_match_of_parts_with_parts_of_their_own_is_not_entered_in_a_row() {
     let set = Level {
         parts: Parts::Same {
             level: Box::new(scored("game")),
+            min: 6,
             max: 6,
         },
         ..scored("set")
@@ -397,6 +398,7 @@ fn a_match_of_parts_with_parts_of_their_own_is_not_entered_in_a_row() {
     let r#match = Level {
         parts: Parts::Same {
             level: Box::new(set),
+            min: 2,
             max: 3,
         },
         ..Level::new(Phrase::new("match", "match"))
@@ -410,6 +412,7 @@ fn a_match_with_a_field_of_its_own_and_parts_is_not_entered_in_a_row() {
     let r#match = Level {
         parts: Parts::Same {
             level: Box::new(scored("game")),
+            min: 2,
             max: 3,
         },
         ..scored("match")

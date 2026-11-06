@@ -69,6 +69,11 @@ impl BestOf {
         }
     }
 
+    /// The games a side needs to win the match: more than half of them.
+    const fn needed(&self) -> u32 {
+        self.games / 2 + 1
+    }
+
     /// The games each side won of `games`.
     fn won(games: &[Part]) -> Sides<u32> {
         let mut won = Sides::new(0, 0);
@@ -90,6 +95,7 @@ impl MatchFormat for BestOf {
             root: Level {
                 parts: Parts::Same {
                     level: Box::new(self.game()),
+                    min: self.needed(),
                     max: self.games,
                 },
                 ..Level::new(Phrase::new("match", "match"))
@@ -118,7 +124,7 @@ impl MatchFormat for BestOf {
             return suggest_by_score(part);
         }
         let won = Self::won(part.parts());
-        let needed = self.games / 2 + 1;
+        let needed = self.needed();
         if won.a >= needed || won.b >= needed || won.a + won.b >= self.games {
             Some(result_of(won))
         } else {
@@ -210,6 +216,19 @@ mod tests {
         let part = Part::new().with_part(game(21, 3)).with_part(game(3, 21));
 
         assert_eq!(format.suggest(&level, &part), Some(MatchResult::Draw));
+    }
+
+    #[test]
+    fn a_match_takes_at_least_the_games_a_side_needs_and_at_most_all() {
+        let phase = phase(BestOf::new(5));
+        let r#match = phase.data().matches().values().next().unwrap();
+
+        let template = BestOf::new(5).template(phase.data(), r#match);
+
+        assert!(matches!(
+            template.root.parts,
+            Parts::Same { min: 3, max: 5, .. }
+        ));
     }
 
     #[test]

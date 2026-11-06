@@ -64,6 +64,7 @@ impl MatchFormat for Games {
                 }],
                 parts: Parts::Same {
                     level: Box::new(game),
+                    min: 2,
                     max: 3,
                 },
                 ..Level::new(Phrase::new("match", "match"))

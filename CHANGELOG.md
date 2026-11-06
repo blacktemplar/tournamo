@@ -19,7 +19,10 @@ a file whose `"format"` changes is migrated, not refused.
   ranking by the difference or by the points scored.
 - In the browser, a match whose results hold more than who won is entered in
   the row of the match: the score of each side, or of each game of a best of,
-  side by side, reported by Enter or the button beside them. Its details
+  side by side, reported by Enter or the button beside them. A best of shows
+  the fewest games that can decide it, and one more game whenever those
+  entered do not decide it yet (the fourth of a best of five at 2–1); games
+  entered after the match was decided are pointed out. Its details
   button opens a dialog with what the row holds, for more. What looks
   like a typo is pointed out but taken, such as a score unlike one with the
   winning score of the match format (21–17, 22–20 or 30–29 in a game to 21).

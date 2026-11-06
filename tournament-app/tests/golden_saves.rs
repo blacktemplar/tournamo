@@ -26,7 +26,7 @@ use tournament_app::{
     storage::{MemoryStorage, Storage as _},
 };
 use tournament_engine::{
-    Competition, EnteredValue, FieldKey, MatchResult, Team,
+    Competition, EnteredValue, MatchResult, Sides,
     plugins::{
         match_format::{BestOf, Scored},
         metrics_calculator::{
@@ -394,17 +394,11 @@ fn play_scores(session: &mut Session, played: &[&[(u32, u32)]], matches: usize) 
 
 /// Enters `scores` into `form`: the match's, if it has a field, or else those of its games.
 fn enter_scores(form: &mut ResultForm, scores: &[(u32, u32)]) {
-    let root = form.view().root;
-    let places: Vec<_> = if root.fields.is_empty() {
-        root.parts.iter().map(|part| part.path.clone()).collect()
-    } else {
-        vec![Vec::new()]
-    };
-    let score = FieldKey::new("score");
-    for (path, (a, b)) in places.iter().zip(scores) {
-        form.set_value(path, &score, Team::A, Some(EnteredValue::Count(*a)));
-        form.set_value(path, &score, Team::B, Some(EnteredValue::Count(*b)));
-    }
+    let scores: Vec<_> = scores
+        .iter()
+        .map(|&(a, b)| Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b))))
+        .collect();
+    assert!(form.enter_scores(&scores));
 }
 
 /// Enters entrants named `names`, returning their ids.

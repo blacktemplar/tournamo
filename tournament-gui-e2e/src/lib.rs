@@ -2049,6 +2049,65 @@ impl Gui {
             .await
     }
 
+    /// Waits until the value of a result labelled `label` is in the row of its match, e.g. a game
+    /// of a best of once the match needs it, or is not there, as `shown` says.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_in_row(&self, label: &str, shown: bool) -> WebDriverResult<()> {
+        if shown {
+            return self
+                .page
+                .expect(
+                    By::XPath(format!(
+                        "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
+                        without_isolation_marks("@aria-label")
+                    )),
+                    |query| query.and_displayed(),
+                    &format!("the value {label:?} in its row"),
+                )
+                .await;
+        }
+        assert!(
+            self.value_in_row(label).wait_until_gone().await.is_ok(),
+            "the value {label:?} must not be in its row"
+        );
+        Ok(())
+    }
+
+    /// Presses Tab in the last value of `part` in the row of its match, e.g. `"Game 2, match 1"`,
+    /// whichever side it is of.
+    pub async fn tab_out_of_part_in_row(&self, part: &str) -> WebDriverResult<()> {
+        let values = self.values_of_part_in_row(part).all_from_selector().await?;
+        values
+            .last()
+            .expect("a value of the part")
+            .send_keys(Key::Tab)
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the focus is on a value of `part` in the row of its match, e.g.
+    /// `"Game 3, match 1"`.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_in_part_in_row(&self, part: &str) -> WebDriverResult<()> {
+        let suffix = format!(" in {part}");
+        self.page
+            .expect(
+                By::Css(":focus"),
+                |query| {
+                    query.with_attribute("aria-label", move |found: &str| {
+                        found.replace(ISOLATION_MARKS, "").ends_with(&suffix)
+                    })
+                },
+                &format!("a value of {part:?}"),
+            )
+            .await
+    }
+
     /// Waits until the rows of results entered point out `warnings`.
     ///
     /// # Panics
@@ -2080,6 +2139,21 @@ impl Gui {
         self.driver.query(By::XPath(format!(
             "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
             without_isolation_marks("@aria-label")
+        )))
+    }
+
+    /// The values of `part` in the row of its match, e.g. `"Game 2, match 1"`, in the order shown.
+    fn values_of_part_in_row(
+        &self,
+        part: &str,
+    ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
+        // XPath 1.0 has no ends-with
+        let label = without_isolation_marks("@aria-label");
+        let suffix = format!(" in {part}");
+        let length = suffix.chars().count();
+        self.driver.query(By::XPath(format!(
+            "//*[contains(@class, 'quick-result')]//input[substring({label}, \
+             string-length({label}) - {length} + 1) = '{suffix}']"
         )))
     }
 

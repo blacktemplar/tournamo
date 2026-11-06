@@ -66,6 +66,7 @@ warning-unranked = ohne Kriterium sind in der Tabelle alle Teilnehmer gleichauf
 warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger üblicherweise hat
 warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt
+warning-more-than-decided = es ist mehr eingetragen, als es zur Entscheidung des Spiels brauchte
 issue-unanswered = das braucht eine Antwort
 issue-out-of-range = das muss { number-range } sein
 issue-not-a-number = „{ $entered }“ ist keine Zahl

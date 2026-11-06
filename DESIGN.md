@@ -568,6 +568,19 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   starting from what the row holds) for overriding, reasons and what a row
   cannot hold, such as a fixture's rubbers. The row never chooses a result: it
   reports what the values suggest, or says that they decide nothing.
+- **Parts appear as the match needs them**: `Parts::Same` says the fewest parts
+  that may decide a part (`min`, two of a best of three), and the form shows
+  those, the parts up to the last one entered, and one more while each shown is
+  decided and the match is not, in the row and the dialog alike. It never hides
+  a part entered, and warns of parts entered after the match was decided
+  rather than refusing them. Values commit on input, so the next game is there
+  before Tab moves on. Rejected: every part at once (a best of five shows five
+  boxes for a 3–0, as Challonge does), one part at a time behind an *Add game*
+  button (a tap per game, and start.gg's fixed best of three makes adding
+  games by hand a chore), and moving the focus to *Report* once decided as
+  ezBadminton does (typing 21–17 decides the game at 21–1, so the focus would
+  jump away mid-score; ezBadminton avoids it by filling in the winner's
+  score, a guess the row does not make).
 
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the match formats of their rubbers, live reporting (an `UpdatePlay` on open

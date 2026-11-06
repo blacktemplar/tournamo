@@ -79,6 +79,7 @@ warning-unranked = ranked by nothing, every entrant is tied in the standings
 warning-below-winning-score = neither side has { $winning }, which a winner usually has
 warning-winning-lead = at { $winning } or more, a winner usually leads by one or two
 warning-result-disagrees = this is not the result the score suggests
+warning-more-than-decided = more is entered than it took to decide the match
 # what is wrong with the answer of a field, or with a plugin chosen
 issue-unanswered = this needs an answer
 # the variables of number-range

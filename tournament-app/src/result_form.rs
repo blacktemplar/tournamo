@@ -3,8 +3,9 @@
 //!
 //! A [`ResultForm`] holds what was entered for each part of a match: the match itself, and its
 //! games, sets or rubbers, as deep as the match format divides it. It hands out a [`ResultView`]:
-//! every part with its fields and their values, the result chosen or else the one the match format
-//! suggests from what was entered, and warnings of what looks like a typo. A screen lays it out and
+//! every part played so far with its fields and their values (a game of a best of appears once the
+//! match needs it), the result chosen or else the one the match format suggests from what was
+//! entered, and warnings of what looks like a typo. A screen lays it out and
 //! hands what the operator does back to the form, by the path of the part it was done to; once
 //! done, it hands the form to [`Session::report_form`](crate::session::Session::report_form).
 //!
@@ -16,8 +17,8 @@
 //! ([`PartView::needs_choice`]).
 //!
 //! Nothing entered is refused for breaking the rules of a sport: the form only warns of a score
-//! unlike those the match format hints a winner usually has, and of a result chosen against the one
-//! the values suggest.
+//! unlike those the match format hints a winner usually has, of a result chosen against the one the
+//! values suggest, and of parts entered after those before them decided the match.
 
 use tournament_engine::{
     Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Score, Sides, Team,
@@ -122,6 +123,9 @@ pub struct PartView {
     pub reason: Option<ResultReason>,
     /// What looks wrong about the result, though it is taken.
     pub warnings: Vec<Text>,
+    /// Its parts as far as they are played: of parts at the same level, the fewest that may
+    /// decide it and those up to the last one entered, and one more while each of them is decided
+    /// but the part is not, e.g. the fourth game of a best of five at 2–1.
     pub parts: Vec<PartView>,
 }
 
@@ -147,7 +151,7 @@ pub struct QuickEntry {
     pub fields: Vec<QuickField>,
     /// The result the values suggest, `None` while they suggest none.
     pub result: Option<MatchResult>,
-    /// What looks like a typo in any field, each said once.
+    /// What looks like a typo in any field, or wrong about the match, each said once.
     pub warnings: Vec<Text>,
 }
 
@@ -220,14 +224,16 @@ impl ResultForm {
     /// they are more than its parts, a score is of a part without a field, or a decimal is of a
     /// field of counts.
     pub fn enter_scores(&mut self, scores: &[Sides<Option<EnteredValue>>]) -> bool {
-        let root = self.view().root;
-        // where each score goes: the path of its part and its field, none for a part without one
-        let places: Vec<Option<(Vec<usize>, FieldView)>> = match root.fields.into_iter().next() {
+        let root = &self.template.root;
+        // where each score goes: the path of its part and its field, none for a part without one;
+        // of every part, not only those the view shows yet
+        let places: Vec<Option<(Vec<usize>, &FieldSpec)>> = match root.fields.first() {
             Some(field) => vec![Some((Vec::new(), field))],
-            None => root
-                .parts
-                .into_iter()
-                .map(|part| Some((part.path, part.fields.into_iter().next()?)))
+            None => (0..self.root.parts.len())
+                .map(|index| {
+                    let level = root.level_of_part(index).expect("an entry for each part");
+                    Some((vec![index], level.fields.first()?))
+                })
                 .collect(),
         };
         if scores.len() > places.len() {
@@ -244,7 +250,7 @@ impl ResultForm {
                     None => Some(None),
                 };
                 let (a, b) = (fit(score.a)?, fit(score.b)?);
-                Some((path, field.key, Sides::new(a, b)))
+                Some((path, field.key.clone(), Sides::new(a, b)))
             })
             .collect::<Option<Vec<_>>>()
         else {
@@ -267,10 +273,9 @@ impl ResultForm {
     /// never chosen there, so the form is reported as it suggests.
     pub fn quick_entry(&self) -> Option<QuickEntry> {
         let level = &self.template.root;
-        let root = self.view().root;
+        let mut root = self.view().root;
         let fields: Vec<QuickField> = match (&level.parts, level.fields.len()) {
-            (Parts::None, 1) => root
-                .fields
+            (Parts::None, 1) => std::mem::take(&mut root.fields)
                 .into_iter()
                 .map(|field| QuickField {
                     path: Vec::new(),
@@ -281,7 +286,7 @@ impl ResultForm {
             (Parts::Same { level, .. }, 0)
                 if level.fields.len() == 1 && matches!(level.parts, Parts::None) =>
             {
-                root.parts
+                std::mem::take(&mut root.parts)
                     .into_iter()
                     .enumerate()
                     .flat_map(|(index, part)| {
@@ -297,7 +302,8 @@ impl ResultForm {
             _ => return None,
         };
         let mut warnings: Vec<Text> = Vec::new();
-        for warning in fields.iter().flat_map(|quick| &quick.field.warnings) {
+        let of_fields = fields.iter().flat_map(|quick| &quick.field.warnings);
+        for warning in of_fields.chain(&root.warnings) {
             if !warnings.contains(warning) {
                 warnings.push(warning.clone());
             }
@@ -372,17 +378,41 @@ impl ResultForm {
             views.push(view);
             children.push(part);
         }
-        let last = entry.parts.iter().rposition(|part| !part.is_empty());
+        let entered = entry
+            .parts
+            .iter()
+            .rposition(|part| !part.is_empty())
+            .map_or(0, |last| last + 1);
+        children.truncate(entered);
         let mut part = Part::new();
         for (key, values) in &entry.values {
             part = part.with_value(key.clone(), *values);
         }
-        for child in children.into_iter().take(last.map_or(0, |last| last + 1)) {
+        let mut warnings = Vec::new();
+        // whether the parts before the last one entered already decided the part
+        if let Some((_, before)) = children.split_last()
+            && matches!(level.parts, Parts::Same { .. })
+        {
+            let decided = before.iter().cloned().fold(part.clone(), Part::with_part);
+            if self.format.suggest(level, &decided).is_some() {
+                warnings.push(Text::new("warning-more-than-decided"));
+            }
+        }
+        for child in children {
             part = part.with_part(child);
         }
         let suggested = self.format.suggest(level, &part);
         let result = entry.chosen.or(suggested);
-        let mut warnings = Vec::new();
+        if let Parts::Same { min, .. } = level.parts {
+            let mut shown = entered.max(min as usize).min(views.len());
+            if result.is_none()
+                && shown < views.len()
+                && views[..shown].iter().all(|view| view.result.is_some())
+            {
+                shown += 1;
+            }
+            views.truncate(shown);
+        }
         if let (Some(chosen), Some(suggested)) = (entry.chosen, suggested)
             && chosen != suggested
         {

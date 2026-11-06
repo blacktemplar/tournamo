@@ -157,6 +157,29 @@ async fn the_games_of_a_best_of_are_entered_in_the_row_of_the_match() {
     .await;
 }
 
+/// A game of a best of appears in the row once the match needs it, in time for Tab to move into it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_game_appears_in_the_row_once_the_match_needs_it() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Best of games").await?;
+        let third = "Score of Alice in Game 3, match 1";
+        gui.expect_in_row(third, false).await?;
+
+        for (game, alice, bob) in [(1, "21", "17"), (2, "17", "21")] {
+            gui.enter_in_row(&format!("Score of Alice in Game {game}, match 1"), alice)
+                .await?;
+            gui.enter_in_row(&format!("Score of Bob in Game {game}, match 1"), bob)
+                .await?;
+        }
+        gui.tab_out_of_part_in_row("Game 2, match 1").await?;
+
+        gui.expect_focus_in_part_in_row("Game 3, match 1").await?;
+        gui.expect_in_row(third, true).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_result_the_row_does_not_decide_is_not_reported() {
@@ -200,7 +223,7 @@ async fn the_row_of_a_match_follows_the_phase_edited() {
         }
         // two games of five
         gui.expect_row_outcomes(&["Not decided yet"]).await?;
-        gui.enter_in_row("Score of Alice in Game 5, match 1", "21")
+        gui.enter_in_row("Score of Alice in Game 3, match 1", "21")
             .await
     })
     .await;

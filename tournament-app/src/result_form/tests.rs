@@ -173,12 +173,12 @@ fn a_score_of_one_side_alone_is_not_warned_of() {
 }
 
 #[test]
-fn a_best_of_shows_every_game_and_reports_those_played() {
+fn a_best_of_shows_the_games_that_may_decide_it_and_reports_those_played() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
     let mut form = session.result_form(id).unwrap();
     let games = form.view().root.parts;
-    assert_eq!(games.len(), 3);
-    assert_eq!(games[2].path, [2]);
+    assert_eq!(games.len(), 2);
+    assert_eq!(games[1].path, [1]);
 
     score(&mut form, &[0], 21, 17);
     score(&mut form, &[1], 21, 9);
@@ -186,8 +186,69 @@ fn a_best_of_shows_every_game_and_reports_those_played() {
     let root = form.view().root;
     assert_eq!(root.parts[0].result, Some(MatchResult::AWins));
     assert_eq!(root.result, Some(MatchResult::AWins), "two games of three");
+    assert_eq!(root.parts.len(), 2, "no third game");
     session.report_form(&form).unwrap();
     assert_eq!(the_match(session.competition()).contest().parts().len(), 2);
+}
+
+/// The number of games the form of a best of five shows once each of `games` is entered.
+fn games_shown(games: &[(u32, u32)]) -> usize {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
+    let mut form = session.result_form(id).unwrap();
+    for (index, &(a, b)) in games.iter().enumerate() {
+        score(&mut form, &[index], a, b);
+    }
+    form.view().root.parts.len()
+}
+
+#[test]
+fn a_game_is_shown_once_every_game_before_it_is_decided_but_the_match_is_not() {
+    assert_eq!(games_shown(&[]), 3);
+    assert_eq!(games_shown(&[(21, 3), (21, 3), (21, 3)]), 3, "3–0");
+    assert_eq!(games_shown(&[(21, 3), (21, 3), (3, 21)]), 4, "2–1");
+    assert_eq!(games_shown(&[(21, 3), (21, 3), (3, 21), (3, 21)]), 5, "2–2");
+}
+
+#[test]
+fn a_game_entered_on_one_side_alone_shows_no_further_game() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 3);
+    score(&mut form, &[1], 3, 21);
+    form.set_value(&[2], &SCORE, Team::A, count(21));
+
+    assert_eq!(form.view().root.parts.len(), 3);
+}
+
+#[test]
+fn a_match_decided_by_hand_shows_no_further_game() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 3);
+    score(&mut form, &[1], 3, 21);
+
+    form.choose(&[], Some(MatchResult::AWins));
+
+    assert_eq!(form.view().root.parts.len(), 2);
+}
+
+#[test]
+fn a_game_entered_after_the_match_was_decided_stays_with_a_warning() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 3);
+    score(&mut form, &[1], 21, 3);
+    score(&mut form, &[2], 3, 21);
+    score(&mut form, &[3], 21, 3);
+    assert_eq!(form.view().root.warnings, []);
+
+    score(&mut form, &[2], 21, 3);
+
+    let root = form.view().root;
+    assert_eq!(root.parts.len(), 4, "the fourth game stays");
+    let warning = Text::new("warning-more-than-decided");
+    assert_eq!(root.warnings, std::slice::from_ref(&warning));
+    assert_eq!(form.quick_entry().unwrap().warnings, [warning]);
 }
 
 #[test]
@@ -313,16 +374,7 @@ fn the_games_of_a_best_of_are_entered_in_one_row() {
         .iter()
         .map(|field| (field.path.clone(), field.part.as_ref().unwrap().1))
         .collect();
-    assert_eq!(
-        parts,
-        [
-            (vec![0], 1),
-            (vec![1], 2),
-            (vec![2], 3),
-            (vec![3], 4),
-            (vec![4], 5)
-        ]
-    );
+    assert_eq!(parts, [(vec![0], 1), (vec![1], 2), (vec![2], 3)]);
     assert_eq!(
         quick.result,
         Some(MatchResult::AWins),

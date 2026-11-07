@@ -1,4 +1,5 @@
-//! The points, or goals, a ranking scored and conceded, as the match format tallied them.
+//! The points, or goals, a ranking scored and conceded, as the match format tallied them, and their
+//! difference.
 
 use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ use crate::{
         metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
+    score::Score,
     type_map::TypeMapValue,
 };
 
@@ -43,6 +45,20 @@ impl ToCell for PointsBalance {
 #[typetag::serde(name = "tournament_engine::points_balance")]
 impl TypeMapValue for PointsBalance {}
 
+/// The points, or goals, a ranking scored minus those it conceded, see
+/// [`PointsBalance::difference`].
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub struct PointsDifference(pub i64);
+
+impl ToCell for PointsDifference {
+    fn to_cell(&self) -> Cell {
+        Cell::Signed(Score::new(self.0 as f64))
+    }
+}
+
+#[typetag::serde(name = "tournament_engine::points_difference")]
+impl TypeMapValue for PointsDifference {}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::higher_points_difference",
@@ -53,10 +69,10 @@ impl TypeMapValue for PointsBalance {}
 pub struct HigherPointsDifference;
 
 impl RankingCriterion for HigherPointsDifference {
-    type Metric = PointsBalance;
+    type Metric = PointsDifference;
 
-    fn compare(&self, first: &PointsBalance, second: &PointsBalance) -> Comparison {
-        Comparison::greater_is_better(first.difference().cmp(&second.difference()))
+    fn compare(&self, first: &PointsDifference, second: &PointsDifference) -> Comparison {
+        Comparison::greater_is_better(first.0.cmp(&second.0))
     }
 }
 
@@ -144,6 +160,68 @@ impl MetricsCalculator for PointsBalanceCalculator {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::points_difference",
+    label = "points difference",
+    description = "the points or goals scored minus those conceded",
+    declare_static = Self::declare_static
+)]
+pub struct PointsDifferenceCalculator;
+
+impl PointsDifferenceCalculator {
+    fn declare_static(declaration: &mut Declaration) {
+        declaration
+            .provide(CalculatesMetric::<PointsDifference>::new())
+            .require::<CalculatesMetric<PointsBalance>>("the points scored and conceded");
+    }
+
+    /// The difference of every ranking whose balance the calculators before changed.
+    fn changes(phase_data: &PhaseData, old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)> {
+        old_metrics
+            .of::<PointsBalance>()
+            .map(|(r_id, _)| {
+                let balance = phase_data.rankings()[&r_id]
+                    .metric::<PointsBalance>()
+                    .unwrap();
+                (
+                    r_id,
+                    Box::new(PointsDifference(balance.difference())) as Metric,
+                )
+            })
+            .collect()
+    }
+}
+
+#[register]
+impl MetricsCalculator for PointsDifferenceCalculator {
+    fn default_metric_value(&self) -> Metric {
+        Box::new(PointsDifference::default())
+    }
+
+    fn update_after_match_result(
+        &mut self,
+        phase_data: &PhaseData,
+        _: &Match,
+        old_metrics: &OldMetrics,
+    ) -> Vec<(RankingId, Metric)> {
+        Self::changes(phase_data, old_metrics)
+    }
+
+    fn update_after_bye(
+        &mut self,
+        phase_data: &PhaseData,
+        _: &Bye,
+        old_metrics: &OldMetrics,
+    ) -> Vec<(RankingId, Metric)> {
+        Self::changes(phase_data, old_metrics)
+    }
+
+    fn column(&self) -> Option<MetricColumn> {
+        Some(MetricColumn::new::<PointsDifference>("±"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(target_arch = "wasm32")]
@@ -159,6 +237,7 @@ mod tests {
             match_format::Scored,
             metrics_calculator::test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
         },
+        type_map::TypeMap,
     };
 
     fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Phase {
@@ -166,6 +245,7 @@ mod tests {
             PhaseBuilder::new()
                 .match_format(Scored::default())
                 .add_metric(PointsBalanceCalculator)
+                .add_metric(PointsDifferenceCalculator)
                 .add_players(players),
             matches,
             byes,
@@ -204,6 +284,18 @@ mod tests {
         assert_eq!(metric_of::<PointsBalance>(&phase, 0), balance(26, 38));
         assert_eq!(metric_of::<PointsBalance>(&phase, 1), balance(17, 21));
         assert_eq!(metric_of::<PointsBalance>(&phase, 2), balance(21, 5));
+        assert_eq!(
+            metric_of::<PointsDifference>(&phase, 0),
+            PointsDifference(-12)
+        );
+        assert_eq!(
+            metric_of::<PointsDifference>(&phase, 1),
+            PointsDifference(-4)
+        );
+        assert_eq!(
+            metric_of::<PointsDifference>(&phase, 2),
+            PointsDifference(16)
+        );
     }
 
     #[test]
@@ -214,9 +306,17 @@ mod tests {
 
         for player in [0, 1] {
             assert_eq!(metric_of::<PointsBalance>(&phase, player), balance(10, 7));
+            assert_eq!(
+                metric_of::<PointsDifference>(&phase, player),
+                PointsDifference(3)
+            );
         }
         for player in [2, 3] {
             assert_eq!(metric_of::<PointsBalance>(&phase, player), balance(7, 10));
+            assert_eq!(
+                metric_of::<PointsDifference>(&phase, player),
+                PointsDifference(-3)
+            );
         }
     }
 
@@ -225,14 +325,20 @@ mod tests {
         let phase = phase(1, Vec::new(), vec![(1, 0)]);
 
         assert_eq!(metric_of::<PointsBalance>(&phase, 0), balance(0, 0));
+        assert_eq!(
+            metric_of::<PointsDifference>(&phase, 0),
+            PointsDifference(0)
+        );
     }
 
     #[test]
     fn the_difference_and_the_points_scored_rank_differently() {
         let (more_scored, better_difference) = (balance(30, 28), balance(20, 10));
+        let difference = |balance: PointsBalance| PointsDifference(balance.difference());
 
         assert_eq!(
-            HigherPointsDifference.compare(&better_difference, &more_scored),
+            HigherPointsDifference
+                .compare(&difference(better_difference), &difference(more_scored)),
             Comparison::Better
         );
         assert_eq!(
@@ -244,5 +350,34 @@ mod tests {
     #[test]
     fn the_column_shows_scored_to_conceded() {
         assert_eq!(balance(26, 38).to_cell().to_string(), "26:38");
+    }
+
+    #[test]
+    fn the_difference_shows_its_sign() {
+        assert_eq!(PointsDifference(4).to_cell(), Cell::Signed(Score::new(4.0)));
+    }
+
+    /// The tags are part of every log and snapshot written, see `transition_log_serialization.rs`.
+    #[test]
+    fn the_calculators_and_their_metrics_are_serialized_under_their_tags() {
+        let calculators: Vec<Box<dyn MetricsCalculator>> = vec![
+            Box::new(PointsBalanceCalculator),
+            Box::new(PointsDifferenceCalculator),
+        ];
+        let mut metrics = TypeMap::new();
+        metrics.insert(PointsBalance::default());
+        metrics.insert(PointsDifference::default());
+
+        let tags = [
+            "tournament_engine::points_balance",
+            "tournament_engine::points_difference",
+        ];
+        for (index, tag) in tags.into_iter().enumerate() {
+            assert_eq!(
+                serde_json::to_value(&calculators).unwrap()[index]["type"],
+                tag
+            );
+            assert_eq!(serde_json::to_value(&metrics).unwrap()[index]["type"], tag);
+        }
     }
 }

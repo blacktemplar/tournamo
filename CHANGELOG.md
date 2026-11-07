@@ -15,8 +15,9 @@ a file whose `"format"` changes is migrated, not refused.
 - A phase has a match format, chosen right after its format: what is entered
   for its matches, who won ("winner only", what every phase entered before),
   the score of each side, or the games of a best of, each with its score.
-- The points (or goals) scored and conceded, as a metric of the standings, and
-  ranking by the difference or by the points scored.
+- The points (or goals) scored and conceded, and their difference (+5), as
+  metrics of the standings, and ranking by the difference, which shows it, or
+  by the points scored.
 - The games (or sets) won and lost in the matches of a best of, as a metric of
   the standings, and ranking by the difference or by the games won.
 - In the browser, a match whose results hold more than who won is entered in

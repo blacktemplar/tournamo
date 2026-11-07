@@ -35,6 +35,7 @@ pub use games_balance::{
 pub use points::{MorePoints, Points, PointsCalculator};
 pub use points_balance::{
     HigherPointsDifference, MorePointsScored, PointsBalance, PointsBalanceCalculator,
+    PointsDifference, PointsDifferenceCalculator,
 };
 pub use round_of_elimination::{
     Eliminates, LaterElimination, RoundOfElimination, RoundOfEliminationCalculator,

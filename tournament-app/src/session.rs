@@ -1724,7 +1724,7 @@ fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
             .iter()
             .find(|(name, _)| *name == "round")
             .map(|(_, round)| *round),
-        Cell::Number(_) => None,
+        Cell::Number(_) | Cell::Signed(_) => None,
     };
     let Some(round) = round else {
         return StandingCell::Metric(cell);

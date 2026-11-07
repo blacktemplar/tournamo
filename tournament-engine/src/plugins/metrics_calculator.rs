@@ -1,5 +1,6 @@
 use std::{
     any::{Any, TypeId},
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
 };
 
@@ -165,11 +166,23 @@ pub trait ToCell {
     fn to_cell(&self) -> Cell;
 }
 
+/// The sign a [`Cell::Signed`] shows before the magnitude of `number`: none for zero.
+pub fn sign(number: Score) -> &'static str {
+    match number.cmp(&Score::ZERO) {
+        Ordering::Greater => "+",
+        Ordering::Less => "\u{2212}",
+        Ordering::Equal => "",
+    }
+}
+
 /// What a cell of a [`MetricColumn`] shows. Shows as it does in English.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Cell {
     /// A number, which a frontend writes as its language writes numbers.
     Number(Score),
+    /// A number with its sign, such as a difference: `+5`, `−3` (with a minus sign) or `0`.
+    /// A frontend writes the number without its sign as its language writes numbers.
+    Signed(Score),
     /// A phrase of the calculator's, which a translation finds by the calculator's id.
     Text(Phrase),
 }
@@ -178,7 +191,26 @@ impl Display for Cell {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Number(number) => Display::fmt(number, f),
+            Self::Signed(number) => write!(f, "{}{}", sign(*number), number.get().abs()),
             Self::Text(phrase) => Display::fmt(phrase, f),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn a_signed_cell_shows_the_sign_of_every_number_but_zero() {
+        let shown = |number| Cell::Signed(Score::new(number)).to_string();
+
+        assert_eq!(shown(5.0), "+5");
+        assert_eq!(shown(-3.0), "\u{2212}3");
+        assert_eq!(shown(-0.5), "\u{2212}0.5");
+        assert_eq!(shown(0.0), "0");
     }
 }

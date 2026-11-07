@@ -313,6 +313,10 @@ fn a_cell_is_said_in_the_language_or_else_as_its_code_says() {
             .cell(PointsCalculator::ID, &Cell::Number(Score::new(2.5))),
         "2.5"
     );
+    let signed = |number| german.cell("my_crate::difference", &Cell::Signed(Score::new(number)));
+    assert_eq!(signed(2.5), "+2,5");
+    assert_eq!(signed(-3.0), "\u{2212}3");
+    assert_eq!(signed(0.0), "0");
 }
 
 /// The plugins of the engine, of every axis, except those only its tests use.
@@ -428,7 +432,7 @@ fn phrases_in_cells(id: &str) -> Vec<Phrase> {
         .into_iter()
         .filter_map(|cell| match cell {
             Cell::Text(phrase) => Some(phrase),
-            Cell::Number(_) => None,
+            Cell::Number(_) | Cell::Signed(_) => None,
         })
         .collect()
 }

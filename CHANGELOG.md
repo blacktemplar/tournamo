@@ -12,6 +12,9 @@ a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
+- Best-of matches count drawn games toward completion and finish early once
+  the leading side cannot be caught by the games remaining.
+
 - Entered counts and winning-score hints are limited to 65535. Point tallies
   and standings totals saturate at 4294967295 rather than overflowing, so
   result reporting and replay agree in checked and unchecked builds.

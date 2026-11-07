@@ -118,14 +118,19 @@ impl MatchFormat for BestOf {
     }
 
     /// A game by its score; the match for the side that won most games, once one has won more
-    /// than half of them or every game is decided.
+    /// than the other side can still win or every game is decided.
     fn suggest(&self, level: &Level, part: &Part) -> Option<MatchResult> {
         if level.name.key() == "game" {
             return suggest_by_score(part);
         }
         let won = Self::won(part.parts());
-        let needed = self.needed();
-        if won.a >= needed || won.b >= needed || won.a + won.b >= self.games {
+        let decided = part
+            .parts()
+            .iter()
+            .filter(|game| game.decision().is_some())
+            .count();
+        let remaining = self.games.saturating_sub(decided as u32);
+        if won.a.abs_diff(won.b) > remaining || remaining == 0 {
             Some(result_of(won))
         } else {
             None
@@ -241,6 +246,60 @@ mod tests {
             "a third game decides"
         );
         assert_eq!(suggest(Vec::new()), None);
+    }
+
+    #[test]
+    fn draws_count_as_decided_games() {
+        let level = Level::new(Phrase::new("match", "match"));
+        let drawn = Part::new().with_part(game(3, 3));
+        assert_eq!(
+            BestOf::new(1).suggest(&level, &drawn),
+            Some(MatchResult::Draw)
+        );
+
+        let split = Part::new()
+            .with_part(game(21, 3))
+            .with_part(game(3, 21))
+            .with_part(game(3, 3));
+        assert_eq!(
+            BestOf::new(3).suggest(&level, &split),
+            Some(MatchResult::Draw)
+        );
+    }
+
+    #[test]
+    fn a_lead_must_exceed_the_remaining_games_to_finish_early() {
+        let format = BestOf::new(5);
+        let level = Level::new(Phrase::new("match", "match"));
+        for (win, loss, outcome) in [
+            (game(21, 3), game(3, 21), MatchResult::AWins),
+            (game(3, 21), game(21, 3), MatchResult::BWins),
+        ] {
+            let first_three = Part::new()
+                .with_part(win.clone())
+                .with_part(game(3, 3))
+                .with_part(game(3, 3));
+            assert_eq!(format.suggest(&level, &first_three), None);
+            assert_eq!(
+                format.suggest(&level, &first_three.clone().with_part(win.clone())),
+                Some(outcome)
+            );
+            let tied = first_three.with_part(loss);
+            assert_eq!(format.suggest(&level, &tied), None);
+            assert_eq!(
+                format.suggest(&level, &tied.with_part(game(3, 3))),
+                Some(MatchResult::Draw)
+            );
+            let two_wins = Part::new()
+                .with_part(win.clone())
+                .with_part(win)
+                .with_part(game(3, 3));
+            assert_eq!(format.suggest(&level, &two_wins), None);
+            assert_eq!(
+                format.suggest(&level, &two_wins.with_part(Part::new())),
+                None
+            );
+        }
     }
 
     #[test]

@@ -590,6 +590,10 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   starting from what the row holds) for overriding, reasons and what a row
   cannot hold, such as a fixture's rubbers. The row never chooses a result: it
   reports what the values suggest, or says that they decide nothing.
+- **Best-of completion counts decisions, including draws**: a side wins early
+  when its lead in games won exceeds the games still undecided. Otherwise all
+  configured games are played, and equal win totals suggest a draw (subject to
+  the phase format allowing match draws).
 - **Parts appear as the match needs them**: `Parts::Same` says the fewest parts
   that may decide a part (`min`, two of a best of three), and the form shows
   those, the parts up to the last one entered, and one more while each shown is

@@ -232,7 +232,19 @@ fn QuickValues(
                     move |_| {
                         let prefix = format!("quick-value-{number}");
                         if let Some(form) = form.write().as_mut() {
-                            complete_score(form, &prefix, &path, &key, team);
+                            complete_score(form, &prefix, &path, &key, team, false);
+                        }
+                    }
+                },
+                onkeydown: {
+                    let (path, key) = (path.clone(), key.clone());
+                    move |event: KeyboardEvent| {
+                        let prefix = format!("quick-value-{number}");
+                        if is_tab(&event)
+                            && let Some(form) = form.write().as_mut()
+                            && complete_score(form, &prefix, &path, &key, team, true)
+                        {
+                            event.prevent_default();
                         }
                     }
                 },
@@ -504,7 +516,26 @@ fn ResultField(
                 value: shown(value),
                 onblur: {
                     let (path, key) = (path.clone(), key.clone());
-                    move |_| complete_score(&mut form.write(), "result-value", &path, &key, team)
+                    move |_| {
+                        complete_score(&mut form.write(), "result-value", &path, &key, team, false);
+                    }
+                },
+                onkeydown: {
+                    let (path, key) = (path.clone(), key.clone());
+                    move |event: KeyboardEvent| {
+                        if is_tab(&event)
+                            && complete_score(
+                                &mut form.write(),
+                                "result-value",
+                                &path,
+                                &key,
+                                team,
+                                true,
+                            )
+                        {
+                            event.prevent_default();
+                        }
+                    }
                 },
                 oninput: move |event: FormEvent| {
                     let value = entered(&event.value(), kind);
@@ -541,25 +572,55 @@ fn value_id(prefix: &str, path: &[usize], key: &FieldKey, team: Team) -> String 
 }
 
 /// Completes the score of the field `key` of the part at `path` once `team`'s value is left
-/// ([`ResultForm::complete_score`]); if the focus moved to the value completed, among the inputs
-/// whose ids start with `prefix`, it is selected, so that typing replaces it.
-fn complete_score(form: &mut ResultForm, prefix: &str, path: &[usize], key: &FieldKey, team: Team) {
-    if form.complete_score(path, key, team) {
-        // an id made of the page's prefixes, indices and field keys, which a JavaScript string
-        // reads as Rust does
-        let other = format!("{:?}", value_id(prefix, path, key, team.opponent()));
-        // the second frame is after the page rendered the value, and the focus moved on
-        _ = document::eval(&format!(
-            r#"
-            requestAnimationFrame(() => requestAnimationFrame(() => {{
-                const element = document.activeElement;
-                if (element?.id === {other}) {{
-                    element.select();
-                }}
-            }}));
-            "#
-        ));
+/// ([`ResultForm::complete_score`]), returning whether it did; if the focus moved to the value
+/// completed, among the inputs whose ids start with `prefix`, it is selected, so that typing
+/// replaces it. If `tabbing`, the value is left by Tab, whose move the caller prevents if it
+/// completed: the focus moves on once the page shows the score, so that it reaches a game the
+/// score made the match need.
+fn complete_score(
+    form: &mut ResultForm,
+    prefix: &str,
+    path: &[usize],
+    key: &FieldKey,
+    team: Team,
+    tabbing: bool,
+) -> bool {
+    if !form.complete_score(path, key, team) {
+        return false;
     }
+    // ids made of the page's prefixes, indices and field keys, which a JavaScript string reads as
+    // Rust does
+    let this = format!("{:?}", value_id(prefix, path, key, team));
+    let other = format!("{:?}", value_id(prefix, path, key, team.opponent()));
+    // the second frame is after the page rendered the value, and the focus moved on
+    _ = document::eval(&format!(
+        r#"
+        requestAnimationFrame(() => requestAnimationFrame(() => {{
+            if ({tabbing}) {{
+                // what Tab moves to: the next element taking the focus that is shown
+                const focusable = [...document.querySelectorAll(
+                    "input, select, textarea, button, a[href], [tabindex]"
+                )].filter(element => !element.disabled && element.tabIndex >= 0
+                    && element.getClientRects().length > 0);
+                const from = document.getElementById({this});
+                const index = focusable.indexOf(from);
+                if (index >= 0) {{
+                    focusable[index + 1]?.focus();
+                }}
+            }}
+            const element = document.activeElement;
+            if (element?.id === {other}) {{
+                element.select();
+            }}
+        }}));
+        "#
+    ));
+    true
+}
+
+/// Whether `event` is Tab, moving the focus forwards.
+fn is_tab(event: &KeyboardEvent) -> bool {
+    event.key() == Key::Tab && !event.modifiers().contains(Modifiers::SHIFT)
 }
 
 /// What `value` is entered as into a field.

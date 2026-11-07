@@ -2086,6 +2086,23 @@ impl Gui {
         Ok(())
     }
 
+    /// Types `text` into the value of the side `side` (0 the first shown, 1 the second) of `part`
+    /// in the row of its match, e.g. `"Game 2, match 1"`, in place of what it shows, and stays
+    /// there, e.g. to press Tab next.
+    pub async fn enter_in_part_in_row(
+        &self,
+        part: &str,
+        side: usize,
+        text: &str,
+    ) -> WebDriverResult<()> {
+        let values = self.values_of_part_in_row(part).all_from_selector().await?;
+        let input = values.get(side).expect("a value of each side of the part");
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Types `text` into the first value of a result in the dialog open, whichever side it is
     /// of, in place of what it shows, and stays there, e.g. to press Tab next.
     pub async fn enter_first_value(&self, text: &str) -> WebDriverResult<()> {

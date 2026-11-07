@@ -567,7 +567,9 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   more: either side may have won), so nothing is filled in. The GUI completes
   a value once it is left, not while it is typed (the 1 of 15 would complete
   it too early), only when the other side is empty, and selects what it filled
-  in when Tab moves there, so that typing replaces it.
+  in when Tab moves there, so that typing replaces it. Tab completes before it
+  moves, and moves only once the page shows the score: else it would pass a
+  game the completed score makes the match need, which appears after it.
 - **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
   template and checked on report, as a config's field names are: a generic UI
   needs keys it can list. What the engine reads, the tallies, stays typed.

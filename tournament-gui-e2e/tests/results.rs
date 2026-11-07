@@ -202,6 +202,33 @@ async fn a_score_close_to_the_winning_score_completes_nothing() {
     .await;
 }
 
+/// Tab out of a score completed waits for the game the match needs then, and moves into it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn tab_out_of_a_score_completed_moves_into_the_game_it_makes_needed() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Round robin").await?;
+        gui.choose_plugin("match_format", "Best of games").await?;
+        gui.toggle("Winning score of a game").await?;
+        gui.enter("match_format.winning_score", "21").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        gui.enter_in_part_in_row("Game 1, match 1", 0, "17").await?;
+        gui.enter_in_part_in_row("Game 1, match 1", 1, "21").await?;
+
+        // the second side, after which Tab would leave the games shown so far
+        gui.enter_in_part_in_row("Game 2, match 1", 1, "15").await?;
+        gui.press(Key::Tab).await?;
+
+        gui.expect_focus_in_part_in_row("Game 3, match 1").await?;
+        gui.expect_row_outcomes(&["Not decided yet (1–1)"]).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_score_far_below_the_winning_score_completes_the_other_in_the_dialog() {

@@ -1,10 +1,12 @@
 #!/bin/sh
-# Runs on the host, with Zed quit, after Zed has created a new container for this checkout: points
-# Zed's agent threads of this checkout's old dev containers at the current one, and removes those
-# containers' project groups from Zed's windows. Zed files both under the container's id, which
-# changes whenever the container is created anew; it then neither shows nor opens the threads, and
-# keeps a group that does not open (https://github.com/zed-industries/zed/issues/56576). Remove this
-# script once Zed gives dev containers a stable identity.
+# Runs on the host, with Zed quit, after Zed has opened this checkout's container under another id:
+# points Zed's agent threads of this checkout's old dev containers at the current one, and removes
+# those containers' project groups from Zed's windows. Zed files both under the id it connected with
+# and compares it exactly; for any other id it neither shows nor opens the threads, and keeps a group
+# that does not open (https://github.com/zed-industries/zed/issues/56576). That id changes when the
+# container is created anew, and also for the same container: Zed uses the full id of a container it
+# created and the short one of a container it found (as after a reboot, which stops the container).
+# Remove this script once Zed gives dev containers a stable identity.
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -20,22 +22,31 @@ if pgrep -x zed >/dev/null || pgrep -x zed-editor >/dev/null; then
     echo "Quit Zed first: it keeps the threads in memory and would write them back." >&2
     exit 1
 fi
-new=$(docker compose -p "tournamo-$hash" ps -aq --no-trunc dev)
-if [ -z "$new" ]; then
+full=$(docker compose -p "tournamo-$hash" ps -aq --no-trunc dev)
+if [ -z "$full" ]; then
     echo "No container of tournamo-$hash yet: open the project in Zed once, then quit it." >&2
     exit 1
 fi
 
 sql_quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
 
-# Whether a container id of this checkout is an old one. Zed looks a thread up by the full id, but
-# older threads may hold the short one: a short form of the current id is old too, while any other
-# container that still exists is not (another checkout).
+# The form of the container's id that Zed last connected with, which is what it looks threads up by.
+new=$(sqlite3 "$db" "SELECT r.container_id
+    FROM workspaces w JOIN remote_connections r ON w.remote_connection_id = r.id
+    WHERE r.kind = 'docker' AND length(r.container_id) >= 12 AND '$full' LIKE r.container_id || '%'
+    ORDER BY w.timestamp DESC LIMIT 1;")
+if [ -z "$new" ]; then
+    echo "Zed has not connected to $full yet: open the project in Zed once, then quit it." >&2
+    exit 1
+fi
+
+# Whether a container id of this checkout is an old one. The other form of the current id is old
+# too, while any other container that still exists is not (another checkout).
 is_old() {
     if [ "$1" = "$new" ]; then
         return 1
     fi
-    case $new in
+    case $full in
         "$1"*) return 0 ;;
     esac
     ! docker container inspect "$1" >/dev/null 2>&1

@@ -1231,21 +1231,13 @@ impl Gui {
     /// # Panics
     /// Panics if it is not in time, with the view chosen instead.
     pub async fn expect_view(&self, label: &str) -> WebDriverResult<()> {
-        let pressed = self
-            .driver
-            .query(By::Css(".view-switch button[aria-pressed=true]"))
-            .and_displayed()
-            .all_from_selector()
-            .await?;
-        let mut texts = Vec::new();
-        for button in pressed {
-            texts.push(button.text().await?);
-        }
-        assert!(
-            texts.iter().any(|text| text == label),
-            "the view chosen must be {label:?}, but is {texts:?}"
-        );
-        Ok(())
+        self.page
+            .expect(
+                By::Css(".view-switch button[aria-pressed=true]"),
+                |query| query.and_displayed().with_text(label.to_owned()),
+                &format!("the view chosen {label:?}"),
+            )
+            .await
     }
 
     /// Checks that nothing of the page shows between the bar on top and the bottom of the view

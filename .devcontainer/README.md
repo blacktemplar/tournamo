@@ -1,33 +1,23 @@
 # The dev container
 
 A container for working on Tournamo, made for letting Claude Code work without asking
-(`bypassPermissions`), in Zed or in a terminal. It has everything the hooks need, including the
+(`bypassPermissions`). It has everything the hooks need, including the
 manual ones (`prek run --all-files --stage manual`): Rust stable with the wasm target, nightly
 rustfmt, wasm-pack, trunk, dx, Chromium and chromedriver, Node. Also cargo-warloc, to count lines
 of code, and gh, reading GitHub with a read-only token (*GitHub CLI* below).
 
-## Using it in Zed
+## Using it
 
-1. Open the checkout (or a worktree of it) in Zed and choose *Open in Container* (or *Project: Open
-   Remote* → *Connect Dev Container*). The first build takes a while.
-2. Add *Claude Agent* once: `agent: open settings` → *External Agents* → *Add Agent* → *Install
-   from Registry*. In a container project Zed runs it inside the container.
-3. Sign in once: start a Claude Agent thread and run `/login`, or run `claude` in Zed's terminal. The
-   sign-in is kept in the volume `tournamo-claude`, which every checkout shares.
+1. Open the checkout (or a worktree of it) in the container with an editor or tool that supports dev
+   containers. The first build takes a while.
+2. Sign in once: run `claude` in the container and then `/login`. The sign-in is kept in the volume
+   `tournamo-claude`, which every checkout shares.
 
 Claude starts in `bypassPermissions` there, set by `/etc/claude-code/managed-settings.json` of the
-image, so it applies only inside the container. In a terminal, `claude` does the same.
+image, so it applies only inside the container.
 
-Zed does not notice changes to these files: after one, remove the containers
-(`docker compose -p tournamo-<hash> down`, the name is in `.env`) and open the project again.
-
-Zed files agent threads and project groups under the id it connected to the container with. That id
-changes when the container is created anew, and also when Zed reopens a stopped container, as after
-a reboot: it uses the full id of a container it created and the short id of one it found. Threads
-filed under the other id neither show in the sidebar nor open, and the old group stays in the window
-without opening ([zed#56576](https://github.com/zed-industries/zed/issues/56576)). To move the
-threads to the id in use and remove the old group, quit Zed, run
-`.devcontainer/rebind-zed-threads.sh` on the host (from a terminal outside Zed), and start Zed again.
+After a change to these files, remove the containers (`docker compose -p tournamo-<hash> down`, the
+name is in `.env`) and open the project again.
 
 ## GitHub CLI
 

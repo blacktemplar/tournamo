@@ -510,7 +510,7 @@ pub struct Part {                      // a match, or a game, set, rubber, leg o
     annotations: TypeMap,
 }
 pub struct Decision { result: MatchResult, reason: Option<ResultReason> }
-pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport needs them
+pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport needs them
 ```
 
 - **A match is a part**: `Match::contest`, holding the match's annotations too.
@@ -550,6 +550,10 @@ pub enum EnteredValue { Count(u32), Decimal(Score) }  // durations when a sport 
   (1–3)), rather than the winner's first. A `MatchFormat::show` for a sport
   writing its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a
   sport.
+- **Count limits**: entered counts and winning-score hints are `u16` (0–65535).
+  Point tallies and points/games balances use `u32`; accumulated totals saturate
+  at `u32::MAX`, identically in checked and unchecked builds. Differences use
+  those saturated totals.
 - **Hints are not rules**: the app turns them into warnings ("23–19 in a game
   to 21?"), never refusals.
 - **The winning score is what a winner has, not a maximum**: in a game to 21

@@ -297,7 +297,12 @@ impl ResultForm {
             .map_or(Sides::new(None, None), |(_, values)| *values);
         let (entered, other) = (*values.of(team), *values.of(team.opponent()));
         // from one below the winning score on, the other side may win by more or lose
-        let completes = matches!(entered, Some(EnteredValue::Count(count)) if count + 2 <= winning);
+        let completes = match entered {
+            Some(EnteredValue::Count(count)) => {
+                winning.checked_sub(count).is_some_and(|gap| gap >= 2)
+            }
+            _ => false,
+        };
         if !completes || other.is_some() {
             return false;
         }
@@ -556,12 +561,12 @@ impl ResultForm {
 fn of_kind(value: EnteredValue, kind: ValueKind) -> Option<EnteredValue> {
     match (value, kind) {
         (EnteredValue::Count(count), ValueKind::Decimal) => {
-            Some(EnteredValue::Decimal(Score::from(count)))
+            Some(EnteredValue::Decimal(Score::from(u32::from(count))))
         }
         (EnteredValue::Decimal(decimal), ValueKind::Count) => {
             let number = decimal.get();
-            (number.fract() == 0.0 && (0.0..=f64::from(u32::MAX)).contains(&number))
-                .then_some(EnteredValue::Count(number as u32))
+            (number.fract() == 0.0 && (0.0..=f64::from(u16::MAX)).contains(&number))
+                .then_some(EnteredValue::Count(number as u16))
         }
         (value, _) => Some(value),
     }
@@ -593,12 +598,12 @@ fn field_view(field: &FieldSpec, values: &Values) -> FieldView {
 
 /// The warning of a score of `high` to `low` in a part usually won with `winning`, or more than
 /// it, then by one or two, if it is no such score.
-fn winning_score_warning(winning: u32, high: u32, low: u32) -> Option<Text> {
+fn winning_score_warning(winning: u16, high: u16, low: u16) -> Option<Text> {
     let lead = high - low;
     if high < winning {
-        Some(Text::new("warning-below-winning-score").with("winning", winning))
+        Some(Text::new("warning-below-winning-score").with("winning", u32::from(winning)))
     } else if (high > winning && !(1..=2).contains(&lead)) || lead == 0 {
-        Some(Text::new("warning-winning-lead").with("winning", winning))
+        Some(Text::new("warning-winning-lead").with("winning", u32::from(winning)))
     } else {
         None
     }

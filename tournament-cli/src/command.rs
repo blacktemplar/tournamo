@@ -90,7 +90,7 @@ pub enum Reported {
     Result(ReportedResult),
     /// The score of each side, the first team's first: of the match, or of its next part, e.g. a
     /// game.
-    Score(u32, u32),
+    Score(u16, u16),
 }
 
 impl FromStr for Reported {
@@ -253,6 +253,16 @@ mod tests {
                 entry: vec![Reported::Result(ReportedResult::Draw)]
             }
         );
+    }
+
+    #[test]
+    fn score_counts_fit_in_u16() {
+        assert_eq!(
+            Reported::from_str("65535-0").unwrap(),
+            Reported::Score(u16::MAX, 0)
+        );
+        assert!(Reported::from_str("65536-0").is_err());
+        assert!(Reported::from_str("4294967295-0").is_err());
     }
 
     #[test]

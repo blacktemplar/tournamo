@@ -167,8 +167,8 @@ impl FieldKey {
 /// A value entered for a side of a part.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EnteredValue {
-    /// A number counted: goals, points, games, cards.
-    Count(u32),
+    /// A number counted, from 0 to 65535: goals, points, games, cards.
+    Count(u16),
     /// A number with a fraction: a judged score, victory points.
     Decimal(Score),
 }
@@ -190,6 +190,25 @@ impl<T> Sides<T> {
         match team {
             Team::A => &self.a,
             Team::B => &self.b,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn counts_load_only_within_their_range() {
+        assert_eq!(
+            serde_json::from_str::<EnteredValue>(r#"{"Count":65535}"#).unwrap(),
+            EnteredValue::Count(u16::MAX)
+        );
+        for invalid in [r#"{"Count":65536}"#, r#"{"Count":4294967295}"#] {
+            assert!(serde_json::from_str::<EnteredValue>(invalid).is_err());
         }
     }
 }

@@ -45,12 +45,12 @@ fn the_match(competition: &Competition) -> &Match {
         .unwrap()
 }
 
-fn count(count: u32) -> Option<EnteredValue> {
+fn count(count: u16) -> Option<EnteredValue> {
     Some(EnteredValue::Count(count))
 }
 
 /// Enters `a` to `b` into the score of the part at `path`.
-fn score(form: &mut ResultForm, path: &[usize], a: u32, b: u32) {
+fn score(form: &mut ResultForm, path: &[usize], a: u16, b: u16) {
     form.set_value(path, &SCORE, Team::A, count(a));
     form.set_value(path, &SCORE, Team::B, count(b));
 }
@@ -123,7 +123,7 @@ fn only_a_part_without_values_or_parts_needs_a_choice() {
 }
 
 /// The warnings of the score `a` to `b` in a match to 21.
-fn warnings_of(a: u32, b: u32) -> Vec<Text> {
+fn warnings_of(a: u16, b: u16) -> Vec<Text> {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
     let mut form = session.result_form(id).unwrap();
     score(&mut form, &[], a, b);
@@ -192,7 +192,7 @@ fn a_best_of_shows_the_games_that_may_decide_it_and_reports_those_played() {
 }
 
 /// The number of games the form of a best of five shows once each of `games` is entered.
-fn games_shown(games: &[(u32, u32)]) -> usize {
+fn games_shown(games: &[(u16, u16)]) -> usize {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
     let mut form = session.result_form(id).unwrap();
     for (index, &(a, b)) in games.iter().enumerate() {
@@ -368,6 +368,8 @@ fn a_score_is_entered_as_its_field_takes_it() {
     );
     assert_eq!(of_kind(half(2.5), ValueKind::Count), None);
     assert_eq!(of_kind(half(-1.0), ValueKind::Count), None);
+    assert_eq!(of_kind(half(65535.0), ValueKind::Count), count(u16::MAX));
+    assert_eq!(of_kind(half(65536.0), ValueKind::Count), None);
     assert_eq!(of_kind(half(2.5), ValueKind::Decimal), Some(half(2.5)));
 }
 
@@ -542,7 +544,7 @@ fn a_result_reported_against_the_score_shows_as_chosen() {
 
 /// What `complete_score` does after entering `entered` for the first side of the score of a match
 /// to 21, with `other` already entered for the second: whether it completed it, and the score.
-fn completed(entered: u32, other: Option<EnteredValue>) -> (bool, Sides<Option<EnteredValue>>) {
+fn completed(entered: u16, other: Option<EnteredValue>) -> (bool, Sides<Option<EnteredValue>>) {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
     let mut form = session.result_form(id).unwrap();
     form.set_value(&[], &SCORE, Team::B, other);
@@ -566,7 +568,7 @@ fn a_score_two_or_more_below_the_winning_score_completes_the_other_side_as_winni
 
 #[test]
 fn a_score_from_one_below_the_winning_score_on_completes_nothing() {
-    for entered in [20, 21, 25] {
+    for entered in [20, 21, 25, u16::MAX] {
         assert_eq!(
             completed(entered, None),
             (false, Sides::new(count(entered), None)),

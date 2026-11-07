@@ -37,7 +37,7 @@ pub struct Scored {
         min = 1,
         default = None
     )]
-    winning_score: Option<u32>,
+    winning_score: Option<u16>,
 }
 
 impl Scored {
@@ -45,7 +45,7 @@ impl Scored {
     ///
     /// Requires the `test-util` feature.
     #[cfg(feature = "test-util")]
-    pub const fn new(winning_score: Option<u32>) -> Self {
+    pub const fn new(winning_score: Option<u16>) -> Self {
         Self { winning_score }
     }
 
@@ -59,14 +59,14 @@ impl Scored {
 pub(crate) fn score(part: &Part) -> Option<Sides<u32>> {
     let sides = part.value(SCORE.key())?;
     let count = |value: Option<EnteredValue>| match value {
-        Some(EnteredValue::Count(count)) => count,
+        Some(EnteredValue::Count(count)) => u32::from(count),
         _ => 0,
     };
     (sides.a.is_some() || sides.b.is_some()).then(|| Sides::new(count(sides.a), count(sides.b)))
 }
 
 /// The result of a score: more wins, the same is a draw.
-pub(crate) fn result_of(score: Sides<u32>) -> MatchResult {
+pub(crate) fn result_of<T: Ord>(score: Sides<T>) -> MatchResult {
     match score.a.cmp(&score.b) {
         std::cmp::Ordering::Greater => MatchResult::AWins,
         std::cmp::Ordering::Less => MatchResult::BWins,
@@ -86,7 +86,7 @@ pub(crate) fn suggest_by_score(part: &Part) -> Option<MatchResult> {
 }
 
 /// The field of a score, pointing out one other than one of `winning_score`.
-pub(crate) fn score_field(winning_score: Option<u32>) -> FieldSpec {
+pub(crate) fn score_field(winning_score: Option<u16>) -> FieldSpec {
     FieldSpec {
         key: SCORE,
         label: Phrase::new("score", "score"),
@@ -131,7 +131,7 @@ mod tests {
         plugins::metrics_calculator::test_utils::{match_id, phase_with},
     };
 
-    fn count(a: u32, b: u32) -> Sides<Option<EnteredValue>> {
+    fn count(a: u16, b: u16) -> Sides<Option<EnteredValue>> {
         Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b)))
     }
 

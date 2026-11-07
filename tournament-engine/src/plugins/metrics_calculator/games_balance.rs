@@ -17,6 +17,7 @@ use crate::{
 };
 
 /// The games a ranking won and lost in all its matches.
+/// Each total saturates at `u32::MAX`.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct GamesBalance {
     pub won: u32,
@@ -135,8 +136,8 @@ impl MetricsCalculator for GamesBalanceCalculator {
                     let mut metric = *phase_data.rankings()[r_id]
                         .metric::<GamesBalance>()
                         .unwrap();
-                    metric.won += won;
-                    metric.lost += lost;
+                    metric.won = metric.won.saturating_add(won);
+                    metric.lost = metric.lost.saturating_add(lost);
                     (*r_id, Box::new(metric) as Metric)
                 })
             })

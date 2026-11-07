@@ -129,6 +129,6 @@ pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
 }
 
 /// A count for each side.
-pub fn count(a: u32, b: u32) -> Sides<Option<EnteredValue>> {
+pub fn count(a: u16, b: u16) -> Sides<Option<EnteredValue>> {
     Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b)))
 }

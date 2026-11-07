@@ -40,7 +40,7 @@ pub struct BestOf {
         min = 1,
         default = None
     )]
-    winning_score: Option<u32>,
+    winning_score: Option<u16>,
 }
 
 impl BestOf {
@@ -106,10 +106,10 @@ impl MatchFormat for BestOf {
     /// The games each side won, and the points it scored in all of them.
     fn tally(&self, _: &PhaseData, r#match: &Match) -> TypeMap {
         let games = r#match.contest().parts();
-        let mut points = Sides::new(0, 0);
+        let mut points = Sides::new(0u32, 0u32);
         for score in games.iter().filter_map(score) {
-            points.a += score.a;
-            points.b += score.b;
+            points.a = points.a.saturating_add(score.a);
+            points.b = points.b.saturating_add(score.b);
         }
         let mut tallies = TypeMap::new();
         tallies.insert(GamesWon(Self::won(games)));
@@ -151,7 +151,7 @@ mod tests {
     };
 
     /// A game `a` to `b`, decided by its score.
-    fn game(a: u32, b: u32) -> Part {
+    fn game(a: u16, b: u16) -> Part {
         let score = Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b)));
         Part::new()
             .with_decision(result_of(Sides::new(a, b)))
@@ -181,6 +181,40 @@ mod tests {
         assert_eq!(
             r#match.tally::<PointsScored>(),
             Some(&PointsScored(Sides::new(61, 53)))
+        );
+    }
+
+    #[test]
+    fn maximum_scores_sum_in_the_wider_tally() {
+        let mut phase = phase(BestOf::new(3));
+        let id = match_id(&phase, 1, &[0], &[1]);
+        phase.report_match(
+            id,
+            Decision::new(MatchResult::AWins),
+            Values::new(),
+            vec![game(u16::MAX, 1), game(u16::MAX, 2)],
+        );
+        assert_eq!(
+            phase.data().matches()[&id].tally::<PointsScored>(),
+            Some(&PointsScored(Sides::new(2 * u32::from(u16::MAX), 3)))
+        );
+    }
+
+    #[test]
+    fn a_points_tally_saturates_at_the_aggregate_limit() {
+        // Just enough maximum scores to cross u32::MAX, not the configured maximum games.
+        let games = 65_538;
+        let mut phase = phase(BestOf::new(games));
+        let id = match_id(&phase, 1, &[0], &[1]);
+        phase.report_match(
+            id,
+            Decision::new(MatchResult::AWins),
+            Values::new(),
+            vec![game(u16::MAX, 1); games as usize],
+        );
+        assert_eq!(
+            phase.data().matches()[&id].tally::<PointsScored>(),
+            Some(&PointsScored(Sides::new(u32::MAX, games)))
         );
     }
 

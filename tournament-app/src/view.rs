@@ -545,9 +545,17 @@ pub(crate) fn top_score(phase: &Phase, r#match: &Match) -> Option<Sides<Option<E
     let contest = r#match.contest();
     score(&template.root, contest).or_else(|| {
         parts_won_of(&template.root, contest).map(|won| {
+            // Derived game totals can exceed the range of an entered count.
+
             Sides::new(
-                Some(EnteredValue::Count(won.a)),
-                Some(EnteredValue::Count(won.b)),
+                Some(
+                    u16::try_from(won.a)
+                        .map_or_else(|_| EnteredValue::Decimal(won.a.into()), EnteredValue::Count),
+                ),
+                Some(
+                    u16::try_from(won.b)
+                        .map_or_else(|_| EnteredValue::Decimal(won.b.into()), EnteredValue::Count),
+                ),
             )
         })
     })

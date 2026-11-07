@@ -18,6 +18,7 @@ use crate::{
 };
 
 /// The points, or goals, a ranking scored and conceded in all its matches.
+/// Each total saturates at `u32::MAX`.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct PointsBalance {
     pub scored: u32,
@@ -25,6 +26,11 @@ pub struct PointsBalance {
 }
 
 impl PointsBalance {
+    fn add(&mut self, scored: u32, conceded: u32) {
+        self.scored = self.scored.saturating_add(scored);
+        self.conceded = self.conceded.saturating_add(conceded);
+    }
+
     /// The points scored minus those conceded.
     pub fn difference(&self) -> i64 {
         i64::from(self.scored) - i64::from(self.conceded)
@@ -137,8 +143,7 @@ impl MetricsCalculator for PointsBalanceCalculator {
                     let mut metric = *phase_data.rankings()[r_id]
                         .metric::<PointsBalance>()
                         .unwrap();
-                    metric.scored += scored;
-                    metric.conceded += conceded;
+                    metric.add(scored, conceded);
                     (*r_id, Box::new(metric) as Metric)
                 })
             })
@@ -252,7 +257,7 @@ mod tests {
         )
     }
 
-    fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], score: (u32, u32)) {
+    fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], score: (u16, u16)) {
         let id = match_id(phase, round, a, b);
         let values = vec![(
             FieldKey::new("score"),
@@ -271,6 +276,18 @@ mod tests {
 
     fn balance(scored: u32, conceded: u32) -> PointsBalance {
         PointsBalance { scored, conceded }
+    }
+
+    #[test]
+    fn points_accumulated_across_matches_saturate_at_the_aggregate_limit() {
+        let mut points = PointsBalance::default();
+        points.add(u32::MAX - 1, u32::MAX - 2);
+        points.add(2, 1);
+        assert_eq!(points, balance(u32::MAX, u32::MAX - 1));
+        assert_eq!(points.difference(), 1);
+        points.add(1, 2);
+        assert_eq!(points, balance(u32::MAX, u32::MAX));
+        assert_eq!(points.difference(), 0);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{entities::details::Sides, type_map::TypeMapValue};
 
 /// The points, or goals, each side of a match scored: in all its parts, if it is played in parts.
-/// A side without a score entered scored none.
+/// A side without a score entered scored none. Built-in formats saturate totals at `u32::MAX`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct PointsScored(pub Sides<u32>);
 

@@ -10,6 +10,12 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Fixed
+
+- Entered counts and winning-score hints are limited to 65535. Point tallies
+  and standings totals saturate at 4294967295 rather than overflowing, so
+  result reporting and replay agree in checked and unchecked builds.
+
 ### Added
 
 - A phase has a match format, chosen right after its format: what is entered

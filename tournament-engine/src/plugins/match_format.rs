@@ -195,7 +195,7 @@ impl ValueKind {
 pub struct Hints {
     /// The count the winner of a part usually has, or more than it, then leading by one or two:
     /// e.g. 21–17, 22–20 or 30–29 in a game to 21.
-    pub winning_score: Option<u32>,
+    pub winning_score: Option<u16>,
 }
 
 /// A reason a part may be decided for other than in the usual way.

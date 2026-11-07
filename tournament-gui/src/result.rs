@@ -221,6 +221,7 @@ fn QuickValues(
             input {
                 r#type: "number",
                 min: "0",
+                max: (kind == ValueKind::Count).then_some("65535"),
                 inputmode: if kind == ValueKind::Count { "numeric" } else { "decimal" },
                 step: if kind == ValueKind::Count { "1" } else { "any" },
                 disabled,
@@ -501,6 +502,7 @@ fn ResultField(
             input {
                 r#type: "number",
                 min: "0",
+                max: (kind == ValueKind::Count).then_some("65535"),
                 inputmode: if kind == ValueKind::Count { "numeric" } else { "decimal" },
                 step: if kind == ValueKind::Count { "1" } else { "any" },
                 aria_label: match &within {

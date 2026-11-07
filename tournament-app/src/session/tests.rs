@@ -1777,12 +1777,12 @@ fn a_result_entered_is_refused_unless_it_reads_as_one_of_a_match() {
     assert!(matches(&session).iter().all(|row| row.result.is_none()));
 }
 
-fn count(count: u32) -> Option<EnteredValue> {
+fn count(count: u16) -> Option<EnteredValue> {
     Some(EnteredValue::Count(count))
 }
 
 /// The scores of `a` to `b`, each pair one.
-fn scores<const N: usize>(scores: [(u32, u32); N]) -> Vec<Sides<Option<EnteredValue>>> {
+fn scores<const N: usize>(scores: [(u16, u16); N]) -> Vec<Sides<Option<EnteredValue>>> {
     scores
         .into_iter()
         .map(|(a, b)| Sides::new(count(a), count(b)))

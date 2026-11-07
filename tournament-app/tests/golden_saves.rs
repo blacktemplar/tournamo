@@ -428,7 +428,7 @@ fn games(session: &mut Session) {
 
 /// Reports up to `matches` of the playable matches, one at a time, with the scores of `played` in
 /// turn, each the scores of a match or of its games.
-fn play_scores(session: &mut Session, played: &[&[(u32, u32)]], matches: usize) {
+fn play_scores(session: &mut Session, played: &[&[(u16, u16)]], matches: usize) {
     for scores in played.iter().cycle().take(matches) {
         let Some(row) = session.playable().into_iter().next() else {
             return;
@@ -440,7 +440,7 @@ fn play_scores(session: &mut Session, played: &[&[(u32, u32)]], matches: usize) 
 }
 
 /// Enters `scores` into `form`: the match's, if it has a field, or else those of its games.
-fn enter_scores(form: &mut ResultForm, scores: &[(u32, u32)]) {
+fn enter_scores(form: &mut ResultForm, scores: &[(u16, u16)]) {
     let scores: Vec<_> = scores
         .iter()
         .map(|&(a, b)| Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b))))

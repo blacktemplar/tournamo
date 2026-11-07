@@ -1,4 +1,4 @@
-//! The games a ranking won and lost, as the match format tallied them.
+//! The games a ranking won and lost, as the match format tallied them, and their difference.
 
 use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,7 @@ use crate::{
         metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
+    score::Score,
     type_map::TypeMapValue,
 };
 
@@ -43,6 +44,19 @@ impl ToCell for GamesBalance {
 #[typetag::serde(name = "tournament_engine::games_balance")]
 impl TypeMapValue for GamesBalance {}
 
+/// The games a ranking won minus those it lost, see [`GamesBalance::difference`].
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub struct GamesDifference(pub i64);
+
+impl ToCell for GamesDifference {
+    fn to_cell(&self) -> Cell {
+        Cell::Signed(Score::new(self.0 as f64))
+    }
+}
+
+#[typetag::serde(name = "tournament_engine::games_difference")]
+impl TypeMapValue for GamesDifference {}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::higher_games_difference",
@@ -53,10 +67,10 @@ impl TypeMapValue for GamesBalance {}
 pub struct HigherGamesDifference;
 
 impl RankingCriterion for HigherGamesDifference {
-    type Metric = GamesBalance;
+    type Metric = GamesDifference;
 
-    fn compare(&self, first: &GamesBalance, second: &GamesBalance) -> Comparison {
-        Comparison::greater_is_better(first.difference().cmp(&second.difference()))
+    fn compare(&self, first: &GamesDifference, second: &GamesDifference) -> Comparison {
+        Comparison::greater_is_better(first.0.cmp(&second.0))
     }
 }
 
@@ -144,6 +158,68 @@ impl MetricsCalculator for GamesBalanceCalculator {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::games_difference",
+    label = "games difference",
+    description = "the games won minus those lost",
+    declare_static = Self::declare_static
+)]
+pub struct GamesDifferenceCalculator;
+
+impl GamesDifferenceCalculator {
+    fn declare_static(declaration: &mut Declaration) {
+        declaration
+            .provide(CalculatesMetric::<GamesDifference>::new())
+            .require::<CalculatesMetric<GamesBalance>>("the games won and lost");
+    }
+
+    /// The difference of every ranking whose balance the calculators before changed.
+    fn changes(phase_data: &PhaseData, old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)> {
+        old_metrics
+            .of::<GamesBalance>()
+            .map(|(r_id, _)| {
+                let balance = phase_data.rankings()[&r_id]
+                    .metric::<GamesBalance>()
+                    .unwrap();
+                (
+                    r_id,
+                    Box::new(GamesDifference(balance.difference())) as Metric,
+                )
+            })
+            .collect()
+    }
+}
+
+#[register]
+impl MetricsCalculator for GamesDifferenceCalculator {
+    fn default_metric_value(&self) -> Metric {
+        Box::new(GamesDifference::default())
+    }
+
+    fn update_after_match_result(
+        &mut self,
+        phase_data: &PhaseData,
+        _: &Match,
+        old_metrics: &OldMetrics,
+    ) -> Vec<(RankingId, Metric)> {
+        Self::changes(phase_data, old_metrics)
+    }
+
+    fn update_after_bye(
+        &mut self,
+        phase_data: &PhaseData,
+        _: &Bye,
+        old_metrics: &OldMetrics,
+    ) -> Vec<(RankingId, Metric)> {
+        Self::changes(phase_data, old_metrics)
+    }
+
+    fn column(&self) -> Option<MetricColumn> {
+        Some(MetricColumn::new::<GamesDifference>("games ±"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(target_arch = "wasm32")]
@@ -167,6 +243,7 @@ mod tests {
             PhaseBuilder::new()
                 .match_format(BestOf::new(5))
                 .add_metric(GamesBalanceCalculator)
+                .add_metric(GamesDifferenceCalculator)
                 .add_players(players),
             matches,
             byes,
@@ -221,6 +298,9 @@ mod tests {
         assert_eq!(metric_of::<GamesBalance>(&phase, 0), balance(5, 3));
         assert_eq!(metric_of::<GamesBalance>(&phase, 1), balance(0, 3));
         assert_eq!(metric_of::<GamesBalance>(&phase, 2), balance(3, 2));
+        assert_eq!(metric_of::<GamesDifference>(&phase, 0), GamesDifference(2));
+        assert_eq!(metric_of::<GamesDifference>(&phase, 1), GamesDifference(-3));
+        assert_eq!(metric_of::<GamesDifference>(&phase, 2), GamesDifference(1));
     }
 
     #[test]
@@ -231,9 +311,17 @@ mod tests {
 
         for player in [0, 1] {
             assert_eq!(metric_of::<GamesBalance>(&phase, player), balance(3, 1));
+            assert_eq!(
+                metric_of::<GamesDifference>(&phase, player),
+                GamesDifference(2)
+            );
         }
         for player in [2, 3] {
             assert_eq!(metric_of::<GamesBalance>(&phase, player), balance(1, 3));
+            assert_eq!(
+                metric_of::<GamesDifference>(&phase, player),
+                GamesDifference(-2)
+            );
         }
     }
 
@@ -242,14 +330,16 @@ mod tests {
         let phase = phase(1, Vec::new(), vec![(1, 0)]);
 
         assert_eq!(metric_of::<GamesBalance>(&phase, 0), balance(0, 0));
+        assert_eq!(metric_of::<GamesDifference>(&phase, 0), GamesDifference(0));
     }
 
     #[test]
     fn the_difference_and_the_games_won_rank_differently() {
         let (more_won, better_difference) = (balance(6, 4), balance(4, 0));
+        let difference = |balance: GamesBalance| GamesDifference(balance.difference());
 
         assert_eq!(
-            HigherGamesDifference.compare(&better_difference, &more_won),
+            HigherGamesDifference.compare(&difference(better_difference), &difference(more_won)),
             Comparison::Better
         );
         assert_eq!(
@@ -263,20 +353,35 @@ mod tests {
         assert_eq!(balance(5, 3).to_cell().to_string(), "5:3");
     }
 
+    #[test]
+    fn the_difference_shows_its_sign() {
+        assert_eq!(
+            GamesDifference(-2).to_cell(),
+            Cell::Signed(Score::new(-2.0))
+        );
+    }
+
     /// The tags are part of every log and snapshot written, see `transition_log_serialization.rs`.
     #[test]
-    fn the_calculator_and_its_metric_are_serialized_under_their_tags() {
-        let calculator: Box<dyn MetricsCalculator> = Box::new(GamesBalanceCalculator);
+    fn the_calculators_and_their_metrics_are_serialized_under_their_tags() {
+        let calculators: Vec<Box<dyn MetricsCalculator>> = vec![
+            Box::new(GamesBalanceCalculator),
+            Box::new(GamesDifferenceCalculator),
+        ];
         let mut metrics = TypeMap::new();
         metrics.insert(GamesBalance::default());
+        metrics.insert(GamesDifference::default());
 
-        assert_eq!(
-            serde_json::to_value(&calculator).unwrap()["type"],
-            "tournament_engine::games_balance"
-        );
-        assert_eq!(
-            serde_json::to_value(&metrics).unwrap()[0]["type"],
-            "tournament_engine::games_balance"
-        );
+        let tags = [
+            "tournament_engine::games_balance",
+            "tournament_engine::games_difference",
+        ];
+        for (index, tag) in tags.into_iter().enumerate() {
+            assert_eq!(
+                serde_json::to_value(&calculators).unwrap()[index]["type"],
+                tag
+            );
+            assert_eq!(serde_json::to_value(&metrics).unwrap()[index]["type"], tag);
+        }
     }
 }

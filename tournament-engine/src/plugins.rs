@@ -281,8 +281,9 @@ mod tests {
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
             match_format::{BestOf, Scored, WinnerOnly},
             metrics_calculator::{
-                GamesBalanceCalculator, HigherPointsDifference, Metric, OldMetrics, PointsBalance,
-                PointsBalanceCalculator, PointsDifference,
+                GamesBalance, GamesBalanceCalculator, GamesDifference, HigherGamesDifference,
+                HigherPointsDifference, Metric, OldMetrics, PointsBalance, PointsBalanceCalculator,
+                PointsDifference,
                 buchholz::{
                     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
                     MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
@@ -578,6 +579,25 @@ mod tests {
         let plugins = draft.build().unwrap();
 
         assert_eq!(metrics(&plugins), metrics![PointsBalance, PointsDifference]);
+        assert_eq!(check(&plugins), Ok(()));
+    }
+
+    /// The difference is calculated from the games won and lost, so ranking by it adds both
+    /// calculators, in running order.
+    #[test]
+    fn ranking_by_the_games_difference_adds_its_calculators() {
+        let mut draft = Competition::default()
+            .phase_draft()
+            .with("format", plugin::<RoundRobin>())
+            .and_then(|draft| draft.with("match_format", plugin::<BestOf>()))
+            .and_then(|draft| draft.with("ranking", vec![plugin::<HigherGamesDifference>()]))
+            .and_then(|draft| draft.with("metrics", Vec::<PluginConfig>::new()))
+            .and_then(Draft::with_defaults)
+            .unwrap();
+        draft.add_implied();
+        let plugins = draft.build().unwrap();
+
+        assert_eq!(metrics(&plugins), metrics![GamesBalance, GamesDifference]);
         assert_eq!(check(&plugins), Ok(()));
     }
 

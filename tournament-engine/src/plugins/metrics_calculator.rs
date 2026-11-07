@@ -30,7 +30,8 @@ pub use buchholz::{
     MoreBuchholzOfBuchholz, MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
 };
 pub use games_balance::{
-    GamesBalance, GamesBalanceCalculator, HigherGamesDifference, MoreGamesWon,
+    GamesBalance, GamesBalanceCalculator, GamesDifference, GamesDifferenceCalculator,
+    HigherGamesDifference, MoreGamesWon,
 };
 pub use points::{MorePoints, Points, PointsCalculator};
 pub use points_balance::{

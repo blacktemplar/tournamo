@@ -62,7 +62,8 @@ struct Entry {
     values: Values,
     /// What was typed for a side of a field and not taken, which leaves the side without a value.
     rejected: Vec<Rejected>,
-    /// One for each part the level can have.
+    /// What was entered for its parts, from the first on: nothing for a part after them. Made as
+    /// they are entered, since a level may take many parts.
     parts: Vec<Entry>,
 }
 
@@ -77,30 +78,25 @@ struct Rejected {
 }
 
 impl Entry {
-    /// An entry with nothing entered for a part at `level`, and for each of its parts.
-    fn empty(level: &Level) -> Self {
-        let parts = match &level.parts {
-            Parts::None => Vec::new(),
-            Parts::Same { level, max, .. } => (0..*max).map(|_| Self::empty(level)).collect(),
-            Parts::Each(levels) => levels.iter().map(Self::empty).collect(),
-        };
-        Self {
-            parts,
-            ..Self::default()
-        }
-    }
-
     /// The entry of `part`, reported at `level` and read by `format`: its values, reason and
     /// parts, and its result chosen where the values and parts do not suggest it.
     fn reported(format: &dyn MatchFormat, level: &Level, part: &Part) -> Self {
-        let mut entry = Self::empty(level);
-        for (index, reported) in part.parts().iter().enumerate() {
-            let level = level
-                .level_of_part(index)
-                .expect("a reported part fits the template");
-            entry.parts[index] = Self::reported(format, level, reported);
-        }
-        entry.values = part.values().clone();
+        let parts = part
+            .parts()
+            .iter()
+            .enumerate()
+            .map(|(index, reported)| {
+                let level = level
+                    .level_of_part(index)
+                    .expect("a reported part fits the template");
+                Self::reported(format, level, reported)
+            })
+            .collect();
+        let mut entry = Self {
+            values: part.values().clone(),
+            parts,
+            ..Self::default()
+        };
         if let Some(decision) = part.decision() {
             entry.reason = decision.reason().cloned();
             let result = decision.result();
@@ -130,13 +126,26 @@ impl Entry {
         self.parts.iter_mut().for_each(Self::follow_suggestions);
     }
 
-    fn at(&mut self, path: &[usize]) -> &mut Self {
-        path.iter().fold(self, |entry, &index| {
-            entry
-                .parts
-                .get_mut(index)
-                .expect("a path of a part of the view")
-        })
+    /// The entry of the part at `path` of this part, which is at `level`, made if there is none
+    /// yet, with those of the parts before it.
+    fn at(&mut self, level: &Level, path: &[usize]) -> &mut Self {
+        let (mut entry, mut level) = (self, level);
+        for &index in path {
+            level = level
+                .level_of_part(index)
+                .expect("a path of a part of the view");
+            if entry.parts.len() <= index {
+                entry.parts.resize_with(index + 1, Self::default);
+            }
+            entry = &mut entry.parts[index];
+        }
+        entry
+    }
+
+    /// The entry of the part at `path` of this part, if one was made.
+    fn get(&self, path: &[usize]) -> Option<&Self> {
+        path.iter()
+            .try_fold(self, |entry, &index| entry.parts.get(index))
     }
 }
 
@@ -230,12 +239,11 @@ impl ResultForm {
     /// A form with nothing entered for the match `match_id`, whose result looks like `template`,
     /// entered by `format`.
     pub(crate) fn new(match_id: MatchId, format: Box<dyn MatchFormat>, template: Template) -> Self {
-        let root = Entry::empty(&template.root);
         Self {
             match_id,
             format,
             template,
-            root,
+            root: Entry::default(),
         }
     }
 
@@ -279,7 +287,7 @@ impl ResultForm {
         team: Team,
         value: Option<EnteredValue>,
     ) {
-        let entry = self.root.at(path);
+        let entry = self.root.at(&self.template.root, path);
         entry
             .rejected
             .retain(|rejected| rejected.field != *field || rejected.team != team);
@@ -321,12 +329,15 @@ impl ResultForm {
             Ok(value) => self.set_value(path, field, team, value),
             Err(problem) => {
                 self.set_value(path, field, team, None);
-                self.root.at(path).rejected.push(Rejected {
-                    field: field.clone(),
-                    team,
-                    entered: entered.to_owned(),
-                    problem,
-                });
+                self.root
+                    .at(&self.template.root, path)
+                    .rejected
+                    .push(Rejected {
+                        field: field.clone(),
+                        team,
+                        entered: entered.to_owned(),
+                        problem,
+                    });
             }
         }
     }
@@ -348,7 +359,9 @@ impl ResultForm {
         else {
             return false;
         };
-        let entry = self.root.at(path);
+        let Some(entry) = self.root.get(path) else {
+            return false;
+        };
         let values = entry
             .values
             .iter()
@@ -387,13 +400,13 @@ impl ResultForm {
     pub fn enter_scores(&mut self, scores: &[Sides<Option<EnteredValue>>]) -> bool {
         let root = &self.template.root;
         // where each score goes: the path of its part and its field, none for a part without one;
-        // of every part, not only those the view shows yet
+        // of every part there is a score for, not only those the view shows yet
         let places: Vec<Option<(Vec<usize>, &FieldSpec)>> = match root.fields.first() {
             Some(field) => vec![Some((Vec::new(), field))],
-            None => (0..self.root.parts.len())
-                .map(|index| {
-                    let level = root.level_of_part(index).expect("an entry for each part");
-                    Some((vec![index], level.fields.first()?))
+            None => (0..scores.len())
+                .map_while(|index| {
+                    let level = root.level_of_part(index)?;
+                    Some(level.fields.first().map(|field| (vec![index], field)))
                 })
                 .collect(),
         };
@@ -486,7 +499,7 @@ impl ResultForm {
     /// # Panics
     /// Panics if `path` is no path of a part of the [view](Self::view).
     pub fn choose(&mut self, path: &[usize], result: Option<MatchResult>) {
-        self.root.at(path).chosen = result;
+        self.root.at(&self.template.root, path).chosen = result;
     }
 
     /// Whether a result was chosen by hand for any part.
@@ -504,7 +517,7 @@ impl ResultForm {
     /// # Panics
     /// Panics if `path` is no path of a part of the [view](Self::view).
     pub fn set_reason(&mut self, path: &[usize], reason: Option<ResultReason>) {
-        self.root.at(path).reason = reason;
+        self.root.at(&self.template.root, path).reason = reason;
     }
 
     /// The result of the match, as the [view](Self::view) shows it: `None` while neither chosen
@@ -549,21 +562,28 @@ impl ResultForm {
 
     /// The view of the part `entry` makes up at `level`, at `path`, with that part.
     fn part_view(&self, level: &Level, entry: &Entry, path: Vec<usize>) -> (PartView, Part) {
-        let mut children = Vec::new();
-        let mut views = Vec::new();
-        for (index, child) in entry.parts.iter().enumerate() {
-            let child_level = level.level_of_part(index).expect("an entry for each part");
-            let mut child_path = path.clone();
-            child_path.push(index);
-            let (view, part) = self.part_view(child_level, child, child_path);
-            views.push(view);
-            children.push(part);
-        }
         let entered = entry
             .parts
             .iter()
             .rposition(|part| !part.is_empty())
             .map_or(0, |last| last + 1);
+        let empty = Entry::default();
+        // the view and the part of the part at `index`, also if nothing was entered for it
+        let child_at = |index: usize| {
+            let child_level = level.level_of_part(index).expect("a part of the template");
+            let mut child_path = path.clone();
+            child_path.push(index);
+            let child = entry.parts.get(index).unwrap_or(&empty);
+            self.part_view(child_level, child, child_path)
+        };
+        // the parts shown, the only ones built, as a level may take many: of parts at the same
+        // level, the fewest that may decide the part and those up to the last one entered
+        let shown = match &level.parts {
+            Parts::None => 0,
+            Parts::Same { min, max, .. } => entered.max(*min as usize).min(*max as usize),
+            Parts::Each(levels) => levels.len(),
+        };
+        let (mut views, mut children): (Vec<_>, Vec<_>) = (0..shown).map(&child_at).unzip();
         children.truncate(entered);
         let mut part = Part::new();
         for (key, values) in &entry.values {
@@ -590,15 +610,13 @@ impl ResultForm {
         let suggested = self.format.suggest(level, &part);
         let parts_won = view::parts_won_of(level, &part);
         let result = entry.chosen.or(suggested);
-        if let Parts::Same { min, .. } = level.parts {
-            let mut shown = entered.max(min as usize).min(views.len());
-            if result.is_none()
-                && shown < views.len()
-                && views[..shown].iter().all(|view| view.result.is_some())
-            {
-                shown += 1;
-            }
-            views.truncate(shown);
+        // and one more while each of them is decided but the part is not
+        if let Parts::Same { max, .. } = level.parts
+            && result.is_none()
+            && shown < max as usize
+            && views.iter().all(|view| view.result.is_some())
+        {
+            views.push(child_at(shown).0);
         }
         if let (Some(chosen), Some(suggested)) = (entry.chosen, suggested)
             && chosen != suggested

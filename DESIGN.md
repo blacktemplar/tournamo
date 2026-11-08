@@ -616,8 +616,10 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   those, the parts up to the last one entered, and one more while each shown is
   decided and the match is not, in the row and the dialog alike. It never hides
   a part entered, and warns of parts entered after the match was decided
-  rather than refusing them. Values commit on input, so the next game is there
-  before Tab moves on. Rejected: every part at once (a best of five shows five
+  rather than refusing them. It makes entries only for the parts entered and
+  views only for those it shows, so a large `max` costs nothing before it is
+  reached. Values commit on input, so the next game is there before Tab moves
+  on. Rejected: every part at once (a best of five shows five
   boxes for a 3–0, as Challonge does), one part at a time behind an *Add game*
   button (a tap per game, and start.gg's fixed best of three makes adding
   games by hand a chore), and moving the focus to *Report* once decided as

@@ -631,6 +631,25 @@ fn a_match_with_a_field_of_its_own_and_parts_is_not_entered_in_a_row() {
     assert_eq!(form_of(r#match).quick_entry(), None);
 }
 
+/// A form holds what was entered, not an entry for each part a match may take, which a match
+/// format may make many.
+#[test]
+fn a_form_makes_entries_only_as_far_as_parts_are_entered() {
+    let mut form = form_of(Level {
+        parts: Parts::Same {
+            level: Box::new(scored("game")),
+            min: 2,
+            max: 1000,
+        },
+        ..Level::new(Phrase::new("match", "match"))
+    });
+    assert!(form.root.parts.is_empty());
+
+    score(&mut form, &[2], 21, 17);
+
+    assert_eq!(form.root.parts.len(), 3);
+}
+
 #[test]
 fn a_finished_match_shows_its_result_as_reported() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));

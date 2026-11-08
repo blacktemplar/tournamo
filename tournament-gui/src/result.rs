@@ -236,9 +236,11 @@ fn QuickValues(
         rsx! {
             input {
                 r#type: "number",
-                min: "0",
+                // a decimal may be negative
+                min: (kind == ValueKind::Count).then_some("0"),
                 max: (kind == ValueKind::Count).then_some("65535"),
-                inputmode: if kind == ValueKind::Count { "numeric" } else { "decimal" },
+                // a minus as well for a decimal, where the keyboard of decimals has none
+                inputmode: if kind == ValueKind::Count { "numeric" } else { "text" },
                 step: if kind == ValueKind::Count { "1" } else { "any" },
                 disabled,
                 id: value_id(&format!("quick-value-{number}"), &quick.path, &field.key, team),
@@ -521,9 +523,11 @@ fn ResultField(
         rsx! {
             input {
                 r#type: "number",
-                min: "0",
+                // a decimal may be negative
+                min: (kind == ValueKind::Count).then_some("0"),
                 max: (kind == ValueKind::Count).then_some("65535"),
-                inputmode: if kind == ValueKind::Count { "numeric" } else { "decimal" },
+                // a minus as well for a decimal, where the keyboard of decimals has none
+                inputmode: if kind == ValueKind::Count { "numeric" } else { "text" },
                 step: if kind == ValueKind::Count { "1" } else { "any" },
                 aria_label: match &within {
                     Some(part) => {

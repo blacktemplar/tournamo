@@ -27,8 +27,8 @@ use tournament_app::{
     view,
 };
 use tournament_engine::{
-    Annotated as _, Competition, EnteredValue, Entrant, EntrantId, Match, MatchId, MatchResult,
-    Phase, PhaseData, PhasePlugins, RankingId, Sides, TypeMap,
+    Annotated as _, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseData,
+    PhasePlugins, RankingId, Sides, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
@@ -527,10 +527,7 @@ impl Session {
         let scores = scores
             .iter()
             .map(|reported| match reported {
-                Reported::Score(a, b) => Ok(Sides::new(
-                    Some(EnteredValue::Count(*a)),
-                    Some(EnteredValue::Count(*b)),
-                )),
+                Reported::Score(score) => Ok(Sides::new(Some(score.a), Some(score.b))),
                 Reported::Result(_) => Err(Error::ResultBeforeScores),
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -1268,17 +1265,23 @@ mod tests {
     }
 
     #[test]
-    fn scores_go_before_the_result_and_no_more_than_the_games() {
+    fn scores_go_before_the_result_and_fit_the_games() {
         let mut session = best_of_three();
 
         assert!(matches!(
             execute(&mut session, "report 1 a 21-17"),
             Err(Error::ResultBeforeScores)
         ));
-        assert!(matches!(
-            execute(&mut session, "report 1 1-0 1-0 1-0 1-0"),
-            Err(Error::ScoresNotTaken(_))
-        ));
+        // more scores than games, and a decimal in a game scored in counts
+        for scores in ["1-0 1-0 1-0 1-0", "21.5-17 21-15"] {
+            assert!(
+                matches!(
+                    execute(&mut session, &format!("report 1 {scores}")),
+                    Err(Error::ScoresNotTaken(_))
+                ),
+                "{scores}"
+            );
+        }
     }
 
     /// Wins, draws, losses and the matches they add up to are four criteria of a single metric, so

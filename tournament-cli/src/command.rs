@@ -7,6 +7,8 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use thiserror::Error;
+use tournament_app::result_form::read_score;
+use tournament_engine::{EnteredValue, Sides};
 
 /// A single command typed at the prompt.
 ///
@@ -56,8 +58,8 @@ pub enum Command {
         /// The number of the match, as listed by `matches`
         number: NonZeroUsize,
         /// The result, `a`, `b` or `draw` (in any case, so that the sides can be named the way
-        /// `matches` shows them); or the scores, e.g. `21-17 19-21 21-15`, followed by the result
-        /// only where it is not the one they give
+        /// `matches` shows them); or the scores, e.g. `21-17 19-21 21-15` (or `21:17`, or `21–17`
+        /// as `matches` shows them), followed by the result only where it is not the one they give
         #[arg(required = true, num_args = 1..)]
         entry: Vec<Reported>,
     },
@@ -88,9 +90,9 @@ pub enum Command {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reported {
     Result(ReportedResult),
-    /// The score of each side, the first team's first: of the match, or of its next part, e.g. a
-    /// game.
-    Score(u16, u16),
+    /// The score of each side, the first team's first, as [`read_score`] reads it: of the match,
+    /// or of its next part, e.g. a game.
+    Score(Sides<EnteredValue>),
 }
 
 impl FromStr for Reported {
@@ -100,11 +102,9 @@ impl FromStr for Reported {
         if let Ok(result) = ReportedResult::from_str(text, true) {
             return Ok(Self::Result(result));
         }
-        text.split_once(['-', ':'])
-            .and_then(|(a, b)| Some(Self::Score(a.parse().ok()?, b.parse().ok()?)))
-            .ok_or_else(|| {
-                format!("“{text}” is no result (a, b or draw) and no score (e.g. 21-17)")
-            })
+        read_score(text).map(Self::Score).ok_or_else(|| {
+            format!("“{text}” is no result (a, b or draw) and no score (e.g. 21-17)")
+        })
     }
 }
 
@@ -165,10 +165,16 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use clap::{CommandFactory, error::ErrorKind};
+    use tournament_engine::Score;
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
+
+    /// The score of `a` to `b`.
+    fn counts(a: u16, b: u16) -> Reported {
+        Reported::Score(Sides::new(EnteredValue::Count(a), EnteredValue::Count(b)))
+    }
 
     #[track_caller]
     fn parse(line: &str) -> Command {
@@ -257,27 +263,40 @@ mod tests {
 
     #[test]
     fn score_counts_fit_in_u16() {
-        assert_eq!(
-            Reported::from_str("65535-0").unwrap(),
-            Reported::Score(u16::MAX, 0)
-        );
+        assert_eq!(Reported::from_str("65535-0").unwrap(), counts(u16::MAX, 0));
         assert!(Reported::from_str("65536-0").is_err());
         assert!(Reported::from_str("4294967295-0").is_err());
     }
 
+    /// An en dash joins the numbers of a score as `matches` shows them, so that one shown can be
+    /// pasted.
     #[test]
-    fn scores_are_reported_with_a_hyphen_or_a_colon_and_a_result_after_them() {
+    fn scores_are_reported_with_a_hyphen_a_colon_or_an_en_dash_and_a_result_after_them() {
         assert_eq!(
-            parse("report 2 21-17 19:21 a"),
+            parse("report 2 21-17 19:21 21–15 a"),
             Command::Report {
                 number: NonZeroUsize::new(2).unwrap(),
                 entry: vec![
-                    Reported::Score(21, 17),
-                    Reported::Score(19, 21),
+                    counts(21, 17),
+                    counts(19, 21),
+                    counts(21, 15),
                     Reported::Result(ReportedResult::A),
                 ]
             }
         );
+    }
+
+    #[test]
+    fn a_score_may_be_a_decimal_with_a_point_or_a_comma() {
+        let decimal = EnteredValue::Decimal(Score::new(9.5));
+
+        for score in ["9.5-10", "9,5–10"] {
+            assert_eq!(
+                Reported::from_str(score).unwrap(),
+                Reported::Score(Sides::new(decimal, EnteredValue::Count(10))),
+                "{score}"
+            );
+        }
     }
 
     #[test]

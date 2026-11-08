@@ -49,7 +49,7 @@ use crate::{
     file::{self, File},
     form::PhaseForm,
     people::{People, Person},
-    result_form::{ResultForm, ResultView},
+    result_form::{ResultForm, ResultView, read_score},
     storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
     view::{
         self, Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow,
@@ -1017,9 +1017,8 @@ impl Session {
     ///   end are read as a part of the name as long as a name contains them, e.g. `"Malcolm X"` is
     ///   Malcolm X's win, and `"Malcolm X X"` a draw of his match.
     ///
-    /// A score is the numbers of both sides joined by a `-`, a `:` or an en dash, e.g. `21-17`,
-    /// each a count or a decimal with a point or a comma, e.g. `9.5-10`: that of the match, or
-    /// else one of each of its parts in order, e.g. its games, as [`ResultForm::enter_scores`]
+    /// A score is one [`read_score`] reads, e.g. `21-17`, `21–17` or `9.5-10`: that of the match,
+    /// or else one of each of its parts in order, e.g. its games, as [`ResultForm::enter_scores`]
     /// enters them. The result entered must be the one they say, if they say one: a result
     /// against them is entered in a [`ResultForm`].
     ///
@@ -1591,29 +1590,6 @@ fn read_result(text: &str, separated: bool) -> Option<MatchResult> {
         "1" if separated => Some(MatchResult::AWins),
         "2" if separated => Some(MatchResult::BWins),
         "X" | "x" => Some(MatchResult::Draw),
-        _ => None,
-    }
-}
-
-/// The score `word` says, the numbers of both sides joined by a `-`, a `:` or an en dash, e.g.
-/// `21-17` or `9.5-10`: each a count, or a decimal with a point or a comma.
-fn read_score(word: &str) -> Option<Sides<EnteredValue>> {
-    let (a, b) = word.split_once(['-', ':', '–'])?;
-    Some(Sides::new(read_number(a)?, read_number(b)?))
-}
-
-/// The number `text` is: digits, a count, or digits with a point or a comma between them, a
-/// decimal.
-fn read_number(text: &str) -> Option<EnteredValue> {
-    let digits = |text: &str| !text.is_empty() && text.chars().all(|char| char.is_ascii_digit());
-    match text.split_once(['.', ',']) {
-        None if digits(text) => text.parse().ok().map(EnteredValue::Count),
-        Some((whole, fraction)) if digits(whole) && digits(fraction) => {
-            format!("{whole}.{fraction}")
-                .parse()
-                .ok()
-                .map(EnteredValue::Decimal)
-        }
         _ => None,
     }
 }

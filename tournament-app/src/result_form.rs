@@ -656,6 +656,31 @@ impl ResultForm {
     }
 }
 
+/// The score `word` says: the numbers of both sides, side A's first, joined by a `-`, a `:` or an
+/// en dash, as [`Translator::scores`](crate::i18n::Translator::scores) joins them, e.g. `21-17`,
+/// `21:17` or `21–17`. Each is digits, a count (so at most 65535), or digits with a point or a
+/// comma between them, a decimal, e.g. `9.5-10` or `9,5–10`.
+pub fn read_score(word: &str) -> Option<Sides<EnteredValue>> {
+    let (a, b) = word.split_once(['-', ':', '–'])?;
+    Some(Sides::new(read_number(a)?, read_number(b)?))
+}
+
+/// The number `text` is: digits, a count, or digits with a point or a comma between them, a
+/// decimal.
+fn read_number(text: &str) -> Option<EnteredValue> {
+    let digits = |text: &str| !text.is_empty() && text.chars().all(|char| char.is_ascii_digit());
+    match text.split_once(['.', ',']) {
+        None if digits(text) => text.parse().ok().map(EnteredValue::Count),
+        Some((whole, fraction)) if digits(whole) && digits(fraction) => {
+            format!("{whole}.{fraction}")
+                .parse()
+                .ok()
+                .map(EnteredValue::Decimal)
+        }
+        _ => None,
+    }
+}
+
 /// `value` as a value of `kind`: a count as a decimal of its number, a decimal as a count only if
 /// it is a whole number.
 fn of_kind(value: EnteredValue, kind: ValueKind) -> Option<EnteredValue> {

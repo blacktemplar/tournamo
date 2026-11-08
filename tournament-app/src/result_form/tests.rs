@@ -784,3 +784,20 @@ fn the_score_of_a_game_is_completed_in_its_game() {
     assert_eq!(games[0].fields[0].values, Sides::new(None, None));
     assert_eq!(games[1].fields[0].values, Sides::new(count(11), count(4)));
 }
+
+/// A score shown can be typed or pasted in again, in every language.
+#[test]
+fn a_score_is_read_as_it_is_written() {
+    let decimal = EnteredValue::Decimal(Score::new(9.5));
+    for language in [Language::English, Language::German] {
+        let translator = Translator::new(language, &[]);
+        for score in [
+            Sides::new(EnteredValue::Count(21), EnteredValue::Count(17)),
+            Sides::new(decimal, EnteredValue::Count(10)),
+        ] {
+            let written = translator.scores(&[Sides::new(Some(score.a), Some(score.b))]);
+
+            assert_eq!(read_score(&written), Some(score), "{written}");
+        }
+    }
+}

@@ -60,8 +60,9 @@ a file whose `"format"` changes is migrated, not refused.
   1, ½ and 0, which stay for matches entered by who won; a win is bold as well
   as tinted. Screen readers say the score after how the match ended (won,
   3–2). A click on such a match opens what was reported for it.
-- The command line reports scores, e.g. `report 3 21-17 19-21 21-15`, and
-  lists them with each finished match, a best of with its games won.
+- The command line reports scores, e.g. `report 3 21-17 19-21 21-15` (or
+  `21–17`, as copied from its list of matches), and lists them with each
+  finished match, a best of with its games won.
 - In the browser, scores are typed in as well: after the number of the match,
   the left side's first (`3 21-17 19-21 21-15`), or after part of the winner's
   name, the winner's first (`ali 21-17`). A result typed against the scores is

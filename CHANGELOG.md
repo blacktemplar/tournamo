@@ -23,7 +23,8 @@ a file whose `"format"` changes is migrated, not refused.
 
 - A phase has a match format, chosen right after its format: what is entered
   for its matches, who won ("winner only", what every phase entered before),
-  the score of each side, or the games of a best of, each with its score.
+  the score of each side, or the games of a best of (up to 99), each with its
+  score.
 - The points (or goals) scored and conceded, and their difference (+5), as
   metrics of the standings, and ranking by the difference, which shows it, or
   by the points scored.

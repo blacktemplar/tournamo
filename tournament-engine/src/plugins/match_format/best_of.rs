@@ -30,7 +30,9 @@ use crate::{
     declare_static = Self::declare_static
 )]
 pub struct BestOf {
-    #[plugin(label = "games", min = 1, default = 3)]
+    // a result is entered from the fewest games that may decide the match, more than half of
+    // them, so far more than are played (a snooker final has 35 frames) would hold the page up
+    #[plugin(label = "games", min = 1, max = 99, default = 3)]
     games: u32,
     #[serde(default)]
     #[plugin(
@@ -140,6 +142,7 @@ impl MatchFormat for BestOf {
 
 #[cfg(test)]
 mod tests {
+    use plugin_factory::{config::ConfigError, draft::Draft};
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -207,7 +210,8 @@ mod tests {
 
     #[test]
     fn a_points_tally_saturates_at_the_aggregate_limit() {
-        // Just enough maximum scores to cross u32::MAX, not the configured maximum games.
+        // Just enough maximum scores to cross u32::MAX: far more games than a best of is
+        // configured with, as one loaded from a file may have.
         let games = 65_538;
         let mut phase = phase(BestOf::new(games));
         let id = match_id(&phase, 1, &[0], &[1]);
@@ -322,6 +326,14 @@ mod tests {
             template.root.parts,
             Parts::Same { min: 3, max: 5, .. }
         ));
+    }
+
+    #[test]
+    fn a_best_of_takes_at_most_99_games() {
+        let games = |games: u32| Draft::<BestOf>::new(|_| {}).with("games", games);
+
+        assert!(games(99).is_ok());
+        assert!(matches!(games(100), Err(ConfigError::OutOfRange { .. })));
     }
 
     #[test]

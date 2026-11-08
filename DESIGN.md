@@ -607,6 +607,10 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   when its lead in games won exceeds the games still undecided. Otherwise all
   configured games are played, and equal win totals suggest a draw (subject to
   the phase format allowing match draws).
+- **A best of takes at most 99 games**: its form shows the fewest games that
+  may decide the match from the start, more than half of them, so a mistyped
+  number of games would hold the page up. The longest played, a snooker final,
+  has 35 frames.
 - **Parts appear as the match needs them**: `Parts::Same` says the fewest parts
   that may decide a part (`min`, two of a best of three), and the form shows
   those, the parts up to the last one entered, and one more while each shown is

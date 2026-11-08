@@ -489,7 +489,8 @@ async fn the_details_of_a_finished_match_show_its_games() {
 }
 
 /// The cross table shows the games each side won of a best of, from the row's side, a win in
-/// bold, and a click on a match opens its details.
+/// bold; a screen reader says them after how the match ended. A click on a match opens its
+/// details.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_cross_table_shows_the_games_won_and_opens_the_details() {
@@ -498,10 +499,17 @@ async fn the_cross_table_shows_the_games_won_and_opens_the_details() {
         gui.enter_result("ali 21-17 19-21 21-15").await?;
         gui.click("Cross table").await?;
 
-        gui.expect_cross_table_row(1, &["", "2–1\nwon", "1"])
+        gui.expect_cross_table_row(1, &["", "2–1\nwon, 2–1", "1"])
             .await?;
-        gui.expect_cross_table_row(2, &["1–2\nlost", "", "0"])
+        gui.expect_cross_table_row(2, &["1–2\nlost, 1–2", "", "0"])
             .await?;
+        gui.expect_cross_table_row_said(1, &["", "won, 2–1 Details of the result of match 1", "1"])
+            .await?;
+        gui.expect_cross_table_row_said(
+            2,
+            &["lost, 1–2 Details of the result of match 1", "", "0"],
+        )
+        .await?;
         let win = gui.page.style_of(".outcome.win", "font-weight").await?;
         let loss = gui.page.style_of(".outcome.loss", "font-weight").await?;
         assert!(win > loss, "{win} {loss}");

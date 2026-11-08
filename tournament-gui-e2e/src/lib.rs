@@ -1478,6 +1478,26 @@ impl Gui {
             .await
     }
 
+    /// Waits until a screen reader says `cells` of the cells of the row of the cross table numbered
+    /// `row`, from 1, as [`Page::expect_accessible_names`] has them, e.g. `"won"`, or `"won, 2–1
+    /// Details of the result of match 1"` with the button opening its details, `""` for a match
+    /// without a result and against itself.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with what it says instead.
+    pub async fn expect_cross_table_row_said(
+        &self,
+        row: usize,
+        cells: &[&str],
+    ) -> WebDriverResult<()> {
+        self.page
+            .expect_accessible_names(
+                By::Css(format!("#cross-table-grid tbody tr:nth-child({row}) td")),
+                cells,
+            )
+            .await
+    }
+
     /// Waits until the numbers of the bracket's pairings are `numbers`, in the order of the
     /// bracket, scheduled or not, e.g. `"3"`.
     ///

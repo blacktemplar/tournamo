@@ -1189,11 +1189,12 @@ pairing (every slot grows); the bracket in half the width.
   place: a row and column per team, each cell the matches between them from the
   row's side, each at the highest level of its result (`CrossMatch::score`: its
   own score, else the parts won, so `3–2` for a best of five rather than its
-  games), or else `1`, `½`, `0`; said as won/drawn/lost. A click on a match
-  with more than who won opens its details, as in the list. `Session::cross_table`
-  offers it where every match is between two single rankings and the format
-  plays no bracket (round robin, random rounds; not Monster DYP or knockouts),
-  so no table of formats beyond the bracket's.
+  games), or else `1`, `½`, `0`; said as won/drawn/lost, followed by the score
+  if it shows one (`won, 3–2`), as an overridden result need not follow from
+  the score. A click on a match with more than who won opens its details, as in
+  the list. `Session::cross_table` offers it where every match is between two
+  single rankings and the format plays no bracket (round robin, random rounds;
+  not Monster DYP or knockouts), so no table of formats beyond the bracket's.
 - **Rows by rank**, as published cross tables are; columns headed by row
   numbers (names would make 20 columns too wide), names said to screen readers
   and kept in sight while scrolling.

@@ -30,8 +30,9 @@ use tempfile::TempDir;
 pub use thirtyfour;
 use thirtyfour::{
     BrowserLogEntry, By, CapabilitiesHelper, ChromiumLikeCapabilities, DesiredCapabilities,
-    LoggingPrefsLogLevel, WebDriver, WindowHandle,
+    ElementId, LoggingPrefsLogLevel, WebDriver, WebElement, WindowHandle,
     bidi::events::UserPromptOpened,
+    common::command::{Command, ExtensionCommand},
     error::{WebDriverError, WebDriverErrorInner, WebDriverResult},
     extensions::query::{ElementPollerWithTimeout, ElementQuery, ElementQueryable},
     manager::BrowserKind,
@@ -385,6 +386,26 @@ fn sha256(text: &str) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+/// WebDriver's Get Computed Label of an element: its accessible name, which thirtyfour has no
+/// method for.
+#[derive(Debug)]
+struct ComputedLabel(ElementId);
+
+impl ExtensionCommand for ComputedLabel {
+    fn parameters_json(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    // the method of the crate http, which thirtyfour takes and reqwest re-exports
+    fn method(&self) -> reqwest::Method {
+        reqwest::Method::GET
+    }
+
+    fn endpoint(&self) -> Arc<str> {
+        format!("/element/{}/computedlabel", self.0).into()
+    }
 }
 
 /// The page under test, as a WebDriver session.
@@ -1002,11 +1023,48 @@ impl Page {
     /// # Panics
     /// Panics if they do not in time, with the texts they have instead.
     pub async fn expect_texts_of(&self, by: By, alternatives: &[&[&str]]) -> WebDriverResult<()> {
+        self.expect_read(by, alternatives, "texts", async |element| {
+            element.text().await
+        })
+        .await
+    }
+
+    /// Waits until the elements `by` finds have the accessible names `names`, in this order,
+    /// ignoring the [`ISOLATION_MARKS`] in them: what Chrome tells assistive technology each is
+    /// called (WebDriver's Get Computed Label). A table cell, for one, is called what its content
+    /// says, without what is `aria-hidden`, which is what a screen reader says of it.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the names they have instead.
+    pub async fn expect_accessible_names(&self, by: By, names: &[&str]) -> WebDriverResult<()> {
+        self.expect_read(by, &[names], "accessible names", async |element| {
+            let label = ComputedLabel(element.element_id());
+            element
+                .handle()
+                .cmd(Command::ExtensionCommand(Box::new(label)))
+                .await?
+                .value()
+        })
+        .await
+    }
+
+    /// Waits until what `read` reads of each element `by` finds, ignoring the [`ISOLATION_MARKS`],
+    /// is one of `alternatives`, which are the `what` of the elements, e.g. their texts.
+    ///
+    /// # Panics
+    /// Panics if it is not in time, with what is read instead.
+    async fn expect_read(
+        &self,
+        by: By,
+        alternatives: &[&[&str]],
+        what: &str,
+        read: impl AsyncFn(&WebElement) -> WebDriverResult<String>,
+    ) -> WebDriverResult<()> {
         let start = Instant::now();
         loop {
             let mut found = Vec::new();
             for element in self.driver.find_all(by.clone()).await? {
-                match element.text().await {
+                match read(&element).await {
                     Ok(text) => found.push(text.replace(ISOLATION_MARKS, "")),
                     // replaced by the page since it was found, so looked for again
                     Err(error)
@@ -1023,7 +1081,7 @@ impl Page {
             }
             if start.elapsed() > TIMEOUT {
                 match alternatives {
-                    [texts] => panic!("{by} must find the texts {texts:?}, but finds {found:?}"),
+                    [texts] => panic!("{by} must find the {what} {texts:?}, but finds {found:?}"),
                     _ => panic!("{by} must find one of {alternatives:?}, but finds {found:?}"),
                 }
             }

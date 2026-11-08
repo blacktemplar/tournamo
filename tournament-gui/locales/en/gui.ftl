@@ -277,6 +277,10 @@ cross-table-total = Total
 outcome-win = won
 outcome-draw = drawn
 outcome-loss = lost
+# how a match ended for the team of the row, followed by the score shown for it, said by screen
+# readers; $outcome: what `outcome-win`, `outcome-draw` or `outcome-loss` say; $score: e.g. 2–1, the
+# row's first
+outcome-with-score = { $outcome }, { $score }
 # the bracket of a knockout, every match in it from the start
 bracket = Bracket
 bracket-winners = Winners bracket

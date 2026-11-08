@@ -211,6 +211,7 @@ cross-table-total = Gesamt
 outcome-win = gewonnen
 outcome-draw = unentschieden
 outcome-loss = verloren
+outcome-with-score = { $outcome }, { $score }
 bracket = Turnierbaum
 bracket-winners = Gewinnerseite
 bracket-losers = Verliererseite

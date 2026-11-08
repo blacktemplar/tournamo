@@ -247,6 +247,47 @@ async fn a_score_far_below_the_winning_score_completes_the_other_in_the_dialog()
     .await;
 }
 
+/// A count too large to be one stays as typed, marked as invalid with why, and neither leaving it
+/// nor leaving a score far below the winning score on the other side completes anything.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_count_too_large_stays_marked_and_is_not_completed_over_in_the_row() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+
+        gui.enter_first_in_row(1, "70000").await?;
+        gui.press(Key::Tab).await?;
+        gui.expect_focus_value("").await?;
+        gui.type_text("15").await?;
+        gui.press(Key::Tab).await?;
+
+        gui.expect_marked_invalid("70000").await?;
+        gui.expect_row_issues(&["This takes a whole number from 0 to 65535."])
+            .await?;
+        gui.expect_row_outcomes(&["Not decided yet"]).await
+    })
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_count_too_large_stays_marked_in_the_dialog() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+        gui.click_labelled("Details of the result of match 1")
+            .await?;
+
+        gui.enter_first_value("70000").await?;
+        gui.press(Key::Tab).await?;
+
+        gui.expect_focus_value("").await?;
+        gui.expect_marked_invalid("70000").await?;
+        gui.expect_result_issues(&["This takes a whole number from 0 to 65535."])
+            .await
+    })
+    .await;
+}
+
 /// The games of a best of are entered side by side, and Enter in any of them reports the match.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

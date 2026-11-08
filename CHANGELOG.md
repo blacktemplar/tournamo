@@ -41,7 +41,9 @@ a file whose `"format"` changes is migrated, not refused.
   winning score of the match format (21–17, 22–20 or 30–29 in a game to 21).
   A score at least two below the winning score, once left, gives the other
   side, if empty, the winning score (15 gives 21 in a game to 21), selected
-  when Tab moves there, so that typing replaces it.
+  when Tab moves there, so that typing replaces it. A value no score can be,
+  such as a count above 65535, stays as typed, marked with why, and the match
+  is not reported until it is corrected.
   The dialog shows who wins each game and the match by the scores entered;
   a different result is chosen only after asking to override it. Finished
   matches show their scores, in the list of matches and in the bracket; a best

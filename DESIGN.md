@@ -574,6 +574,19 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   in when Tab moves there, so that typing replaces it. Tab completes before it
   moves, and moves only once the page shows the score: else it would pass a
   game the completed score makes the match need, which appears after it.
+- **What a field cannot take stays as typed** (`ResultForm::enter`): a count
+  above 65535, below 0 or with a fraction, read as the phase form reads a
+  number (comma or point, `1e3`), leaves the side without a value but shown
+  with why (`issue-out-of-range`), and keeps the match from being reported
+  (`ReportError::NotTaken`). The form keeps the text, not the GUI: values
+  commit on input, and Dioxus writes an input's value whenever the one
+  rendered changes, so a value dropped to none would empty the field at the
+  digit that makes it too large. Nothing is completed onto such a side, as it
+  is not empty. Rejected: refusing the keystroke (a `type=number` input has no
+  selection to tell where a key went, and reverting the text from script says
+  nothing to a screen reader). The inputs stay `type=number`, keeping the
+  browser's own check on submit; text the browser cannot read as a number
+  (`1e`) reaches the form as nothing, which the browser flags on submit.
 - **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
   template and checked on report, as a config's field names are: a generic UI
   needs keys it can list. What the engine reads, the tallies, stays typed.

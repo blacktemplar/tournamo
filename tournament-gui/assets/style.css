@@ -1542,11 +1542,18 @@ ul.summary-items {
 }
 
 .quick-outcome,
+.quick-result .issues,
 .quick-result .warnings,
 .quick-result .error[role="alert"] {
   flex-basis: 100%;
   margin: 0;
   text-align: center;
+}
+
+/* why values are not taken, a line each */
+.quick-result .issues p,
+.result-field .issues p {
+  margin: 0;
 }
 
 .quick-outcome {
@@ -1591,6 +1598,12 @@ ul.summary-items {
   width: 5rem;
 }
 
+/* a value not taken, among others in a row: marked by more than its colour */
+.quick-value input[aria-invalid="true"],
+.result-field input[aria-invalid="true"] {
+  border: 2px solid var(--error);
+}
+
 .result-field .result-label {
   min-width: 4rem;
 }
@@ -1599,6 +1612,7 @@ ul.summary-items {
   font-weight: 600;
 }
 
+.result-field .issues,
 .result-field .warnings,
 .result-outcome .warnings,
 .result-choice .warnings {

@@ -24,8 +24,11 @@
 //!
 //! Nothing entered is refused for breaking the rules of a sport: the form only warns of a score
 //! unlike those the match format hints a winner usually has, of a result chosen against the one the
-//! values suggest, and of parts entered after those before them decided the match.
+//! values suggest, and of parts entered after those before them decided the match. What is typed as
+//! no value its field takes at all, e.g. a count above 65535, stays shown with why, and keeps the
+//! match from being reported until it is corrected ([`ResultForm::enter`]).
 
+use plugin_factory::schema::{DecimalRange, IntegerRange, NumberRange};
 use tournament_engine::{
     Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Score, Sides, Team,
     Values,
@@ -35,7 +38,11 @@ use tournament_engine::{
     },
 };
 
-use crate::{i18n::Text, view};
+use crate::{
+    form::{NotTaken, typed_number, with_range},
+    i18n::Text,
+    view,
+};
 
 /// The result of a match being entered, see the [module](self).
 #[derive(Clone)]
@@ -53,8 +60,20 @@ struct Entry {
     chosen: Option<MatchResult>,
     reason: Option<ResultReason>,
     values: Values,
+    /// What was typed for a side of a field and not taken, which leaves the side without a value.
+    rejected: Vec<Rejected>,
     /// One for each part the level can have.
     parts: Vec<Entry>,
+}
+
+/// What was typed for `team` into the field `field` of a part and not taken, with why, see
+/// [`ResultForm::enter`].
+#[derive(Debug, Clone)]
+struct Rejected {
+    field: FieldKey,
+    team: Team,
+    entered: String,
+    problem: Text,
 }
 
 impl Entry {
@@ -94,7 +113,12 @@ impl Entry {
         self.chosen.is_none()
             && self.reason.is_none()
             && self.values.is_empty()
+            && self.rejected.is_empty()
             && self.parts.iter().all(Self::is_empty)
+    }
+
+    fn has_rejected(&self) -> bool {
+        !self.rejected.is_empty() || self.parts.iter().any(Self::has_rejected)
     }
 
     fn is_chosen(&self) -> bool {
@@ -164,6 +188,11 @@ pub struct FieldView {
     pub label: Phrase,
     pub kind: ValueKind,
     pub values: Sides<Option<EnteredValue>>,
+    /// What was typed for each side and not taken, see [`ResultForm::enter`], which the field
+    /// shows instead of the side's value, `None` then.
+    pub entered: Sides<Option<String>>,
+    /// Why what was typed is not taken, said once where both sides are alike.
+    pub issues: Vec<Text>,
     /// What looks like a typo, though it is taken.
     pub warnings: Vec<Text>,
 }
@@ -181,6 +210,8 @@ pub struct QuickEntry {
     pub result: Option<MatchResult>,
     /// The parts each side won, as in [`PartView::parts_won`].
     pub parts_won: Option<Sides<u32>>,
+    /// Why what was typed into any field is not taken, each said once, see [`FieldView::issues`].
+    pub issues: Vec<Text>,
     /// What looks like a typo in any field, or wrong about the match, each said once.
     pub warnings: Vec<Text>,
 }
@@ -236,7 +267,8 @@ impl ResultForm {
         &self.template
     }
 
-    /// Enters `value` for `team` into the field `field` of the part at `path`, or clears it.
+    /// Enters `value` for `team` into the field `field` of the part at `path`, or clears it, in
+    /// place of what was typed there and not taken.
     ///
     /// # Panics
     /// Panics if `path` is no path of a part of the [view](Self::view).
@@ -248,6 +280,9 @@ impl ResultForm {
         value: Option<EnteredValue>,
     ) {
         let entry = self.root.at(path);
+        entry
+            .rejected
+            .retain(|rejected| rejected.field != *field || rejected.team != team);
         let index = match entry.values.iter().position(|(key, _)| key == field) {
             Some(index) => index,
             None => {
@@ -265,37 +300,65 @@ impl ResultForm {
         }
     }
 
+    /// Enters `entered`, as an operator typed it, for `team` into the field `field` of the part at
+    /// `path`: nothing clears the value, as [`set_value`](Self::set_value) does, and a number the
+    /// field takes is entered as its value, with a point or a comma before its decimals, possibly
+    /// with an exponent (`1e3`), a count as a whole number from 0 to 65535. Anything else leaves
+    /// the side without a value, and the field shows what was typed, with why it is not taken
+    /// ([`FieldView::issues`]), until the side is entered again; meanwhile no score is completed
+    /// onto it, and the match is not reported.
+    ///
+    /// # Panics
+    /// Panics if `path` is no path of a part of the [view](Self::view), or the part has no field
+    /// `field`.
+    pub fn enter(&mut self, path: &[usize], field: &FieldKey, team: Team, entered: &str) {
+        let kind = self
+            .level(path)
+            .field(field)
+            .expect("a field of the part")
+            .kind;
+        match read(entered, kind) {
+            Ok(value) => self.set_value(path, field, team, value),
+            Err(problem) => {
+                self.set_value(path, field, team, None);
+                self.root.at(path).rejected.push(Rejected {
+                    field: field.clone(),
+                    team,
+                    entered: entered.to_owned(),
+                    problem,
+                });
+            }
+        }
+    }
+
     /// Completes the score of a part won as usual: if `team` has a count in the field `field` of
     /// the part at `path` at least two below the score its winner usually has
     /// ([`Hints::winning_score`](tournament_engine::plugins::match_format::Hints::winning_score)),
-    /// and the other side has none, the other side is entered as winning with that score, the only
-    /// one it can win with by the usual lead, e.g. 21 for 19 or less in a game to 21. Returns
-    /// whether it entered it.
+    /// and nothing is entered for the other side, not even what was typed and not taken, the other
+    /// side is entered as winning with that score, the only one it can win with by the usual lead,
+    /// e.g. 21 for 19 or less in a game to 21. Returns whether it entered it.
     ///
     /// # Panics
     /// Panics if `path` is no path of a part of the [view](Self::view).
     pub fn complete_score(&mut self, path: &[usize], field: &FieldKey, team: Team) -> bool {
-        let level = path.iter().fold(&self.template.root, |level, &index| {
-            level
-                .level_of_part(index)
-                .expect("a path of a part of the view")
-        });
-        let Some(winning) = level
-            .fields
-            .iter()
-            .find(|spec| spec.key == *field)
+        let Some(winning) = self
+            .level(path)
+            .field(field)
             .and_then(|spec| spec.hints.winning_score)
         else {
             return false;
         };
-        let values = self
-            .root
-            .at(path)
+        let entry = self.root.at(path);
+        let values = entry
             .values
             .iter()
             .find(|(key, _)| key == field)
             .map_or(Sides::new(None, None), |(_, values)| *values);
         let (entered, other) = (*values.of(team), *values.of(team.opponent()));
+        let other_typed = entry
+            .rejected
+            .iter()
+            .any(|rejected| rejected.field == *field && rejected.team == team.opponent());
         // from one below the winning score on, the other side may win by more or lose
         let completes = match entered {
             Some(EnteredValue::Count(count)) => {
@@ -303,7 +366,7 @@ impl ResultForm {
             }
             _ => false,
         };
-        if !completes || other.is_some() {
+        if !completes || other.is_some() || other_typed {
             return false;
         }
         self.set_value(
@@ -367,8 +430,9 @@ impl ResultForm {
     /// best of. A match decided by its winner alone takes none, and neither does one of parts of
     /// several levels, e.g. the rubbers of a fixture.
     ///
-    /// What the row enters goes into this form as [`set_value`](Self::set_value) does; a result is
-    /// never chosen there, so the form is reported as it suggests.
+    /// What the row enters goes into this form as [`enter`](Self::enter) or
+    /// [`set_value`](Self::set_value) do; a result is never chosen there, so the form is reported
+    /// as it suggests.
     pub fn quick_entry(&self) -> Option<QuickEntry> {
         let level = &self.template.root;
         let mut root = self.view().root;
@@ -399,18 +463,19 @@ impl ResultForm {
             }
             _ => return None,
         };
-        let mut warnings: Vec<Text> = Vec::new();
-        let of_fields = fields.iter().flat_map(|quick| &quick.field.warnings);
-        for warning in of_fields.chain(&root.warnings) {
-            if !warnings.contains(warning) {
-                warnings.push(warning.clone());
-            }
-        }
+        let issues = said_once(fields.iter().flat_map(|quick| &quick.field.issues));
+        let warnings = said_once(
+            fields
+                .iter()
+                .flat_map(|quick| &quick.field.warnings)
+                .chain(&root.warnings),
+        );
         Some(QuickEntry {
             match_format: plugin_factory::id_of(&*self.format),
             fields,
             result: root.result,
             parts_won: root.parts_won,
+            issues,
             warnings,
         })
     }
@@ -446,6 +511,23 @@ impl ResultForm {
     /// nor suggested.
     pub fn result(&self) -> Option<MatchResult> {
         self.view().root.result
+    }
+
+    /// Whether anything typed into the form was not taken, see [`Self::enter`].
+    pub(crate) fn has_rejected(&self) -> bool {
+        self.root.has_rejected()
+    }
+
+    /// The level of the part at `path`.
+    ///
+    /// # Panics
+    /// Panics if `path` is no path of a part of the [view](Self::view).
+    fn level(&self, path: &[usize]) -> &Level {
+        path.iter().fold(&self.template.root, |level, &index| {
+            level
+                .level_of_part(index)
+                .expect("a path of a part of the view")
+        })
     }
 
     pub fn view(&self) -> ResultView {
@@ -536,7 +618,7 @@ impl ResultForm {
             fields: level
                 .fields
                 .iter()
-                .map(|field| field_view(field, &entry.values))
+                .map(|field| field_view(field, &entry.values, &entry.rejected))
                 .collect(),
             result,
             suggested,
@@ -572,13 +654,66 @@ fn of_kind(value: EnteredValue, kind: ValueKind) -> Option<EnteredValue> {
     }
 }
 
-/// The view of `field`, with its values among `values`, warning of a score unlike one the winner
-/// of the part usually has.
-fn field_view(field: &FieldSpec, values: &Values) -> FieldView {
+/// What `entered`, as an operator typed it, is in a field of `kind`, see [`ResultForm::enter`]:
+/// `None` if nothing, else its value, or why it is none.
+fn read(entered: &str, kind: ValueKind) -> Result<Option<EnteredValue>, Text> {
+    if entered.trim().is_empty() {
+        return Ok(None);
+    }
+    let out_of_range = || with_range(Text::new("issue-out-of-range"), range_of(kind));
+    match typed_number(entered) {
+        Ok(number) => of_kind(EnteredValue::Decimal(Score::new(number)), kind)
+            .map(Some)
+            .ok_or_else(out_of_range),
+        Err(NotTaken::OutOfRange) => Err(out_of_range()),
+        Err(NotTaken::NoNumber) => {
+            Err(Text::new("issue-not-a-number").with("entered", entered.trim()))
+        }
+    }
+}
+
+/// The numbers a field of `kind` takes.
+fn range_of(kind: ValueKind) -> NumberRange {
+    match kind {
+        ValueKind::Count => NumberRange::Integer(IntegerRange::new(0, u16::MAX.into())),
+        ValueKind::Decimal => NumberRange::Decimal(DecimalRange::ALL),
+    }
+}
+
+/// Each of `texts` once, in the order they first come in.
+fn said_once<'a>(texts: impl IntoIterator<Item = &'a Text>) -> Vec<Text> {
+    let mut once: Vec<Text> = Vec::new();
+    for text in texts {
+        if !once.contains(text) {
+            once.push(text.clone());
+        }
+    }
+    once
+}
+
+/// The view of `field`, with its values among `values` and what was typed for it and not taken
+/// among `rejected`, warning of a score unlike one the winner of the part usually has.
+fn field_view(field: &FieldSpec, values: &Values, rejected: &[Rejected]) -> FieldView {
     let values = values
         .iter()
         .find(|(key, _)| *key == field.key)
         .map_or(Sides::new(None, None), |(_, values)| *values);
+    let rejected_of = |team: Team| {
+        rejected
+            .iter()
+            .find(|rejected| rejected.field == field.key && rejected.team == team)
+    };
+    let typed = Sides::new(rejected_of(Team::A), rejected_of(Team::B));
+    let entered = Sides::new(
+        typed.a.map(|rejected| rejected.entered.clone()),
+        typed.b.map(|rejected| rejected.entered.clone()),
+    );
+    let issues = said_once(
+        [typed.a, typed.b]
+            .into_iter()
+            .flatten()
+            .map(|rejected| &rejected.problem),
+    );
     let warnings = match (field.hints.winning_score, values.a, values.b) {
         (Some(winning), Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b))) => {
             winning_score_warning(winning, a.max(b), a.min(b))
@@ -592,6 +727,8 @@ fn field_view(field: &FieldSpec, values: &Values) -> FieldView {
         label: field.label.clone(),
         kind: field.kind,
         values,
+        entered,
+        issues,
         warnings,
     }
 }

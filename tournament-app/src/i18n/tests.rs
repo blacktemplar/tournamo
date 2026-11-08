@@ -152,6 +152,7 @@ fn an_error_says_in_english_what_its_display_says() {
         both(StartError::TooFewEntrants),
         both(StartError::TooFewForFormat(4)),
         both(ReportError::NotStarted),
+        both(ReportError::NotTaken),
         both(ReportEnteredError::Unreadable),
         both(ReportEnteredError::NoMatch(3)),
         both(ReportEnteredError::AlreadyFinished(3)),

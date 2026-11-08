@@ -1241,9 +1241,12 @@ impl Session {
     /// Reports the result entered into `form`.
     ///
     /// # Errors
-    /// Returns an error as [`Self::report`] does, and if the result neither says nor suggests who
-    /// won.
+    /// Returns an error as [`Self::report`] does, if anything typed into the form was not taken
+    /// ([`ResultForm::enter`]), and if the result neither says nor suggests who won.
     pub fn report_form(&mut self, form: &ResultForm) -> Result<Reported, ReportError> {
+        if form.has_rejected() {
+            return Err(ReportError::NotTaken);
+        }
         let (decision, values, parts) = form.report();
         let decision = decision.ok_or(ReportError::Undecided)?;
         self.report_decision(form.match_id(), decision, values, parts)

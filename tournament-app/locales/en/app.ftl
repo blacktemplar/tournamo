@@ -24,6 +24,7 @@ error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already
 error-draw-not-allowed = a match of this format cannot end in a draw
 error-undecided = the result does not say who won
+error-value-not-taken = a value entered is not taken; correct the one marked
 error-result-unreadable = enter the number of a match and its result, 1, X or 2, e.g. “3 1”, or part of the winner's name
 error-no-match-numbered = there is no match { $number }
 error-match-numbered-finished-already = match { $number } has a result already

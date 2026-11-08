@@ -10,7 +10,11 @@ use tournament_engine::{
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::{error::ReportError, session::Session};
+use crate::{
+    error::ReportError,
+    i18n::{Language, Translator},
+    session::Session,
+};
 
 const SCORE: FieldKey = FieldKey::new("score");
 
@@ -373,6 +377,131 @@ fn a_score_is_entered_as_its_field_takes_it() {
     assert_eq!(of_kind(half(2.5), ValueKind::Decimal), Some(half(2.5)));
 }
 
+/// `text` in English, without the marks isolating its variables.
+fn english(text: &Text) -> String {
+    Translator::new(Language::English, &[])
+        .text(text)
+        .replace(['\u{2068}', '\u{2069}'], "")
+}
+
+/// The field of the score of a match once `typed` is typed for the first side.
+fn after_typing(typed: &str) -> FieldView {
+    let (session, id) = started(PluginConfig::of::<Scored>());
+    let mut form = session.result_form(id).unwrap();
+    form.enter(&[], &SCORE, Team::A, typed);
+    form.view().root.fields.remove(0)
+}
+
+#[test]
+fn a_whole_number_typed_is_entered_as_a_count() {
+    for (typed, value) in [
+        ("17", 17),
+        (" 3 ", 3),
+        ("2.0", 2),
+        ("1e3", 1000),
+        ("65535", u16::MAX),
+    ] {
+        let field = after_typing(typed);
+
+        assert_eq!(field.values.a, count(value), "{typed}");
+        assert_eq!(field.entered.a, None, "{typed}");
+        assert!(field.issues.is_empty(), "{typed}");
+    }
+}
+
+#[test]
+fn what_is_typed_as_no_count_stays_shown_with_why() {
+    let range = "this takes a whole number from 0 to 65535";
+    for (typed, why) in [
+        ("65536", range),
+        ("4294967295", range),
+        ("-1", range),
+        ("2.5", range),
+        ("many", "“many” is no number"),
+    ] {
+        let field = after_typing(typed);
+
+        assert_eq!(field.values.a, None, "{typed}");
+        assert_eq!(field.entered.a.as_deref(), Some(typed));
+        let issues: Vec<_> = field.issues.iter().map(english).collect();
+        assert_eq!(issues, [why], "{typed}");
+    }
+}
+
+#[test]
+fn a_value_typed_or_cleared_replaces_what_was_not_taken() {
+    for (typed, value) in [("7", count(7)), ("", None)] {
+        let (session, id) = started(PluginConfig::of::<Scored>());
+        let mut form = session.result_form(id).unwrap();
+        form.enter(&[], &SCORE, Team::A, "70000");
+
+        form.enter(&[], &SCORE, Team::A, typed);
+
+        let field = &form.view().root.fields[0];
+        assert_eq!(field.values.a, value, "{typed:?}");
+        assert_eq!(field.entered.a, None, "{typed:?}");
+        assert!(field.issues.is_empty(), "{typed:?}");
+    }
+}
+
+#[test]
+fn why_values_in_one_row_are_not_taken_is_said_once() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let mut form = session.result_form(id).unwrap();
+    form.enter(&[0], &SCORE, Team::A, "70000");
+    form.enter(&[1], &SCORE, Team::B, "80000");
+
+    let quick = form.quick_entry().unwrap();
+
+    let entered: Vec<_> = quick
+        .fields
+        .iter()
+        .map(|quick| quick.field.entered.clone())
+        .collect();
+    assert_eq!(
+        entered,
+        [
+            Sides::new(Some("70000".to_owned()), None),
+            Sides::new(None, Some("80000".to_owned())),
+        ]
+    );
+    let issues: Vec<_> = quick.issues.iter().map(english).collect();
+    assert_eq!(issues, ["this takes a whole number from 0 to 65535"]);
+}
+
+#[test]
+fn a_game_holding_only_what_was_not_taken_stays_shown() {
+    let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 17);
+    score(&mut form, &[1], 21, 15);
+    form.enter(&[2], &SCORE, Team::A, "7");
+
+    form.enter(&[2], &SCORE, Team::A, "70000");
+
+    assert_eq!(form.view().root.parts.len(), 3);
+}
+
+#[test]
+fn a_match_with_a_value_not_taken_is_not_reported() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let mut form = session.result_form(id).unwrap();
+    score(&mut form, &[0], 21, 17);
+    score(&mut form, &[1], 21, 15);
+    form.enter(&[2], &SCORE, Team::A, "70000");
+    assert_eq!(
+        form.result(),
+        Some(MatchResult::AWins),
+        "the games before decide it"
+    );
+
+    assert!(matches!(
+        session.report_form(&form),
+        Err(ReportError::NotTaken)
+    ));
+    assert_eq!(the_match(session.competition()).result(), None);
+}
+
 #[test]
 fn a_score_is_entered_in_one_row() {
     let (session, id) = started(PluginConfig::of::<Scored>());
@@ -596,6 +725,29 @@ fn a_score_without_a_winning_score_is_not_completed() {
         form.view().root.fields[0].values,
         Sides::new(None, count(3))
     );
+}
+
+#[test]
+fn what_was_typed_and_not_taken_completes_nothing() {
+    let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
+    let mut form = session.result_form(id).unwrap();
+    form.enter(&[], &SCORE, Team::A, "4294967295");
+
+    assert!(!form.complete_score(&[], &SCORE, Team::A));
+    assert_eq!(form.view().root.fields[0].values, Sides::new(None, None));
+}
+
+#[test]
+fn no_score_is_completed_onto_what_was_typed_and_not_taken() {
+    let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
+    let mut form = session.result_form(id).unwrap();
+    form.enter(&[], &SCORE, Team::B, "70000");
+    form.enter(&[], &SCORE, Team::A, "15");
+
+    assert!(!form.complete_score(&[], &SCORE, Team::A));
+    let field = &form.view().root.fields[0];
+    assert_eq!(field.values, Sides::new(count(15), None));
+    assert_eq!(field.entered.b.as_deref(), Some("70000"));
 }
 
 #[test]

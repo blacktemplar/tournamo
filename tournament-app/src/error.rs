@@ -137,6 +137,9 @@ pub enum ReportError {
     /// A result entered that neither says nor suggests who won.
     #[error("the result does not say who won")]
     Undecided,
+    /// Something typed into the [`ResultForm`](crate::result_form::ResultForm) was not taken.
+    #[error("a value entered is not taken; correct the one marked")]
+    NotTaken,
     /// The engine refused the result for a reason this crate does not know.
     #[error("{0}")]
     Rejected(TransitionError),
@@ -374,6 +377,7 @@ impl Message for ReportError {
             Self::AlreadyFinished => Text::new("error-match-finished-already"),
             Self::DrawNotAllowed => Text::new("error-draw-not-allowed"),
             Self::Undecided => Text::new("error-undecided"),
+            Self::NotTaken => Text::new("error-value-not-taken"),
             Self::Rejected(error) => rejected(error),
         }
     }

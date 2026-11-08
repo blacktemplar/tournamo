@@ -9,6 +9,9 @@
 //!
 //! A value left completes the score of the other side where its winning score is the only one
 //! possible ([`ResultForm::complete_score`]), selected if the focus moves there.
+//!
+//! What a field cannot take, e.g. a count above 65535, stays as typed, marked as invalid, with why
+//! below the row or the field ([`ResultForm::enter`]).
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -17,7 +20,7 @@ use tournament_app::{
     view::MatchRow,
 };
 use tournament_engine::{
-    EnteredValue, FieldKey, MatchResult, Score, Sides, Team,
+    EnteredValue, FieldKey, MatchResult, Sides, Team,
     plugins::{Phrase, match_format::ValueKind},
 };
 
@@ -157,6 +160,17 @@ fn QuickResult(
             }
             // read out as it changes with the values
             output { class: "quick-outcome", {outcome} }
+            // which the values not taken name as their description
+            if !quick.issues.is_empty() {
+                div {
+                    class: "issues",
+                    id: "quick-issues-{row.number}",
+                    role: "status",
+                    for issue in &quick.issues {
+                        p { {tr.sentence(issue)} }
+                    }
+                }
+            }
             for warning in &quick.warnings {
                 p { class: "warnings", role: "status", {tr.sentence(warning)} }
             }
@@ -197,8 +211,10 @@ fn QuickValues(
         t!(tr, "part-numbered", name = name.as_str(), number = *number)
     });
     let kind = field.kind;
-    let input = |team: Team, name: &str, value: Option<EnteredValue>| {
+    let input = |team: Team, name: &str| {
         let (path, key) = (quick.path.clone(), field.key.clone());
+        let entered = field.entered.of(team).clone();
+        let invalid = entered.is_some();
         let value_of = label.as_str();
         let aria_label = match &part {
             Some(part) => t!(
@@ -227,7 +243,9 @@ fn QuickValues(
                 disabled,
                 id: value_id(&format!("quick-value-{number}"), &quick.path, &field.key, team),
                 aria_label,
-                value: shown(value),
+                aria_invalid: invalid.then_some("true"),
+                aria_describedby: invalid.then(|| format!("quick-issues-{number}")),
+                value: entered.unwrap_or_else(|| shown(*field.values.of(team))),
                 onblur: {
                     let (path, key) = (path.clone(), key.clone());
                     move |_| {
@@ -257,9 +275,8 @@ fn QuickValues(
                     }
                 },
                 oninput: move |event: FormEvent| {
-                    let value = entered(&event.value(), kind);
                     if let Some(form) = form.write().as_mut() {
-                        form.set_value(&path, &key, team, value);
+                        form.enter(&path, &key, team, &event.value());
                     }
                     on_input.call(());
                 },
@@ -272,9 +289,9 @@ fn QuickValues(
             if let Some((_, number)) = quick.part {
                 span { class: "quick-part", aria_hidden: "true", "{number}" }
             }
-            {input(Team::A, &a, field.values.a)}
+            {input(Team::A, &a)}
             span { aria_hidden: "true", "–" }
-            {input(Team::B, &b, field.values.b)}
+            {input(Team::B, &b)}
         }
     }
 }
@@ -496,8 +513,11 @@ fn ResultField(
         &field.label,
     ));
     let kind = field.kind;
-    let input = |team: Team, name: &str, value: Option<EnteredValue>| {
+    let issues_id = issues_id(&path, &field.key);
+    let input = |team: Team, name: &str| {
         let (path, key) = (path.clone(), field.key.clone());
+        let entered = field.entered.of(team).clone();
+        let invalid = entered.is_some();
         rsx! {
             input {
                 r#type: "number",
@@ -514,8 +534,10 @@ fn ResultField(
                     }
                     None => t!(tr, "value-of", value = label.as_str(), team = name),
                 },
+                aria_invalid: invalid.then_some("true"),
+                aria_describedby: invalid.then(|| issues_id.clone()),
                 id: value_id("result-value", &path, &field.key, team),
-                value: shown(value),
+                value: entered.unwrap_or_else(|| shown(*field.values.of(team))),
                 onblur: {
                     let (path, key) = (path.clone(), key.clone());
                     move |_| {
@@ -540,8 +562,7 @@ fn ResultField(
                     }
                 },
                 oninput: move |event: FormEvent| {
-                    let value = entered(&event.value(), kind);
-                    form.write().set_value(&path, &key, team, value);
+                    form.write().enter(&path, &key, team, &event.value());
                 },
             }
         }
@@ -551,10 +572,17 @@ fn ResultField(
             span { class: "result-label", aria_hidden: "true", {label.clone()} }
             // the names beside their values, which their inputs name for screen readers
             span { class: "result-team a", aria_hidden: "true", {a.clone()} }
-            {input(Team::A, &a, field.values.a)}
+            {input(Team::A, &a)}
             span { aria_hidden: "true", "–" }
-            {input(Team::B, &b, field.values.b)}
+            {input(Team::B, &b)}
             span { class: "result-team b", aria_hidden: "true", {b.clone()} }
+            if !field.issues.is_empty() {
+                div { class: "issues", id: "{issues_id}", role: "status",
+                    for issue in &field.issues {
+                        p { {tr.sentence(issue)} }
+                    }
+                }
+            }
             for warning in &field.warnings {
                 p { class: "warnings", role: "status", {tr.sentence(warning)} }
             }
@@ -571,6 +599,12 @@ fn value_id(prefix: &str, path: &[usize], key: &FieldKey, team: Team) -> String 
         Team::B => "b",
     };
     format!("{prefix}{path}-{}-{side}", key.key())
+}
+
+/// The id of why the values of the field `key` of the part at `path` in the dialog are not taken.
+fn issues_id(path: &[usize], key: &FieldKey) -> String {
+    let path: String = path.iter().map(|index| format!("-{index}")).collect();
+    format!("result-issues{path}-{}", key.key())
 }
 
 /// Completes the score of the field `key` of the part at `path` once `team`'s value is left
@@ -631,20 +665,6 @@ fn shown(value: Option<EnteredValue>) -> String {
         Some(EnteredValue::Count(count)) => count.to_string(),
         Some(EnteredValue::Decimal(decimal)) => decimal.get().to_string(),
         None => String::new(),
-    }
-}
-
-/// The value `text` entered into a field of `kind` stands for, `None` if none.
-fn entered(text: &str, kind: ValueKind) -> Option<EnteredValue> {
-    let text = text.trim();
-    match kind {
-        ValueKind::Count => text.parse().ok().map(EnteredValue::Count),
-        ValueKind::Decimal => text
-            .replace(',', ".")
-            .parse::<f64>()
-            .ok()
-            .filter(|number| number.is_finite())
-            .map(|number| EnteredValue::Decimal(Score::new(number))),
     }
 }
 

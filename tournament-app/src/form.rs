@@ -784,8 +784,8 @@ fn suggested(mut draft: Draft<PhasePlugins>) -> Result<Draft<PhasePlugins>, Conf
     PhasePlugins::with_suggestions(draft)
 }
 
-/// Why a number entered is not taken, see [`number`].
-enum NotTaken {
+/// Why a number entered is not taken, see [`number`] and [`typed_number`].
+pub(crate) enum NotTaken {
     /// It is a number, but none of the kind the field takes, or nothing was entered.
     OutOfRange,
     NoNumber,
@@ -797,20 +797,7 @@ fn number(entered: &str, range: NumberRange) -> Result<Value, NotTaken> {
     if text.is_empty() {
         return Err(NotTaken::OutOfRange);
     }
-    // what Rust reads as a number besides digits, e.g. `inf` and `NaN`, is no number to an
-    // operator
-    let numeric = text
-        .chars()
-        .all(|char| char.is_ascii_digit() || matches!(char, '.' | 'e' | 'E' | '+' | '-'));
-    let number = text
-        .parse::<f64>()
-        .ok()
-        .filter(|_| numeric && text.contains(|char: char| char.is_ascii_digit()))
-        .ok_or(NotTaken::NoNumber)?;
-    // a number too large for a float is a number all the same
-    if !number.is_finite() {
-        return Err(NotTaken::OutOfRange);
-    }
+    let number = typed_number(&text)?;
     match range {
         NumberRange::Integer(_) => {
             // exactly, where a float would round
@@ -829,6 +816,28 @@ fn number(entered: &str, range: NumberRange) -> Result<Value, NotTaken> {
         }
         NumberRange::Decimal(_) => Ok(Value::from(number)),
     }
+}
+
+/// The number `entered` stands for, as an operator typed it: with a point or a comma before its
+/// decimals, possibly with an exponent (`1e3`), spaces around it ignored. A number too large for a
+/// float is out of range.
+pub(crate) fn typed_number(entered: &str) -> Result<f64, NotTaken> {
+    let text = entered.trim().replace(',', ".");
+    // what Rust reads as a number besides digits, e.g. `inf` and `NaN`, is no number to an
+    // operator
+    let numeric = text
+        .chars()
+        .all(|char| char.is_ascii_digit() || matches!(char, '.' | 'e' | 'E' | '+' | '-'));
+    let number = text
+        .parse::<f64>()
+        .ok()
+        .filter(|_| numeric && text.contains(|char: char| char.is_ascii_digit()))
+        .ok_or(NotTaken::NoNumber)?;
+    // a number too large for a float is a number all the same
+    if !number.is_finite() {
+        return Err(NotTaken::OutOfRange);
+    }
+    Ok(number)
 }
 
 /// Puts `text` at the deepest field or item of `fields` that `path` is within; `false` if it is
@@ -912,7 +921,7 @@ fn issue_text(issue: &Issue, fields: &[FieldNode]) -> Text {
     clippy::cast_precision_loss,
     reason = "a bound an operator reads is far below 2^52"
 )]
-fn with_range(text: Text, range: NumberRange) -> Text {
+pub(crate) fn with_range(text: Text, range: NumberRange) -> Text {
     let (whole, min, max, multiple) = match range {
         NumberRange::Integer(range) => (
             "yes",

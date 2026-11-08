@@ -22,6 +22,7 @@ error-unknown-match = dieses Spiel gibt es nicht
 error-match-finished-already = das Spiel hat schon ein Ergebnis
 error-draw-not-allowed = ein Spiel dieses Formats kann nicht unentschieden enden
 error-undecided = das Ergebnis sagt nicht, wer gewonnen hat
+error-value-not-taken = ein eingegebener Wert wird nicht angenommen; korrigiere den markierten
 error-result-unreadable = gib die Nummer eines Spiels und sein Ergebnis ein, 1, X oder 2, z. B. „3 1“, oder einen Teil des Namens des Siegers
 error-no-match-numbered = es gibt kein Spiel { $number }
 error-match-numbered-finished-already = Spiel { $number } hat schon ein Ergebnis

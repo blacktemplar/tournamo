@@ -2226,6 +2226,35 @@ impl Gui {
             .await
     }
 
+    /// Waits until the rows of results entered say why values typed into them are not taken,
+    /// `issues`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_row_issues(&self, issues: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".quick-result .issues p"), issues)
+            .await
+    }
+
+    /// Waits until a value of a result marked as invalid (`aria-invalid`), in the row of its match
+    /// or in the dialog open, shows `text`, e.g. a count too large typed there.
+    ///
+    /// # Panics
+    /// Panics if none does in time.
+    pub async fn expect_marked_invalid(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(
+                    ".quick-value input[aria-invalid=true], \
+                     [role=dialog] input[aria-invalid=true]",
+                ),
+                |query| query.with_value(text.to_owned()),
+                &format!("a value {text:?} marked as invalid"),
+            )
+            .await
+    }
+
     /// Waits until the row of a result says why it was not reported, `text`.
     ///
     /// # Panics
@@ -2373,6 +2402,16 @@ impl Gui {
     pub async fn expect_result_warnings(&self, warnings: &[&str]) -> WebDriverResult<()> {
         self.page
             .expect_texts(By::Css("[role=dialog] .warnings"), warnings)
+            .await
+    }
+
+    /// Waits until the dialog open says why values typed into it are not taken, `issues`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_result_issues(&self, issues: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .issues p"), issues)
             .await
     }
 

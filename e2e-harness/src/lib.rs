@@ -48,6 +48,9 @@ use tower_http::services::ServeDir;
 /// How long a query waits for what it looks for, and how often it looks.
 const TIMEOUT: Duration = Duration::from_secs(5);
 const INTERVAL: Duration = Duration::from_millis(20);
+/// How long the page may take to start: its WebAssembly, unoptimized for the tests, takes seconds
+/// to load and compile on a busy machine, as where every test runs a browser of its own.
+const STARTUP: Duration = Duration::from_secs(30);
 
 /// The version of axe-core that checks accessibility, where it is downloaded from, and the SHA-256
 /// of what is downloaded.
@@ -940,6 +943,7 @@ impl Page {
     async fn ready(&self) -> WebDriverResult<()> {
         self.driver
             .query(self.ready.clone())
+            .wait(STARTUP, INTERVAL)
             .without_text("")
             .first()
             .await?;

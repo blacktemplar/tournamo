@@ -12,12 +12,16 @@ keeps everything on your device: there is no account, no server and no tracking.
   (with an optional match for third place), double elimination (with an
   optional grand final reset) and Monster DYP (teams of two drawn anew every
   round).
+- **Results** as who won, the score of each side (21–17) or the games of a best
+  of, each with its score, as each phase sets.
 - **Rankings** by criteria you choose and order: points (for a win, a draw and
   a bye, as you set them), wins, draws, losses, Buchholz, Buchholz of Buchholz,
-  Sonneborn-Berger, and for knockouts how far an entrant came.
-- **Reporting results** with a tap on the winner, in the bracket, or by
-  keyboard (`3 1` for match 3 won by the first side, `ali` for the open match
-  Alice is in); every result can be undone.
+  Sonneborn-Berger, the points (or goals) scored, the games won, the
+  differences of both, and for knockouts how far an entrant came.
+- **Reporting results** with a tap on the winner, by entering the scores in
+  the row of the match, in the bracket, or by keyboard (`3 1` for match 3 won
+  by the first side, `3 21-17` for its score, `ali` for the open match Alice
+  is in); every result can be undone.
 - **Standings, a bracket and a cross table**, laid out for phones, tablets and
   laptops, in light or dark.
 - **Offline and installable** as an app. Competitions are stored in the

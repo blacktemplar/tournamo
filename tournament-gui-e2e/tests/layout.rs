@@ -638,7 +638,7 @@ async fn a_checkbox_is_big_enough_to_tap() {
 async fn the_views_look_unlike_the_switch_within_a_card() {
     run_in_new_competition(async |gui| {
         start_round_robin_of(&gui, &["Alice", "Bob", "Carol"]).await?;
-        gui.click("By round").await?;
+        gui.show_by_round().await?;
 
         let tab = ".view-switch [aria-pressed=true]";
         let switch = ".card .segmented [aria-pressed=true]";

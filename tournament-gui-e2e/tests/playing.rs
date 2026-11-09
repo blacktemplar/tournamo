@@ -68,7 +68,7 @@ async fn a_double_tap_reporting_a_result_does_not_reopen_it() {
 async fn a_result_shown_again_is_reopened_at_once() {
     run_in_new_competition(async |gui| {
         start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
-        gui.click("By round").await?;
+        gui.show_by_round().await?;
         gui.click("Draw").await?;
         gui.expect_enabled("Reopen match 1").await?;
 
@@ -133,7 +133,7 @@ async fn undo_says_what_it_covers() {
 async fn a_result_and_the_finish_move_nothing() {
     run_in_new_competition(async |gui| {
         start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
-        gui.click("By round").await?;
+        gui.show_by_round().await?;
         let top = gui.page.top_of("#match-list").await?;
 
         gui.click("Draw").await?;

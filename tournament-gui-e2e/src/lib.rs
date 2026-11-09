@@ -1054,6 +1054,21 @@ impl Gui {
             .await
     }
 
+    /// Shows the matches by round, and waits until the rounds to choose from show.
+    ///
+    /// # Panics
+    /// Panics if they do not in time.
+    pub async fn show_by_round(&self) -> WebDriverResult<()> {
+        self.click("By round").await?;
+        self.page
+            .expect(
+                By::Css("select#round"),
+                |query| query.and_displayed(),
+                "the rounds to choose from",
+            )
+            .await
+    }
+
     /// Shows the matches of the round whose option reads `text`, e.g. `"Round 2 (2 open)"`, while
     /// the matches are shown by round.
     pub async fn choose_round(&self, text: &str) -> WebDriverResult<()> {

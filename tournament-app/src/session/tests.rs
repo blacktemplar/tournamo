@@ -2438,6 +2438,29 @@ fn catching_up_takes_the_people_as_stored() {
     assert_eq!(names(&following.entrants()), ["Alice", "Bob"]);
 }
 
+/// What another session saved may have reported a match this one reopened, and reopened it again,
+/// so after catching up, the form of the match no longer starts out at the result this one took
+/// back.
+#[test]
+fn catching_up_drops_the_results_taken_back() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    session.report_entered("1 21-17").unwrap();
+    session.undo_report(numbered(&session, 1)).unwrap();
+    now(session.save(&storage)).unwrap();
+    let mut other = now(Session::load(&storage, session.key())).unwrap();
+    other.report_entered("1 21-19").unwrap();
+    other.undo_report(numbered(&other, 1)).unwrap();
+    now(other.save(&storage)).unwrap();
+
+    now(session.catch_up(&storage)).unwrap();
+
+    let form = session.result_form(numbered(&session, 1)).unwrap();
+    assert_eq!(form.view().root.fields[0].values, Sides::new(None, None));
+}
+
 #[test]
 fn an_entry_stored_that_does_not_apply_is_not_caught_up_with() {
     let storage = MemoryStorage::default();

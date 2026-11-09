@@ -1,7 +1,8 @@
 //! The dialog entering the result of a match whose match format enters more than who won, e.g. a
 //! score: the [`ResultForm`] of its result, every part with the values of each side and its result,
 //! the one the values suggest. Overriding it is rare, so a result is chosen only after asking to
-//! override, except for a part that only a choice decides.
+//! override, except for a part that only a choice decides, and the dialog opens overriding where a
+//! result is chosen already, e.g. that of a match reopened.
 //!
 //! A match whose result takes no more than a row ([`ResultForm::quick_entry`]), e.g. a score or the
 //! score of each game, is entered in the row below its pairing instead, the dialog a button away
@@ -347,7 +348,8 @@ pub fn EnterResult(
                 };
                 if let Ok(form) = form {
                     error.set(None);
-                    overriding.set(false);
+                    // a result chosen already, e.g. that of a match reopened, shows as chosen
+                    overriding.set(form.is_chosen());
                     entering.set(Some(Signal::new(form)));
                     focus_later(&["#result-form input", "#result-form select"]);
                 }

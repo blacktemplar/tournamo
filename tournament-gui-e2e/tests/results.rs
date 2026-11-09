@@ -411,6 +411,65 @@ async fn the_details_of_a_result_start_from_the_row_of_the_match() {
     .await;
 }
 
+/// A match reopened keeps its scores in its row, so that correcting a typo takes changing only
+/// that value.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_match_reopened_keeps_its_scores_to_be_corrected() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Best of games").await?;
+        for (game, alice, bob) in [(1, "21", "17"), (2, "19", "21"), (3, "21", "15")] {
+            gui.enter_in_row(&format!("Score of Alice in Game {game}, match 1"), alice)
+                .await?;
+            gui.enter_in_row(&format!("Score of Bob in Game {game}, match 1"), bob)
+                .await?;
+        }
+        gui.click_labelled("Report match 1").await?;
+
+        gui.click_labelled("Reopen match 1").await?;
+
+        gui.expect_in_row_value("Score of Alice in Game 2, match 1", "19")
+            .await?;
+        gui.expect_row_outcomes_either_way(&["Alice wins (2–1)"])
+            .await?;
+        gui.enter_in_row("Score of Bob in Game 3, match 1", "19")
+            .await?;
+        gui.click_labelled("Report match 1").await?;
+        // across the page, where the list has room for the scores of the games
+        gui.page.resize(900, 900).await?;
+        gui.expect_scores_either_way("2–1 (21–17 19–21 21–19)")
+            .await
+    })
+    .await;
+}
+
+/// A result reported against the score is reopened overriding it, which only the dialog shows.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_overridden_is_reopened_overriding_in_the_dialog() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Score").await?;
+        gui.enter_in_row("Score of Alice, match 1", "1").await?;
+        gui.enter_in_row("Score of Bob, match 1", "0").await?;
+        gui.click_labelled("Details of the result of match 1")
+            .await?;
+        gui.click("Override result").await?;
+        gui.choose_result("Result: Match", "Bob wins").await?;
+        gui.report_in_dialog().await?;
+
+        gui.click_labelled("Reopen match 1").await?;
+
+        gui.click_labelled("Enter result of match 1").await?;
+        gui.expect_result_choices(&["Result: Match"]).await?;
+        gui.expect_result_warnings(&["This is not the result the score suggests."])
+            .await?;
+        gui.page.check_accessibility().await?;
+        gui.report_in_dialog().await?;
+        gui.expect_standings(&["Bob", "Alice"]).await
+    })
+    .await;
+}
+
 /// Scores typed in after part of the winner's name are the winner's first, and must say the
 /// result the name does.
 #[tokio::test]

@@ -645,6 +645,20 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   it opens to no more than who won. Rejected: a *Details* label or an icon by every
   finished match (room in a row kept to one line), a chevron (the card steps
   through rounds by chevrons).
+- **A reopened match starts out at its result** (`Session::result_form`), so
+  that a typo in one game of a best of five is corrected in that game, still
+  by an undo and a report. The session keeps what was reported for each match
+  whose result it took back (reopening, undoing the report, redoing a
+  reopening), the latest of each, as it keeps the configuration of a phase
+  whose adding it undid; the form starts out at it while the match format
+  takes it (`Level::check`). A result chosen against the values stays chosen:
+  the match takes no row, which holds values only (`ResultForm::quick_entry`),
+  and the dialog opens overriding. Scores typed in are the whole result and
+  replace it (`ResultForm::enter_scores`). Catching up drops what the session
+  kept, as another session may have reported and reopened the match since.
+  Rejected: reading the result from the undone report in the log (it would
+  come back after a reload or in another tab, in a form nobody reopened, and
+  every form would search the log).
 
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the match formats of their rubbers, live reporting (an `UpdatePlay` on open

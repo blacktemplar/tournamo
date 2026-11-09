@@ -85,6 +85,9 @@ pub struct Session {
     /// The configuration of the phase whose adding this session undid last, which the form of a
     /// new phase starts out at.
     undone_phase: Option<Config>,
+    /// What was reported for each match whose result this session took back, as it was then, the
+    /// latest of each, which the form of the match starts out at, see [`Self::result_form`].
+    reopened: HashMap<MatchId, Part>,
     /// How often the session changed the people: with the length of the log, which every other
     /// change makes longer, undo and redo included, it counts the changes, see [`Self::changes`].
     people_changes: usize,
@@ -116,6 +119,7 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
+            reopened: HashMap::new(),
             people_changes: 0,
             saved_changes: 0,
             competition_saved: false,
@@ -146,6 +150,7 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
+            reopened: HashMap::new(),
             people_changes: 0,
             competition_saved: file.competition.is_some(),
         })
@@ -172,8 +177,10 @@ impl Session {
     /// Catches up with `stored`, what a storage holds of this session's competition: appends the
     /// entries of its log after those of the session's, each as [`Self::load`] would have
     /// replayed it, and takes the people as stored. Returns how many entries it appended. They are
-    /// no actions of this session, so there is nothing more to undo. [`Self::catch_up`] reads and
-    /// catches up in one; reading apart lets a GUI hold no borrow of the session while it reads.
+    /// no actions of this session, so there is nothing more to undo, and since they may have
+    /// reported and reopened again the matches this session reopened, the forms of those start
+    /// out empty again. [`Self::catch_up`] reads and catches up in one; reading apart lets a GUI
+    /// hold no borrow of the session while it reads.
     ///
     /// An entry that undoes or replaces an earlier one replays the log after that one, as it did
     /// when it was appended; any other entry only applies to the current state.
@@ -198,6 +205,9 @@ impl Session {
         self.competition_saved = file.competition.is_some();
         let entries = file.log.into_iter().skip(self.machine.log().len());
         let appended = entries.len();
+        if appended > 0 {
+            self.reopened.clear();
+        }
         for entry in entries {
             self.machine.apply(entry).map_err(LoadError::Replay)?;
             self.saved_changes = self.changes();
@@ -248,6 +258,7 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
+            reopened: HashMap::new(),
             people_changes: 0,
             saved_changes: 0,
             competition_saved: false,
@@ -1197,7 +1208,11 @@ impl Session {
         self.report_decision(id, Decision::new(result), Values::new(), Vec::new())
     }
 
-    /// A form to enter the result of the match `id` into, see [`ResultForm`].
+    /// A form to enter the result of the match `id` into, see [`ResultForm`]. If this session took
+    /// back the result of the match, by reopening it ([`Self::undo_report`]), undoing its report
+    /// or redoing a reopening, the form starts out at that result, the one taken back last, so
+    /// that correcting a value takes changing only that one, as long as the match format still
+    /// takes it; else nothing is entered.
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, or the match has a
@@ -1214,7 +1229,18 @@ impl Session {
         }
         let format = phase.match_format();
         let template = format.template(phase.data(), r#match);
-        Ok(ResultForm::new(id, dyn_clone::clone_box(format), template))
+        // the match format may have changed since, e.g. with the phase edited
+        let reopened = self.reopened.get(&id).filter(|contest| {
+            template
+                .root
+                .check(contest.decision(), contest.values(), contest.parts())
+                .is_ok()
+        });
+        let format = dyn_clone::clone_box(format);
+        Ok(match reopened {
+            Some(contest) => ResultForm::reported(id, format, template, contest),
+            None => ResultForm::new(id, format, template),
+        })
     }
 
     /// The result of the finished match `id` as it was reported, to be shown, not changed: as a
@@ -1301,7 +1327,8 @@ impl Session {
     }
 
     /// Undoes the result reported for the match `id`, which may be any reported match rather than
-    /// only the one reported last. Every other change stays in effect.
+    /// only the one reported last. Every other change stays in effect. The form of the match
+    /// starts out at the result, see [`Self::result_form`].
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, the match has no
@@ -1312,6 +1339,7 @@ impl Session {
             return Err(UndoReportError::UnknownMatch);
         };
         let row = self.match_row(phase, r#match);
+        let contest = r#match.contest().clone();
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
         self.act(Action::Reopen(row.clone()), |machine, history| {
@@ -1323,6 +1351,7 @@ impl Session {
                 .reported_number(&error)
                 .map_or(UndoReportError::DependedOn, UndoReportError::DependedOnBy),
         })?;
+        self.reopened.insert(id, contest);
         let matches = self
             .started_phase()
             .expect("still started")
@@ -1404,15 +1433,20 @@ impl Session {
     }
 
     /// Undoes the latest action of this session that is still in effect, which may be an
-    /// [`Self::undo_report`], bringing the result back. Returns the action undone.
+    /// [`Self::undo_report`], bringing the result back. Returns the action undone. The form of a
+    /// match whose report it undoes starts out at the result, see [`Self::result_form`].
     ///
     /// # Errors
     /// Returns [`NothingToUndo`] if every action of the session is undone.
     pub fn undo(&mut self) -> Result<Action, NothingToUndo> {
-        // read before the undo, which removes the phase
+        // read before the undo, which removes the phase, or the result
         let phase = (self.done.last() == Some(&Action::AddPhase))
             .then(|| self.phase().map(Phase::config))
             .flatten();
+        let reported = match self.done.last() {
+            Some(Action::Report(row)) => self.reported_contest(row.id),
+            _ => None,
+        };
         match self.history.undo_last(&mut self.machine) {
             Ok(_) => {
                 let action = self.done.pop().expect("an action was undone");
@@ -1420,6 +1454,7 @@ impl Session {
                 if phase.is_some() {
                     self.undone_phase = phase;
                 }
+                self.reopened.extend(reported);
                 Ok(action)
             }
             Err(UndoLastError::NothingToUndo) => Err(NothingToUndo),
@@ -1430,15 +1465,22 @@ impl Session {
     }
 
     /// Redoes the action this session undid last, as long as it took no other action since.
-    /// Returns the action redone.
+    /// Returns the action redone. The form of a match it reopens again starts out at the result,
+    /// see [`Self::result_form`].
     ///
     /// # Errors
     /// Returns [`NothingToRedo`] if there is no such action.
     pub fn redo(&mut self) -> Result<Action, NothingToRedo> {
+        // read before the redo, which takes the result back
+        let reported = match self.undone.last() {
+            Some(Action::Reopen(row)) => self.reported_contest(row.id),
+            _ => None,
+        };
         match self.history.redo_last(&mut self.machine) {
             Ok(_) => {
                 let action = self.undone.pop().expect("an action was redone");
                 self.done.push(action.clone());
+                self.reopened.extend(reported);
                 Ok(action)
             }
             Err(RedoLastError::NothingToRedo) => Err(NothingToRedo),
@@ -1482,6 +1524,15 @@ impl Session {
             .matches()
             .get(&reported.match_id())?;
         Some(number(r#match))
+    }
+
+    /// The match `id` with what was reported for it, if it has a result, which undoing its report
+    /// takes back.
+    fn reported_contest(&self, id: MatchId) -> Option<(MatchId, Part)> {
+        let r#match = self.started_phase()?.data().matches().get(&id)?;
+        r#match
+            .is_finished()
+            .then(|| (id, r#match.contest().clone()))
     }
 
     /// The phase of the competition, whether started or not.

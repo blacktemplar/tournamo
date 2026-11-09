@@ -2233,6 +2233,24 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the value of a result labelled `label` in the row of its match, e.g.
+    /// `"Score of Alice, match 1"`, shows `text`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_in_row_value(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::XPath(format!(
+                    "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
+                    without_isolation_marks("@aria-label")
+                )),
+                |query| query.with_value(text.to_owned()),
+                &format!("the value {text:?}"),
+            )
+            .await
+    }
+
     /// Presses Tab in the last value of `part` in the row of its match, e.g. `"Game 2, match 1"`,
     /// whichever side it is of.
     pub async fn tab_out_of_part_in_row(&self, part: &str) -> WebDriverResult<()> {

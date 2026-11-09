@@ -16,11 +16,14 @@
 //! screen asks ([`ResultForm::complete_score`]).
 //!
 //! A finished match is shown as it was reported by the view of a form of it
-//! ([`Session::reported_result`](crate::session::Session::reported_result)).
+//! ([`Session::reported_result`](crate::session::Session::reported_result)). Once reopened, its
+//! form starts out at that result, to be corrected
+//! ([`Session::result_form`](crate::session::Session::result_form)).
 //!
 //! A result chosen by hand overrides the one suggested, which is rare: a screen may offer the
 //! choice only on request, except for a part that only a choice decides
-//! ([`PartView::needs_choice`]).
+//! ([`PartView::needs_choice`]) and a form with a result chosen already, e.g. that of a match
+//! reopened ([`ResultForm::is_chosen`]).
 //!
 //! Nothing entered is refused for breaking the rules of a sport: the form only warns of a score
 //! unlike those the match format hints a winner usually has, of a result chosen against the one the
@@ -119,6 +122,14 @@ impl Entry {
 
     fn is_chosen(&self) -> bool {
         self.chosen.is_some() || self.parts.iter().any(Self::is_chosen)
+    }
+
+    /// Whether nothing but values was entered for the part and its parts: no result chosen, and no
+    /// reason given.
+    fn has_only_values(&self) -> bool {
+        self.chosen.is_none()
+            && self.reason.is_none()
+            && self.parts.iter().all(Self::has_only_values)
     }
 
     fn follow_suggestions(&mut self) {
@@ -391,12 +402,12 @@ impl ResultForm {
         true
     }
 
-    /// Enters `scores` as [`MatchRow::scores`](crate::view::MatchRow::scores) shows them: the one
-    /// of the match into its first field, if it has one, or else one into the first field of each
-    /// part in order, e.g. the games of a best of; a count goes into a field of decimals as its
-    /// number. Returns whether the match takes them, having entered nothing if not: it does not if
-    /// they are more than its parts, a score is of a part without a field, or a decimal is of a
-    /// field of counts.
+    /// Enters `scores` as [`MatchRow::scores`](crate::view::MatchRow::scores) shows them, in place
+    /// of everything entered: the one of the match into its first field, if it has one, or else
+    /// one into the first field of each part in order, e.g. the games of a best of; a count goes
+    /// into a field of decimals as its number. Returns whether the match takes them, having
+    /// changed nothing if not: it does not if they are more than its parts, a score is of a part
+    /// without a field, or a decimal is of a field of counts.
     pub fn enter_scores(&mut self, scores: &[Sides<Option<EnteredValue>>]) -> bool {
         let root = &self.template.root;
         // where each score goes: the path of its part and its field, none for a part without one;
@@ -430,6 +441,7 @@ impl ResultForm {
         else {
             return false;
         };
+        self.root = Entry::default();
         for (path, key, score) in entries {
             self.set_value(path.as_slice(), &key, Team::A, score.a);
             self.set_value(&path, &key, Team::B, score.b);
@@ -441,12 +453,16 @@ impl ResultForm {
     /// match has a single field and no parts, e.g. its score, or else no field of its own and parts
     /// of one level with a single field and no parts of their own, e.g. the score of each game of a
     /// best of. A match decided by its winner alone takes none, and neither does one of parts of
-    /// several levels, e.g. the rubbers of a fixture.
+    /// several levels, e.g. the rubbers of a fixture, nor one with more entered than values, e.g. a
+    /// result chosen by hand before the match was reopened.
     ///
     /// What the row enters goes into this form as [`enter`](Self::enter) or
     /// [`set_value`](Self::set_value) do; a result is never chosen there, so the form is reported
     /// as it suggests.
     pub fn quick_entry(&self) -> Option<QuickEntry> {
+        if !self.root.has_only_values() {
+            return None;
+        }
         let level = &self.template.root;
         let mut root = self.view().root;
         let fields: Vec<QuickField> = match (&level.parts, level.fields.len()) {

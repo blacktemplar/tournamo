@@ -70,6 +70,10 @@ a file whose `"format"` changes is migrated, not refused.
   the left side's first (`3 21-17 19-21 21-15`), or after part of the winner's
   name, the winner's first (`ali 21-17`). A result typed against the scores is
   refused; that takes the dialog.
+- In the browser, a match reopened, or whose report is undone, keeps the score
+  reported, in its row or its dialog, so that correcting a typo takes changing
+  only that value. A result chosen against the score stays chosen, in the
+  dialog. Scores typed in for the match replace it.
 
 ### Changed
 

@@ -1,0 +1,978 @@
+{
+  "format": 2,
+  "name": "single-elimination",
+  "log": [
+    {
+      "id": "7476f289-f1a2-4a67-96fd-7617f7350927",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::set_competition_seed",
+          "value": {
+            "seed": [
+              14,
+              235,
+              74,
+              203,
+              82,
+              58,
+              200,
+              8,
+              104,
+              93,
+              137,
+              169
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "0dbb0fd2-1b93-4e29-ac0f-72fdc2a03c6e",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "050da518-1fe7-411f-99a9-a5f3e9aecd98",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "94046e12-0722-4dfd-8771-212a15721e7a",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "12f6158a-66a7-47c2-aa92-f83ba2af2ee4",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "9d0e2d8a-99cd-4a1c-8602-66830522763e",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "bbd1ecea-8eb2-46c1-81d4-4e4ff4ab7c58",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "f9a259e9-8b80-4947-8d96-b2ccf29f3613",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "dc11f180-4cc8-46d2-a1a0-fd3a0df61299",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8b2ba33e-303d-4bf9-9f8d-aa63f1f48a1c",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "1ce2d488-65ca-4286-b535-9c80491d31bc",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "5d364745-ce2b-487d-b739-1e0cd26a9148",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_entrant",
+          "value": {
+            "entrant": {
+              "id": "e0be6599-46fd-49f5-8a47-2128f22a87e1",
+              "annotations": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "8e762495-a4e5-4ae3-ac89-af5486e49b91",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::add_phase",
+          "value": {
+            "id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "plugins": {
+              "format": {
+                "type": "tournament_engine::single_elimination",
+                "value": {
+                  "third_place_match": true,
+                  "bracket": null
+                }
+              },
+              "match_format": {
+                "type": "tournament_engine::winner_only",
+                "value": null
+              },
+              "ranking": [
+                {
+                  "type": "tournament_engine::later_first_loss",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::fewer_losses",
+                  "value": null
+                }
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": null
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "f9c0c715-a861-489c-ab9d-cf416ee47f79",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::start_competition",
+          "value": null
+        }
+      }
+    },
+    {
+      "id": "704d518b-e6bc-489e-954a-18ec9d79f8b1",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::report_match_result",
+          "value": {
+            "phase_id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "match_id": "65cb5b56-b604-5f5d-80b6-2c1a57b745a0",
+            "decision": {
+              "result": "AWins",
+              "reason": null
+            },
+            "values": [],
+            "parts": []
+          }
+        }
+      }
+    },
+    {
+      "id": "53a86955-89d7-4ee3-9014-74f1bee96aaa",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::report_match_result",
+          "value": {
+            "phase_id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "match_id": "96076f08-d559-5cb3-9ad6-3c57e09f774c",
+            "decision": {
+              "result": "BWins",
+              "reason": null
+            },
+            "values": [],
+            "parts": []
+          }
+        }
+      }
+    },
+    {
+      "id": "a1b6df30-91a0-45f1-bce6-670566cf5902",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::report_match_result",
+          "value": {
+            "phase_id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "match_id": "234a2c48-9434-57f5-8897-bd39324daf8d",
+            "decision": {
+              "result": "AWins",
+              "reason": null
+            },
+            "values": [],
+            "parts": []
+          }
+        }
+      }
+    },
+    {
+      "id": "9ffa1a57-d53b-4d4e-b1d4-c54eac7144c7",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::report_match_result",
+          "value": {
+            "phase_id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "match_id": "64e3b0b4-8efb-56b6-8256-17634ad33d84",
+            "decision": {
+              "result": "BWins",
+              "reason": null
+            },
+            "values": [],
+            "parts": []
+          }
+        }
+      }
+    },
+    {
+      "id": "adea5289-e44e-46eb-9c5a-cefed21fcf08",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::report_match_result",
+          "value": {
+            "phase_id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "match_id": "45a455d6-07de-5b24-aa44-d8f13580f9c0",
+            "decision": {
+              "result": "AWins",
+              "reason": null
+            },
+            "values": [],
+            "parts": []
+          }
+        }
+      }
+    },
+    {
+      "id": "5c6a235f-2e24-44dd-8384-e762fc018622",
+      "kind": {
+        "Apply": {
+          "type": "tournament_engine::report_match_result",
+          "value": {
+            "phase_id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+            "match_id": "3f0a8237-b233-5971-83a5-9f4a6604f08c",
+            "decision": {
+              "result": "BWins",
+              "reason": null
+            },
+            "values": [],
+            "parts": []
+          }
+        }
+      }
+    }
+  ],
+  "people": [
+    {
+      "id": "050da518-1fe7-411f-99a9-a5f3e9aecd98",
+      "name": "A"
+    },
+    {
+      "id": "12f6158a-66a7-47c2-aa92-f83ba2af2ee4",
+      "name": "B"
+    },
+    {
+      "id": "bbd1ecea-8eb2-46c1-81d4-4e4ff4ab7c58",
+      "name": "C"
+    },
+    {
+      "id": "dc11f180-4cc8-46d2-a1a0-fd3a0df61299",
+      "name": "D"
+    },
+    {
+      "id": "1ce2d488-65ca-4286-b535-9c80491d31bc",
+      "name": "E"
+    },
+    {
+      "id": "e0be6599-46fd-49f5-8a47-2128f22a87e1",
+      "name": "F"
+    }
+  ],
+  "competition": {
+    "entrants": [
+      {
+        "id": "050da518-1fe7-411f-99a9-a5f3e9aecd98",
+        "annotations": []
+      },
+      {
+        "id": "12f6158a-66a7-47c2-aa92-f83ba2af2ee4",
+        "annotations": []
+      },
+      {
+        "id": "bbd1ecea-8eb2-46c1-81d4-4e4ff4ab7c58",
+        "annotations": []
+      },
+      {
+        "id": "dc11f180-4cc8-46d2-a1a0-fd3a0df61299",
+        "annotations": []
+      },
+      {
+        "id": "1ce2d488-65ca-4286-b535-9c80491d31bc",
+        "annotations": []
+      },
+      {
+        "id": "e0be6599-46fd-49f5-8a47-2128f22a87e1",
+        "annotations": []
+      }
+    ],
+    "phases": [
+      {
+        "id": "f21a8250-8ddb-4ae1-8f2d-34e82614fa2d",
+        "phase_format": {
+          "type": "tournament_engine::single_elimination",
+          "value": {
+            "third_place_match": true,
+            "bracket": {
+              "pairings": [
+                {
+                  "round": 1,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 8
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "ecc9fa2b-4090-51ec-8371-61a6cfca9fef"
+                    },
+                    "Bye"
+                  ],
+                  "match": null,
+                  "winner_to": {
+                    "pairing": 4,
+                    "side": "A"
+                  },
+                  "loser_to": null,
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 1,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 8
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "38b7dc73-124a-5f2f-8a67-ba23afece9d4"
+                    },
+                    {
+                      "Ranking": "b994e721-f4dd-570b-938f-b91c964f02bf"
+                    }
+                  ],
+                  "match": "65cb5b56-b604-5f5d-80b6-2c1a57b745a0",
+                  "winner_to": {
+                    "pairing": 4,
+                    "side": "B"
+                  },
+                  "loser_to": null,
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 1,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 8
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "3f1ace5d-68e9-5981-b414-30d6e18df3ae"
+                    },
+                    "Bye"
+                  ],
+                  "match": null,
+                  "winner_to": {
+                    "pairing": 5,
+                    "side": "A"
+                  },
+                  "loser_to": null,
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 1,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 8
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "c1b6ddba-c04d-5cfb-8766-44b3f6da424a"
+                    },
+                    {
+                      "Ranking": "bcb057d5-a2ca-511f-bed7-a9ffe49a2852"
+                    }
+                  ],
+                  "match": "96076f08-d559-5cb3-9ad6-3c57e09f774c",
+                  "winner_to": {
+                    "pairing": 5,
+                    "side": "B"
+                  },
+                  "loser_to": null,
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 2,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 4
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "ecc9fa2b-4090-51ec-8371-61a6cfca9fef"
+                    },
+                    {
+                      "Ranking": "38b7dc73-124a-5f2f-8a67-ba23afece9d4"
+                    }
+                  ],
+                  "match": "234a2c48-9434-57f5-8897-bd39324daf8d",
+                  "winner_to": {
+                    "pairing": 6,
+                    "side": "A"
+                  },
+                  "loser_to": {
+                    "pairing": 7,
+                    "side": "B"
+                  },
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 2,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 4
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "3f1ace5d-68e9-5981-b414-30d6e18df3ae"
+                    },
+                    {
+                      "Ranking": "bcb057d5-a2ca-511f-bed7-a9ffe49a2852"
+                    }
+                  ],
+                  "match": "64e3b0b4-8efb-56b6-8256-17634ad33d84",
+                  "winner_to": {
+                    "pairing": 6,
+                    "side": "B"
+                  },
+                  "loser_to": {
+                    "pairing": 7,
+                    "side": "A"
+                  },
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 3,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": {
+                        "RoundOf": 2
+                      }
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "ecc9fa2b-4090-51ec-8371-61a6cfca9fef"
+                    },
+                    {
+                      "Ranking": "bcb057d5-a2ca-511f-bed7-a9ffe49a2852"
+                    }
+                  ],
+                  "match": "45a455d6-07de-5b24-aa44-d8f13580f9c0",
+                  "winner_to": null,
+                  "loser_to": null,
+                  "advances_only_if_won_by": null
+                },
+                {
+                  "round": 3,
+                  "annotations": [
+                    {
+                      "type": "tournament_engine::knockout_round",
+                      "value": "ThirdPlace"
+                    }
+                  ],
+                  "seats": [
+                    {
+                      "Ranking": "3f1ace5d-68e9-5981-b414-30d6e18df3ae"
+                    },
+                    {
+                      "Ranking": "38b7dc73-124a-5f2f-8a67-ba23afece9d4"
+                    }
+                  ],
+                  "match": "3f0a8237-b233-5971-83a5-9f4a6604f08c",
+                  "winner_to": null,
+                  "loser_to": null,
+                  "advances_only_if_won_by": null
+                }
+              ],
+              "in_play": []
+            }
+          }
+        },
+        "ranker": [
+          {
+            "type": "tournament_engine::later_first_loss",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::fewer_losses",
+            "value": null
+          }
+        ],
+        "metrics_calculators": [
+          {
+            "type": "tournament_engine::round_of_first_loss",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::wins_draws_losses",
+            "value": null
+          }
+        ],
+        "match_format": {
+          "type": "tournament_engine::winner_only",
+          "value": null
+        },
+        "data": {
+          "rankings": [
+            {
+              "id": "ecc9fa2b-4090-51ec-8371-61a6cfca9fef",
+              "entrants": [
+                "dc11f180-4cc8-46d2-a1a0-fd3a0df61299"
+              ],
+              "initial_unique_rank": 1,
+              "unique_rank": 1,
+              "rank": 1,
+              "played_matches": [
+                "234a2c48-9434-57f5-8897-bd39324daf8d",
+                "45a455d6-07de-5b24-aa44-d8f13580f9c0"
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": null
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": {
+                    "wins": 2,
+                    "draws": 0,
+                    "losses": 0,
+                    "byes": 1
+                  }
+                }
+              ]
+            },
+            {
+              "id": "3f1ace5d-68e9-5981-b414-30d6e18df3ae",
+              "entrants": [
+                "12f6158a-66a7-47c2-aa92-f83ba2af2ee4"
+              ],
+              "initial_unique_rank": 2,
+              "unique_rank": 4,
+              "rank": 4,
+              "played_matches": [
+                "64e3b0b4-8efb-56b6-8256-17634ad33d84",
+                "3f0a8237-b233-5971-83a5-9f4a6604f08c"
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": 2
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": {
+                    "wins": 0,
+                    "draws": 0,
+                    "losses": 2,
+                    "byes": 1
+                  }
+                }
+              ]
+            },
+            {
+              "id": "c1b6ddba-c04d-5cfb-8766-44b3f6da424a",
+              "entrants": [
+                "bbd1ecea-8eb2-46c1-81d4-4e4ff4ab7c58"
+              ],
+              "initial_unique_rank": 3,
+              "unique_rank": 5,
+              "rank": 5,
+              "played_matches": [
+                "96076f08-d559-5cb3-9ad6-3c57e09f774c"
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": 1
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": {
+                    "wins": 0,
+                    "draws": 0,
+                    "losses": 1,
+                    "byes": 0
+                  }
+                }
+              ]
+            },
+            {
+              "id": "38b7dc73-124a-5f2f-8a67-ba23afece9d4",
+              "entrants": [
+                "050da518-1fe7-411f-99a9-a5f3e9aecd98"
+              ],
+              "initial_unique_rank": 4,
+              "unique_rank": 3,
+              "rank": 3,
+              "played_matches": [
+                "65cb5b56-b604-5f5d-80b6-2c1a57b745a0",
+                "234a2c48-9434-57f5-8897-bd39324daf8d",
+                "3f0a8237-b233-5971-83a5-9f4a6604f08c"
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": 2
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": {
+                    "wins": 2,
+                    "draws": 0,
+                    "losses": 1,
+                    "byes": 0
+                  }
+                }
+              ]
+            },
+            {
+              "id": "b994e721-f4dd-570b-938f-b91c964f02bf",
+              "entrants": [
+                "1ce2d488-65ca-4286-b535-9c80491d31bc"
+              ],
+              "initial_unique_rank": 5,
+              "unique_rank": 6,
+              "rank": 5,
+              "played_matches": [
+                "65cb5b56-b604-5f5d-80b6-2c1a57b745a0"
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": 1
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": {
+                    "wins": 0,
+                    "draws": 0,
+                    "losses": 1,
+                    "byes": 0
+                  }
+                }
+              ]
+            },
+            {
+              "id": "bcb057d5-a2ca-511f-bed7-a9ffe49a2852",
+              "entrants": [
+                "e0be6599-46fd-49f5-8a47-2128f22a87e1"
+              ],
+              "initial_unique_rank": 6,
+              "unique_rank": 2,
+              "rank": 2,
+              "played_matches": [
+                "96076f08-d559-5cb3-9ad6-3c57e09f774c",
+                "64e3b0b4-8efb-56b6-8256-17634ad33d84",
+                "45a455d6-07de-5b24-aa44-d8f13580f9c0"
+              ],
+              "metrics": [
+                {
+                  "type": "tournament_engine::round_of_first_loss",
+                  "value": 3
+                },
+                {
+                  "type": "tournament_engine::wins_draws_losses",
+                  "value": {
+                    "wins": 2,
+                    "draws": 0,
+                    "losses": 1,
+                    "byes": 0
+                  }
+                }
+              ]
+            }
+          ],
+          "ranking_ids_ordered_by_unique_rank": [
+            "ecc9fa2b-4090-51ec-8371-61a6cfca9fef",
+            "bcb057d5-a2ca-511f-bed7-a9ffe49a2852",
+            "38b7dc73-124a-5f2f-8a67-ba23afece9d4",
+            "3f1ace5d-68e9-5981-b414-30d6e18df3ae",
+            "c1b6ddba-c04d-5cfb-8766-44b3f6da424a",
+            "b994e721-f4dd-570b-938f-b91c964f02bf"
+          ],
+          "matches": [
+            {
+              "id": "65cb5b56-b604-5f5d-80b6-2c1a57b745a0",
+              "team_a": [
+                "38b7dc73-124a-5f2f-8a67-ba23afece9d4"
+              ],
+              "team_b": [
+                "b994e721-f4dd-570b-938f-b91c964f02bf"
+              ],
+              "round": 1,
+              "number": 1,
+              "contest": {
+                "decision": {
+                  "result": "AWins",
+                  "reason": null
+                },
+                "values": [],
+                "parts": [],
+                "annotations": [
+                  {
+                    "type": "tournament_engine::knockout_round",
+                    "value": {
+                      "RoundOf": 8
+                    }
+                  }
+                ]
+              },
+              "tallies": []
+            },
+            {
+              "id": "96076f08-d559-5cb3-9ad6-3c57e09f774c",
+              "team_a": [
+                "c1b6ddba-c04d-5cfb-8766-44b3f6da424a"
+              ],
+              "team_b": [
+                "bcb057d5-a2ca-511f-bed7-a9ffe49a2852"
+              ],
+              "round": 1,
+              "number": 2,
+              "contest": {
+                "decision": {
+                  "result": "BWins",
+                  "reason": null
+                },
+                "values": [],
+                "parts": [],
+                "annotations": [
+                  {
+                    "type": "tournament_engine::knockout_round",
+                    "value": {
+                      "RoundOf": 8
+                    }
+                  }
+                ]
+              },
+              "tallies": []
+            },
+            {
+              "id": "234a2c48-9434-57f5-8897-bd39324daf8d",
+              "team_a": [
+                "ecc9fa2b-4090-51ec-8371-61a6cfca9fef"
+              ],
+              "team_b": [
+                "38b7dc73-124a-5f2f-8a67-ba23afece9d4"
+              ],
+              "round": 2,
+              "number": 3,
+              "contest": {
+                "decision": {
+                  "result": "AWins",
+                  "reason": null
+                },
+                "values": [],
+                "parts": [],
+                "annotations": [
+                  {
+                    "type": "tournament_engine::knockout_round",
+                    "value": {
+                      "RoundOf": 4
+                    }
+                  }
+                ]
+              },
+              "tallies": []
+            },
+            {
+              "id": "64e3b0b4-8efb-56b6-8256-17634ad33d84",
+              "team_a": [
+                "3f1ace5d-68e9-5981-b414-30d6e18df3ae"
+              ],
+              "team_b": [
+                "bcb057d5-a2ca-511f-bed7-a9ffe49a2852"
+              ],
+              "round": 2,
+              "number": 4,
+              "contest": {
+                "decision": {
+                  "result": "BWins",
+                  "reason": null
+                },
+                "values": [],
+                "parts": [],
+                "annotations": [
+                  {
+                    "type": "tournament_engine::knockout_round",
+                    "value": {
+                      "RoundOf": 4
+                    }
+                  }
+                ]
+              },
+              "tallies": []
+            },
+            {
+              "id": "45a455d6-07de-5b24-aa44-d8f13580f9c0",
+              "team_a": [
+                "ecc9fa2b-4090-51ec-8371-61a6cfca9fef"
+              ],
+              "team_b": [
+                "bcb057d5-a2ca-511f-bed7-a9ffe49a2852"
+              ],
+              "round": 3,
+              "number": 5,
+              "contest": {
+                "decision": {
+                  "result": "AWins",
+                  "reason": null
+                },
+                "values": [],
+                "parts": [],
+                "annotations": [
+                  {
+                    "type": "tournament_engine::knockout_round",
+                    "value": {
+                      "RoundOf": 2
+                    }
+                  }
+                ]
+              },
+              "tallies": []
+            },
+            {
+              "id": "3f0a8237-b233-5971-83a5-9f4a6604f08c",
+              "team_a": [
+                "3f1ace5d-68e9-5981-b414-30d6e18df3ae"
+              ],
+              "team_b": [
+                "38b7dc73-124a-5f2f-8a67-ba23afece9d4"
+              ],
+              "round": 3,
+              "number": 6,
+              "contest": {
+                "decision": {
+                  "result": "BWins",
+                  "reason": null
+                },
+                "values": [],
+                "parts": [],
+                "annotations": [
+                  {
+                    "type": "tournament_engine::knockout_round",
+                    "value": "ThirdPlace"
+                  }
+                ]
+              },
+              "tallies": []
+            }
+          ],
+          "byes": [
+            {
+              "id": "6faa76b0-e298-59d2-9ece-c2099a1a0331",
+              "ranking": "ecc9fa2b-4090-51ec-8371-61a6cfca9fef",
+              "round": 1,
+              "reached": true,
+              "annotations": [
+                {
+                  "type": "tournament_engine::knockout_round",
+                  "value": {
+                    "RoundOf": 8
+                  }
+                }
+              ]
+            },
+            {
+              "id": "71302f4d-3bb4-598a-bbf8-bad6225d79df",
+              "ranking": "3f1ace5d-68e9-5981-b414-30d6e18df3ae",
+              "round": 1,
+              "reached": true,
+              "annotations": [
+                {
+                  "type": "tournament_engine::knockout_round",
+                  "value": {
+                    "RoundOf": 8
+                  }
+                }
+              ]
+            }
+          ],
+          "seed": [
+            56,
+            11,
+            14,
+            233,
+            87,
+            134,
+            238,
+            117,
+            124,
+            72,
+            68,
+            142
+          ]
+        }
+      }
+    ],
+    "started": true,
+    "seed": [
+      14,
+      235,
+      74,
+      203,
+      82,
+      58,
+      200,
+      8,
+      104,
+      93,
+      137,
+      169
+    ]
+  }
+}

@@ -46,16 +46,9 @@ pub fn ResultOf(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Focus
     let mut form = use_signal(|| ctx.session.peek().result_form(id).ok());
     // what the result looks like, changing only with the match format, e.g. when the phase is
     // edited; what was entered for another one is dropped then
-    let template = use_memo(move || {
-        let session = ctx.session.read();
-        session
-            .result_form(id)
-            .ok()
-            .map(|form| form.template().clone())
-    });
+    let template = use_memo(move || ctx.session.read().result_template(id).ok());
     use_effect(move || {
-        let template = template();
-        if form.peek().as_ref().map(|form| form.template().clone()) != template {
+        if form.peek().as_ref().map(ResultForm::template) != template.read().as_ref() {
             form.set(ctx.session.peek().result_form(id).ok());
         }
     });

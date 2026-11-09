@@ -767,6 +767,30 @@ fn a_result_the_match_format_no_longer_takes_is_not_where_the_form_starts_out() 
     assert_eq!(form.result(), None);
 }
 
+#[test]
+fn the_template_of_a_match_is_that_of_its_form() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    let best_of = session.result_template(id).unwrap();
+    assert_eq!(&best_of, session.result_form(id).unwrap().template());
+
+    let draft = session
+        .phase_draft_to_edit()
+        .unwrap()
+        .with("match_format", PluginConfig::of::<Scored>())
+        .and_then(|draft| draft.with_defaults())
+        .unwrap();
+    session.edit_phase(&draft).unwrap();
+
+    let scored = session.result_template(id).unwrap();
+    assert_ne!(scored, best_of);
+    assert_eq!(&scored, session.result_form(id).unwrap().template());
+    session.report_entered("1 21-17").unwrap();
+    assert!(matches!(
+        session.result_template(id),
+        Err(ReportError::AlreadyFinished)
+    ));
+}
+
 /// A result chosen by hand shows only where results are chosen, so a match reopened with one takes
 /// no row.
 #[test]

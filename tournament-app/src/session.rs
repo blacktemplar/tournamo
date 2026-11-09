@@ -24,7 +24,7 @@ use tournament_engine::{
     RankingId, RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition,
     Team, TypeMap, Values,
     plugins::{
-        match_format::Parts,
+        match_format::{Parts, Template},
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
         ranker::SliceRanker,
@@ -1218,15 +1218,7 @@ impl Session {
     /// Returns an error if the competition has not started, has no such match, or the match has a
     /// result already.
     pub fn result_form(&self, id: MatchId) -> Result<ResultForm, ReportError> {
-        let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
-        let r#match = phase
-            .data()
-            .matches()
-            .get(&id)
-            .ok_or(ReportError::UnknownMatch)?;
-        if r#match.is_finished() {
-            return Err(ReportError::AlreadyFinished);
-        }
+        let (phase, r#match) = self.open_match(id)?;
         let format = phase.match_format();
         let template = format.template(phase.data(), r#match);
         // the match format may have changed since, e.g. with the phase edited
@@ -1241,6 +1233,16 @@ impl Session {
             Some(contest) => ResultForm::reported(id, format, template, contest),
             None => ResultForm::new(id, format, template),
         })
+    }
+
+    /// The [template](ResultForm::template) of the [form](Self::result_form) of the match `id`,
+    /// without making the form.
+    ///
+    /// # Errors
+    /// Returns an error as [`Self::result_form`] does.
+    pub fn result_template(&self, id: MatchId) -> Result<Template, ReportError> {
+        let (phase, r#match) = self.open_match(id)?;
+        Ok(phase.match_format().template(phase.data(), r#match))
     }
 
     /// The result of the finished match `id` as it was reported, to be shown, not changed: as a
@@ -1542,6 +1544,20 @@ impl Session {
 
     fn started_phase(&self) -> Option<&Phase> {
         self.phase().filter(|_| self.competition().is_started())
+    }
+
+    /// The started phase and its match `id`, which has no result yet.
+    fn open_match(&self, id: MatchId) -> Result<(&Phase, &Match), ReportError> {
+        let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
+        let r#match = phase
+            .data()
+            .matches()
+            .get(&id)
+            .ok_or(ReportError::UnknownMatch)?;
+        if r#match.is_finished() {
+            return Err(ReportError::AlreadyFinished);
+        }
+        Ok((phase, r#match))
     }
 
     fn entrant_row(&self, id: &EntrantId) -> EntrantRow {

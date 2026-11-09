@@ -51,6 +51,7 @@ async fn the_views_of_a_knockout_fit_a_phone_in_german() {
         gui.click("Starten").await?;
 
         gui.click("Phase").await?;
+        gui.expect_view("Phase").await?;
 
         // those shown on a phone
         gui.page
@@ -161,10 +162,12 @@ async fn the_page_keeps_its_width_between_views() {
         }
         gui.click("Add phase").await?;
         gui.click("Start").await?;
+        gui.expect_view("Matches & standings").await?;
         let (scrolling, matches) = gui.page.scrolling_and_width().await?;
         assert!(scrolling, "the matches of 16 scroll");
 
         gui.click("Phase").await?;
+        gui.expect_view("Phase").await?;
 
         let (scrolling, phase) = gui.page.scrolling_and_width().await?;
         assert!(!scrolling, "the phase does not scroll");
@@ -190,6 +193,7 @@ async fn a_cross_table_scrolls_inside_its_card_on_a_phone() {
         gui.click("Start").await?;
 
         gui.click("Cross table").await?;
+        gui.expect_view("Cross table").await?;
 
         gui.page.expect_no_sideways_scroll().await
     })

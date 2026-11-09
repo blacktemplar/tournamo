@@ -4,8 +4,12 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    EntrantId, MatchId, MatchResult, Score,
-    plugins::{metrics_calculator::Cell, phase_format::Stage},
+    Decision, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides,
+    plugins::{
+        match_format::{Level, Parts},
+        metrics_calculator::Cell,
+        phase_format::Stage,
+    },
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
 
@@ -98,6 +102,17 @@ pub struct MatchRow {
     pub a: Vec<EntrantRow>,
     pub b: Vec<EntrantRow>,
     pub result: Option<MatchResult>,
+    /// The scores of the match once finished, as entered: its own, or else those of its parts in
+    /// order, e.g. the games of a best of; none if it has none. Said in the operator's language by
+    /// [`Translator::scores`](crate::i18n::Translator::scores).
+    pub scores: Vec<Sides<Option<EnteredValue>>>,
+    /// The parts each side won once the match is finished, if it is played in parts at one level,
+    /// e.g. 3–1 in games of a best of; none if no part was decided. Said with the scores by
+    /// [`Translator::match_scores`](crate::i18n::Translator::match_scores).
+    pub parts_won: Option<Sides<u32>>,
+    /// Whether its match format enters more than who won, e.g. a score, which a
+    /// [`ResultForm`](crate::result_form::ResultForm) enters.
+    pub details: bool,
 }
 
 /// What an operator typed to find entrants by their name: it finds those whose name contains it,
@@ -315,6 +330,9 @@ pub struct CrossMatch {
     pub row: MatchRow,
     /// How it ended for the team of the cell's row, once it has a result.
     pub outcome: Option<Outcome>,
+    /// Its result at the highest level entered, the row's team first, once finished: its own
+    /// score, else the parts each side won, e.g. 3–2 in games of a best of; none if it has neither.
+    pub score: Option<Sides<Option<EnteredValue>>>,
 }
 
 /// How a match ended for one of its teams.
@@ -465,4 +483,88 @@ pub enum Action {
     Report(MatchRow),
     /// A result undone by its match, see [`Reopened::row`].
     Reopen(MatchRow),
+}
+
+/// The parts of `r#match` each side won, as [`MatchRow::parts_won`] shows them.
+pub fn parts_won(phase: &Phase, r#match: &Match) -> Option<Sides<u32>> {
+    if !r#match.is_finished() {
+        return None;
+    }
+    let template = phase.match_format().template(phase.data(), r#match);
+    parts_won_of(&template.root, r#match.contest())
+}
+
+/// The parts of `part` each side won, if it is played in parts at the same `level`, e.g. the games
+/// of a best of, and any of them is decided.
+pub(crate) fn parts_won_of(level: &Level, part: &Part) -> Option<Sides<u32>> {
+    if !matches!(level.parts, Parts::Same { .. }) {
+        return None;
+    }
+    let mut won = Sides::new(0, 0);
+    let mut decided = false;
+    for result in part
+        .parts()
+        .iter()
+        .filter_map(|part| part.decision().map(Decision::result))
+    {
+        decided = true;
+        match result {
+            MatchResult::AWins => won.a += 1,
+            MatchResult::BWins => won.b += 1,
+            MatchResult::Draw => {}
+        }
+    }
+    decided.then_some(won)
+}
+
+/// The scores of `r#match`, as [`MatchRow::scores`] shows them.
+pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>> {
+    if !r#match.is_finished() {
+        return Vec::new();
+    }
+    let template = phase.match_format().template(phase.data(), r#match);
+    let contest = r#match.contest();
+    match score(&template.root, contest) {
+        Some(score) => vec![score],
+        None => contest
+            .parts()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, part)| score(template.root.level_of_part(index)?, part))
+            .collect(),
+    }
+}
+
+/// The score of `r#match` at its highest level once finished, as [`CrossMatch::score`] has it,
+/// side A's first.
+pub(crate) fn top_score(phase: &Phase, r#match: &Match) -> Option<Sides<Option<EnteredValue>>> {
+    if !r#match.is_finished() {
+        return None;
+    }
+    let template = phase.match_format().template(phase.data(), r#match);
+    let contest = r#match.contest();
+    score(&template.root, contest).or_else(|| {
+        parts_won_of(&template.root, contest).map(|won| {
+            // Derived game totals can exceed the range of an entered count.
+
+            Sides::new(
+                Some(
+                    u16::try_from(won.a)
+                        .map_or_else(|_| EnteredValue::Decimal(won.a.into()), EnteredValue::Count),
+                ),
+                Some(
+                    u16::try_from(won.b)
+                        .map_or_else(|_| EnteredValue::Decimal(won.b.into()), EnteredValue::Count),
+                ),
+            )
+        })
+    })
+}
+
+/// The value of the first field of `level` entered for `part`.
+fn score(level: &Level, part: &Part) -> Option<Sides<Option<EnteredValue>>> {
+    level
+        .fields
+        .iter()
+        .find_map(|field| part.value(field.key.key()).copied())
 }

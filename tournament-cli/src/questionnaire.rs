@@ -1154,6 +1154,7 @@ mod tests {
             script.asked,
             [
                 "Format",
+                "Match format",
                 "Ranked by",
                 "Ranked by, then",
                 "Ranked by, then",
@@ -1196,7 +1197,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            script.options[1][..4],
+            script.options[2][..4],
             [
                 "more points",
                 "more Sonneborn-Berger",
@@ -1205,7 +1206,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            script.options[4][..4],
+            script.options[5][..4],
             [
                 "win-draw-loss record",
                 "points",
@@ -1254,6 +1255,7 @@ mod tests {
     fn a_fieldless_dependency_is_implied_without_being_preselected() {
         let mut script = Script::new([
             Step::Pick("round robin"),
+            Step::Accept,
             Step::Pick("more Buchholz"),
             Step::Pick(NO_FURTHER_ONE),
         ]);
@@ -1275,6 +1277,7 @@ mod tests {
     fn an_incompatible_choice_is_offered_and_the_operator_can_resolve_its_conflict() {
         let mut script = Script::new([
             Step::Pick("round robin"),
+            Step::Accept,
             Step::Pick("later elimination"),
             Step::Pick(NO_FURTHER_ONE),
             Step::Many(&["round of elimination"]),
@@ -1285,7 +1288,7 @@ mod tests {
         fill(&mut draft, &mut script).unwrap();
         assert_eq!(script.retries, 1);
         assert_eq!(
-            &script.asked[4..],
+            &script.asked[5..],
             ["Format", "Double elimination: grand final reset"]
         );
         assert!(draft.build().is_ok());
@@ -1295,6 +1298,7 @@ mod tests {
     fn a_missing_configurable_dependency_is_asked_again_instead_of_ignored() {
         let mut script = Script::new([
             Step::Pick("round robin"),
+            Step::Accept,
             Step::Pick("more points"),
             Step::Pick(NO_FURTHER_ONE),
             Step::Many(&[]),
@@ -1304,7 +1308,7 @@ mod tests {
         let mut draft = phase_draft();
         fill(&mut draft, &mut script).unwrap();
         assert_eq!(script.retries, 1);
-        assert_eq!(script.asked[4], "Metrics");
+        assert_eq!(script.asked[5], "Metrics");
         assert_eq!(ids(&draft, "metrics"), ["points"]);
         draft.add_implied();
         assert!(draft.build().is_ok());
@@ -1331,7 +1335,7 @@ mod tests {
                 "Format",
                 "Random rounds: rounds",
                 "Random rounds: rounds",
-                "Ranked by"
+                "Match format"
             ]
         );
         assert_eq!(
@@ -1359,6 +1363,7 @@ mod tests {
             &mut Script::new([
                 Step::Pick("Monster DYP"),
                 Step::Integer(7),
+                Step::Accept,
                 Step::Pick("more wins"),
             ]),
         )

@@ -19,10 +19,12 @@ use plugin_factory::{
 };
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated as _, Bye, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt as _, CompetitionTransition, Entrant, EntrantId, Match, MatchId,
-    MatchResult, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId, RemoveEntrant,
-    ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, TypeMap,
+    CompetitionStateMachineExt as _, CompetitionTransition, Decision, EnteredValue, Entrant,
+    EntrantId, Match, MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking,
+    RankingId, RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition,
+    Team, TypeMap, Values,
     plugins::{
+        match_format::{Parts, Template},
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::PhaseFormat,
         ranker::SliceRanker,
@@ -47,10 +49,11 @@ use crate::{
     file::{self, File},
     form::PhaseForm,
     people::{People, Person},
+    result_form::{ResultForm, ResultView, read_score},
     storage::{CompetitionKey, Listing, Progress, Save, Storage, Stored},
     view::{
-        Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow, Medal,
-        NameSearch, Plugin, Reopened, Reported, Round, RoundSummary, Scale, StageName,
+        self, Action, Actions, ByeRow, Column, Count, Entered, EntrantRow, Glossary, MatchRow,
+        Medal, NameSearch, Plugin, Reopened, Reported, Round, RoundSummary, Scale, StageName,
         StandingCell, StandingRow, Standings,
     },
 };
@@ -82,6 +85,9 @@ pub struct Session {
     /// The configuration of the phase whose adding this session undid last, which the form of a
     /// new phase starts out at.
     undone_phase: Option<Config>,
+    /// What was reported for each match whose result this session took back, as it was then, the
+    /// latest of each, which the form of the match starts out at, see [`Self::result_form`].
+    reopened: HashMap<MatchId, Part>,
     /// How often the session changed the people: with the length of the log, which every other
     /// change makes longer, undo and redo included, it counts the changes, see [`Self::changes`].
     people_changes: usize,
@@ -113,6 +119,7 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
+            reopened: HashMap::new(),
             people_changes: 0,
             saved_changes: 0,
             competition_saved: false,
@@ -143,6 +150,7 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
+            reopened: HashMap::new(),
             people_changes: 0,
             competition_saved: file.competition.is_some(),
         })
@@ -169,8 +177,10 @@ impl Session {
     /// Catches up with `stored`, what a storage holds of this session's competition: appends the
     /// entries of its log after those of the session's, each as [`Self::load`] would have
     /// replayed it, and takes the people as stored. Returns how many entries it appended. They are
-    /// no actions of this session, so there is nothing more to undo. [`Self::catch_up`] reads and
-    /// catches up in one; reading apart lets a GUI hold no borrow of the session while it reads.
+    /// no actions of this session, so there is nothing more to undo, and since they may have
+    /// reported and reopened again the matches this session reopened, the forms of those start
+    /// out empty again. [`Self::catch_up`] reads and catches up in one; reading apart lets a GUI
+    /// hold no borrow of the session while it reads.
     ///
     /// An entry that undoes or replaces an earlier one replays the log after that one, as it did
     /// when it was appended; any other entry only applies to the current state.
@@ -195,6 +205,9 @@ impl Session {
         self.competition_saved = file.competition.is_some();
         let entries = file.log.into_iter().skip(self.machine.log().len());
         let appended = entries.len();
+        if appended > 0 {
+            self.reopened.clear();
+        }
         for entry in entries {
             self.machine.apply(entry).map_err(LoadError::Replay)?;
             self.saved_changes = self.changes();
@@ -245,6 +258,7 @@ impl Session {
             done: Vec::new(),
             undone: Vec::new(),
             undone_phase: None,
+            reopened: HashMap::new(),
             people_changes: 0,
             saved_changes: 0,
             competition_saved: false,
@@ -981,7 +995,16 @@ impl Session {
     pub fn report_entered(&mut self, entry: &str) -> Result<Reported, ReportEnteredError> {
         let row = self.read_entered(entry).report?;
         let result = row.result.expect("an entry says a result");
-        self.report(row.id, result).map_err(|error| match error {
+        let reported = if row.scores.is_empty() {
+            self.report(row.id, result)
+        } else {
+            let mut form = self.result_form(row.id)?;
+            let entered = form.enter_scores(&row.scores);
+            debug_assert!(entered, "the scores of an entry fit its match");
+            form.choose(&[], Some(result));
+            self.report_form(&form)
+        };
+        reported.map_err(|error| match error {
             ReportError::AlreadyFinished => ReportEnteredError::AlreadyFinished(row.number),
             error => error.into(),
         })
@@ -992,20 +1015,29 @@ impl Session {
     ///
     /// - the number of a match, as [`MatchRow::number`], and its result, separated by whitespace
     ///   or a `-`: `1` for a win of side A, `2` for one of side B, and `X` (or `x`) for a draw,
-    ///   which needs no separator, e.g. `"3 1"`, `"3-1"`, `"12 X"` or `"12x"`. It fits that match,
-    ///   also with a result already or without a result entered (`"3"`); or
+    ///   which needs no separator, e.g. `"3 1"`, `"3-1"`, `"12 X"` or `"12x"`; or its scores,
+    ///   side A's first, followed by its result only where they do not say it, each apart by
+    ///   whitespace, e.g. `"3 21-17"`, `"3 21-17 19-21 21-15"` or `"3 21-17 1"`. It fits that
+    ///   match, also with a result already or without a result entered (`"3"`); or
     /// - part of the name of the winner, found as [`NameSearch`] finds it, optionally followed by
-    ///   the number of the match and by `X` for a draw, in either order, each apart by whitespace,
-    ///   e.g. `"ali"`, `"ali X"`, `"ali 5"` or `"ali 5 X"`. It fits the open matches with an
-    ///   entrant of that name, and says a result only if they are one side of one match (one match
-    ///   for a draw), whichever of them is playable now. A number
-    ///   or an `X` at the end is read as a part of the name as long as a name contains it, e.g.
-    ///   `"Malcolm X"` is Malcolm X's win, and `"Malcolm X X"` a draw of his match.
+    ///   the number of the match and by `X` for a draw, in either order, and then by the scores,
+    ///   the named side's first, each apart by whitespace, e.g. `"ali"`, `"ali X"`, `"ali 5"`,
+    ///   `"ali 5 X"` or `"ali 21-17"`. It fits the open matches with an entrant of that name, and
+    ///   says a result only if they are one side of one match (one match for a draw, on one side
+    ///   of it with scores), whichever of them is playable now. A number, an `X` or scores at the
+    ///   end are read as a part of the name as long as a name contains them, e.g. `"Malcolm X"` is
+    ///   Malcolm X's win, and `"Malcolm X X"` a draw of his match.
+    ///
+    /// A score is one [`read_score`] reads, e.g. `21-17`, `21–17` or `9.5-10`: that of the match,
+    /// or else one of each of its parts in order, e.g. its games, as [`ResultForm::enter_scores`]
+    /// enters them. The result entered must be the one they say, if they say one: a result
+    /// against them is entered in a [`ResultForm`].
     ///
     /// The result is an error if the competition has not started, `entry` is empty, it is the
     /// number of a match alone, there is no match of the number entered, it has a result already,
-    /// its format has no draws while a draw is entered, or the name entered fits no open match,
-    /// both sides of one, or several matches.
+    /// its format has no draws while a draw is entered or scored, the name entered fits no open
+    /// match, both sides of one, or several matches, the match does not take the scores entered,
+    /// they say no result while none is entered, or another than the one entered.
     pub fn read_entered(&self, entry: &str) -> Entered {
         let nothing = |error: ReportEnteredError| Entered {
             found: Vec::new(),
@@ -1018,7 +1050,12 @@ impl Session {
         if entry.is_empty() {
             return nothing(ReportEnteredError::Unreadable);
         }
-        let Some((number, result)) = read_entry(entry) else {
+        let Some(NumberedEntry {
+            number,
+            scores,
+            result,
+        }) = read_entry(entry)
+        else {
             return self.read_named(phase, entry);
         };
         let Some(r#match) = phase
@@ -1032,14 +1069,8 @@ impl Session {
         let row = self.match_row(phase, r#match);
         let report = match result {
             _ if r#match.is_finished() => Err(ReportEnteredError::AlreadyFinished(number)),
-            None => Err(ReportEnteredError::MissingResult(number)),
-            Some(MatchResult::Draw) if !phase.format().allows_draws() => {
-                Err(ReportError::DrawNotAllowed.into())
-            }
-            Some(result) => Ok(MatchRow {
-                result: Some(result),
-                ..row.clone()
-            }),
+            None if scores.is_empty() => Err(ReportEnteredError::MissingResult(number)),
+            result => self.with_scores(phase, row.clone(), &scores, result),
         };
         Entered {
             found: vec![row],
@@ -1071,7 +1102,7 @@ impl Session {
                     let number = reading.number?;
                     let anywhere = NamedEntry {
                         number: None,
-                        ..*reading
+                        ..reading.clone()
                     };
                     (!anywhere.fitting(&open).is_empty()).then(|| ReportEnteredError::NotInMatch {
                         name: reading.name.to_owned(),
@@ -1085,7 +1116,7 @@ impl Session {
             };
         };
         let mut found: Vec<MatchRow> = Vec::new();
-        for (row, _) in &fitting {
+        for (row, ..) in &fitting {
             if found.last().is_none_or(|last| last.id != row.id) {
                 found.push((*row).clone());
             }
@@ -1094,10 +1125,27 @@ impl Session {
             Err(ReportError::DrawNotAllowed.into())
         } else {
             match (fitting.as_slice(), found.as_slice()) {
-                ([(row, result)], _) => Ok(MatchRow {
-                    result: Some(*result),
-                    ..(*row).clone()
-                }),
+                ([(row, result, side)], _) => match (reading.scores.as_slice(), side) {
+                    ([], _) => Ok(MatchRow {
+                        result: Some(*result),
+                        ..(*row).clone()
+                    }),
+                    // scores of a draw whose both sides have the name are no one's
+                    (_, None) => Err(ReportEnteredError::BothSides {
+                        name: reading.name.to_owned(),
+                        number: row.number,
+                    }),
+                    (scores, Some(team)) => {
+                        let scores: Vec<_> = scores
+                            .iter()
+                            .map(|score| match team {
+                                Team::A => *score,
+                                Team::B => Sides::new(score.b, score.a),
+                            })
+                            .collect();
+                        self.with_scores(phase, (*row).clone(), &scores, Some(*result))
+                    }
+                },
                 (_, [row]) => Err(ReportEnteredError::BothSides {
                     name: reading.name.to_owned(),
                     number: row.number,
@@ -1112,24 +1160,149 @@ impl Session {
         Entered { found, report }
     }
 
-    /// Reports `result` for the match `id`.
+    /// `row`, an open match of `phase`, with the result `scores` (side A's first) and `result`
+    /// say, see [`Self::read_entered`].
+    fn with_scores(
+        &self,
+        phase: &Phase,
+        row: MatchRow,
+        scores: &[Sides<EnteredValue>],
+        result: Option<MatchResult>,
+    ) -> Result<MatchRow, ReportEnteredError> {
+        let scores: Vec<_> = scores
+            .iter()
+            .map(|score| Sides::new(Some(score.a), Some(score.b)))
+            .collect();
+        let result = if scores.is_empty() {
+            result
+        } else {
+            let mut form = self.result_form(row.id)?;
+            if !form.enter_scores(&scores) {
+                return Err(ReportEnteredError::ScoresNotTaken(row.number));
+            }
+            match (result, form.result()) {
+                (Some(entered), Some(suggested)) if entered != suggested => {
+                    return Err(ReportEnteredError::AgainstScores(row.number));
+                }
+                (None, None) => return Err(ReportEnteredError::Undecided(row.number)),
+                (entered, suggested) => entered.or(suggested),
+            }
+        };
+        let result = result.expect("a result entered or suggested");
+        if result == MatchResult::Draw && !phase.format().allows_draws() {
+            return Err(ReportError::DrawNotAllowed.into());
+        }
+        Ok(MatchRow {
+            result: Some(result),
+            scores,
+            ..row
+        })
+    }
+
+    /// Reports `result` for the match `id`, with nothing else entered.
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, the match has a
     /// result already, or its format does not take the result.
     pub fn report(&mut self, id: MatchId, result: MatchResult) -> Result<Reported, ReportError> {
+        self.report_decision(id, Decision::new(result), Values::new(), Vec::new())
+    }
+
+    /// A form to enter the result of the match `id` into, see [`ResultForm`]. If this session took
+    /// back the result of the match, by reopening it ([`Self::undo_report`]), undoing its report
+    /// or redoing a reopening, the form starts out at that result, the one taken back last, so
+    /// that correcting a value takes changing only that one, as long as the match format still
+    /// takes it; else nothing is entered.
+    ///
+    /// # Errors
+    /// Returns an error if the competition has not started, has no such match, or the match has a
+    /// result already.
+    pub fn result_form(&self, id: MatchId) -> Result<ResultForm, ReportError> {
+        let (phase, r#match) = self.open_match(id)?;
+        let format = phase.match_format();
+        let template = format.template(phase.data(), r#match);
+        // the match format may have changed since, e.g. with the phase edited
+        let reopened = self.reopened.get(&id).filter(|contest| {
+            template
+                .root
+                .check(contest.decision(), contest.values(), contest.parts())
+                .is_ok()
+        });
+        let format = dyn_clone::clone_box(format);
+        Ok(match reopened {
+            Some(contest) => ResultForm::reported(id, format, template, contest),
+            None => ResultForm::new(id, format, template),
+        })
+    }
+
+    /// The [template](ResultForm::template) of the [form](Self::result_form) of the match `id`,
+    /// without making the form.
+    ///
+    /// # Errors
+    /// Returns an error as [`Self::result_form`] does.
+    pub fn result_template(&self, id: MatchId) -> Result<Template, ReportError> {
+        let (phase, r#match) = self.open_match(id)?;
+        Ok(phase.match_format().template(phase.data(), r#match))
+    }
+
+    /// The result of the finished match `id` as it was reported, to be shown, not changed: as a
+    /// [`ResultForm`] shows it, a result reported against the values that suggest another one
+    /// shown as chosen, with its warning. `None` if there is no such match or it is not finished.
+    pub fn reported_result(&self, id: MatchId) -> Option<ResultView> {
+        let phase = self.started_phase()?;
+        let r#match = phase.data().matches().get(&id)?;
+        if !r#match.is_finished() {
+            return None;
+        }
+        let format = phase.match_format();
+        let template = format.template(phase.data(), r#match);
+        let form = ResultForm::reported(
+            id,
+            dyn_clone::clone_box(format),
+            template,
+            r#match.contest(),
+        );
+        Some(form.view())
+    }
+
+    /// Reports the result entered into `form`.
+    ///
+    /// # Errors
+    /// Returns an error as [`Self::report`] does, if anything typed into the form was not taken
+    /// ([`ResultForm::enter`]), and if the result neither says nor suggests who won.
+    pub fn report_form(&mut self, form: &ResultForm) -> Result<Reported, ReportError> {
+        if form.has_rejected() {
+            return Err(ReportError::NotTaken);
+        }
+        let (decision, values, parts) = form.report();
+        let decision = decision.ok_or(ReportError::Undecided)?;
+        self.report_decision(form.match_id(), decision, values, parts)
+    }
+
+    fn report_decision(
+        &mut self,
+        id: MatchId,
+        decision: Decision,
+        values: Values,
+        parts: Vec<Part>,
+    ) -> Result<Reported, ReportError> {
         let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
         let Some(r#match) = phase.data().matches().get(&id) else {
             return Err(ReportError::UnknownMatch);
         };
         let row = MatchRow {
-            result: Some(result),
+            result: Some(decision.result()),
             ..self.match_row(phase, r#match)
         };
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
+        let report = values.into_iter().fold(
+            ReportMatchResult::new(phase_id, id, decision),
+            |report, (key, sides)| report.with_value(key, sides),
+        );
+        let report = parts.into_iter().fold(report, ReportMatchResult::with_part);
         self.act(Action::Report(row.clone()), |machine, history| {
-            machine.apply_in(history, ReportMatchResult::new(phase_id, id, result))
+            machine.apply_in(history, report)
         })
         .map_err(|error| {
             let error = rejection(error);
@@ -1146,6 +1319,8 @@ impl Session {
             .expect("still started")
             .data()
             .matches();
+        let phase = self.started_phase().expect("still started");
+        let row = self.match_row(phase, &phase.data().matches()[&id]);
         Ok(Reported {
             row,
             new_matches: matches.len() - matches_before,
@@ -1154,7 +1329,8 @@ impl Session {
     }
 
     /// Undoes the result reported for the match `id`, which may be any reported match rather than
-    /// only the one reported last. Every other change stays in effect.
+    /// only the one reported last. Every other change stays in effect. The form of the match
+    /// starts out at the result, see [`Self::result_form`].
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, the match has no
@@ -1165,6 +1341,7 @@ impl Session {
             return Err(UndoReportError::UnknownMatch);
         };
         let row = self.match_row(phase, r#match);
+        let contest = r#match.contest().clone();
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
         self.act(Action::Reopen(row.clone()), |machine, history| {
@@ -1176,6 +1353,7 @@ impl Session {
                 .reported_number(&error)
                 .map_or(UndoReportError::DependedOn, UndoReportError::DependedOnBy),
         })?;
+        self.reopened.insert(id, contest);
         let matches = self
             .started_phase()
             .expect("still started")
@@ -1257,15 +1435,20 @@ impl Session {
     }
 
     /// Undoes the latest action of this session that is still in effect, which may be an
-    /// [`Self::undo_report`], bringing the result back. Returns the action undone.
+    /// [`Self::undo_report`], bringing the result back. Returns the action undone. The form of a
+    /// match whose report it undoes starts out at the result, see [`Self::result_form`].
     ///
     /// # Errors
     /// Returns [`NothingToUndo`] if every action of the session is undone.
     pub fn undo(&mut self) -> Result<Action, NothingToUndo> {
-        // read before the undo, which removes the phase
+        // read before the undo, which removes the phase, or the result
         let phase = (self.done.last() == Some(&Action::AddPhase))
             .then(|| self.phase().map(Phase::config))
             .flatten();
+        let reported = match self.done.last() {
+            Some(Action::Report(row)) => self.reported_contest(row.id),
+            _ => None,
+        };
         match self.history.undo_last(&mut self.machine) {
             Ok(_) => {
                 let action = self.done.pop().expect("an action was undone");
@@ -1273,6 +1456,7 @@ impl Session {
                 if phase.is_some() {
                     self.undone_phase = phase;
                 }
+                self.reopened.extend(reported);
                 Ok(action)
             }
             Err(UndoLastError::NothingToUndo) => Err(NothingToUndo),
@@ -1283,15 +1467,22 @@ impl Session {
     }
 
     /// Redoes the action this session undid last, as long as it took no other action since.
-    /// Returns the action redone.
+    /// Returns the action redone. The form of a match it reopens again starts out at the result,
+    /// see [`Self::result_form`].
     ///
     /// # Errors
     /// Returns [`NothingToRedo`] if there is no such action.
     pub fn redo(&mut self) -> Result<Action, NothingToRedo> {
+        // read before the redo, which takes the result back
+        let reported = match self.undone.last() {
+            Some(Action::Reopen(row)) => self.reported_contest(row.id),
+            _ => None,
+        };
         match self.history.redo_last(&mut self.machine) {
             Ok(_) => {
                 let action = self.undone.pop().expect("an action was redone");
                 self.done.push(action.clone());
+                self.reopened.extend(reported);
                 Ok(action)
             }
             Err(RedoLastError::NothingToRedo) => Err(NothingToRedo),
@@ -1337,6 +1528,15 @@ impl Session {
         Some(number(r#match))
     }
 
+    /// The match `id` with what was reported for it, if it has a result, which undoing its report
+    /// takes back.
+    fn reported_contest(&self, id: MatchId) -> Option<(MatchId, Part)> {
+        let r#match = self.started_phase()?.data().matches().get(&id)?;
+        r#match
+            .is_finished()
+            .then(|| (id, r#match.contest().clone()))
+    }
+
     /// The phase of the competition, whether started or not.
     fn phase(&self) -> Option<&Phase> {
         self.competition().phases().values().next()
@@ -1344,6 +1544,20 @@ impl Session {
 
     fn started_phase(&self) -> Option<&Phase> {
         self.phase().filter(|_| self.competition().is_started())
+    }
+
+    /// The started phase and its match `id`, which has no result yet.
+    fn open_match(&self, id: MatchId) -> Result<(&Phase, &Match), ReportError> {
+        let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
+        let r#match = phase
+            .data()
+            .matches()
+            .get(&id)
+            .ok_or(ReportError::UnknownMatch)?;
+        if r#match.is_finished() {
+            return Err(ReportError::AlreadyFinished);
+        }
+        Ok((phase, r#match))
     }
 
     fn entrant_row(&self, id: &EntrantId) -> EntrantRow {
@@ -1372,8 +1586,17 @@ impl Session {
             a: self.team(data, r#match.team_a()),
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
+            scores: view::scores(phase, r#match),
+            parts_won: view::parts_won(phase, r#match),
+            details: details(phase, r#match),
         }
     }
+}
+
+/// Whether the match format of `r#match` enters more than who won, see [`MatchRow::details`].
+fn details(phase: &Phase, r#match: &Match) -> bool {
+    let root = phase.match_format().template(phase.data(), r#match).root;
+    !root.fields.is_empty() || !matches!(root.parts, Parts::None)
 }
 
 /// The number of `r#match`, as [`MatchRow::number`] shows it.
@@ -1381,49 +1604,105 @@ fn number(r#match: &Match) -> usize {
     usize::try_from(r#match.number().get()).expect("a number of a match fits a usize")
 }
 
-/// The number of a match and its result, if any, that `entry` says, see
-/// [`Session::read_entered`].
-fn read_entry(entry: &str) -> Option<(usize, Option<MatchResult>)> {
+/// What an entry of the number of a match says, see [`Session::read_entered`].
+struct NumberedEntry {
+    number: usize,
+    /// Side A's first.
+    scores: Vec<Sides<EnteredValue>>,
+    result: Option<MatchResult>,
+}
+
+/// What `entry` says, if it starts with the number of a match, see [`Session::read_entered`].
+fn read_entry(entry: &str) -> Option<NumberedEntry> {
     let entry = entry.trim();
     let digits = entry
         .find(|char: char| !char.is_ascii_digit())
         .unwrap_or(entry.len());
     let (number, rest) = entry.split_at(digits);
     let number = number.parse().ok()?;
+    let numbered = |scores, result| {
+        Some(NumberedEntry {
+            number,
+            scores,
+            result,
+        })
+    };
     if rest.is_empty() {
-        return Some((number, None));
+        return numbered(Vec::new(), None);
     }
     let result = rest.trim_start_matches(|char: char| char.is_whitespace() || char == '-');
     // a win needs a separator, or its side would be read as a digit of the number
-    let separated = result.len() < rest.len();
-    let result = match result {
-        "1" if separated => MatchResult::AWins,
-        "2" if separated => MatchResult::BWins,
-        "X" | "x" => MatchResult::Draw,
-        _ => return None,
-    };
-    Some((number, Some(result)))
+    if let Some(result) = read_result(result, result.len() < rest.len()) {
+        return numbered(Vec::new(), Some(result));
+    }
+    // scores apart by whitespace, perhaps followed by the result
+    if !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let mut words: Vec<_> = rest.split_whitespace().collect();
+    let result = words.last().and_then(|last| read_result(last, true));
+    if result.is_some() {
+        words.pop();
+    }
+    let scores = words
+        .into_iter()
+        .map(read_score)
+        .collect::<Option<Vec<_>>>()?;
+    numbered(scores, result)
+}
+
+/// The result `text` says: `1`, `2` (if `separated` from the number of its match) or `X`.
+fn read_result(text: &str, separated: bool) -> Option<MatchResult> {
+    match text {
+        "1" if separated => Some(MatchResult::AWins),
+        "2" if separated => Some(MatchResult::BWins),
+        "X" | "x" => Some(MatchResult::Draw),
+        _ => None,
+    }
 }
 
 /// A way to read an entry of part of a name, see [`Session::read_entered`].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct NamedEntry<'a> {
     name: &'a str,
     /// The number of the match it is restricted to.
     number: Option<usize>,
     draw: bool,
+    /// The named side's first.
+    scores: Vec<Sides<EnteredValue>>,
 }
 
 impl<'a> NamedEntry<'a> {
     /// The ways to read `entry`, the longest name first: all of it, then without the last word if
-    /// that is a number or an `X`, then without the last two if they are one of each.
+    /// that is a number or an `X`, then without the last two if they are one of each; then the
+    /// same without the scores at its end, if any.
     fn readings(entry: &'a str) -> Vec<Self> {
+        let mut readings = Self::without_number(entry, Vec::new());
+        let mut name = entry;
+        let mut scores = Vec::new();
+        while let Some((before, last)) = name.rsplit_once(char::is_whitespace)
+            && let Some(score) = read_score(last)
+        {
+            scores.insert(0, score);
+            name = before.trim_end();
+        }
+        if !scores.is_empty() {
+            readings.extend(Self::without_number(name, scores));
+        }
+        readings
+    }
+
+    /// The ways to read `entry`, followed by `scores`, the longest name first: all of it, then
+    /// without the last word if that is a number or an `X`, then without the last two if they are
+    /// one of each.
+    fn without_number(entry: &'a str, scores: Vec<Sides<EnteredValue>>) -> Vec<Self> {
         let mut reading = Self {
             name: entry,
             number: None,
             draw: false,
+            scores,
         };
-        let mut readings = vec![reading];
+        let mut readings = vec![reading.clone()];
         for _ in 0..2 {
             let Some((before, last)) = reading.name.rsplit_once(char::is_whitespace) else {
                 break;
@@ -1439,14 +1718,15 @@ impl<'a> NamedEntry<'a> {
                 break;
             }
             reading.name = before.trim_end();
-            readings.push(reading);
+            readings.push(reading.clone());
         }
         readings
     }
 
-    /// The open matches of `open` this reading fits, with the result it says of each: a win of
-    /// each side with an entrant of its name, or a draw of a match with one.
-    fn fitting<'r>(&self, open: &'r [MatchRow]) -> Vec<(&'r MatchRow, MatchResult)> {
+    /// The open matches of `open` this reading fits, with the result it says of each and the side
+    /// named: a win of each side with an entrant of its name, or a draw of a match with one, whose
+    /// side is `None` if both sides have one.
+    fn fitting<'r>(&self, open: &'r [MatchRow]) -> Vec<(&'r MatchRow, MatchResult, Option<Team>)> {
         let search = NameSearch::new(self.name);
         let finds = |side: &[EntrantRow]| side.iter().any(|entrant| search.finds(entrant));
         open.iter()
@@ -1454,18 +1734,28 @@ impl<'a> NamedEntry<'a> {
             .flat_map(|row| {
                 let (a, b) = (finds(&row.a), finds(&row.b));
                 let results = if self.draw {
-                    vec![MatchResult::Draw]
+                    let side = match (a, b) {
+                        (true, true) => Some(None),
+                        (true, false) => Some(Some(Team::A)),
+                        (false, true) => Some(Some(Team::B)),
+                        (false, false) => None,
+                    };
+                    side.map(|side| (MatchResult::Draw, side))
                         .into_iter()
-                        .filter(|_| a || b)
                         .collect()
                 } else {
-                    [(a, MatchResult::AWins), (b, MatchResult::BWins)]
-                        .into_iter()
-                        .filter(|(found, _)| *found)
-                        .map(|(_, result)| result)
-                        .collect::<Vec<_>>()
+                    [
+                        (a, MatchResult::AWins, Team::A),
+                        (b, MatchResult::BWins, Team::B),
+                    ]
+                    .into_iter()
+                    .filter(|(found, ..)| *found)
+                    .map(|(_, result, team)| (result, Some(team)))
+                    .collect::<Vec<_>>()
                 };
-                results.into_iter().map(move |result| (row, result))
+                results
+                    .into_iter()
+                    .map(move |(result, side)| (row, result, side))
             })
             .collect()
     }
@@ -1480,7 +1770,7 @@ fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
             .iter()
             .find(|(name, _)| *name == "round")
             .map(|(_, round)| *round),
-        Cell::Number(_) => None,
+        Cell::Number(_) | Cell::Signed(_) => None,
     };
     let Some(round) = round else {
         return StandingCell::Metric(cell);

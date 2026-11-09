@@ -62,6 +62,8 @@ pub struct Ctx {
     error: Signal<Option<Text>>,
     /// What the last action did, shown until the next one.
     announcement: Signal<Option<Announcement>>,
+    /// When this tab last reported a result, in milliseconds since the epoch.
+    reported_at: Signal<Option<f64>>,
 }
 
 impl Ctx {
@@ -123,7 +125,16 @@ impl Ctx {
 
     /// Tells the operator what the action just done did, until the next action.
     pub fn announce(mut self, announcement: Announcement) {
+        if matches!(announcement, Announcement::Reported(_)) {
+            self.reported_at.set(Some(js_sys::Date::now()));
+        }
         self.announcement.set(Some(announcement));
+    }
+
+    /// How long ago this tab last reported a result (announced by [`Ctx::announce`]), in
+    /// milliseconds; `None` if it has reported none. Reading it subscribes to nothing.
+    pub fn since_report(&self) -> Option<f64> {
+        (*self.reported_at.peek()).map(|at| js_sys::Date::now() - at)
     }
 
     /// Writes the competition if anything changed since the last save, without holding the session
@@ -239,6 +250,7 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
             translator: page.translator,
             error: page.error,
             announcement: Signal::new(None),
+            reported_at: Signal::new(None),
         }
     });
     use_hook(move || ctx.save());

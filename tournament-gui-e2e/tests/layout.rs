@@ -51,6 +51,7 @@ async fn the_views_of_a_knockout_fit_a_phone_in_german() {
         gui.click("Starten").await?;
 
         gui.click("Phase").await?;
+        gui.expect_view("Phase").await?;
 
         // those shown on a phone
         gui.page
@@ -110,6 +111,46 @@ async fn the_views_of_a_knockout_fit_the_narrowest_phone() {
     .await;
 }
 
+/// Finished matches share their columns, so their pairings line up whatever their scores; the
+/// scores of the games give way to the games won where the list has no room for them, beside the
+/// standings.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn finished_matches_line_up_whatever_their_scores() {
+    run_in_new_competition(async |gui| {
+        for name in [LONG_NAME, "Bo", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Round robin").await?;
+        gui.choose_plugin("match_format", "Best of games").await?;
+        gui.enter("match_format.games", "5").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        gui.enter_result("1 21-4 21-3 21-3").await?;
+        gui.enter_result("2 21-5 6-21 5-21 21-5 23-21").await?;
+        gui.choose_round("Round 1").await?;
+
+        for (width, games_shown) in [(1280, false), (900, true)] {
+            gui.page.resize(width, 900).await?;
+            let numbers = gui.page.rects_of("#match-list .number").await?;
+            assert_eq!(numbers.len(), 2);
+            assert_eq!(
+                numbers[0].left, numbers[1].left,
+                "the pairings line up at {width}px"
+            );
+            let games = gui.page.rects_of("#match-list .game-scores").await?;
+            assert!(
+                games
+                    .iter()
+                    .all(|games| (games.right - games.left > 1.0) == games_shown),
+                "the scores of the games show at {width}px: {games_shown}"
+            );
+        }
+        Ok(())
+    })
+    .await;
+}
+
 /// The page keeps its width whether it scrolls or not, so the bar does not shift between views.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -121,10 +162,12 @@ async fn the_page_keeps_its_width_between_views() {
         }
         gui.click("Add phase").await?;
         gui.click("Start").await?;
+        gui.expect_view("Matches & standings").await?;
         let (scrolling, matches) = gui.page.scrolling_and_width().await?;
         assert!(scrolling, "the matches of 16 scroll");
 
         gui.click("Phase").await?;
+        gui.expect_view("Phase").await?;
 
         let (scrolling, phase) = gui.page.scrolling_and_width().await?;
         assert!(!scrolling, "the phase does not scroll");
@@ -150,6 +193,7 @@ async fn a_cross_table_scrolls_inside_its_card_on_a_phone() {
         gui.click("Start").await?;
 
         gui.click("Cross table").await?;
+        gui.expect_view("Cross table").await?;
 
         gui.page.expect_no_sideways_scroll().await
     })
@@ -594,7 +638,7 @@ async fn a_checkbox_is_big_enough_to_tap() {
 async fn the_views_look_unlike_the_switch_within_a_card() {
     run_in_new_competition(async |gui| {
         start_round_robin_of(&gui, &["Alice", "Bob", "Carol"]).await?;
-        gui.click("By round").await?;
+        gui.show_by_round().await?;
 
         let tab = ".view-switch [aria-pressed=true]";
         let switch = ".card .segmented [aria-pressed=true]";

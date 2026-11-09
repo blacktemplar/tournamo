@@ -1,26 +1,106 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
-    entities::competition::{Competition, MatchId, MatchResult, PhaseId},
+    entities::{
+        competition::{Competition, MatchId, MatchResult, PhaseId},
+        details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
+    },
+    plugins::match_format::Misfit,
     transitions::CompetitionTransition,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Reports how a match was decided, which finishes it, with the values and parts entered for it.
+#[derive(Debug, Serialize)]
 pub struct ReportMatchResult {
     phase_id: PhaseId,
     match_id: MatchId,
-    match_result: MatchResult,
+    decision: Decision,
+    values: Values,
+    parts: Vec<Part>,
+}
+
+impl<'de> Deserialize<'de> for ReportMatchResult {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename = "ReportMatchResult")]
+        struct Current {
+            phase_id: PhaseId,
+            match_id: MatchId,
+            decision: Decision,
+            values: Values,
+            parts: Vec<Part>,
+        }
+        // Logged in JSON by 0.3.0 and earlier: a `match_result` in place of the `decision`.
+        #[derive(Deserialize)]
+        #[serde(rename = "ReportMatchResult")]
+        struct Saved {
+            phase_id: PhaseId,
+            match_id: MatchId,
+            #[serde(default)]
+            decision: Option<Decision>,
+            #[serde(default)]
+            match_result: Option<MatchResult>,
+            #[serde(default)]
+            values: Values,
+            #[serde(default)]
+            parts: Vec<Part>,
+        }
+
+        if deserializer.is_human_readable() {
+            let saved = Saved::deserialize(deserializer)?;
+            let decision = saved
+                .decision
+                .or(saved.match_result.map(Decision::new))
+                .ok_or_else(|| serde::de::Error::missing_field("decision"))?;
+            Ok(Self {
+                phase_id: saved.phase_id,
+                match_id: saved.match_id,
+                decision,
+                values: saved.values,
+                parts: saved.parts,
+            })
+        } else {
+            let current = Current::deserialize(deserializer)?;
+            Ok(Self {
+                phase_id: current.phase_id,
+                match_id: current.match_id,
+                decision: current.decision,
+                values: current.values,
+                parts: current.parts,
+            })
+        }
+    }
 }
 
 impl ReportMatchResult {
-    pub fn new(phase_id: PhaseId, match_id: MatchId, match_result: MatchResult) -> Self {
+    /// Reports `decision` for the match `match_id` of the phase `phase_id`, no values or parts.
+    pub fn new(phase_id: PhaseId, match_id: MatchId, decision: impl Into<Decision>) -> Self {
         Self {
             phase_id,
             match_id,
-            match_result,
+            decision: decision.into(),
+            values: Values::new(),
+            parts: Vec::new(),
         }
+    }
+
+    /// This report with `values` for `field` of the match, replacing any it had.
+    #[must_use]
+    pub fn with_value(mut self, field: FieldKey, values: Sides<Option<EnteredValue>>) -> Self {
+        match self.values.iter_mut().find(|(key, _)| *key == field) {
+            Some((_, old)) => *old = values,
+            None => self.values.push((field, values)),
+        }
+        self
+    }
+
+    /// This report with `part` as the last part of the match.
+    #[must_use]
+    pub fn with_part(mut self, part: Part) -> Self {
+        self.parts.push(part);
+        self
     }
 
     pub fn phase_id(&self) -> PhaseId {
@@ -32,7 +112,19 @@ impl ReportMatchResult {
     }
 
     pub fn match_result(&self) -> MatchResult {
-        self.match_result
+        self.decision.result()
+    }
+
+    pub fn decision(&self) -> &Decision {
+        &self.decision
+    }
+
+    pub fn values(&self) -> &Values {
+        &self.values
+    }
+
+    pub fn parts(&self) -> &[Part] {
+        &self.parts
     }
 }
 
@@ -46,6 +138,8 @@ pub enum ReportMatchResultError {
     MatchAlreadyFinished,
     #[error("the phase format does not allow draws")]
     DrawNotAllowed,
+    #[error("the result does not fit the match format: {0}")]
+    Misfit(#[from] Misfit),
 }
 
 impl Transition<Competition> for ReportMatchResult {
@@ -62,9 +156,15 @@ impl Transition<Competition> for ReportMatchResult {
         if r#match.is_finished() {
             return Err(Box::new(ReportMatchResultError::MatchAlreadyFinished));
         }
-        if self.match_result == MatchResult::Draw && !phase.format().allows_draws() {
+        if self.decision.result() == MatchResult::Draw && !phase.format().allows_draws() {
             return Err(Box::new(ReportMatchResultError::DrawNotAllowed));
         }
+        phase
+            .match_format()
+            .template(phase.data(), r#match)
+            .root
+            .check(Some(&self.decision), &self.values, &self.parts)
+            .map_err(ReportMatchResultError::from)?;
         Ok(())
     }
 
@@ -73,7 +173,12 @@ impl Transition<Competition> for ReportMatchResult {
         competition: &mut Competition,
     ) -> Result<(), undoable_state_machine::TransitionError> {
         let phase = competition.phases_mut().get_mut(&self.phase_id).unwrap();
-        phase.report_match_result(self.match_id, self.match_result);
+        phase.report_match(
+            self.match_id,
+            self.decision.clone(),
+            self.values.clone(),
+            self.parts.clone(),
+        );
         Ok(())
     }
 }

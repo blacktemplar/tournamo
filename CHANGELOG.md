@@ -10,6 +10,33 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Added
+
+- Match formats: right after its format, a phase chooses what is entered for
+  each match: who won ("winner only", as every phase so far), the score of each
+  side (21–17), or the games of a best of (up to 99), each with its score.
+  Scores are entered in the row of the match, or in its dialog, which shows who
+  wins by them and takes another result only on request; what looks like a
+  typo is pointed out but taken. They are typed in like a result
+  (`3 21-17 19-21 21-15`) and reported at the command line (`report 3 21-17`).
+  Finished matches show their scores in the list of matches, the bracket and
+  the cross table, and on a click what was reported; a match reopened keeps
+  its scores. The standings show and rank by the points (or goals) scored and
+  conceded and by the games won and lost, and their differences.
+
+### Changed
+
+- A competition is saved in format 2: a reported result is saved as a decision,
+  so that it can later say why a match was decided and hold its score.
+  Competitions of format 1 open unchanged; earlier versions refuse format 2 as
+  a file of a newer version.
+
+### Fixed
+
+- In the browser, the button reopening a match no longer takes no click for a
+  moment each time its match shows, as on going through the rounds: only right
+  after a report, against a double tap.
+
 ## [0.3.0] - 2026-11-03
 
 Competitions saved with 0.2.0 and earlier open unchanged. Once a browser has

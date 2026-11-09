@@ -1369,11 +1369,15 @@ ul.summary-items {
   padding: 0 var(--space-2);
 }
 
+/* the columns of a finished match, shared by every finished match of the list, so that their
+ * pairings line up whatever their scores, as in a table; a match still to play has its own */
 #match-list {
   display: grid;
   padding: 0;
   margin: 0;
+  container: match-list / inline-size;
   gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
   list-style: none;
 }
 
@@ -1387,6 +1391,7 @@ ul.summary-items {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   gap: var(--space-2);
+  grid-column: 1 / -1;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
@@ -1475,19 +1480,290 @@ ul.summary-items {
   justify-self: start;
 }
 
+/* a match whose result is entered in a dialog: one button below the pairing */
+.match .enter-result {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+/* a result entered below the pairing: the values of each part side by side, wrapping where they do
+ * not fit, then the buttons, and what they say below them */
+.match .quick-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  grid-column: 1 / -1;
+}
+
+.quick-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* the values of a part close together, apart from those of the next */
+.quick-value {
+  display: grid;
+  align-items: center;
+  column-gap: 2px;
+  grid-template-columns: auto auto auto;
+}
+
+/* wide enough for three digits, without the spin buttons, which have no room: a best of five
+ * fits a card beside the standings */
+.quick-value input {
+  width: 2.5rem;
+  padding-inline: var(--space-1);
+  appearance: textfield;
+  text-align: center;
+}
+
+.quick-value input::-webkit-inner-spin-button,
+.quick-value input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+/* the number of the part, e.g. of the game, above its values */
+.quick-part {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  grid-column: 1 / -1;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.quick-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.quick-outcome,
+.quick-result .issues,
+.quick-result .warnings,
+.quick-result .error[role="alert"] {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+/* why values are not taken, a line each */
+.quick-result .issues p,
+.result-field .issues p {
+  margin: 0;
+}
+
+.quick-outcome {
+  color: var(--text-muted);
+}
+
+/* said while empty too, without taking room */
+.quick-outcome:empty,
+.quick-result .error[role="alert"]:empty {
+  display: contents;
+}
+
+/* the fields of a result entered in a dialog: a part's values side by side, its parts nested */
+.result-part {
+  display: grid;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: var(--space-2);
+}
+
+.result-part legend {
+  font-weight: 600;
+}
+
+.result-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* the scores of a finished match in the bracket, below its pairing */
+.pairing .scores {
+  color: var(--text-muted);
+  grid-column: 2;
+  font-size: 0.9em;
+}
+
+.result-field input {
+  width: 5rem;
+}
+
+/* a value not taken, among others in a row: marked by more than its colour */
+.quick-value input[aria-invalid="true"],
+.result-field input[aria-invalid="true"] {
+  border: 2px solid var(--error);
+}
+
+.result-field .result-label {
+  min-width: 4rem;
+}
+
+.result-team {
+  font-weight: 600;
+}
+
+.result-field .issues,
+.result-field .warnings,
+.result-outcome .warnings,
+.result-choice .warnings {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* the result of a part as its values suggest it, unless it is overridden */
+.result-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  gap: var(--space-2);
+}
+
+/* rarely used, so apart from reporting and cancelling */
+.dialog-buttons .override {
+  margin-inline-end: auto;
+}
+
+.result-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* a match with a result on one line, so that the list of a round is mostly those still to play:
  * the pairing, then a draw said and the button reopening it */
 .match.finished {
   padding-block: var(--space-2);
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  grid-template-columns: subgrid;
 }
 
+/* the buttons in line at the end, the scores beside them */
 .match.finished .report {
   display: flex;
   align-items: center;
+  justify-content: end;
   gap: var(--space-2);
   grid-column: 4;
   grid-row: 1;
+}
+
+/* the button reopening a finished match, above the one showing its details */
+.finished-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: var(--space-2);
+}
+
+/* the button showing the details of a finished match: the whole card or pairing, without a look
+ * of its own but a tint on hover, and the focus ring around it */
+.match-details {
+  position: absolute;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+  inset: 0;
+}
+
+/* the tint on the card, as the button lies above what it shows */
+button.match-details:hover {
+  background: none;
+}
+
+.match:has(> .report .match-details:hover),
+.pairing:has(> .match-details:hover) {
+  background: var(--accent-subtle);
+}
+
+/* the pairing it covers */
+.pairing:has(> .match-details) {
+  position: relative;
+}
+
+/* the score of a match that opens, underlined as a link is, as opening only shows more: it tells
+ * touch, which has no hover, that the match opens, without taking room in its row; its colour
+ * stays, so that finished matches still recede */
+.match:has(> .report .match-details) .result.scores,
+.pairing:has(> .match-details) .scores,
+.cross-table .played:has(> .match-details) .outcome.scored {
+  text-decoration-line: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* the parts of a finished match in its dialog, e.g. its games, a row each; names wrap rather than
+ * widen it beyond a phone */
+.reported-parts th,
+.reported-parts td {
+  padding: var(--space-1) var(--space-2);
+  overflow-wrap: break-word;
+  text-align: start;
+}
+
+/* the names heading the columns of their values, and who won where it has a column, wrap
+ * between words */
+.reported-parts td:not(.value),
+.reported-parts thead th {
+  white-space: normal;
+}
+
+/* the values of the winner of a part, marked as the winner of a match is */
+.reported-parts .won {
+  font-weight: 600;
+}
+
+.reported-parts .won::before {
+  color: var(--accent);
+  content: "✓ ";
+}
+
+/* the name of a part heads its row, without the look of a column's header */
+.reported-parts tbody th {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.reported-parts .value {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.reported-parts .warnings,
+#result-details .warnings {
+  margin: 0;
+}
+
+.reported-field,
+.reported-outcome {
+  margin: 0;
+}
+
+/* where the list is too narrow for the scores of every game on the line, the games won alone; the
+ * scores of the games are still read out */
+@container match-list (width < 40rem) {
+  .match .game-scores {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* On a phone the sides are stacked, so that each name has the line beside the number to itself
@@ -1557,6 +1833,16 @@ ul.summary-items {
     grid-row: 3;
   }
 
+  .match .enter-result {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  /* below the pairing, across the card */
+  .match .quick-result {
+    grid-column: 1 / -1;
+  }
+
   /* the names on the whole line, which no button takes once the match is played */
   .match.finished .side.a,
   .match.finished .side.b {
@@ -1572,7 +1858,7 @@ ul.summary-items {
     grid-row: 4;
   }
 
-  .match.finished button {
+  .match.finished .finished-actions {
     grid-column: 3;
     grid-row: 3;
   }
@@ -2061,8 +2347,8 @@ td.name {
 /* The cross table (cross_table.rs): narrow cells, so that a table of many teams fits, centred
  * under the numbers of the columns, a cell's matches side by side, the row's number before its
  * name as the columns name it */
-.cross-table td,
-.cross-table thead th:not(.name) {
+.cross-table > * > tr > td,
+.cross-table > thead > tr > th:not(.name) {
   /* holding what only screen readers get, which would otherwise widen the page, not the table */
   position: relative;
   min-width: 1.75rem;
@@ -2071,7 +2357,7 @@ td.name {
   text-align: center;
 }
 
-.cross-table td > * + * {
+.cross-table > tbody > tr > td > * + * {
   margin-left: var(--space-1);
 }
 
@@ -2084,19 +2370,33 @@ td.name {
 }
 
 /* a team against itself */
-.cross-table td.self {
+.cross-table > tbody > tr > td.self {
   background: var(--hover);
+}
+
+/* a match, which its details button covers */
+.cross-table .played {
+  position: relative;
+  display: inline-block;
+  border-radius: var(--radius);
 }
 
 .cross-table .outcome {
   padding: 0 var(--space-1);
   border-radius: var(--radius);
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-/* a win and a loss tinted, so that the table reads at a glance; the number says it as well */
+.cross-table .played:has(> .match-details:hover) {
+  outline: 2px solid var(--accent);
+}
+
+/* a win and a loss tinted, so that the table reads at a glance, and a win bold, so that it reads
+ * without the colours too */
 .cross-table .outcome.win {
   background: var(--win-subtle);
+  font-weight: 700;
 }
 
 .cross-table .outcome.loss {

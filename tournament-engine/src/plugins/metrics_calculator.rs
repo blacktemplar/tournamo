@@ -1,5 +1,6 @@
 use std::{
     any::{Any, TypeId},
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
 };
 
@@ -8,14 +9,16 @@ use plugin_factory::{Plugin, axis};
 
 use crate::{
     Score,
-    entities::competition::{Bye, Match, PhaseData, Ranking, RankingId},
+    entities::competition::{Bye, Match, PhaseData, Ranking, RankingId, Team},
     map::Map,
     plugins::Phrase,
     type_map::{TypeMapValue, downcast_unchecked_ref},
 };
 
 pub mod buchholz;
+pub mod games_balance;
 pub mod points;
+pub mod points_balance;
 pub mod round_of_elimination;
 pub mod round_of_first_loss;
 #[cfg(test)]
@@ -26,7 +29,15 @@ pub use buchholz::{
     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator, MoreBuchholz,
     MoreBuchholzOfBuchholz, MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
 };
+pub use games_balance::{
+    GamesBalance, GamesBalanceCalculator, GamesDifference, GamesDifferenceCalculator,
+    HigherGamesDifference, MoreGamesWon,
+};
 pub use points::{MorePoints, Points, PointsCalculator};
+pub use points_balance::{
+    HigherPointsDifference, MorePointsScored, PointsBalance, PointsBalanceCalculator,
+    PointsDifference, PointsDifferenceCalculator,
+};
 pub use round_of_elimination::{
     Eliminates, LaterElimination, RoundOfElimination, RoundOfEliminationCalculator,
 };
@@ -124,6 +135,39 @@ pub trait MetricsCalculator: Plugin + DynClone {
 
 dyn_clone::clone_trait_object!(MetricsCalculator);
 
+/// The metric `M` of every ranking of `match`, as `update` changes it for the ranking's team.
+fn updated_for_each_team<M: TypeMapValue + Copy>(
+    phase_data: &PhaseData,
+    r#match: &Match,
+    update: impl Fn(&mut M, Team),
+) -> Vec<(RankingId, Metric)> {
+    let mut updated = Vec::new();
+    for team in [Team::A, Team::B] {
+        for r_id in r#match.rankings_of(team) {
+            let mut metric = *phase_data.rankings()[r_id].metric::<M>().unwrap();
+            update(&mut metric, team);
+            updated.push((*r_id, Box::new(metric) as Metric));
+        }
+    }
+    updated
+}
+
+/// The metric `D`, as `derive` makes it of the metric `M`, of every ranking whose `M` the
+/// calculators that ran before changed.
+fn derived<M: TypeMapValue, D: TypeMapValue>(
+    phase_data: &PhaseData,
+    old_metrics: &OldMetrics,
+    derive: impl Fn(&M) -> D,
+) -> Vec<(RankingId, Metric)> {
+    old_metrics
+        .of::<M>()
+        .map(|(r_id, _)| {
+            let metric = phase_data.rankings()[&r_id].metric::<M>().unwrap();
+            (r_id, Box::new(derive(metric)) as Metric)
+        })
+        .collect()
+}
+
 /// A column of a table of standings showing one metric: its header and the cell of every
 /// ranking's value.
 #[derive(Debug, Clone, Copy)]
@@ -157,11 +201,23 @@ pub trait ToCell {
     fn to_cell(&self) -> Cell;
 }
 
+/// The sign a [`Cell::Signed`] shows before the magnitude of `number`: none for zero.
+pub fn sign(number: Score) -> &'static str {
+    match number.cmp(&Score::ZERO) {
+        Ordering::Greater => "+",
+        Ordering::Less => "\u{2212}",
+        Ordering::Equal => "",
+    }
+}
+
 /// What a cell of a [`MetricColumn`] shows. Shows as it does in English.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Cell {
     /// A number, which a frontend writes as its language writes numbers.
     Number(Score),
+    /// A number with its sign, such as a difference: `+5`, `−3` (with a minus sign) or `0`.
+    /// A frontend writes the number without its sign as its language writes numbers.
+    Signed(Score),
     /// A phrase of the calculator's, which a translation finds by the calculator's id.
     Text(Phrase),
 }
@@ -170,7 +226,26 @@ impl Display for Cell {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Number(number) => Display::fmt(number, f),
+            Self::Signed(number) => write!(f, "{}{}", sign(*number), number.get().abs()),
             Self::Text(phrase) => Display::fmt(phrase, f),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn a_signed_cell_shows_the_sign_of_every_number_but_zero() {
+        let shown = |number| Cell::Signed(Score::new(number)).to_string();
+
+        assert_eq!(shown(5.0), "+5");
+        assert_eq!(shown(-3.0), "\u{2212}3");
+        assert_eq!(shown(-0.5), "\u{2212}0.5");
+        assert_eq!(shown(0.0), "0");
     }
 }

@@ -4,17 +4,19 @@ use itertools::{Either, Itertools};
 use plugin_factory::{compatibility::Declaration, config::Config, draft::Draft};
 use rand::{RngExt, rngs::StdRng, seq::SliceRandom};
 use rand_seeder::Seeder;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::{Uuid, uuid};
 use vec1::{Vec1, vec1};
 
 #[cfg(feature = "test-util")]
 use crate::plugins::PhasePluginsBuilder;
 use crate::{
+    entities::details::{Decision, Part, Values},
     map::{IdAble, IdMap},
     plugins::{
         PhasePlugins,
         facts::EntrantsPerRanking,
+        match_format::{self, MatchFormat},
         metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
         ranker::{HierarchicalRanker, SliceRanker},
@@ -89,15 +91,8 @@ impl Competition {
     }
 
     pub(crate) fn add_phase(&mut self, id: PhaseId, plugins: PhasePlugins) {
-        let (phase_format, ranker, metrics_calculators) = plugins.into_parts();
         let seed = Seed(self.seed.rng(id).random());
-        self.phases.insert(Phase::new(
-            id,
-            phase_format,
-            ranker,
-            metrics_calculators,
-            seed,
-        ));
+        self.phases.insert(Phase::new(id, plugins, seed));
     }
 
     /// Declares the facts that hold for a phase added to this competition before any of its
@@ -256,6 +251,9 @@ pub struct Phase {
     phase_format: Box<dyn PhaseFormat>,
     ranker: HierarchicalRanker,
     metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
+    // phases saved by 0.3.0 and earlier knew only who won
+    #[serde(default = "match_format::default")]
+    match_format: Box<dyn MatchFormat>,
     data: PhaseData,
 }
 
@@ -317,13 +315,8 @@ impl PhaseData {
 
 impl Phase {
     /// A phase without rankings, matches and byes yet.
-    fn new(
-        id: PhaseId,
-        phase_format: Box<dyn PhaseFormat>,
-        ranker: HierarchicalRanker,
-        metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
-        seed: Seed,
-    ) -> Self {
+    fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
+        let (phase_format, match_format, ranker, metrics_calculators) = plugins.into_parts();
         Self {
             id,
             data: PhaseData {
@@ -336,6 +329,7 @@ impl Phase {
             phase_format,
             ranker,
             metrics_calculators,
+            match_format,
         }
     }
 
@@ -363,6 +357,11 @@ impl Phase {
         &*self.phase_format
     }
 
+    /// The match format of this phase: what is entered for its matches.
+    pub fn match_format(&self) -> &dyn MatchFormat {
+        &*self.match_format
+    }
+
     /// The answers to a [`Competition::phase_draft`] the plugins of this phase are built from,
     /// without their runtime state, see [`PhasePlugins::config`]. Put back into a draft with
     /// [`Draft::with_answers`], they are changed and built into the plugins the phase is
@@ -371,6 +370,7 @@ impl Phase {
     pub fn config(&self) -> Config {
         PhasePlugins::from_parts(
             self.phase_format.clone(),
+            self.match_format.clone(),
             self.ranker.slice_rankers().to_vec(),
             self.metrics_calculators.clone(),
         )
@@ -516,10 +516,27 @@ impl Phase {
         reached_any
     }
 
-    pub(crate) fn report_match_result(&mut self, match_id: MatchId, match_result: MatchResult) {
+    /// Reports `decision` alone for the match `match_id`, see [`Phase::report_match`].
+    #[cfg(test)]
+    pub(crate) fn report_match_result(&mut self, match_id: MatchId, decision: impl Into<Decision>) {
+        self.report_match(match_id, decision.into(), Values::new(), Vec::new());
+    }
+
+    /// Decides the match `match_id` by `decision`, with the `values` and `parts` entered for it.
+    pub(crate) fn report_match(
+        &mut self,
+        match_id: MatchId,
+        decision: Decision,
+        values: Values,
+        parts: Vec<Part>,
+    ) {
         let r#match = self.data.matches.get_mut(&match_id).unwrap();
         assert!(!r#match.is_finished());
-        r#match.set_result(match_result);
+        r#match.contest.decide(decision, values, parts);
+        let tallies = self
+            .match_format
+            .tally(&self.data, &self.data.matches[&match_id]);
+        self.data.matches.get_mut(&match_id).unwrap().tallies = tallies;
         for ranking_id in self.data.matches[&match_id].rankings() {
             let ranking = self.data.rankings.get_mut(ranking_id).unwrap();
             ranking.played_matches.push(match_id);
@@ -761,19 +778,85 @@ pub struct MatchId(Uuid);
 
 /// A match between two teams of rankings in a round of a phase, numbered within the phase.
 ///
-/// Beyond who plays it, its round, its number and its result, a match holds `annotations`: data
-/// that describes it, keyed by type, such as which stage of a knockout it belongs to. The
+/// Beyond who plays it, its round and its number, a match is its [`contest`](Self::contest): how it
+/// was decided, once it is finished, what was entered for it, and its `annotations`: data that
+/// describes it, keyed by type, such as which stage of a knockout it belongs to. The
 /// [`PhaseFormat`] scheduling the match gives them when creating it as a [`NewMatch`], with
 /// [`Annotated::with_annotation`].
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct Match {
     id: MatchId,
     team_a: Vec1<RankingId>,
     team_b: Vec1<RankingId>,
     round: NonZeroU32,
     number: NonZeroU32,
-    result: Option<MatchResult>,
-    annotations: TypeMap,
+    contest: Part,
+    tallies: TypeMap,
+}
+
+impl<'de> Deserialize<'de> for Match {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename = "Match")]
+        struct Current {
+            id: MatchId,
+            team_a: Vec1<RankingId>,
+            team_b: Vec1<RankingId>,
+            round: NonZeroU32,
+            number: NonZeroU32,
+            contest: Part,
+            tallies: TypeMap,
+        }
+        // Saved in JSON by 0.3.0 and earlier: a `result` and the `annotations` in place of the
+        // `contest`, and no `tallies`, which their match format did not have.
+        #[derive(Deserialize)]
+        #[serde(rename = "Match")]
+        struct Saved {
+            id: MatchId,
+            team_a: Vec1<RankingId>,
+            team_b: Vec1<RankingId>,
+            round: NonZeroU32,
+            number: NonZeroU32,
+            contest: Option<Part>,
+            #[serde(default)]
+            result: Option<MatchResult>,
+            #[serde(default)]
+            annotations: TypeMap,
+            #[serde(default)]
+            tallies: TypeMap,
+        }
+
+        let current = if deserializer.is_human_readable() {
+            let saved = Saved::deserialize(deserializer)?;
+            let contest = saved.contest.unwrap_or_else(|| {
+                let contest = Part::new().with_annotations(saved.annotations);
+                match saved.result {
+                    Some(result) => contest.with_decision(result),
+                    None => contest,
+                }
+            });
+            Current {
+                id: saved.id,
+                team_a: saved.team_a,
+                team_b: saved.team_b,
+                round: saved.round,
+                number: saved.number,
+                contest,
+                tallies: saved.tallies,
+            }
+        } else {
+            Current::deserialize(deserializer)?
+        };
+        Ok(Match {
+            id: current.id,
+            team_a: current.team_a,
+            team_b: current.team_b,
+            round: current.round,
+            number: current.number,
+            contest: current.contest,
+            tallies: current.tallies,
+        })
+    }
 }
 
 /// A match a [`PhaseFormat`] schedules, see [`Schedule`]: who plays it in which round, what it is
@@ -846,8 +929,8 @@ impl NewMatch {
             team_b: self.team_b,
             round: self.round,
             number,
-            result: None,
-            annotations: self.annotations,
+            contest: Part::new().with_annotations(self.annotations),
+            tallies: TypeMap::new(),
         }
     }
 }
@@ -924,7 +1007,7 @@ impl Match {
 
     /// What the result of this match is for `team`, or `None` if it is not finished.
     pub fn result_of_team(&self, team: Team) -> Option<ResultOfTeam> {
-        self.result.map(|result| result.for_team(team))
+        self.result().map(|result| result.for_team(team))
     }
 
     pub fn rankings(&self) -> impl Iterator<Item = &RankingId> {
@@ -933,7 +1016,7 @@ impl Match {
 
     pub fn non_losing_rankings(&self) -> impl Iterator<Item = &RankingId> {
         // technically no team is losing yet if result is not finished
-        match self.result.and_then(MatchResult::winner) {
+        match self.result().and_then(MatchResult::winner) {
             Some(winner) => Either::Left(self.rankings_of(winner).iter()),
             None => Either::Right(self.rankings()),
         }
@@ -954,25 +1037,37 @@ impl Match {
 
     /// The result of this match, or `None` if it is not finished.
     pub fn result(&self) -> Option<MatchResult> {
-        self.result
+        self.decision().map(Decision::result)
+    }
+
+    /// How this match was decided, or `None` if it is not finished.
+    pub fn decision(&self) -> Option<&Decision> {
+        self.contest.decision()
+    }
+
+    /// The match as a part: its decision, the values entered for it, its parts and its annotations.
+    pub fn contest(&self) -> &Part {
+        &self.contest
     }
 
     pub fn is_finished(&self) -> bool {
-        self.result.is_some()
+        self.decision().is_some()
     }
 
-    pub(crate) fn set_result(&mut self, result: MatchResult) {
-        self.result = Some(result);
+    /// The tally `T` of this match, see [`MatchFormat::tally`]: `None` while it is not finished, or
+    /// if its match format does not tally `T`.
+    pub fn tally<T: TypeMapValue>(&self) -> Option<&T> {
+        self.tallies.get::<T>()
     }
 }
 
 impl Annotated for Match {
     fn annotations(&self) -> &TypeMap {
-        &self.annotations
+        self.contest.annotations()
     }
 
     fn annotations_mut(&mut self) -> &mut TypeMap {
-        &mut self.annotations
+        self.contest.annotations_mut()
     }
 }
 
@@ -1106,6 +1201,12 @@ impl PhaseBuilder {
         self
     }
 
+    /// Enters the results of matches by `format`, see [`PhasePluginsBuilder::match_format`].
+    pub fn match_format(mut self, format: impl MatchFormat) -> Self {
+        self.plugins = self.plugins.match_format(format);
+        self
+    }
+
     /// Adds `players` more rankings, each a single entrant, ranked after the rankings already
     /// added.
     pub fn add_players(mut self, players: u32) -> Self {
@@ -1118,18 +1219,11 @@ impl PhaseBuilder {
     /// # Panics
     /// Panics if building its plugins fails, see [`PhasePluginsBuilder::build`].
     pub fn build(self) -> Phase {
-        let (format, ranker, metrics) = self
+        let plugins = self
             .plugins
             .build()
-            .expect("the plugins of the phase can be ordered")
-            .into_parts();
-        let mut phase = Phase::new(
-            PhaseId::new(Uuid::nil()),
-            format,
-            ranker,
-            metrics,
-            Seed::default(),
-        );
+            .expect("the plugins of the phase can be ordered");
+        let mut phase = Phase::new(PhaseId::new(Uuid::nil()), plugins, Seed::default());
         let rankings: Vec<_> = (0..self.players)
             .map(|index| {
                 let entrant_id = EntrantId::new(Uuid::from_u128(index.into()));

@@ -1,9 +1,14 @@
 //! The commands an operator types at the prompt, and how a line of input becomes one.
 
-use std::num::{NonZeroU32, NonZeroUsize};
+use std::{
+    num::{NonZeroU32, NonZeroUsize},
+    str::FromStr,
+};
 
 use clap::{Parser, ValueEnum};
 use thiserror::Error;
+use tournament_app::result_form::read_score;
+use tournament_engine::{EnteredValue, Sides};
 
 /// A single command typed at the prompt.
 ///
@@ -52,9 +57,11 @@ pub enum Command {
     Report {
         /// The number of the match, as listed by `matches`
         number: NonZeroUsize,
-        /// Case insensitive, so that the sides can be named the way `matches` shows them
-        #[arg(ignore_case = true)]
-        result: ReportedResult,
+        /// The result, `a`, `b` or `draw` (in any case, so that the sides can be named the way
+        /// `matches` shows them); or the scores, e.g. `21-17 19-21 21-15` (or `21:17`, or `21–17`
+        /// as `matches` shows them), followed by the result only where it is not the one they give
+        #[arg(required = true, num_args = 1..)]
+        entry: Vec<Reported>,
     },
     /// Undo the result reported for a match, which may be any reported match rather than only the
     /// one reported last
@@ -77,6 +84,28 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+}
+
+/// What an operator reports of a match: its result, or a score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reported {
+    Result(ReportedResult),
+    /// The score of each side, the first team's first, as [`read_score`] reads it: of the match,
+    /// or of its next part, e.g. a game.
+    Score(Sides<EnteredValue>),
+}
+
+impl FromStr for Reported {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if let Ok(result) = ReportedResult::from_str(text, true) {
+            return Ok(Self::Result(result));
+        }
+        read_score(text).map(Self::Score).ok_or_else(|| {
+            format!("“{text}” is no result (a, b or draw) and no score (e.g. 21-17)")
+        })
+    }
 }
 
 /// The result of a match, as reported by an operator.
@@ -136,10 +165,16 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use clap::{CommandFactory, error::ErrorKind};
+    use tournament_engine::Score;
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
+
+    /// The score of `a` to `b`.
+    fn counts(a: u16, b: u16) -> Reported {
+        Reported::Score(Sides::new(EnteredValue::Count(a), EnteredValue::Count(b)))
+    }
 
     #[track_caller]
     fn parse(line: &str) -> Command {
@@ -221,9 +256,47 @@ mod tests {
             parse("report 3 draw"),
             Command::Report {
                 number: NonZeroUsize::new(3).unwrap(),
-                result: ReportedResult::Draw
+                entry: vec![Reported::Result(ReportedResult::Draw)]
             }
         );
+    }
+
+    #[test]
+    fn score_counts_fit_in_u16() {
+        assert_eq!(Reported::from_str("65535-0").unwrap(), counts(u16::MAX, 0));
+        assert!(Reported::from_str("65536-0").is_err());
+        assert!(Reported::from_str("4294967295-0").is_err());
+    }
+
+    /// An en dash joins the numbers of a score as `matches` shows them, so that one shown can be
+    /// pasted.
+    #[test]
+    fn scores_are_reported_with_a_hyphen_a_colon_or_an_en_dash_and_a_result_after_them() {
+        assert_eq!(
+            parse("report 2 21-17 19:21 21–15 a"),
+            Command::Report {
+                number: NonZeroUsize::new(2).unwrap(),
+                entry: vec![
+                    counts(21, 17),
+                    counts(19, 21),
+                    counts(21, 15),
+                    Reported::Result(ReportedResult::A),
+                ]
+            }
+        );
+    }
+
+    #[test]
+    fn a_score_may_be_a_decimal_with_a_point_or_a_comma() {
+        let decimal = EnteredValue::Decimal(Score::new(9.5));
+
+        for score in ["9.5-10", "9,5–10"] {
+            assert_eq!(
+                Reported::from_str(score).unwrap(),
+                Reported::Score(Sides::new(decimal, EnteredValue::Count(10))),
+                "{score}"
+            );
+        }
     }
 
     #[test]
@@ -232,21 +305,21 @@ mod tests {
             parse("report 1 A"),
             Command::Report {
                 number: NonZeroUsize::new(1).unwrap(),
-                result: ReportedResult::A
+                entry: vec![Reported::Result(ReportedResult::A)]
             }
         );
         assert_eq!(
             parse("report 1 B"),
             Command::Report {
                 number: NonZeroUsize::new(1).unwrap(),
-                result: ReportedResult::B
+                entry: vec![Reported::Result(ReportedResult::B)]
             }
         );
         assert_eq!(
             parse("report 1 Draw"),
             Command::Report {
                 number: NonZeroUsize::new(1).unwrap(),
-                result: ReportedResult::Draw
+                entry: vec![Reported::Result(ReportedResult::Draw)]
             }
         );
     }

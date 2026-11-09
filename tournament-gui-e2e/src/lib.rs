@@ -734,14 +734,20 @@ impl Gui {
     /// at what they click: WebDriver would click it where it is if it is in the window at all, even
     /// under the bar staying on top.
     async fn click_in_sight(&self, element: &WebElement) -> WebDriverResult<()> {
+        self.scroll_to_middle(element).await?;
+        element.click().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Scrolls `element` into the middle of the window, clear of the bar staying on top.
+    async fn scroll_to_middle(&self, element: &WebElement) -> WebDriverResult<()> {
         self.driver
             .execute(
                 "arguments[0].scrollIntoView({ block: 'center', inline: 'nearest' });",
                 vec![element.to_json()?],
             )
             .await?;
-        element.click().await?;
-        Page::pause().await;
         Ok(())
     }
 
@@ -786,6 +792,30 @@ impl Gui {
         Ok(())
     }
 
+    /// Taps the middle of the scores of the finished match numbered `number` in the list, once
+    /// they are in the middle of the window: what lies on top of them takes the tap, e.g. the
+    /// button opening the match's details, which covers the match.
+    pub async fn tap_scores_of(&self, number: usize) -> WebDriverResult<()> {
+        let scores = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol[@id = 'match-list']/li[span[@class = 'number'] = '{number}']\
+                 //span[contains(concat(' ', @class, ' '), ' scores ')]"
+            )))
+            .and_displayed()
+            .first()
+            .await?;
+        self.scroll_to_middle(&scores).await?;
+        self.driver
+            .action_chain()
+            .move_to_element_center(&scores)
+            .click()
+            .perform()
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Moves the pointer onto the button whose accessible name, its `aria-label`, is `label`, e.g.
     /// `"About points"`.
     pub async fn hover_labelled(&self, label: &str) -> WebDriverResult<()> {
@@ -819,31 +849,28 @@ impl Gui {
                         &format!("a toggletip shown saying {text:?}"),
                     )
                     .await?;
-                let element = self
-                    .driver
-                    .query(shown)
-                    .and_displayed()
-                    .with_text(saying())
-                    .first()
-                    .await?;
                 // the middle of each edge (its corners are round) shows the text, not something
                 // in front of it or nothing, as where an element scrolling cuts it off or out of
-                // the window
-                let whole = self
-                    .driver
-                    .execute(
-                        "const text = arguments[0];
+                // the window; waited for, as it shows on the pointer before it is placed
+                self.page
+                    .expect_script(
+                        r#"
+                        const [saying] = arguments;
+                        const text = [...document.querySelectorAll(".toggletip-text")].find(
+                            (text) => text.checkVisibility()
+                                && text.innerText.replace(/[\u2068\u2069]/g, "") === saying);
+                        if (!text) return "it is not shown";
                         const box = text.getBoundingClientRect();
                         const [x, y] = [(box.left + box.right) / 2, (box.top + box.bottom) / 2];
-                        return [[box.left + 1, y], [box.right - 1, y],
-                                [x, box.top + 1], [x, box.bottom - 1]]
-                            .every(([x, y]) => text.contains(document.elementFromPoint(x, y)));",
-                        vec![element.to_json()?],
+                        const whole = [[box.left + 1, y], [box.right - 1, y],
+                                       [x, box.top + 1], [x, box.bottom - 1]]
+                            .every(([x, y]) => text.contains(document.elementFromPoint(x, y)));
+                        return whole ? null : `it shows at ${JSON.stringify(box)}`;
+                        "#,
+                        vec![serde_json::json!(text)],
+                        &format!("the toggletip saying {text:?} must show whole"),
                     )
-                    .await?
-                    .convert::<bool>()?;
-                assert!(whole, "the toggletip saying {text:?} must show whole");
-                Ok(())
+                    .await
             }
             None => {
                 let gone = self.driver.query(shown).and_displayed();
@@ -856,34 +883,51 @@ impl Gui {
         }
     }
 
-    /// Waits until a toggletip shows, and checks that it covers none of the issues of the form of
-    /// the phase.
+    /// Waits until a toggletip shows, covering none of the issues of the form of the phase.
     ///
     /// # Panics
-    /// Panics if none shows in time, or it covers an issue.
+    /// Panics if it does not in time, with the issues it covers.
     pub async fn expect_toggletip_clear_of_issues(&self) -> WebDriverResult<()> {
-        let shown = self
-            .driver
-            .query(By::Css(".toggletip-text"))
-            .and_displayed()
-            .first()
-            .await?;
-        let covered = self
-            .driver
-            .execute(
-                "const text = arguments[0].getBoundingClientRect();
-                return [...document.querySelectorAll('.phase-form .issues li')]
+        self.page
+            .expect_script(
+                "const shown = [...document.querySelectorAll('.toggletip-text')]
+                    .find((text) => text.checkVisibility());
+                if (!shown) return 'none shows';
+                const text = shown.getBoundingClientRect();
+                const covered = [...document.querySelectorAll('.phase-form .issues li')]
                     .map(issue => [issue, issue.getBoundingClientRect()])
                     .filter(([, box]) => box.left < text.right && text.left < box.right
                         && box.top < text.bottom && text.top < box.bottom)
-                    .map(([issue]) => issue.textContent);",
-                vec![shown.to_json()?],
+                    .map(([issue]) => issue.textContent);
+                return covered.length ? `it covers ${JSON.stringify(covered)}` : null;",
+                Vec::new(),
+                "the toggletip shown must cover no issue",
             )
-            .await?
-            .convert::<Vec<String>>()?;
+            .await
+    }
+
+    /// Waits until the button labelled `label` shows and takes a click.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_enabled(&self, label: &str) -> WebDriverResult<()> {
+        self.labelled(label)
+            .and_displayed()
+            .and_enabled()
+            .first()
+            .await?;
+        Ok(())
+    }
+
+    /// Waits until the button labelled `label` shows, and expects it to take a click at once.
+    ///
+    /// # Panics
+    /// Panics if it does not show in time, or takes no click when it shows.
+    pub async fn expect_enabled_at_once(&self, label: &str) -> WebDriverResult<()> {
+        let button = self.labelled(label).and_displayed().first().await?;
         assert!(
-            covered.is_empty(),
-            "the toggletip shown must cover no issue, but covers {covered:?}"
+            button.is_enabled().await?,
+            "{label} takes no click as it shows"
         );
         Ok(())
     }
@@ -1010,6 +1054,21 @@ impl Gui {
             .await
     }
 
+    /// Shows the matches by round, and waits until the rounds to choose from show.
+    ///
+    /// # Panics
+    /// Panics if they do not in time.
+    pub async fn show_by_round(&self) -> WebDriverResult<()> {
+        self.click("By round").await?;
+        self.page
+            .expect(
+                By::Css("select#round"),
+                |query| query.and_displayed(),
+                "the rounds to choose from",
+            )
+            .await
+    }
+
     /// Shows the matches of the round whose option reads `text`, e.g. `"Round 2 (2 open)"`, while
     /// the matches are shown by round.
     pub async fn choose_round(&self, text: &str) -> WebDriverResult<()> {
@@ -1080,6 +1139,35 @@ impl Gui {
             .await
     }
 
+    /// Waits until the match of the round shown that has a result has the scores `scores`, read
+    /// from either side, e.g. `"21–17 19–21"` or `"17–21 21–19"`, or `"2–1 (21–17 19–21 21–15)"`
+    /// with the games won: a test must not depend on the sides.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the results shown instead.
+    pub async fn expect_scores_either_way(&self, scores: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts_of(
+                By::Css("#match-list .result"),
+                &[&[scores], &[&mirrored(scores)]],
+            )
+            .await
+    }
+
+    /// Waits until the bracket shows the scores `scores` of its one finished match, read from
+    /// either side, as [`Self::expect_scores_either_way`] does in the list of matches.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the scores shown instead.
+    pub async fn expect_bracket_scores_either_way(&self, scores: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts_of(
+                By::Css(".bracket .scores"),
+                &[&[scores], &[&mirrored(scores)]],
+            )
+            .await
+    }
+
     /// Waits until the matches of the list shown that have a result are those numbered `numbers`,
     /// in this order, whoever won them.
     ///
@@ -1091,45 +1179,33 @@ impl Gui {
             .await
     }
 
-    /// Checks that the first match shown with a winner looks played rather than like a
-    /// placeholder, with a solid border, and that its loser's name recedes behind the winner's:
-    /// another colour, and no bolder.
+    /// Waits until the first match shown with a winner looks played rather than like a
+    /// placeholder, with a solid border, and its loser's name recedes behind the winner's: another
+    /// colour, and no bolder.
     ///
     /// # Panics
-    /// Panics if there is no such match, or it does not look so, with how it looks.
+    /// Panics if it does not in time, with how it looks instead.
     pub async fn expect_finished_card_looks_played(&self) -> WebDriverResult<()> {
-        let looks = self
-            .driver
-            .execute(
+        self.page
+            .expect_script(
                 r##"
                 const card = document.querySelector("#match-list > li:has(.winner)");
-                if (!card) return null;
+                if (!card) return "there is none";
                 const style = (selector) => getComputedStyle(card.querySelector(selector));
                 const [winner, loser] = [style(".side.winner"), style(".side:not(.winner)")];
-                return {
-                    border: getComputedStyle(card).borderTopStyle,
+                const border = getComputedStyle(card).borderTopStyle;
+                const played = border === "solid" && winner.color !== loser.color
+                    && Number(loser.fontWeight) <= Number(winner.fontWeight);
+                return played ? null : JSON.stringify({
+                    border,
                     winner: [winner.color, winner.fontWeight],
                     loser: [loser.color, loser.fontWeight],
-                };
+                });
                 "##,
                 Vec::new(),
+                "a match played must have a solid border and a loser receding",
             )
-            .await?
-            .json()
-            .clone();
-        let played = looks["border"] == "solid"
-            && looks["winner"][0] != looks["loser"][0]
-            && looks["loser"][1]
-                .as_str()
-                .and_then(|weight| weight.parse::<u32>().ok())
-                <= looks["winner"][1]
-                    .as_str()
-                    .and_then(|weight| weight.parse().ok());
-        assert!(
-            played,
-            "a match played must have a solid border and a loser receding, but has {looks:#}"
-        );
-        Ok(())
+            .await
     }
 
     /// Waits until the stages of the matches of the round shown are `stages`, in the order of the
@@ -1423,6 +1499,26 @@ impl Gui {
             .await
     }
 
+    /// Waits until a screen reader says `cells` of the cells of the row of the cross table numbered
+    /// `row`, from 1, as [`Page::expect_accessible_names`] has them, e.g. `"won"`, or `"won, 2–1
+    /// Details of the result of match 1"` with the button opening its details, `""` for a match
+    /// without a result and against itself.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with what it says instead.
+    pub async fn expect_cross_table_row_said(
+        &self,
+        row: usize,
+        cells: &[&str],
+    ) -> WebDriverResult<()> {
+        self.page
+            .expect_accessible_names(
+                By::Css(format!("#cross-table-grid tbody tr:nth-child({row}) td")),
+                cells,
+            )
+            .await
+    }
+
     /// Waits until the numbers of the bracket's pairings are `numbers`, in the order of the
     /// bracket, scheduled or not, e.g. `"3"`.
     ///
@@ -1651,6 +1747,27 @@ impl Gui {
         self.driver.active_element().await?.send_keys(key).await?;
         Page::pause().await;
         Ok(())
+    }
+
+    /// Types `text` where the focus is, e.g. into a value whose text is selected, replacing it.
+    pub async fn type_text(&self, text: &str) -> WebDriverResult<()> {
+        self.driver.active_element().await?.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the field with the focus has the value `text`, e.g. the value of a result.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_focus_value(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(":focus"),
+                |query| query.with_value(text.to_owned()),
+                &format!("the focus on the value {text:?}"),
+            )
+            .await
     }
 
     /// Waits until the element with the focus shows `text`, e.g. a button.
@@ -1955,12 +2072,430 @@ impl Gui {
     }
 
     /// The button whose accessible name, its `aria-label`, is `label`.
+    /// Types `text` into the value of a result in the dialog open labelled `label`, e.g.
+    /// `"Score of Alice"`, in place of what it shows.
+    pub async fn enter_value(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//input[{}='{label}']",
+                without_isolation_marks("@aria-label")
+            )))
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Reports the result entered in the dialog open, by its button, rather than by that of the
+    /// row of the match below it.
+    pub async fn report_in_dialog(&self) -> WebDriverResult<()> {
+        let button = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//button[{}='Report']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .and_enabled()
+            .first()
+            .await?;
+        self.click_in_sight(&button).await
+    }
+
+    /// Types `text` into the value of a result in the row of its match labelled `label`, e.g.
+    /// `"Score of Alice, match 1"`, in place of what it shows.
+    pub async fn enter_in_row(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        let input = self.value_in_row(label).first().await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Types `text` into the first value of the result of the match `number` in its row, whichever
+    /// side it is of, in place of what it shows, and stays there, e.g. to press Tab next.
+    pub async fn enter_first_in_row(&self, number: usize, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .values_in_row_ending(&format!(", match {number}"))
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Types `text` into the value of the side `side` (0 the first shown, 1 the second) of `part`
+    /// in the row of its match, e.g. `"Game 2, match 1"`, in place of what it shows, and stays
+    /// there, e.g. to press Tab next.
+    pub async fn enter_in_part_in_row(
+        &self,
+        part: &str,
+        side: usize,
+        text: &str,
+    ) -> WebDriverResult<()> {
+        let values = self.values_of_part_in_row(part).all_from_selector().await?;
+        let input = values.get(side).expect("a value of each side of the part");
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Types `text` into the first value of a result in the dialog open, whichever side it is
+    /// of, in place of what it shows, and stays there, e.g. to press Tab next.
+    pub async fn enter_first_value(&self, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::Css("[role=dialog] input[type=number]"))
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Presses Enter in the value of a result in the row of its match labelled `label`, which
+    /// reports what the row shows.
+    pub async fn press_enter_in_row(&self, label: &str) -> WebDriverResult<()> {
+        self.value_in_row(label)
+            .first()
+            .await?
+            .send_keys(Key::Enter)
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the rows of results entered say the results their values suggest,
+    /// `outcomes`, e.g. `"Alice wins"`; none where nothing is entered.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_row_outcomes(&self, outcomes: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".quick-result output:not(:empty)"), outcomes)
+            .await
+    }
+
+    /// Waits until the rows of results entered say `outcomes`, as [`Self::expect_row_outcomes`]
+    /// does, with each score in them read from either side, e.g. `"Alice wins (2–1)"` or
+    /// `"Alice wins (1–2)"`: a test must not depend on the sides.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_row_outcomes_either_way(&self, outcomes: &[&str]) -> WebDriverResult<()> {
+        let mirrored: Vec<String> = outcomes.iter().map(|outcome| mirrored(outcome)).collect();
+        let mirrored: Vec<&str> = mirrored.iter().map(String::as_str).collect();
+        self.page
+            .expect_texts_of(
+                By::Css(".quick-result output:not(:empty)"),
+                &[outcomes, &mirrored],
+            )
+            .await
+    }
+
+    /// Waits until the value of a result labelled `label` is in the row of its match, e.g. a game
+    /// of a best of once the match needs it, or is not there, as `shown` says.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_in_row(&self, label: &str, shown: bool) -> WebDriverResult<()> {
+        if shown {
+            return self
+                .page
+                .expect(
+                    By::XPath(format!(
+                        "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
+                        without_isolation_marks("@aria-label")
+                    )),
+                    |query| query.and_displayed(),
+                    &format!("the value {label:?} in its row"),
+                )
+                .await;
+        }
+        assert!(
+            self.value_in_row(label).wait_until_gone().await.is_ok(),
+            "the value {label:?} must not be in its row"
+        );
+        Ok(())
+    }
+
+    /// Waits until the value of a result labelled `label` in the row of its match, e.g.
+    /// `"Score of Alice, match 1"`, shows `text`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_in_row_value(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::XPath(format!(
+                    "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
+                    without_isolation_marks("@aria-label")
+                )),
+                |query| query.with_value(text.to_owned()),
+                &format!("the value {text:?}"),
+            )
+            .await
+    }
+
+    /// Presses Tab in the last value of `part` in the row of its match, e.g. `"Game 2, match 1"`,
+    /// whichever side it is of.
+    pub async fn tab_out_of_part_in_row(&self, part: &str) -> WebDriverResult<()> {
+        let values = self.values_of_part_in_row(part).all_from_selector().await?;
+        values
+            .last()
+            .expect("a value of the part")
+            .send_keys(Key::Tab)
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the focus is on a value of `part` in the row of its match, e.g.
+    /// `"Game 3, match 1"`.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_in_part_in_row(&self, part: &str) -> WebDriverResult<()> {
+        let suffix = format!(" in {part}");
+        self.page
+            .expect(
+                By::Css(":focus"),
+                |query| {
+                    query.with_attribute("aria-label", move |found: &str| {
+                        found.replace(ISOLATION_MARKS, "").ends_with(&suffix)
+                    })
+                },
+                &format!("a value of {part:?}"),
+            )
+            .await
+    }
+
+    /// Waits until the rows of results entered point out `warnings`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they point out instead.
+    pub async fn expect_row_warnings(&self, warnings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".quick-result .warnings"), warnings)
+            .await
+    }
+
+    /// Waits until the rows of results entered say why values typed into them are not taken,
+    /// `issues`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_row_issues(&self, issues: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".quick-result .issues p"), issues)
+            .await
+    }
+
+    /// Waits until a value of a result marked as invalid (`aria-invalid`), in the row of its match
+    /// or in the dialog open, shows `text`, e.g. a count too large typed there.
+    ///
+    /// # Panics
+    /// Panics if none does in time.
+    pub async fn expect_marked_invalid(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(
+                    ".quick-value input[aria-invalid=true], \
+                     [role=dialog] input[aria-invalid=true]",
+                ),
+                |query| query.with_value(text.to_owned()),
+                &format!("a value {text:?} marked as invalid"),
+            )
+            .await
+    }
+
+    /// Waits until the row of a result says why it was not reported, `text`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_row_error(&self, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(
+                By::Css(".quick-result .error[role=alert]:not(:empty)"),
+                &[text],
+            )
+            .await
+    }
+
+    /// The value of a result in the row of its match labelled `label`.
+    fn value_in_row(
+        &self,
+        label: &str,
+    ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
+        self.driver.query(By::XPath(format!(
+            "//*[contains(@class, 'quick-result')]//input[{}='{label}']",
+            without_isolation_marks("@aria-label")
+        )))
+    }
+
+    /// The values of `part` in the row of its match, e.g. `"Game 2, match 1"`, in the order shown.
+    fn values_of_part_in_row(
+        &self,
+        part: &str,
+    ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
+        self.values_in_row_ending(&format!(" in {part}"))
+    }
+
+    /// The values of results in the rows of their matches whose labels end with `suffix`, in the
+    /// order shown.
+    fn values_in_row_ending(
+        &self,
+        suffix: &str,
+    ) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
+        // XPath 1.0 has no ends-with
+        let label = without_isolation_marks("@aria-label");
+        let length = suffix.chars().count();
+        self.driver.query(By::XPath(format!(
+            "//*[contains(@class, 'quick-result')]//input[substring({label}, \
+             string-length({label}) - {length} + 1) = '{suffix}']"
+        )))
+    }
+
+    /// Chooses `option` in the choice labelled `label` of the result in the dialog open, e.g.
+    /// `"Alice wins"` for `"Result: Match"`.
+    pub async fn choose_result(&self, label: &str, option: &str) -> WebDriverResult<()> {
+        let select = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//div[@class='result-choice'][label[{}='{label}']]/select",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        let option = select
+            .find(By::XPath(format!(
+                "option[{}='{option}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .await?;
+        option.click().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the dialog of a result open shows the results of its parts not overridden as
+    /// `outcomes`, e.g. `"Match: Bob wins"`, the parts in order and the match last.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_result_outcomes(&self, outcomes: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .result-outcome output"), outcomes)
+            .await
+    }
+
+    /// Waits until the dialog of a result open shows `outcomes`, as
+    /// [`Self::expect_result_outcomes`] does, with each score in them read from either side, e.g.
+    /// `"Match: Alice wins (2–1)"` or `"Match: Alice wins (1–2)"`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_result_outcomes_either_way(
+        &self,
+        outcomes: &[&str],
+    ) -> WebDriverResult<()> {
+        let mirrored: Vec<String> = outcomes.iter().map(|outcome| mirrored(outcome)).collect();
+        let mirrored: Vec<&str> = mirrored.iter().map(String::as_str).collect();
+        self.page
+            .expect_texts_of(
+                By::Css("[role=dialog] .result-outcome output"),
+                &[outcomes, &mirrored],
+            )
+            .await
+    }
+
+    /// Waits until the dialog of a finished match, opened by its details, shows the values of its
+    /// parts as one of `alternatives`, those of each part in turn, each side's in the order of the
+    /// sides, e.g. `["21", "17", "19", "21"]` of two games; those of the winner of each part
+    /// marked as `winners`, in the same order; and its result `outcome`, e.g. `"Match: Alice wins
+    /// (2–1)"`, with each score in it read from either side. Take one alternative for each side
+    /// Alice may be on.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_reported_result(
+        &self,
+        alternatives: &[&[&str]],
+        winners: &[&str],
+        outcome: &str,
+    ) -> WebDriverResult<()> {
+        self.page
+            .expect_texts_of(By::Css("#result-details tbody td"), alternatives)
+            .await?;
+        self.page
+            .expect_texts(By::Css("#result-details tbody td.won"), winners)
+            .await?;
+        self.page
+            .expect_texts_of(
+                By::Css("#result-details .reported-outcome"),
+                &[&[outcome], &[&mirrored(outcome)]],
+            )
+            .await
+    }
+
+    /// Waits until the dialog of a result open offers to choose the results labelled `labels`,
+    /// e.g. `"Result: Match"`, as while overriding them; none if not overriding.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the choices offered instead.
+    pub async fn expect_result_choices(&self, labels: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .result-choice label"), labels)
+            .await
+    }
+
+    /// Waits until the dialog of a result open points out `warnings`, in the order of its fields.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it points out instead.
+    pub async fn expect_result_warnings(&self, warnings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .warnings"), warnings)
+            .await
+    }
+
+    /// Waits until the dialog open says why values typed into it are not taken, `issues`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_result_issues(&self, issues: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] .issues p"), issues)
+            .await
+    }
+
     fn labelled(&self, label: &str) -> e2e_harness::thirtyfour::extensions::query::ElementQuery {
         self.driver.query(By::XPath(format!(
             "//button[{}='{label}']",
             without_isolation_marks("@aria-label")
         )))
     }
+}
+
+/// `text` with each score in it read from the other side, e.g. `"17–21 21–19"` of `"21–17 19–21"`,
+/// `"1–2 (17–21 21–19 15–21)"` of `"2–1 (21–17 19–21 21–15)"`, or `"Alice wins (1–2)"` of
+/// `"Alice wins (2–1)"`; words without an en dash stay.
+fn mirrored(text: &str) -> String {
+    text.split(' ')
+        .map(|word| {
+            let score = word.trim_start_matches('(').trim_end_matches(')');
+            match score.split_once('–') {
+                Some((a, b)) => word.replacen(score, &format!("{b}–{a}"), 1),
+                None => word.to_owned(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// The id of the element of the field at `path` of the form of a phase, as the GUI makes it, e.g.

@@ -1,12 +1,12 @@
 //! The cross table of a phase whose teams stay the same, e.g. a round robin: a row and a column
 //! per team in the order of the standings, each cell the matches of the row's team against the
-//! column's, seen from the row, and last what the row's results add up to. It only shows them;
-//! results are reported in the list of matches.
+//! column's, seen from the row, and last what the row's results add up to. It only shows them,
+//! and the details of a match on a click; results are reported in the list of matches.
 
 use dioxus::prelude::*;
 use tournament_app::view::{CrossMatch, Outcome};
 
-use crate::{competition::Ctx, team_name};
+use crate::{competition::Ctx, i18n::t, result::ResultDetails, team_name};
 
 /// The cross table, if the phase has one.
 #[component]
@@ -73,22 +73,48 @@ pub fn CrossTable() -> Element {
     }
 }
 
-/// A match in a cell: how it ended for the row's team, nothing while it has no result.
+/// A match in a cell: how it ended for the row's team, nothing while it has no result. It shows
+/// the result at its highest level, the row's team first, e.g. the games won of a best of, or else
+/// `1`, `½`, `0`, and says how it ended, followed by the score it shows, if any, e.g. "won, 2–1";
+/// a click on a match entered in more detail than who won opens its details.
 #[component]
 fn Cell(played: CrossMatch) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    // tinted by how it ended, which the number says as well
-    let (shown, said, class) = match played.outcome {
+    // tinted by how it ended, a win also bold, which screen readers are told
+    let (number, outcome, class) = match played.outcome {
         Some(Outcome::Win) => ("1", "outcome-win", "win"),
         Some(Outcome::Draw) => ("½", "outcome-draw", "draw"),
         Some(Outcome::Loss) => ("0", "outcome-loss", "loss"),
         None => return rsx! {},
     };
+    let outcome = tr.get(outcome);
+    // a score, underlined, shows that the match opens, as in the list of matches
+    let scored = played.score.is_some();
+    // a score is said after how the match ended, as an overridden result need not follow from it
+    let (shown, said) = match played.score {
+        Some(score) => {
+            let score = tr.scores(&[score]);
+            let said = t!(
+                tr,
+                "outcome-with-score",
+                outcome = outcome,
+                score = score.as_str()
+            );
+            (score, said)
+        }
+        None => (number.to_owned(), outcome),
+    };
+    let row = played.row;
     rsx! {
-        span { class: "outcome {class}",
-            span { aria_hidden: "true", "{shown}" }
-            span { class: "visually-hidden", {tr.get(said)} }
+        span { class: "played",
+            span { class: "outcome {class}", class: if scored { "scored" },
+                span { aria_hidden: "true", "{shown}" }
+                span { class: "visually-hidden", "{said}" }
+            }
+            if row.details {
+                ResultDetails { row }
+            }
         }
     }
 }

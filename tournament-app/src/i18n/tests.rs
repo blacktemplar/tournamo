@@ -3,19 +3,22 @@ use std::{collections::BTreeSet, fmt::Display, io};
 use plugin_factory::{
     PluginType as _,
     catalog::{AnyAxis, PluginEntry},
+    config::PluginConfig,
     schema::{Configurable as _, Schema},
 };
 use tournament_engine::{
-    PhasePlugins, Score,
+    EnteredValue, PhasePlugins, Score, Sides,
     plugins::{
         Phrase,
+        match_format::MatchFormat,
         metrics_calculator::{
-            Cell, MetricsCalculator, PointsCalculator, RoundOfElimination,
+            Cell, GamesBalance, GamesBalanceCalculator, MetricsCalculator, PointsBalance,
+            PointsBalanceCalculator, PointsCalculator, RoundOfElimination,
             RoundOfEliminationCalculator, RoundOfFirstLoss, RoundOfFirstLossCalculator,
             ToCell as _, WinsDrawsLosses, WinsDrawsLossesCalculator,
         },
         phase_format::{
-            DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat,
+            DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat, RoundRobin,
             SingleElimination, Stage,
         },
         ranker::SliceRanker,
@@ -25,9 +28,13 @@ use tournament_engine::{
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::error::{
-    AddEntrantError, AddPhaseError, ImportError, LoadError, NoPhase, NothingToUndo,
-    PhaseDraftError, ReportEnteredError, ReportError, StartError, UndoReportError,
+use crate::{
+    error::{
+        AddEntrantError, AddPhaseError, ImportError, LoadError, NoPhase, NothingToUndo,
+        PhaseDraftError, ReportEnteredError, ReportError, StartError, UndoReportError,
+    },
+    result_form::PartView,
+    session::Session,
 };
 
 #[test]
@@ -145,6 +152,7 @@ fn an_error_says_in_english_what_its_display_says() {
         both(StartError::TooFewEntrants),
         both(StartError::TooFewForFormat(4)),
         both(ReportError::NotStarted),
+        both(ReportError::NotTaken),
         both(ReportEnteredError::Unreadable),
         both(ReportEnteredError::NoMatch(3)),
         both(ReportEnteredError::AlreadyFinished(3)),
@@ -306,6 +314,10 @@ fn a_cell_is_said_in_the_language_or_else_as_its_code_says() {
             .cell(PointsCalculator::ID, &Cell::Number(Score::new(2.5))),
         "2.5"
     );
+    let signed = |number| german.cell("my_crate::difference", &Cell::Signed(Score::new(number)));
+    assert_eq!(signed(2.5), "+2,5");
+    assert_eq!(signed(-3.0), "\u{2212}3");
+    assert_eq!(signed(0.0), "0");
 }
 
 /// The plugins of the engine, of every axis, except those only its tests use.
@@ -314,6 +326,7 @@ fn engine_plugins() -> Vec<&'static PluginEntry> {
         AnyAxis::of::<dyn PhaseFormat>(),
         AnyAxis::of::<dyn SliceRanker>(),
         AnyAxis::of::<dyn MetricsCalculator>(),
+        AnyAxis::of::<dyn MatchFormat>(),
     ]
     .iter()
     .flat_map(AnyAxis::entries)
@@ -340,6 +353,56 @@ fn translatable(entry: &PluginEntry) -> BTreeSet<String> {
             .iter()
             .map(|phrase| PluginText::Cell(phrase.key()).attribute()),
     );
+    if AnyAxis::of::<dyn MatchFormat>()
+        .entries()
+        .any(|format| format.id() == entry.id())
+    {
+        attributes.extend(phrases_of_rules(entry.id()));
+    }
+    attributes
+}
+
+/// What the result of a match entered by the match format `id` names, as attributes: found from a
+/// form to enter it, in a round robin of two whose results are entered by the match format with
+/// their defaults.
+fn phrases_of_rules(id: &str) -> BTreeSet<String> {
+    fn collect(part: &PartView, attributes: &mut BTreeSet<String>) {
+        attributes.insert(PluginText::Level(part.name.key()).attribute());
+        for field in &part.fields {
+            attributes.insert(PluginText::EnteredValue(field.label.key()).attribute());
+        }
+        for (_, label) in &part.reasons {
+            attributes.insert(PluginText::Reason(label.key()).attribute());
+        }
+        for part in &part.parts {
+            collect(part, attributes);
+        }
+    }
+    let mut session = Session::new("cup");
+    for name in ["Alice", "Bob"] {
+        session.add_entrant(name).unwrap();
+    }
+    let draft = session
+        .phase_draft(RoundRobin::ID)
+        .unwrap()
+        .with("match_format", PluginConfig::new(id))
+        .and_then(|draft| draft.with_defaults())
+        .unwrap();
+    session.add_phase(&draft).unwrap();
+    session.start().unwrap();
+    let r#match = session
+        .competition()
+        .phases()
+        .values()
+        .next()
+        .unwrap()
+        .data();
+    let id = r#match.matches().values().next().unwrap().id();
+    let mut attributes = BTreeSet::new();
+    collect(
+        &session.result_form(id).unwrap().view().root,
+        &mut attributes,
+    );
     attributes
 }
 
@@ -359,6 +422,10 @@ fn phrases_in_cells(id: &str) -> Vec<Phrase> {
         ]
     } else if id == WinsDrawsLossesCalculator::ID {
         vec![WinsDrawsLosses::default().to_cell()]
+    } else if id == PointsBalanceCalculator::ID {
+        vec![PointsBalance::default().to_cell()]
+    } else if id == GamesBalanceCalculator::ID {
+        vec![GamesBalance::default().to_cell()]
     } else {
         Vec::new()
     };
@@ -366,7 +433,7 @@ fn phrases_in_cells(id: &str) -> Vec<Phrase> {
         .into_iter()
         .filter_map(|cell| match cell {
             Cell::Text(phrase) => Some(phrase),
-            Cell::Number(_) => None,
+            Cell::Number(_) | Cell::Signed(_) => None,
         })
         .collect()
 }
@@ -466,4 +533,37 @@ fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
         }
         assert_eq!(translated, expected, "{}", language.tag());
     }
+}
+
+#[test]
+fn scores_are_written_as_the_language_writes_their_numbers() {
+    let translator = Translator::new(Language::German, &[]);
+    let scores = [
+        Sides::new(Some(EnteredValue::Count(21)), Some(EnteredValue::Count(17))),
+        Sides::new(Some(EnteredValue::Decimal(Score::new(1.5))), None),
+    ];
+
+    assert_eq!(translator.scores(&scores), "21–17 1,5–-");
+}
+
+#[test]
+fn the_parts_won_go_before_the_scores_of_a_match() {
+    let translator = Translator::new(Language::English, &[]);
+    let count = |count| Some(EnteredValue::Count(count));
+    let scores = [
+        Sides::new(count(21), count(17)),
+        Sides::new(count(19), count(21)),
+        Sides::new(count(21), count(15)),
+    ];
+
+    assert_eq!(
+        translator.match_scores(Some(Sides::new(2, 1)), &scores),
+        "2–1 (21–17 19–21 21–15)"
+    );
+    assert_eq!(translator.match_scores(None, &scores[..1]), "21–17");
+    assert_eq!(
+        translator.match_scores(Some(Sides::new(1, 0)), &[]),
+        "1–0",
+        "games decided without a score"
+    );
 }

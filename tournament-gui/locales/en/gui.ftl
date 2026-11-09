@@ -47,8 +47,8 @@ help-running-steps = A competition is run in four steps:
 help-running-entrants = Enter the entrants by name, one after the other, or paste a list with a name on each line.
 help-running-phase = Choose how they play: the format, and the order of the standings. Then add the phase.
 help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on. The phase can still be changed, as long as the change fits the results reported.
-help-running-results = Report the results: choose the side that won or Draw at a match, type them in, e.g. “3 1” for a win of the left side of match 3, or choose the winner in the bracket. The standings follow every result.
-help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done.
+help-running-results = Report the results: choose the side that won or Draw at a match, or enter its score below it, type them in, e.g. “3 1” for a win of the left side of match 3, or choose the winner in the bracket. The standings follow every result.
+help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done. Either way, the score entered stays, so that only what was wrong needs changing.
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
 help-formats = Formats and standings
 help-standings = The order of the standings
@@ -221,8 +221,47 @@ draw = Draw
 # the button reporting a draw, for screen readers
 draw-of = { $a } – { $b }: draw
 won = { $team } won
+# a result and the scores it was reported with; $result: what `won` or `draw` say
+result-with-scores = { $result }, { $scores }
 reopen = Reopen
 reopen-match = Reopen match { $number }
+# the result of a match whose match format enters more than who won, e.g. a score, in a dialog
+open-result = Enter result
+open-result-of = Enter result of match { $number }
+# the button opening the dialog of a result entered in the row of its match, for more than the row enters
+result-details = Details
+# what screen readers say of it
+result-details-of = Details of the result of match { $number }
+# the button reporting the result entered in the row of a match, for screen readers
+report-match = Report match { $number }
+# a value entered in the row of a match, for screen readers; $value: what it is, e.g. Score
+quick-value-of = { $value } of { $team }, match { $number }
+# the same of a part of the match; $part: e.g. Game 2
+quick-value-of-in = { $value } of { $team } in { $part }, match { $number }
+result-title = Result of match { $number }
+# the dialog showing the result of a finished match as it was reported
+result-details-description = { $a } against { $b }, as reported.
+# the header of the column saying who won each part, e.g. each game, where it has no values
+result-column = Result
+# a warning of a part, e.g. of game 2; $warning: a sentence
+part-warning = { $part }: { $warning }
+# a value of the match itself; $value: e.g. Score; $score: e.g. 21–17, $a's first
+reported-value = { $value }: { $a } { $score } { $b }
+close = Close
+result-description = { $a } against { $b }. Each value is taken as entered; what looks like a typo is pointed out.
+part-numbered = { $name } { $number }
+value-of = { $value } of { $team }
+value-of-in = { $value } of { $team } in { $part }
+result-of = Result: { $part }
+result-as-entered = As entered: { $result }
+result-open = Not decided yet
+result-is = { $part }: { $result }
+# a result, or that there is none yet, with the parts each side won in the order of the sides, e.g. 2–1 in games; $result: what `wins`, `draw` or `result-open` say
+result-with-parts-won = { $result } ({ $won })
+# a button, rarely used: choosing results other than those the values suggest
+result-override = Override result
+# a button, while overriding: dropping the results chosen
+result-follow-values = Use result as entered
 bye = Bye: { $team }
 bye-in-stage = Bye: { $team } ({ $stage })
 standings = Standings
@@ -238,6 +277,10 @@ cross-table-total = Total
 outcome-win = won
 outcome-draw = drawn
 outcome-loss = lost
+# how a match ended for the team of the row, followed by the score shown for it, said by screen
+# readers; $outcome: what `outcome-win`, `outcome-draw` or `outcome-loss` say; $score: e.g. 2–1, the
+# row's first
+outcome-with-score = { $outcome }, { $score }
 # the bracket of a knockout, every match in it from the start
 bracket = Bracket
 bracket-winners = Winners bracket
@@ -275,6 +318,7 @@ enter-result-hint = Type the number of the match, then 1 if the side on the left
        *[no] , e.g. “ali” or “ali 5”.
     }
 # what the entry reports if submitted now; $result: what the message won or draw says
+enter-scores-hint = Scores follow the number, the left side’s first, or the name, the winner’s first, e.g. “3 21-17 19-21” or “ali 21-17”.
 result-entry-preview = Reports match { $number }: { $result }.
 # the heading of the matches while the entry of results has text; $text: the text
 entry-found = Matches fitting “{ $text }”

@@ -5,10 +5,35 @@
 phase =
     .field-format = Format
     .field-format-description = wie die Spiele angesetzt werden
+    .field-match_format = Spielformat
+    .field-match_format-description = was zu einem Spiel eingetragen wird
     .field-ranking = Reihenfolge der Tabelle
     .field-ranking-description = die Besten zuerst; jedes Kriterium entscheidet nur, wo die vor ihm gleich sind
     .field-metrics = Kennzahlen
     .field-metrics-description = für jeden Teilnehmer berechnet
+
+## Match formats
+
+plugin-tournament_engine-winner_only =
+    .label = nur Sieger
+    .description = wer ein Spiel gewonnen hat oder dass es unentschieden ausging, ohne Spielstand
+    .level-match = Spiel
+plugin-tournament_engine-scored =
+    .label = Spielstand
+    .description = die Punkte oder Tore jeder Seite
+    .level-match = Spiel
+    .value-score = Punkte
+    .field-winning_score = Gewinnpunktzahl
+    .field-winning_score-description = was ein Sieger üblicherweise hat, oder mehr, dann mit einem oder zwei Punkten Vorsprung; jeder andere Spielstand wird angemerkt, da er ein Tippfehler sein kann
+plugin-tournament_engine-best_of =
+    .label = Gewinnsätze
+    .description = wer die meisten Sätze gewinnt, gewinnt; jeder Satz nach seinem Spielstand
+    .level-match = Spiel
+    .level-game = Satz
+    .value-score = Punkte
+    .field-games = Sätze
+    .field-winning_score = Gewinnpunktzahl eines Satzes
+    .field-winning_score-description = was der Sieger eines Satzes üblicherweise hat, oder mehr, dann mit einem oder zwei Punkten Vorsprung; jeder andere Spielstand wird angemerkt, da er ein Tippfehler sein kann
 
 ## Phase formats
 
@@ -68,6 +93,24 @@ plugin-tournament_engine-wins_draws_losses =
     .description = wie viele Spiele gewonnen, unentschieden gespielt und verloren wurden
     .column = S-U-N
     .cell-wins-draws-losses = { $wins }-{ $draws }-{ $losses }
+plugin-tournament_engine-points_balance =
+    .label = erzielte und erhaltene Punkte
+    .description = die Punkte oder Tore aller Spiele, wie die Ergebnisse sie angeben
+    .column = +:−
+    .cell-scored-conceded = { $scored }:{ $conceded }
+plugin-tournament_engine-points_difference =
+    .label = Punktedifferenz
+    .description = die erzielten Punkte oder Tore abzüglich der erhaltenen
+    .column = ±
+plugin-tournament_engine-games_balance =
+    .label = gewonnene und verlorene Sätze
+    .description = die Sätze aller Spiele, wie die Ergebnisse sie angeben
+    .column = Sätze
+    .cell-won-lost = { $won }:{ $lost }
+plugin-tournament_engine-games_difference =
+    .label = Satzdifferenz
+    .description = die gewonnenen Sätze abzüglich der verlorenen
+    .column = Sätze ±
 plugin-tournament_engine-buchholz =
     .label = Buchholz
     .description = die Punkte aller Gegner
@@ -98,6 +141,19 @@ plugin-tournament_engine-round_of_elimination =
     .cell-still-in = -
 
 ## Ranking criteria
+
+plugin-tournament_engine-higher_points_difference =
+    .label = höhere Punktedifferenz
+    .description = die erzielten Punkte oder Tore abzüglich der erhaltenen
+plugin-tournament_engine-more_points_scored =
+    .label = mehr erzielte Punkte
+    .description = eine Feinwertung, die Angreifen über Verteidigen stellt
+plugin-tournament_engine-higher_games_difference =
+    .label = höhere Satzdifferenz
+    .description = die gewonnenen Sätze abzüglich der verlorenen
+plugin-tournament_engine-more_games_won =
+    .label = mehr gewonnene Sätze
+    .description = eine Feinwertung, die die gewonnenen Sätze zählt, nicht die verlorenen
 
 plugin-tournament_engine-more_points =
     .label = mehr Punkte

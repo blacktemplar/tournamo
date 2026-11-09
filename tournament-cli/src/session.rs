@@ -19,15 +19,21 @@ use plugin_factory::{
     draft::{Draft, Issue},
 };
 use thiserror::Error;
-use tournament_app::{error as app_error, file::File, session::Session as AppSession};
+use tournament_app::{
+    error as app_error,
+    file::File,
+    i18n::{Language, Translator},
+    session::Session as AppSession,
+    view,
+};
 use tournament_engine::{
     Annotated as _, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseData,
-    PhasePlugins, RankingId, TypeMap,
+    PhasePlugins, RankingId, Sides, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
 use crate::{
-    command::{Command, ReportedResult},
+    command::{Command, Reported, ReportedResult},
     questionnaire::{self, AcceptDefaults, IssueList},
     storage::Storage,
 };
@@ -87,6 +93,10 @@ pub enum Error {
     NotStarted,
     #[error("there is no match number {0}")]
     UnknownMatch(NonZeroUsize),
+    #[error("enter the scores first, then the result if it is not the one they give")]
+    ResultBeforeScores,
+    #[error("#{0} does not take the scores entered")]
+    ScoresNotTaken(NonZeroUsize),
     #[error("#{0} has no result that could be undone")]
     NotReported(NonZeroUsize),
     /// The match whose result depends on the undone one is scheduled because of it, e.g. the final
@@ -212,7 +222,7 @@ impl Session {
             Command::EditPhase => return Err(Error::NotEdited),
             Command::Start => self.start()?,
             Command::Matches { open, round } => self.matches(open, round)?,
-            Command::Report { number, result } => self.report(number, result)?,
+            Command::Report { number, entry } => self.report(number, entry)?,
             Command::UndoReport { number } => self.undo_report(number)?,
             Command::Ranking => self.ranking()?,
             Command::Undo => self.undo()?,
@@ -506,14 +516,37 @@ impl Session {
         Ok(match_id)
     }
 
-    fn report(&mut self, number: NonZeroUsize, result: ReportedResult) -> Result<String, Error> {
+    /// Reports `entry` for the match `number`: its scores, the match's own or else those of its
+    /// parts in order, then its result, if not the one they give.
+    fn report(&mut self, number: NonZeroUsize, entry: Vec<Reported>) -> Result<String, Error> {
         let match_id = self.match_numbered(number)?;
-        let result = match result {
+        let (scores, result) = match entry.split_last() {
+            Some((Reported::Result(result), scores)) => (scores, Some(*result)),
+            _ => (&entry[..], None),
+        };
+        let scores = scores
+            .iter()
+            .map(|reported| match reported {
+                Reported::Score(score) => Ok(Sides::new(Some(score.a), Some(score.b))),
+                Reported::Result(_) => Err(Error::ResultBeforeScores),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let result = result.map(|result| match result {
             ReportedResult::A => MatchResult::AWins,
             ReportedResult::B => MatchResult::BWins,
             ReportedResult::Draw => MatchResult::Draw,
+        });
+        let reported = if scores.is_empty() {
+            let result = result.expect("an entry is a result or scores");
+            self.session.report(match_id, result)?
+        } else {
+            let mut form = self.session.result_form(match_id)?;
+            if !form.enter_scores(&scores) {
+                return Err(Error::ScoresNotTaken(number));
+            }
+            form.choose(&[], result);
+            self.session.report_form(&form)?
         };
-        let reported = self.session.report(match_id, result)?;
 
         let phase = self.phase()?.data();
         let mut output = format!(
@@ -631,11 +664,21 @@ impl Session {
     fn result_text(&self, phase: &PhaseData, r#match: &Match) -> String {
         let a = self.team_name(phase, r#match.team_a());
         let b = self.team_name(phase, r#match.team_b());
-        match r#match.result() {
+        let text = match r#match.result() {
             Some(MatchResult::AWins) => format!("{a} beat {b}"),
             Some(MatchResult::BWins) => format!("{b} beat {a}"),
             Some(MatchResult::Draw) => "draw".to_owned(),
             None => "open".to_owned(),
+        };
+        let phase = self.phase().expect("a match has a phase");
+        let scores = view::scores(phase, r#match);
+        let parts_won = view::parts_won(phase, r#match);
+        if scores.is_empty() && parts_won.is_none() {
+            text
+        } else {
+            // in the order of the sides, as `matches` lists them
+            let scores = Translator::new(Language::English, &[]).match_scores(parts_won, &scores);
+            format!("{text}: {scores}")
         }
     }
 }
@@ -710,6 +753,7 @@ mod tests {
     use plugin_factory::{PluginType, draft::Problem};
     use tournament_app::error::{AddEntrantError, EditPhaseError, ReportError, StartError};
     use tournament_engine::plugins::{
+        match_format::{BestOf, WinnerOnly},
         metrics_calculator::{
             FewerMatchesPlayed, MorePoints, MoreWins, PointsCalculator, SonnebornBergerCalculator,
             WinsDrawsLossesCalculator,
@@ -739,6 +783,7 @@ mod tests {
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))
+            .and_then(|draft| draft.with("match_format", plugin::<WinnerOnly>()))
             .unwrap()
     }
 
@@ -1180,6 +1225,63 @@ mod tests {
             "got {issues:?}"
         );
         assert!(session.competition().phases().is_empty());
+    }
+
+    /// A started round robin of Alice and Bob whose results are a best of three games.
+    fn best_of_three() -> Session {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob");
+        let draft = draft(&session, plugin::<RoundRobin>(), Vec::new(), Vec::new())
+            .with("match_format", plugin::<BestOf>().with("games", 3))
+            .and_then(|draft| draft.with_defaults())
+            .unwrap();
+        session.add_phase(&draft).unwrap();
+        output(&mut session, "start");
+        session
+    }
+
+    #[test]
+    fn the_scores_of_the_games_decide_a_match_and_show_with_it() {
+        let mut session = best_of_three();
+
+        let reported = output(&mut session, "report 1 21-17 15-21 21-9");
+
+        let line = reported.lines().next().unwrap();
+        assert!(line.starts_with("#1: "), "{reported}");
+        assert!(line.ends_with(": 2–1 (21–17 15–21 21–9)"), "{reported}");
+        assert!(output(&mut session, "matches").contains(": 2–1 (21–17 15–21 21–9)"));
+    }
+
+    #[test]
+    fn a_result_after_the_scores_overrides_what_they_give() {
+        let mut session = best_of_three();
+
+        output(&mut session, "report 1 21-17 b");
+
+        let listed = output(&mut session, "matches");
+        let line = listed.lines().last().unwrap();
+        let (b, a) = line.split_once(" beat ").unwrap();
+        assert!(a.contains("(21–17)") && !b.is_empty(), "{line}");
+    }
+
+    #[test]
+    fn scores_go_before_the_result_and_fit_the_games() {
+        let mut session = best_of_three();
+
+        assert!(matches!(
+            execute(&mut session, "report 1 a 21-17"),
+            Err(Error::ResultBeforeScores)
+        ));
+        // more scores than games, and a decimal in a game scored in counts
+        for scores in ["1-0 1-0 1-0 1-0", "21.5-17 21-15"] {
+            assert!(
+                matches!(
+                    execute(&mut session, &format!("report 1 {scores}")),
+                    Err(Error::ScoresNotTaken(_))
+                ),
+                "{scores}"
+            );
+        }
     }
 
     /// Wins, draws, losses and the matches they add up to are four criteria of a single metric, so
@@ -2021,14 +2123,14 @@ mod tests {
         let mut session = Session::new(storage.clone()).named("cup");
         output(&mut session, "save");
         let mut saved: Value = serde_json::from_slice(&storage.read("cup").unwrap()).unwrap();
-        assert_eq!(saved["format"], 1);
-        saved["format"] = 2.into();
+        assert_eq!(saved["format"], 2);
+        saved["format"] = 3.into();
         storage.write("cup", saved.to_string().as_bytes()).unwrap();
 
         let Err(Error::Load { source, .. }) = Session::load(storage, "cup") else {
             panic!("a file of a newer format must not load");
         };
-        assert!(source.to_string().contains("format 2"), "{source}");
+        assert!(source.to_string().contains("format 3"), "{source}");
     }
 
     #[test]

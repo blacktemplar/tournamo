@@ -30,8 +30,9 @@ use tempfile::TempDir;
 pub use thirtyfour;
 use thirtyfour::{
     BrowserLogEntry, By, CapabilitiesHelper, ChromiumLikeCapabilities, DesiredCapabilities,
-    LoggingPrefsLogLevel, WebDriver, WindowHandle,
+    ElementId, LoggingPrefsLogLevel, WebDriver, WebElement, WindowHandle,
     bidi::events::UserPromptOpened,
+    common::command::{Command, ExtensionCommand},
     error::{WebDriverError, WebDriverErrorInner, WebDriverResult},
     extensions::query::{ElementPollerWithTimeout, ElementQuery, ElementQueryable},
     manager::BrowserKind,
@@ -47,6 +48,9 @@ use tower_http::services::ServeDir;
 /// How long a query waits for what it looks for, and how often it looks.
 const TIMEOUT: Duration = Duration::from_secs(5);
 const INTERVAL: Duration = Duration::from_millis(20);
+/// How long the page may take to start: its WebAssembly, unoptimized for the tests, takes seconds
+/// to load and compile on a busy machine, as where every test runs a browser of its own.
+const STARTUP: Duration = Duration::from_secs(30);
 
 /// The version of axe-core that checks accessibility, where it is downloaded from, and the SHA-256
 /// of what is downloaded.
@@ -385,6 +389,26 @@ fn sha256(text: &str) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+/// WebDriver's Get Computed Label of an element: its accessible name, which thirtyfour has no
+/// method for.
+#[derive(Debug)]
+struct ComputedLabel(ElementId);
+
+impl ExtensionCommand for ComputedLabel {
+    fn parameters_json(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    // the method of the crate http, which thirtyfour takes and reqwest re-exports
+    fn method(&self) -> reqwest::Method {
+        reqwest::Method::GET
+    }
+
+    fn endpoint(&self) -> Arc<str> {
+        format!("/element/{}/computedlabel", self.0).into()
+    }
 }
 
 /// The page under test, as a WebDriver session.
@@ -919,6 +943,7 @@ impl Page {
     async fn ready(&self) -> WebDriverResult<()> {
         self.driver
             .query(self.ready.clone())
+            .wait(STARTUP, INTERVAL)
             .without_text("")
             .first()
             .await?;
@@ -993,11 +1018,57 @@ impl Page {
     /// # Panics
     /// Panics if they do not in time, with the texts they have instead.
     pub async fn expect_texts(&self, by: By, texts: &[&str]) -> WebDriverResult<()> {
+        self.expect_texts_of(by, &[texts]).await
+    }
+
+    /// Waits until the elements `by` finds have one of `alternatives` as their texts, as
+    /// [`Self::expect_texts`] does with one, e.g. a result read from either side of a match.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the texts they have instead.
+    pub async fn expect_texts_of(&self, by: By, alternatives: &[&[&str]]) -> WebDriverResult<()> {
+        self.expect_read(by, alternatives, "texts", async |element| {
+            element.text().await
+        })
+        .await
+    }
+
+    /// Waits until the elements `by` finds have the accessible names `names`, in this order,
+    /// ignoring the [`ISOLATION_MARKS`] in them: what Chrome tells assistive technology each is
+    /// called (WebDriver's Get Computed Label). A table cell, for one, is called what its content
+    /// says, without what is `aria-hidden`, which is what a screen reader says of it.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the names they have instead.
+    pub async fn expect_accessible_names(&self, by: By, names: &[&str]) -> WebDriverResult<()> {
+        self.expect_read(by, &[names], "accessible names", async |element| {
+            let label = ComputedLabel(element.element_id());
+            element
+                .handle()
+                .cmd(Command::ExtensionCommand(Box::new(label)))
+                .await?
+                .value()
+        })
+        .await
+    }
+
+    /// Waits until what `read` reads of each element `by` finds, ignoring the [`ISOLATION_MARKS`],
+    /// is one of `alternatives`, which are the `what` of the elements, e.g. their texts.
+    ///
+    /// # Panics
+    /// Panics if it is not in time, with what is read instead.
+    async fn expect_read(
+        &self,
+        by: By,
+        alternatives: &[&[&str]],
+        what: &str,
+        read: impl AsyncFn(&WebElement) -> WebDriverResult<String>,
+    ) -> WebDriverResult<()> {
         let start = Instant::now();
         loop {
             let mut found = Vec::new();
             for element in self.driver.find_all(by.clone()).await? {
-                match element.text().await {
+                match read(&element).await {
                     Ok(text) => found.push(text.replace(ISOLATION_MARKS, "")),
                     // replaced by the page since it was found, so looked for again
                     Err(error)
@@ -1009,11 +1080,14 @@ impl Page {
                     Err(error) => return Err(error),
                 }
             }
-            if found == texts {
+            if alternatives.iter().any(|texts| found == *texts) {
                 return Ok(());
             }
             if start.elapsed() > TIMEOUT {
-                panic!("{by} must find the texts {texts:?}, but finds {found:?}");
+                match alternatives {
+                    [texts] => panic!("{by} must find the {what} {texts:?}, but finds {found:?}"),
+                    _ => panic!("{by} must find one of {alternatives:?}, but finds {found:?}"),
+                }
             }
             tokio::time::sleep(INTERVAL).await;
         }
@@ -1043,5 +1117,38 @@ impl Page {
             Err(_) => "nothing".to_owned(),
         };
         panic!("{by} must have {expected}, but has {found}");
+    }
+
+    /// Waits until `script`, run with `args`, returns `null`, saying what is wrong otherwise: for a
+    /// check of how the page looks, which may still change after the action before it.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what the page must be, `expected`, and what the script
+    /// returned last.
+    pub async fn expect_script(
+        &self,
+        script: &str,
+        args: Vec<serde_json::Value>,
+        expected: &str,
+    ) -> WebDriverResult<()> {
+        let start = Instant::now();
+        loop {
+            let wrong = self
+                .driver
+                .execute(script, args.clone())
+                .await?
+                .json()
+                .clone();
+            if wrong.is_null() {
+                return Ok(());
+            }
+            if start.elapsed() > TIMEOUT {
+                let wrong = wrong
+                    .as_str()
+                    .map_or_else(|| format!("{wrong:#}"), str::to_owned);
+                panic!("{expected}, but {wrong}");
+            }
+            tokio::time::sleep(INTERVAL).await;
+        }
     }
 }

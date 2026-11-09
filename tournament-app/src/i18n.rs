@@ -20,7 +20,13 @@ use std::{
 
 use fluent_bundle::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use fluent_syntax::{ast, parser};
-use tournament_engine::plugins::{Phrase, metrics_calculator::Cell};
+use tournament_engine::{
+    EnteredValue, Sides,
+    plugins::{
+        Phrase,
+        metrics_calculator::{Cell, sign},
+    },
+};
 
 use crate::{form::FormField, view::StageName};
 
@@ -224,6 +230,14 @@ pub enum PluginText<'a> {
     /// The phrase of this key in a cell of a calculator's column, `.cell-<key>`, with the phrase's
     /// numbers as its variables, see [`Translator::cell`].
     Cell(&'a str),
+    /// What a match format calls a part of a match at the level of this key, e.g. a game,
+    /// `.level-<key>`.
+    Level(&'a str),
+    /// The label of a value of this key that a match format enters for each side, e.g. the score,
+    /// `.value-<key>`.
+    EnteredValue(&'a str),
+    /// A reason of this key a match format gives for a decision, e.g. a walkover, `.reason-<key>`.
+    Reason(&'a str),
 }
 
 impl PluginText<'_> {
@@ -242,6 +256,9 @@ impl PluginText<'_> {
             Self::FieldDescription(name) => format!("field-{name}-description"),
             Self::Stage(key) => format!("stage-{key}"),
             Self::Cell(key) => format!("cell-{key}"),
+            Self::Level(key) => format!("level-{key}"),
+            Self::EnteredValue(key) => format!("value-{key}"),
+            Self::Reason(key) => format!("reason-{key}"),
         }
     }
 }
@@ -342,7 +359,7 @@ impl Translator {
     /// The name of `stage` in the language, as the [`PluginText::Stage`] of its format with its
     /// numbers set, or else in English, as the format's code names it.
     pub fn stage(&self, stage: &StageName) -> String {
-        self.phrase(
+        self.plugin_phrase(
             stage.format,
             PluginText::Stage(stage.stage.key()),
             &stage.stage,
@@ -350,13 +367,59 @@ impl Translator {
     }
 
     /// What `cell` of the column of the calculator `calculator` shows in the language: a number as
-    /// the language writes it, see [`Self::number`], and a phrase as the [`PluginText::Cell`] of
-    /// the calculator with its numbers set, or else in English, as the calculator's code says it.
+    /// the language writes it, see [`Self::number`], a signed one after its sign, and a phrase as
+    /// the [`PluginText::Cell`] of the calculator with its numbers set, or else in English, as the
+    /// calculator's code says it.
     pub fn cell(&self, calculator: &str, cell: &Cell) -> String {
         match cell {
             Cell::Number(number) => self.number(number.get()),
-            Cell::Text(phrase) => self.phrase(calculator, PluginText::Cell(phrase.key()), phrase),
+            Cell::Signed(number) => format!("{}{}", sign(*number), self.number(number.get().abs())),
+            Cell::Text(phrase) => {
+                self.plugin_phrase(calculator, PluginText::Cell(phrase.key()), phrase)
+            }
         }
+    }
+
+    /// `scores` as the language writes them, e.g. `21–17 19–21`: each the numbers of its sides
+    /// joined by an en dash, a side without one shown as `-`, separated by spaces.
+    pub fn scores(&self, scores: &[Sides<Option<EnteredValue>>]) -> String {
+        let side = |value: Option<EnteredValue>| match value {
+            Some(EnteredValue::Count(count)) => self.number(count.into()),
+            Some(EnteredValue::Decimal(decimal)) => self.number(decimal.get()),
+            None => "-".to_owned(),
+        };
+        scores
+            .iter()
+            .map(|score| format!("{}–{}", side(score.a), side(score.b)))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// The scores of a match as [`scores`](Self::scores) says them, after the parts each side won,
+    /// if any, e.g. `3–1 (21–17 19–21 21–15 21–8)`.
+    pub fn match_scores(
+        &self,
+        parts_won: Option<Sides<u32>>,
+        scores: &[Sides<Option<EnteredValue>>],
+    ) -> String {
+        let Some(won) = parts_won else {
+            return self.scores(scores);
+        };
+        let won = self.score(won);
+        if scores.is_empty() {
+            won
+        } else {
+            format!("{won} ({})", self.scores(scores))
+        }
+    }
+
+    /// `score`, side A's first, e.g. `3–1`.
+    pub fn score(&self, score: Sides<u32>) -> String {
+        format!(
+            "{}–{}",
+            self.number(score.a.into()),
+            self.number(score.b.into())
+        )
     }
 
     /// `number` as the language writes it, e.g. `0,5` in German.
@@ -364,8 +427,9 @@ impl Translator {
         written(self.language, &number.to_string())
     }
 
-    /// `phrase` of the plugin `id` as its `text` with the phrase's numbers set, or else in English.
-    fn phrase(&self, id: &str, text: PluginText<'_>, phrase: &Phrase) -> String {
+    /// `phrase` of the plugin `id` as its `text` with the phrase's numbers set, or else in English,
+    /// e.g. a level of the match format `id` as [`PluginText::Level`] of the phrase's key.
+    pub fn plugin_phrase(&self, id: &str, text: PluginText<'_>, phrase: &Phrase) -> String {
         let mut args = FluentArgs::new();
         for (name, value) in phrase.numbers() {
             args.set(*name, *value);

@@ -7,7 +7,7 @@ use tournament_app::{
     view::{Action, EntrantRow, Reopened, Reported},
 };
 
-use crate::{capitalized, i18n::t, result_text, team_name, winners_text};
+use crate::{capitalized, i18n::t, result_text, result_with_scores, team_name, winners_text};
 
 /// Something done that the operator is told about, kept as data so that it is said again in
 /// another language when that is chosen.
@@ -63,7 +63,7 @@ impl Announcement {
                     tr,
                     "announce-reported",
                     number = row.number,
-                    result = result_text(tr, row).unwrap_or_default(),
+                    result = result_with_scores(tr, row).unwrap_or_default(),
                 )];
                 if reported.new_matches > 0 {
                     sentences.push(t!(tr, "announce-new-matches", count = reported.new_matches));

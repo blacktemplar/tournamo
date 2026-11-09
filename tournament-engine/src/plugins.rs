@@ -51,6 +51,7 @@ use serde::{Deserialize, Serialize};
 pub use crate::plugins::builder::PhasePluginsBuilder;
 pub use crate::plugins::phrase::Phrase;
 use crate::plugins::{
+    match_format::MatchFormat,
     metrics_calculator::MetricsCalculator,
     phase_format::PhaseFormat,
     ranker::{HierarchicalRanker, SliceRanker},
@@ -59,6 +60,7 @@ use crate::plugins::{
 #[cfg(feature = "test-util")]
 mod builder;
 pub mod facts;
+pub mod match_format;
 pub mod metrics_calculator;
 pub mod phase_format;
 mod phrase;
@@ -114,6 +116,14 @@ pub struct PhasePlugins {
         default = Box::new(phase_format::RoundRobin)
     )]
     format: Box<dyn PhaseFormat>,
+    // phases added by 0.3.0 and earlier knew only who won
+    #[serde(default = "match_format::default")]
+    #[plugin(
+        label = "match format",
+        description = "what is entered for a match",
+        default = match_format::default()
+    )]
+    match_format: Box<dyn MatchFormat>,
     #[serde(default)]
     #[plugin(
         label = "ranked by",
@@ -128,6 +138,8 @@ pub struct PhasePlugins {
 impl PhasePlugins {
     /// The name of the field taking the format.
     pub const FORMAT: &str = "format";
+    /// The name of the field taking the match format.
+    pub const MATCH_FORMAT: &str = "match_format";
     /// The name of the field taking the ranking criteria.
     pub const RANKING: &str = "ranking";
     /// The name of the field taking the metrics calculators.
@@ -181,15 +193,17 @@ impl PhasePlugins {
         draft.with_defaults()
     }
 
-    /// The plugins of a phase played in `format`, ranked by `ranking` and calculating the metrics
-    /// of `metrics`, put into the order they run in.
+    /// The plugins of a phase played in `format`, entering results by `match_format`, ranked by
+    /// `ranking`, calculating the metrics of `metrics`, put into the order they run in.
     pub(crate) fn from_parts(
         format: Box<dyn PhaseFormat>,
+        match_format: Box<dyn MatchFormat>,
         ranking: Vec<Box<dyn SliceRanker>>,
         metrics: Vec<Box<dyn MetricsCalculator>>,
     ) -> Result<Self, plugin_factory::schema::DependencyOrderedSetError> {
         Ok(Self {
             format,
+            match_format,
             ranking,
             metrics: DependencyOrderedSet::new(metrics)?,
         })
@@ -209,16 +223,29 @@ impl PhasePlugins {
         &self.metrics
     }
 
+    /// The match format: what is entered for a match.
+    pub fn match_format(&self) -> &dyn MatchFormat {
+        &*self.match_format
+    }
+
     /// The answers to a [`Competition::phase_draft`](crate::Competition::phase_draft) these
     /// plugins are built from, without their runtime state, see [`Config::of`].
     pub fn config(&self) -> Config {
         Config::of(self).expect("every plugin serializes as it is configured")
     }
 
-    /// The format, the ranker and the metrics calculators a phase is run with.
-    pub(crate) fn into_parts(self) -> (Box<dyn PhaseFormat>, HierarchicalRanker, Metrics) {
+    /// The format, the match format, the ranker and the metrics calculators a phase is run with.
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        Box<dyn PhaseFormat>,
+        Box<dyn MatchFormat>,
+        HierarchicalRanker,
+        Metrics,
+    ) {
         (
             self.format,
+            self.match_format,
             HierarchicalRanker::new(self.ranking),
             self.metrics.into_iter().collect(),
         )
@@ -252,8 +279,11 @@ mod tests {
         entities::competition::{Bye, Competition, Match, PhaseData, RankingId},
         plugins::{
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
+            match_format::{BestOf, Scored, WinnerOnly},
             metrics_calculator::{
-                Metric, OldMetrics,
+                GamesBalance, GamesBalanceCalculator, GamesDifference, HigherGamesDifference,
+                HigherPointsDifference, Metric, OldMetrics, PointsBalance, PointsBalanceCalculator,
+                PointsDifference,
                 buchholz::{
                     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
                     MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
@@ -412,8 +442,9 @@ mod tests {
             names,
             [
                 PhasePlugins::FORMAT,
+                PhasePlugins::MATCH_FORMAT,
                 PhasePlugins::RANKING,
-                PhasePlugins::METRICS
+                PhasePlugins::METRICS,
             ]
         );
     }
@@ -532,6 +563,44 @@ mod tests {
         assert_eq!(check(&plugins), Ok(()));
     }
 
+    /// The difference is calculated from the points scored and conceded, so ranking by it adds
+    /// both calculators, in running order.
+    #[test]
+    fn ranking_by_the_points_difference_adds_its_calculators() {
+        let mut draft = Competition::default()
+            .phase_draft()
+            .with("format", plugin::<RoundRobin>())
+            .and_then(|draft| draft.with("match_format", plugin::<Scored>()))
+            .and_then(|draft| draft.with("ranking", vec![plugin::<HigherPointsDifference>()]))
+            .and_then(|draft| draft.with("metrics", Vec::<PluginConfig>::new()))
+            .and_then(Draft::with_defaults)
+            .unwrap();
+        draft.add_implied();
+        let plugins = draft.build().unwrap();
+
+        assert_eq!(metrics(&plugins), metrics![PointsBalance, PointsDifference]);
+        assert_eq!(check(&plugins), Ok(()));
+    }
+
+    /// The difference is calculated from the games won and lost, so ranking by it adds both
+    /// calculators, in running order.
+    #[test]
+    fn ranking_by_the_games_difference_adds_its_calculators() {
+        let mut draft = Competition::default()
+            .phase_draft()
+            .with("format", plugin::<RoundRobin>())
+            .and_then(|draft| draft.with("match_format", plugin::<BestOf>()))
+            .and_then(|draft| draft.with("ranking", vec![plugin::<HigherGamesDifference>()]))
+            .and_then(|draft| draft.with("metrics", Vec::<PluginConfig>::new()))
+            .and_then(Draft::with_defaults)
+            .unwrap();
+        draft.add_implied();
+        let plugins = draft.build().unwrap();
+
+        assert_eq!(metrics(&plugins), metrics![GamesBalance, GamesDifference]);
+        assert_eq!(check(&plugins), Ok(()));
+    }
+
     /// The points can be scored in many ways, so ranking by them without configuring how is an
     /// issue rather than a guess.
     #[test]
@@ -633,6 +702,42 @@ mod tests {
                 fact: type_name::<Points>(),
                 required_by: format!("{MorePoints:?}"),
             })
+        );
+    }
+
+    /// The points scored and conceded are only calculated of results with a score.
+    #[test]
+    fn points_scored_and_conceded_need_results_with_a_score() {
+        let builder = PhasePluginsBuilder::new().add_metric(PointsBalanceCalculator);
+
+        assert!(matches!(
+            check(&builder.clone().match_format(WinnerOnly).build().unwrap()),
+            Err(Incompatibility::FactNotProvided { .. })
+        ));
+        assert_eq!(
+            check(&builder.match_format(Scored::default()).build().unwrap()),
+            Ok(())
+        );
+    }
+
+    /// The games won and lost are only calculated of results with games.
+    #[test]
+    fn games_won_and_lost_need_results_with_games() {
+        let builder = PhasePluginsBuilder::new().add_metric(GamesBalanceCalculator);
+
+        assert!(matches!(
+            check(
+                &builder
+                    .clone()
+                    .match_format(Scored::default())
+                    .build()
+                    .unwrap()
+            ),
+            Err(Incompatibility::FactNotProvided { .. })
+        ));
+        assert_eq!(
+            check(&builder.match_format(BestOf::new(3)).build().unwrap()),
+            Ok(())
         );
     }
 

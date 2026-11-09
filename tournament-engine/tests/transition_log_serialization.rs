@@ -13,9 +13,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseId,
-    PhasePluginsBuilder, RemoveEntrant, ReportMatchResult, Score, Seed, SetCompetitionSeed,
-    StartCompetition, TypeMapValue,
+    CompetitionStateMachineExt, Decision, EnteredValue, Entrant, EntrantId, FieldKey, Match,
+    MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant,
+    ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, StartCompetition,
+    TypeMapValue,
     plugins::{
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MorePoints, Points, PointsCalculator,
@@ -28,6 +29,10 @@ use tournament_engine::{
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
+
+use crate::common::games;
+
+mod common;
 
 /// Everything random here is seeded, so that all runs use the exact same tournament.
 const SEED: Seed = Seed::new(*b"log-trip!!!!");
@@ -214,6 +219,81 @@ fn a_transition_is_serialized_with_its_payload_next_to_its_tag() {
             },
         }])
     );
+}
+
+/// Reports logged by 0.3.0 and earlier name a `match_result` where a `decision` is now.
+#[test]
+fn a_report_logged_before_decisions_still_replays() {
+    let machine = played_competition();
+    let mut log = serialized_log(&machine);
+    let Value::Array(entries) = &mut log else {
+        panic!("a log must serialize to a sequence");
+    };
+    let mut reports = 0;
+    for entry in entries {
+        let transition = &mut entry["kind"]["Apply"];
+        if transition["type"] == "tournament_engine::report_match_result" {
+            let value = transition["value"].as_object_mut().unwrap();
+            let decision = value.remove("decision").unwrap();
+            assert_eq!(decision["reason"], Value::Null);
+            assert_eq!(value.remove("values").unwrap(), json!([]));
+            assert_eq!(value.remove("parts").unwrap(), json!([]));
+            value.insert("match_result".to_owned(), decision["result"].clone());
+            reports += 1;
+        }
+    }
+    assert!(reports > 0);
+
+    let replayed: CompetitionStateMachine = serde_json::from_value(log).unwrap();
+
+    assert_current_is(&replayed, machine.current());
+}
+
+/// What a report says of how a match was played reaches the match, through any log format.
+#[test]
+fn a_reported_contest_survives_a_round_trip() {
+    let (mut machine, open) = games::competition_entering_games();
+    let points = FieldKey::new("points");
+    machine
+        .apply_transition(
+            ReportMatchResult::new(
+                games::phase_id(),
+                open,
+                Decision::new(MatchResult::AWins).with_reason(ResultReason::new("retired")),
+            )
+            .with_value(
+                FieldKey::new("games"),
+                Sides::new(Some(EnteredValue::Count(1)), None),
+            )
+            .with_part(
+                Part::new()
+                    .with_decision(MatchResult::AWins)
+                    .with_value(points.clone(), games::count(21, 17)),
+            )
+            .with_part(Part::new().with_value(points, games::count(3, 1))),
+        )
+        .unwrap();
+    let contest = machine.current().phases()[&games::phase_id()]
+        .data()
+        .matches()[&open]
+        .contest();
+    assert_eq!(
+        contest.decision().unwrap().reason(),
+        Some(&ResultReason::new("retired"))
+    );
+    assert_eq!(
+        contest.value("games"),
+        Some(&Sides::new(Some(EnteredValue::Count(1)), None))
+    );
+    assert_eq!(contest.parts().len(), 2);
+    assert_eq!(
+        contest.parts()[0].decision().unwrap().result(),
+        MatchResult::AWins
+    );
+    assert!(contest.parts()[1].decision().is_none());
+
+    assert_current_is(&round_trip(&machine), machine.current());
+    assert_current_is(&binary_round_trip(&machine), machine.current());
 }
 
 /// A transition without any data of its own still carries its tag, which is all that identifies it.
@@ -423,6 +503,10 @@ fn every_plugin_is_serialized_under_its_id() {
     assert_eq!(
         plugins["format"]["type"],
         "tournament_engine::single_elimination"
+    );
+    assert_eq!(
+        plugins["match_format"]["type"],
+        "tournament_engine::winner_only"
     );
     assert_eq!(
         ids(&plugins["ranking"]),

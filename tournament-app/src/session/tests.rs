@@ -13,6 +13,7 @@ use plugin_factory::{
 use tournament_engine::{
     Score,
     plugins::{
+        match_format::{BestOf, Scored},
         metrics_calculator::{Cell as MetricCell, MoreWins, RoundOfFirstLossCalculator},
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
@@ -45,6 +46,8 @@ fn now<T>(future: impl Future<Output = T>) -> T {
 struct Given {
     entrants: Vec<&'static str>,
     format: &'static str,
+    /// The format's suggestion if `None`.
+    match_format: Option<PluginConfig>,
 }
 
 impl Given {
@@ -52,6 +55,7 @@ impl Given {
         Self {
             entrants: vec!["Alice", "Bob", "Carol", "Dave"],
             format: RoundRobin::ID,
+            match_format: None,
         }
     }
 
@@ -66,13 +70,26 @@ impl Given {
         Self { format, ..self }
     }
 
+    fn match_format(self, match_format: PluginConfig) -> Self {
+        Self {
+            match_format: Some(match_format),
+            ..self
+        }
+    }
+
     /// The session with the entrants and the phase added, not started.
     fn added(self) -> Session {
         let mut session = Session::new("cup");
         for name in self.entrants {
             session.add_entrant(name).unwrap();
         }
-        let draft = session.phase_draft(self.format).unwrap();
+        let mut draft = session.phase_draft(self.format).unwrap();
+        if let Some(match_format) = self.match_format {
+            draft = draft
+                .with(PhasePlugins::MATCH_FORMAT, match_format)
+                .and_then(|draft| draft.with_defaults())
+                .unwrap();
+        }
         session.add_phase(&draft).unwrap();
         session
     }
@@ -1333,6 +1350,76 @@ fn a_draw_adds_a_half_to_the_cross_table() {
     assert_eq!(halves, 2);
 }
 
+/// A cell of the cross table has the result at its highest level, seen from the row's team: the
+/// games won of a best of, not their scores.
+#[test]
+fn the_cross_table_has_the_games_won_from_the_side_of_the_row() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+    session.report_entered("1 21-17 19-21 21-15").unwrap();
+
+    let table = session.cross_table().unwrap();
+
+    let mut played: Vec<_> = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flatten()
+        .filter_map(|played| Some((played.outcome?, played.score?)))
+        .collect();
+    played.sort_by_key(|(outcome, _)| *outcome != Outcome::Win);
+    assert_eq!(
+        played,
+        [
+            (Outcome::Win, scores([(2, 1)])[0]),
+            (Outcome::Loss, scores([(1, 2)])[0])
+        ]
+    );
+}
+
+/// A match scored as a whole has its score in the cross table, seen from the row's team.
+#[test]
+fn the_cross_table_has_the_score_of_a_match_from_the_side_of_the_row() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    session.report_entered("1 21-17").unwrap();
+
+    let table = session.cross_table().unwrap();
+
+    let mut played: Vec<_> = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flatten()
+        .filter_map(|played| Some((played.outcome?, played.score?)))
+        .collect();
+    played.sort_by_key(|(outcome, _)| *outcome != Outcome::Win);
+    assert_eq!(
+        played,
+        [
+            (Outcome::Win, scores([(21, 17)])[0]),
+            (Outcome::Loss, scores([(17, 21)])[0])
+        ]
+    );
+    let mut unscored = Given::new().started();
+    unscored
+        .report(numbered(&unscored, 1), MatchResult::AWins)
+        .unwrap();
+    assert!(
+        unscored
+            .cross_table()
+            .unwrap()
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .flatten()
+            .all(|played| played.score.is_none()),
+        "nothing but who won"
+    );
+}
+
 /// A knockout has its bracket instead, and the teams of a Monster DYP change every round.
 #[test]
 fn a_cross_table_is_only_of_teams_that_stay_the_same_without_a_bracket() {
@@ -1688,6 +1775,143 @@ fn a_result_entered_is_refused_unless_it_reads_as_one_of_a_match() {
         Err(ReportEnteredError::Report(ReportError::DrawNotAllowed))
     ));
     assert!(matches(&session).iter().all(|row| row.result.is_none()));
+}
+
+fn count(count: u16) -> Option<EnteredValue> {
+    Some(EnteredValue::Count(count))
+}
+
+/// The scores of `a` to `b`, each pair one.
+fn scores<const N: usize>(scores: [(u16, u16); N]) -> Vec<Sides<Option<EnteredValue>>> {
+    scores
+        .into_iter()
+        .map(|(a, b)| Sides::new(count(a), count(b)))
+        .collect()
+}
+
+#[test]
+fn scores_are_entered_after_the_number_of_a_match_and_say_its_result() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+
+    let entered = session
+        .read_entered(" 1  21-17 19:21 21–15 ")
+        .report
+        .unwrap();
+    assert_eq!(entered.result, Some(MatchResult::AWins));
+    assert_eq!(entered.scores, scores([(21, 17), (19, 21), (21, 15)]));
+    let reported = session.report_entered("1 21-17 19:21 21–15").unwrap();
+    assert_eq!(reported.row.scores, entered.scores);
+    assert_eq!(reported.row.result, Some(MatchResult::AWins));
+    let reported = session.report_entered("2 17-21 21-17 2").unwrap();
+    assert_eq!(
+        reported.row.result,
+        Some(MatchResult::BWins),
+        "the result entered decides where the scores do not"
+    );
+    assert_eq!(reported.row.scores, scores([(17, 21), (21, 17)]));
+}
+
+#[test]
+fn scores_entered_are_refused_unless_they_fit_the_result() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+
+    assert!(matches!(
+        session.report_entered("1 21-17"),
+        Err(ReportEnteredError::Undecided(1))
+    ));
+    assert!(matches!(
+        session.report_entered("1 21-17 21-19 2"),
+        Err(ReportEnteredError::AgainstScores(1))
+    ));
+    assert!(matches!(
+        session.report_entered("1 1-0 1-0 1-0 1-0"),
+        Err(ReportEnteredError::ScoresNotTaken(1))
+    ));
+    assert!(matches(&session).iter().all(|row| row.result.is_none()));
+
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    assert!(matches!(
+        session.report_entered("1 21.5-17"),
+        Err(ReportEnteredError::ScoresNotTaken(1))
+    ));
+    assert_eq!(
+        session.report_entered("1 21,0-17").unwrap().row.scores,
+        scores([(21, 17)]),
+        "a whole number in a score of counts"
+    );
+
+    let mut session = Given::new().started();
+    assert!(matches!(
+        session.report_entered("1 3-1"),
+        Err(ReportEnteredError::ScoresNotTaken(1))
+    ));
+    assert!(
+        session.report_entered("1-1").is_ok(),
+        "a win of side A, as without scores"
+    );
+}
+
+#[test]
+fn scores_entered_after_a_name_are_the_named_sides() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob"])
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    let the_match = &matches(&session)[0];
+    let alice = win_of(the_match, "Alice");
+    let alices_side = |a, b| {
+        if alice == MatchResult::AWins {
+            scores([(a, b)])
+        } else {
+            scores([(b, a)])
+        }
+    };
+
+    assert!(matches!(
+        session.read_entered("ali 17-21").report,
+        Err(ReportEnteredError::AgainstScores(1))
+    ));
+    let won = session.read_entered("ali 1 21-17").report.unwrap();
+    assert_eq!(won.result, Some(alice));
+    assert_eq!(won.scores, alices_side(21, 17));
+    let reported = session.report_entered("bob 21-19").unwrap();
+    assert_eq!(reported.row.scores, alices_side(19, 21));
+    assert_ne!(reported.row.result, Some(alice));
+}
+
+#[test]
+fn a_draw_entered_with_scores_needs_them_to_say_it() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob"])
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+
+    assert!(matches!(
+        session.read_entered("ali x 2-1").report,
+        Err(ReportEnteredError::AgainstScores(1))
+    ));
+    let drawn = session.report_entered("Alice X 2:2").unwrap();
+    assert_eq!(drawn.row.result, Some(MatchResult::Draw));
+    assert_eq!(drawn.row.scores, scores([(2, 2)]));
+}
+
+#[test]
+fn a_drawn_score_is_refused_where_there_are_no_draws() {
+    let mut session = Given::new()
+        .format(SingleElimination::ID)
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+
+    assert!(matches!(
+        session.report_entered("1 2-2"),
+        Err(ReportEnteredError::Report(ReportError::DrawNotAllowed))
+    ));
 }
 
 /// The numbers of `rows`, in order.
@@ -2214,6 +2438,29 @@ fn catching_up_takes_the_people_as_stored() {
     assert_eq!(names(&following.entrants()), ["Alice", "Bob"]);
 }
 
+/// What another session saved may have reported a match this one reopened, and reopened it again,
+/// so after catching up, the form of the match no longer starts out at the result this one took
+/// back.
+#[test]
+fn catching_up_drops_the_results_taken_back() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    session.report_entered("1 21-17").unwrap();
+    session.undo_report(numbered(&session, 1)).unwrap();
+    now(session.save(&storage)).unwrap();
+    let mut other = now(Session::load(&storage, session.key())).unwrap();
+    other.report_entered("1 21-19").unwrap();
+    other.undo_report(numbered(&other, 1)).unwrap();
+    now(other.save(&storage)).unwrap();
+
+    now(session.catch_up(&storage)).unwrap();
+
+    let form = session.result_form(numbered(&session, 1)).unwrap();
+    assert_eq!(form.view().root.fields[0].values, Sides::new(None, None));
+}
+
 #[test]
 fn an_entry_stored_that_does_not_apply_is_not_caught_up_with() {
     let storage = MemoryStorage::default();
@@ -2453,7 +2700,7 @@ fn a_competition_imported_under_a_name_stored_already_is_numbered() {
 fn a_file_without_a_format_is_imported_as_of_the_first() {
     let session = Given::new().added();
     let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
-    assert_eq!(file["format"], 1);
+    assert_eq!(file["format"], 2);
     file.as_object_mut().unwrap().remove("format");
 
     let imported = Session::import(&file.to_string(), "cup", &[]).unwrap();
@@ -2465,14 +2712,14 @@ fn a_file_without_a_format_is_imported_as_of_the_first() {
 fn a_file_of_a_newer_format_is_not_imported_for_its_format() {
     let session = Given::new().added();
     let mut file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();
-    file["format"] = 2.into();
+    file["format"] = 3.into();
     // what a newer format might hold instead of a log
     file["log"] = serde_json::json!({ "entries": [] });
 
     let result = Session::import(&file.to_string(), "cup", &[]);
 
     assert!(
-        matches!(result, Err(ImportError::Newer(format)) if format.to_string() == "2"),
+        matches!(result, Err(ImportError::Newer(format)) if format.to_string() == "3"),
         "{:?}",
         result.err()
     );

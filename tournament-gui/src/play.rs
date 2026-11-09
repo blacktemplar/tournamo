@@ -22,7 +22,8 @@ use crate::{
     i18n::t,
     icons,
     phase::answer,
-    result_text, team_name,
+    result::{ResultDetails, ResultOf},
+    result_text, result_with_scores, team_name,
     toggletip::Toggletip,
 };
 
@@ -37,8 +38,9 @@ enum Shown {
 
 /// What gets the focus once the page shows a result reported or reopened by its buttons.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Focus {
-    /// The first button reporting a result of the match.
+pub enum Focus {
+    /// The first button reporting a result of the match, or the first value of its result entered
+    /// in its row.
     Report(MatchId),
     /// The heading of the matches shown, once none of them is left without a result.
     Heading,
@@ -110,6 +112,9 @@ pub fn Rounds() -> Element {
         .unwrap_or(Shown::Round(current));
     let playable = session.playable();
     let draws = session.round(current).is_some_and(|round| round.draws);
+    let scores = session
+        .round(current)
+        .is_some_and(|round| round.matches.iter().any(|row| row.details));
     // once every match has a result, there is nothing left to type in until one is reopened
     let finished = rounds.iter().all(|summary| summary.open == 0);
     let entered = entry.read().trim().to_owned();
@@ -175,7 +180,7 @@ pub fn Rounds() -> Element {
                 }
             }
             if typing() && !finished {
-                ResultEntry { draws, entry, focus }
+                ResultEntry { draws, scores, entry, focus }
             }
             // out of the way while the matches shown are those the entry fits, which they would not
             // change
@@ -352,7 +357,12 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
 /// part of the winner's name, saying while it is typed what it would report, or why nothing. Its
 /// hint folds behind a toggletip once a result typed in was reported in this browser.
 #[component]
-fn ResultEntry(draws: bool, entry: Signal<String>, focus: Signal<Option<Focus>>) -> Element {
+fn ResultEntry(
+    draws: bool,
+    scores: bool,
+    entry: Signal<String>,
+    focus: Signal<Option<Focus>>,
+) -> Element {
     let ctx = use_context::<Ctx>();
     // why what was entered last was not reported, until it is changed
     let mut error = use_signal(|| None::<Text>);
@@ -370,16 +380,20 @@ fn ResultEntry(draws: bool, entry: Signal<String>, focus: Signal<Option<Focus>>)
                 tr,
                 "result-entry-preview",
                 number = row.number,
-                result = result_text(&tr, &row).unwrap_or_default(),
+                result = result_with_scores(&tr, &row).unwrap_or_default(),
             ),
         ),
         Err(why) => ("preview hint", tr.sentence(&why.text())),
     });
-    let hint = t!(
+    let mut hint = t!(
         tr,
         "enter-result-hint",
         draws = if draws { "yes" } else { "no" }
     );
+    if scores {
+        hint.push(' ');
+        hint.push_str(&tr.get("enter-scores-hint"));
+    }
     rsx! {
         form {
             class: "result-entry",
@@ -528,6 +542,8 @@ fn MatchLine(
             div { class: "report",
                 if row.result.is_some() {
                     ReportedResult { row: row.clone(), draws, focus }
+                } else if row.details {
+                    ResultOf { row: row.clone(), focus, after_report }
                 } else {
                     ReportButtons {
                         row: row.clone(),
@@ -600,27 +616,36 @@ fn ReportButtons(
     }
 }
 
-/// How long the button reopening a match takes no click once it shows, in milliseconds: longer than
-/// the taps of a double tap are apart.
-const REOPEN_DELAY_MS: u32 = 600;
+/// How long after a report the button reopening a match takes no click, in milliseconds: longer
+/// than the taps of a double tap are apart.
+const REOPEN_DELAY_MS: f64 = 600.0;
 
 /// The result of the match `row`, of a round where a match may end in a draw if `draws`, and the
-/// button reopening it, which takes no click for [`REOPEN_DELAY_MS`] once it shows.
+/// button reopening it, which takes no click until [`REOPEN_DELAY_MS`] after this tab last reported
+/// a result.
 #[component]
 fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
     let id = row.id;
-    // the button shows where the result was reported, on a phone where the draw was, so it takes
-    // no click at first, which would be the second of a double tap
-    let mut settled = use_signal(|| false);
+    // the button shows where the result was reported, on a phone where the draw was, so right
+    // after a report it takes no click, which would be the second of a double tap; shown later
+    // (another round, a reload), it takes one at once
+    let wait = use_hook(|| {
+        ctx.since_report()
+            .map_or(0.0, |since| (REOPEN_DELAY_MS - since).max(0.0))
+    });
+    let mut settled = use_signal(|| wait == 0.0);
     use_hook(|| {
-        spawn(async move {
-            _ = document::eval(&format!(
-                "await new Promise((done) => setTimeout(done, {REOPEN_DELAY_MS}));"
-            ))
-            .await;
-            settled.set(true);
-        })
+        if wait > 0.0 {
+            spawn(async move {
+                _ = document::eval(&format!(
+                    "await new Promise((done) => setTimeout(done, {}));",
+                    wait.ceil()
+                ))
+                .await;
+                settled.set(true);
+            });
+        }
     });
     // only reopened by the tab that changes the competition
     let disabled = !ctx.changes() || !settled();
@@ -628,26 +653,57 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
     // a win is shown by the mark at the winner's name, so said only to screen readers, which may
     // not read the mark; a draw has no such mark
     let shown = row.result == Some(MatchResult::Draw);
+    let scored = row.parts_won.is_some() || !row.scores.is_empty();
+    // the games won, then the scores of the games, as `Translator::match_scores` writes them, the
+    // latter giving way where the list is narrow
+    let (won, games) = match row.parts_won {
+        Some(won) => (
+            Some(tr.score(won)),
+            (!row.scores.is_empty()).then(|| format!("({})", tr.scores(&row.scores))),
+        ),
+        None => (None, Some(tr.scores(&row.scores))),
+    };
     rsx! {
-        span { class: if shown { "result" } else { "result visually-hidden" },
-            {result_text(&tr, &row)}
+        if scored {
+            // the scores say how it ended; who won is said to screen readers as well
+            span { class: "visually-hidden", {result_text(&tr, &row)} }
+            span { class: "result scores",
+                if let Some(won) = won.clone() {
+                    span { class: "parts-won", {won} }
+                }
+                if won.is_some() && games.is_some() {
+                    " "
+                }
+                if let Some(games) = games {
+                    span { class: if won.is_some() { "game-scores" }, {games} }
+                }
+            }
+        } else {
+            span { class: if shown { "result" } else { "result visually-hidden" },
+                {result_text(&tr, &row)}
+            }
         }
         // where a match may end in a draw, a win keeps the draw's room, so that the pairings of
         // every finished match line up
-        if draws && !shown {
+        if draws && !shown && !scored {
             span { class: "result-room", aria_hidden: "true", {tr.get("draw")} }
         }
-        button {
-            class: "small",
-            disabled,
-            aria_label: t!(tr, "reopen-match", number = row.number),
-            onclick: move |_| {
-                if let Some(reopened) = ctx.act(move |session| session.undo_report(id)) {
-                    ctx.announce(Announcement::Reopened(reopened));
-                    move_focus(focus, Focus::Report(id));
-                }
-            },
-            {tr.get("reopen")}
+        if row.details {
+            ResultDetails { row: row.clone() }
+        }
+        div { class: "finished-actions",
+            button {
+                class: "small",
+                disabled,
+                aria_label: t!(tr, "reopen-match", number = row.number),
+                onclick: move |_| {
+                    if let Some(reopened) = ctx.act(move |session| session.undo_report(id)) {
+                        ctx.announce(Announcement::Reopened(reopened));
+                        move_focus(focus, Focus::Report(id));
+                    }
+                },
+                {tr.get("reopen")}
+            }
         }
     }
 }

@@ -10,6 +10,7 @@ keywords = ["tournament", "competition", "bracket", "i18n", "offline"]
 categories = ["games", "wasm"]
 
 [dependencies]
+dyn-clone.workspace = true
 fluent-bundle.workspace = true
 fluent-syntax.workspace = true
 # the seed of a new competition is random

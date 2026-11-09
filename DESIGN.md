@@ -489,6 +489,190 @@ a bye's worth (the points calculator's concern); a default no-op hook; counting
 a bye when scheduled (a round robin's odd field led with future byes); hiding
 unreached byes only in the standings (metrics stay wrong).
 
+## Match details
+
+A result is more than who won:
+a score (21–17), games of a best of three, rubbers of a league fixture each with
+games of points, legs of a relay whose score carries over. Some rankings read
+these details (goal difference, sets won, fair-play cards), and a UI must show
+and enter them for sports it does not know.
+
+**One generic shape, interpreted by a plugin.** What was played is a tree of
+`Part`s with a fixed shape; what it means is the business of the phase's
+`MatchFormat`, the `match_format` of `PhasePlugins` (default `WinnerOnly`: who won,
+nothing more):
+
+```rust
+pub struct Part {                      // a match, or a game, set, rubber, leg of one
+    decision: Option<Decision>,        // Some ⇔ decided
+    values: Vec<(FieldKey, Sides<Option<EnteredValue>>)>, // goals, games, cards, …
+    parts: Vec<Part>,                  // in playing order, as deep as entered
+    annotations: TypeMap,
+}
+pub struct Decision { result: MatchResult, reason: Option<ResultReason> }
+pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport needs them
+```
+
+- **A match is a part**: `Match::contest`, holding the match's annotations too.
+  A match is finished if and only if its decision is `Some`; finished and open
+  matches have one type. `ReportMatchResult` carries a `Decision` (not an
+  `Option`), so reporting always decides; the decision is set once, and
+  formats and rankers never see a result change (a correction undoes the
+  report, as before).
+- **The decision is stored, not derived.** The log says who won, so replay does
+  not depend on a plugin's reading of the values, and changing a plugin cannot
+  change a saved winner. A part without a winner of its own (a relay leg, an
+  unfinished set) has none. `ResultReason` names a decision not reached by
+  play (walkover, retired, overtime).
+- **The engine trusts what is reported.** 25–21 in a game to 21, or values
+  disagreeing with the decision, are accepted: the referee is the authority,
+  and rules vary from tournament to tournament. The engine refuses only what it
+  cannot use: a draw where the format allows none, a field, reason or kind of
+  value the template does not declare.
+- **The match format** gives per match a `Template` (levels with their names,
+  their parts, fields with kind and `Hints` like the winning score, reasons),
+  `suggest`s a result from a part's values for a consumer filling one in (the
+  app's `ResultForm`), and derives **tallies** when a match is decided: typed
+  `TypeMapValue`s (`PointsScored`, `GamesWon`, …) stored on the match, which
+  metrics read with one lookup (`PointsBalanceCalculator`,
+  `GamesBalanceCalculator`). A tally is a fact in the compatibility check
+  (`MatchTally<T>`): a calculator requiring `PointsScored` needs a match
+  format providing it. The template sees the
+  match, so it may depend on the stage or on annotations. Match formats:
+  `WinnerOnly`, `Scored`, `BestOf`.
+- **Scores are shown generically**: a match's own score, else those of its
+  parts in order (`MatchRow::scores`), after the parts each side won of a
+  match played in parts at one level (`MatchRow::parts_won`: 2–1 in games),
+  counted from the parts' decisions rather than read from a tally, so that a
+  form shows them before the match is decided too, and a warning of parts
+  entered after the match was decided says where it was (3–0). Always in the
+  order of the sides, as the scores beside them, also after who won (Bob wins
+  (1–3)), rather than the winner's first. A `MatchFormat::show` for a sport
+  writing its scores its own way (tennis: 40–30, 7–6⁽⁵⁾) waits for such a
+  sport.
+- **Count limits**: entered counts and winning-score hints are `u16` (0–65535).
+  Point tallies and points/games balances use `u32`; accumulated totals saturate
+  at `u32::MAX`, identically in checked and unchecked builds. Differences use
+  those saturated totals.
+- **Hints are not rules**: the app turns them into warnings ("23–19 in a game
+  to 21?"), never refusals.
+- **The winning score is what a winner has, not a maximum**: in a game to 21
+  the winner has 21, or more when winning by one or two (22–20, 30–29). Both
+  sides below it, or a lead other than one or two from it on, is warned of.
+  Whether a game needs a lead of two, and where it is capped, is not
+  configured: the warning takes either, which covers sports and tournaments
+  varying it game by game (a fifth game won by two where the others end at
+  5–4). A draw needs no check of its own: with a winning score every drawn
+  score is warned of, and without one (football) draws are usual.
+- **A score far below the winning score completes the other side**
+  (`ResultForm::complete_score`): with at most two below it (19 in a game to
+  21), the winner can only have the winning score itself, as more would lead by
+  three or more. From one below on it cannot be told (20: 21–20 or 22–20; 21 or
+  more: either side may have won), so nothing is filled in. The GUI completes
+  a value once it is left, not while it is typed (the 1 of 15 would complete
+  it too early), only when the other side is empty, and selects what it filled
+  in when Tab moves there, so that typing replaces it. Tab completes before it
+  moves, and moves only once the page shows the score: else it would pass a
+  game the completed score makes the match need, which appears after it.
+- **What a field cannot take stays as typed** (`ResultForm::enter`): a count
+  above 65535, below 0 or with a fraction, read as the phase form reads a
+  number (comma or point, `1e3`), leaves the side without a value but shown
+  with why (`issue-out-of-range`), and keeps the match from being reported
+  (`ReportError::NotTaken`). The form keeps the text, not the GUI: values
+  commit on input, and Dioxus writes an input's value whenever the one
+  rendered changes, so a value dropped to none would empty the field at the
+  digit that makes it too large. Nothing is completed onto such a side, as it
+  is not empty. Rejected: refusing the keystroke (a `type=number` input has no
+  selection to tell where a key went, and reverting the text from script says
+  nothing to a screen reader). The inputs stay `type=number`, keeping the
+  browser's own check on submit; text the browser cannot read as a number
+  (`1e`) reaches the form as nothing, which the browser flags on submit.
+- **Field keys and reasons are strings** (`Cow<'static, str>`), declared by the
+  template and checked on report, as a config's field names are: a generic UI
+  needs keys it can list. What the engine reads, the tallies, stays typed.
+- **Counts, not events**: cards or tries that a ranking reads are fields. A
+  timeline of goals, assists or a chess game's moves is no ranking's business
+  and stays outside, keyed by match id, or in annotations.
+
+- **A result in one row where it fits** (`ResultForm::quick_entry`): read from
+  the shape of the template, not from a list of match formats or a flag one
+  declares: a match with one field and no parts (a score), or with no field of
+  its own and parts of one level with one field each (the games of a best of).
+  The GUI enters it below the pairing, its parts side by side and wrapping on a
+  phone rather than dropped there; the dialog is a button away (*Details*,
+  starting from what the row holds) for overriding, reasons and what a row
+  cannot hold, such as a fixture's rubbers. The row never chooses a result: it
+  reports what the values suggest, or says that they decide nothing.
+- **Best-of completion counts decisions, including draws**: a side wins early
+  when its lead in games won exceeds the games still undecided. Otherwise all
+  configured games are played, and equal win totals suggest a draw (subject to
+  the phase format allowing match draws).
+- **A best of takes at most 99 games**: its form shows the fewest games that
+  may decide the match from the start, more than half of them, so a mistyped
+  number of games would hold the page up. The longest played, a snooker final,
+  has 35 frames.
+- **Parts appear as the match needs them**: `Parts::Same` says the fewest parts
+  that may decide a part (`min`, two of a best of three), and the form shows
+  those, the parts up to the last one entered, and one more while each shown is
+  decided and the match is not, in the row and the dialog alike. It never hides
+  a part entered, and warns of parts entered after the match was decided
+  rather than refusing them. It makes entries only for the parts entered and
+  views only for those it shows, so a large `max` costs nothing before it is
+  reached. Values commit on input, so the next game is there before Tab moves
+  on. Rejected: every part at once (a best of five shows five
+  boxes for a 3–0, as Challonge does), one part at a time behind an *Add game*
+  button (a tap per game, and start.gg's fixed best of three makes adding
+  games by hand a chore), and moving the focus to *Report* once decided as
+  ezBadminton does (typing 21–17 decides the game at 21–1, so the focus would
+  jump away mid-score; ezBadminton avoids it by filling in the winner's
+  score, a guess the row does not make).
+
+- **A finished match is shown as reported** (`Session::reported_result`): the
+  view of a `ResultForm` rebuilt from the match's contest, a result chosen
+  where the values do not suggest it, so that a result reported against them
+  shows with its warning. The GUI shows it read-only in a dialog opened by a
+  click anywhere on the finished match, in the list or the bracket, but its
+  *Reopen*: a button without text covering the card, named for screen readers
+  ("Details of the result of match 1"), its focus ring around the card. On
+  every screen alike, rather than in a second row on a phone: a finished match
+  keeps to one row, and a fixture's rubbers would not fit one. Its parts are a
+  table, a row each, the winner's values marked with ✓ as in the list of
+  matches, rather than a column naming the winner, which long names would push
+  off a phone. What shows that a finished match opens is its score, underlined
+  as a link is (opening changes nothing), in the list, the bracket and the
+  cross table alike, since touch has no hover to tint it; its colour stays, so
+  that finished matches still recede. A match showing no score is not marked:
+  it opens to no more than who won. Rejected: a *Details* label or an icon by every
+  finished match (room in a row kept to one line), a chevron (the card steps
+  through rounds by chevrons).
+- **A reopened match starts out at its result** (`Session::result_form`), so
+  that a typo in one game of a best of five is corrected in that game, still
+  by an undo and a report. The session keeps what was reported for each match
+  whose result it took back (reopening, undoing the report, redoing a
+  reopening), the latest of each, as it keeps the configuration of a phase
+  whose adding it undid; the form starts out at it while the match format
+  takes it (`Level::check`). A result chosen against the values stays chosen:
+  the match takes no row, which holds values only (`ResultForm::quick_entry`),
+  and the dialog opens overriding. Scores typed in are the whole result and
+  replace it (`ResultForm::enter_scores`). Catching up drops what the session
+  kept, as another session may have reported and reopened the match since.
+  Rejected: reading the result from the undone report in the log (it would
+  come back after a reload or in another tab, in a form nobody reopened, and
+  every form would search the log).
+
+*Planned:* lineups on parts (with rosters of players), league fixtures nesting
+the match formats of their rubbers, live reporting (an `UpdatePlay` on open
+matches carrying the whole play, a plain assignment no format or metric reacts
+to).
+
+Rejected: a plugin-defined details type (metrics and UIs could not read it
+without knowing the plugin); events (no ranking needs more than counts); an
+optional decision on a reported match, or one derived from the values (replay
+would depend on plugin code); a separate type for the match level (two places
+for the match's decision); checking the rules of a sport in the engine; the
+name `MatchRules` (the plugin describes the shape of a match, as a
+`PhaseFormat` does of a phase, not the rules of a sport).
+
 ## Persistence
 
 ### Snapshots
@@ -550,7 +734,7 @@ replay it to show it read-only instead (*planned*), and to tell a replay that
 comes out otherwise. The log stays what
 is loaded; the competition is only read in place of it. Its serialized form is
 a persistence contract too, kept loading by converters where it changes.
-Older versions ignore it, so the file's format stays 1.
+Older versions ignore it, so it does not raise the file's format.
 
 Rejected: every version of every transition (unbounded, and keeps old bugs);
 only the competition (no undo, no history); a smaller, display-only archive
@@ -949,7 +1133,11 @@ other changes); native selects (no descriptions where the choice is made).
   reports only what fits one side of one open match and **never guesses** among
   several, not even the one playable now: a wrong match reported is worse than a
   number typed. A trailing number or `X` is part of the name while a name
-  contains it (`Malcolm X`, `Team 7`). While typing, the list shows the matches
+  contains it (`Malcolm X`, `Team 7`). Scores follow the number, side A's first
+  (`3 21-17 19-21 21-15`), or the name, the named side's first (`ali 21-17`),
+  as an entrant says them; the match's own or else one per part, as the CLI
+  takes them. A result typed must be the one they say, if any: overriding the
+  scores, rare, belongs in the result dialog. While typing, the list shows the matches
   it fits and the field says what Enter does (`Session::read_entered`). Result
   buttons move the focus to the next match without a result, so it never falls
   back to the page's start.
@@ -1026,10 +1214,14 @@ pairing (every slot grows); the bracket in half the width.
 
 - **A phase whose teams stay the same shows a cross table** in the bracket's
   place: a row and column per team, each cell the matches between them from the
-  row's side (`1`, `½`, `0`, said as won/drawn/lost). `Session::cross_table`
-  offers it where every match is between two single rankings and the format
-  plays no bracket (round robin, random rounds; not Monster DYP or knockouts),
-  so no table of formats beyond the bracket's.
+  row's side, each at the highest level of its result (`CrossMatch::score`: its
+  own score, else the parts won, so `3–2` for a best of five rather than its
+  games), or else `1`, `½`, `0`; said as won/drawn/lost, followed by the score
+  if it shows one (`won, 3–2`), as an overridden result need not follow from
+  the score. A click on a match with more than who won opens its details, as in
+  the list. `Session::cross_table` offers it where every match is between two
+  single rankings and the format plays no bracket (round robin, random rounds;
+  not Monster DYP or knockouts), so no table of formats beyond the bracket's.
 - **Rows by rank**, as published cross tables are; columns headed by row
   numbers (names would make 20 columns too wide), names said to screen readers
   and kept in sight while scrolling.
@@ -1038,7 +1230,8 @@ pairing (every slot grows); the bracket in half the width.
   many teams.
 - **A total last** (`CrossRow::total`), the sum of the row's `1`, `½`, `0`, as
   published tables have, whatever the points of the phase; wins and losses
-  are tinted (`--win-subtle`, `--error-subtle`), the number saying it too.
+  are tinted (`--win-subtle`, `--error-subtle`), a win also bold, so that it
+  reads without colours where a score does not say who won.
 
 Rejected: rows in entry or draw order (stable, but an order seen nowhere else);
 open matches shown by number (wider columns, the list tells it anyway).
@@ -1065,6 +1258,10 @@ entrants, but any number and format.
   below its name, draw in the middle, columns aligned by subgrid; one per line,
   since a list is read to find who plays whom. With a result it shrinks to one
   row in place, so a round is mostly what is left to play without cards moving.
+  Finished matches share the columns of the list (subgrid), so their pairings
+  line up whatever their scores, as in a table; where the list is narrower
+  than 40rem, the scores of the games of a best of give way to the games won
+  (`3–1`), still read out.
 - **Names are never cut or shrunk**, they wrap: a cut name may no longer tell
   two entrants apart, and reporting for the wrong one is the worst mistake
   possible. So result buttons say only "Wins", named "Alice wins" by

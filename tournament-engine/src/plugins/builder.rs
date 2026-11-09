@@ -3,6 +3,7 @@ use plugin_factory::schema::DependencyOrderedSetError;
 use crate::{
     PhasePlugins,
     plugins::{
+        match_format::{self, MatchFormat},
         metrics_calculator::MetricsCalculator,
         phase_format::{PhaseFormat, RoundRobin},
         ranker::SliceRanker,
@@ -49,13 +50,14 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct PhasePluginsBuilder {
     format: Option<Box<dyn PhaseFormat>>,
+    match_format: Option<Box<dyn MatchFormat>>,
     ranking: Vec<Box<dyn SliceRanker>>,
     metrics: Vec<Box<dyn MetricsCalculator>>,
 }
 
 impl PhasePluginsBuilder {
     /// A builder with nothing given, i.e. of a round robin neither ranked by anything nor
-    /// calculating any metrics.
+    /// calculating any metrics, whose results are only who won.
     pub fn new() -> Self {
         Self::default()
     }
@@ -63,6 +65,12 @@ impl PhasePluginsBuilder {
     /// Plays the phase in `format`, replacing a format given before.
     pub fn format(mut self, format: impl PhaseFormat) -> Self {
         self.format = Some(Box::new(format));
+        self
+    }
+
+    /// Enters the results of matches by `format`, replacing a match format given before.
+    pub fn match_format(mut self, format: impl MatchFormat) -> Self {
+        self.match_format = Some(Box::new(format));
         self
     }
 
@@ -89,7 +97,8 @@ impl PhasePluginsBuilder {
     /// [`DependencyOrderedSet::new`]: plugin_factory::schema::DependencyOrderedSet::new
     pub fn build(self) -> Result<PhasePlugins, DependencyOrderedSetError> {
         let format = self.format.unwrap_or_else(|| Box::new(RoundRobin));
-        PhasePlugins::from_parts(format, self.ranking, self.metrics)
+        let match_format = self.match_format.unwrap_or_else(match_format::default);
+        PhasePlugins::from_parts(format, match_format, self.ranking, self.metrics)
     }
 }
 

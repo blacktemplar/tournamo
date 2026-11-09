@@ -23,6 +23,8 @@ error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already
 error-draw-not-allowed = a match of this format cannot end in a draw
+error-undecided = the result does not say who won
+error-value-not-taken = a value entered is not taken; correct the one marked
 error-result-unreadable = enter the number of a match and its result, 1, X or 2, e.g. “3 1”, or part of the winner's name
 error-no-match-numbered = there is no match { $number }
 error-match-numbered-finished-already = match { $number } has a result already
@@ -33,6 +35,9 @@ error-name-not-in-match = no open match { $number } has an entrant whose name co
 # $matches: how many open matches have an entrant whose name contains $name; $number: one of them
 error-name-in-several-matches = “{ $name }” fits { $matches } open matches; add the number of one, e.g. “{ $name } { $number }”
 error-name-on-both-sides = “{ $name }” fits both sides of match { $number }; enter more of the name
+error-scores-not-taken = match { $number } does not take the scores entered
+error-scores-undecided = the scores entered do not say who won match { $number }; add the result: 1, X or 2
+error-result-against-scores = the result entered for match { $number } is not the one its scores say
 error-match-not-reported = the match has no result that could be undone
 error-result-depended-on = a later result depends on this one; undo that one first
 # $number: the number of the match whose result depends on the one to reopen
@@ -70,6 +75,14 @@ number-range = { $whole ->
     }
 # what an answer leads to that the operator may not want, although the phase can be played so
 warning-unranked = ranked by nothing, every entrant is tied in the standings
+# what looks like a typo in a result entered, though it is taken
+# $winning: the score a winner usually has
+warning-below-winning-score = neither side has { $winning }, which a winner usually has
+warning-winning-lead = at { $winning } or more, a winner usually leads by one or two
+warning-result-disagrees = this is not the result the score suggests
+warning-more-than-decided = more is entered than it took to decide the match
+# $a, $b: the parts, e.g. games, each side had won when the match was decided, side A's first
+warning-more-than-decided-at = the match was decided at { $a }–{ $b } already, yet more is entered
 # what is wrong with the answer of a field, or with a plugin chosen
 issue-unanswered = this needs an answer
 # the variables of number-range

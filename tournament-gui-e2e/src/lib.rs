@@ -849,31 +849,28 @@ impl Gui {
                         &format!("a toggletip shown saying {text:?}"),
                     )
                     .await?;
-                let element = self
-                    .driver
-                    .query(shown)
-                    .and_displayed()
-                    .with_text(saying())
-                    .first()
-                    .await?;
                 // the middle of each edge (its corners are round) shows the text, not something
                 // in front of it or nothing, as where an element scrolling cuts it off or out of
-                // the window
-                let whole = self
-                    .driver
-                    .execute(
-                        "const text = arguments[0];
+                // the window; waited for, as it shows on the pointer before it is placed
+                self.page
+                    .expect_script(
+                        r#"
+                        const [saying] = arguments;
+                        const text = [...document.querySelectorAll(".toggletip-text")].find(
+                            (text) => text.checkVisibility()
+                                && text.innerText.replace(/[\u2068\u2069]/g, "") === saying);
+                        if (!text) return "it is not shown";
                         const box = text.getBoundingClientRect();
                         const [x, y] = [(box.left + box.right) / 2, (box.top + box.bottom) / 2];
-                        return [[box.left + 1, y], [box.right - 1, y],
-                                [x, box.top + 1], [x, box.bottom - 1]]
-                            .every(([x, y]) => text.contains(document.elementFromPoint(x, y)));",
-                        vec![element.to_json()?],
+                        const whole = [[box.left + 1, y], [box.right - 1, y],
+                                       [x, box.top + 1], [x, box.bottom - 1]]
+                            .every(([x, y]) => text.contains(document.elementFromPoint(x, y)));
+                        return whole ? null : `it shows at ${JSON.stringify(box)}`;
+                        "#,
+                        vec![serde_json::json!(text)],
+                        &format!("the toggletip saying {text:?} must show whole"),
                     )
-                    .await?
-                    .convert::<bool>()?;
-                assert!(whole, "the toggletip saying {text:?} must show whole");
-                Ok(())
+                    .await
             }
             None => {
                 let gone = self.driver.query(shown).and_displayed();
@@ -886,36 +883,27 @@ impl Gui {
         }
     }
 
-    /// Waits until a toggletip shows, and checks that it covers none of the issues of the form of
-    /// the phase.
+    /// Waits until a toggletip shows, covering none of the issues of the form of the phase.
     ///
     /// # Panics
-    /// Panics if none shows in time, or it covers an issue.
+    /// Panics if it does not in time, with the issues it covers.
     pub async fn expect_toggletip_clear_of_issues(&self) -> WebDriverResult<()> {
-        let shown = self
-            .driver
-            .query(By::Css(".toggletip-text"))
-            .and_displayed()
-            .first()
-            .await?;
-        let covered = self
-            .driver
-            .execute(
-                "const text = arguments[0].getBoundingClientRect();
-                return [...document.querySelectorAll('.phase-form .issues li')]
+        self.page
+            .expect_script(
+                "const shown = [...document.querySelectorAll('.toggletip-text')]
+                    .find((text) => text.checkVisibility());
+                if (!shown) return 'none shows';
+                const text = shown.getBoundingClientRect();
+                const covered = [...document.querySelectorAll('.phase-form .issues li')]
                     .map(issue => [issue, issue.getBoundingClientRect()])
                     .filter(([, box]) => box.left < text.right && text.left < box.right
                         && box.top < text.bottom && text.top < box.bottom)
-                    .map(([issue]) => issue.textContent);",
-                vec![shown.to_json()?],
+                    .map(([issue]) => issue.textContent);
+                return covered.length ? `it covers ${JSON.stringify(covered)}` : null;",
+                Vec::new(),
+                "the toggletip shown must cover no issue",
             )
-            .await?
-            .convert::<Vec<String>>()?;
-        assert!(
-            covered.is_empty(),
-            "the toggletip shown must cover no issue, but covers {covered:?}"
-        );
-        Ok(())
+            .await
     }
 
     /// Waits until the button labelled `label` shows and takes a click.
@@ -1176,45 +1164,33 @@ impl Gui {
             .await
     }
 
-    /// Checks that the first match shown with a winner looks played rather than like a
-    /// placeholder, with a solid border, and that its loser's name recedes behind the winner's:
-    /// another colour, and no bolder.
+    /// Waits until the first match shown with a winner looks played rather than like a
+    /// placeholder, with a solid border, and its loser's name recedes behind the winner's: another
+    /// colour, and no bolder.
     ///
     /// # Panics
-    /// Panics if there is no such match, or it does not look so, with how it looks.
+    /// Panics if it does not in time, with how it looks instead.
     pub async fn expect_finished_card_looks_played(&self) -> WebDriverResult<()> {
-        let looks = self
-            .driver
-            .execute(
+        self.page
+            .expect_script(
                 r##"
                 const card = document.querySelector("#match-list > li:has(.winner)");
-                if (!card) return null;
+                if (!card) return "there is none";
                 const style = (selector) => getComputedStyle(card.querySelector(selector));
                 const [winner, loser] = [style(".side.winner"), style(".side:not(.winner)")];
-                return {
-                    border: getComputedStyle(card).borderTopStyle,
+                const border = getComputedStyle(card).borderTopStyle;
+                const played = border === "solid" && winner.color !== loser.color
+                    && Number(loser.fontWeight) <= Number(winner.fontWeight);
+                return played ? null : JSON.stringify({
+                    border,
                     winner: [winner.color, winner.fontWeight],
                     loser: [loser.color, loser.fontWeight],
-                };
+                });
                 "##,
                 Vec::new(),
+                "a match played must have a solid border and a loser receding",
             )
-            .await?
-            .json()
-            .clone();
-        let played = looks["border"] == "solid"
-            && looks["winner"][0] != looks["loser"][0]
-            && looks["loser"][1]
-                .as_str()
-                .and_then(|weight| weight.parse::<u32>().ok())
-                <= looks["winner"][1]
-                    .as_str()
-                    .and_then(|weight| weight.parse().ok());
-        assert!(
-            played,
-            "a match played must have a solid border and a loser receding, but has {looks:#}"
-        );
-        Ok(())
+            .await
     }
 
     /// Waits until the stages of the matches of the round shown are `stages`, in the order of the

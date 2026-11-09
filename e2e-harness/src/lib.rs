@@ -1118,4 +1118,37 @@ impl Page {
         };
         panic!("{by} must have {expected}, but has {found}");
     }
+
+    /// Waits until `script`, run with `args`, returns `null`, saying what is wrong otherwise: for a
+    /// check of how the page looks, which may still change after the action before it.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what the page must be, `expected`, and what the script
+    /// returned last.
+    pub async fn expect_script(
+        &self,
+        script: &str,
+        args: Vec<serde_json::Value>,
+        expected: &str,
+    ) -> WebDriverResult<()> {
+        let start = Instant::now();
+        loop {
+            let wrong = self
+                .driver
+                .execute(script, args.clone())
+                .await?
+                .json()
+                .clone();
+            if wrong.is_null() {
+                return Ok(());
+            }
+            if start.elapsed() > TIMEOUT {
+                let wrong = wrong
+                    .as_str()
+                    .map_or_else(|| format!("{wrong:#}"), str::to_owned);
+                panic!("{expected}, but {wrong}");
+            }
+            tokio::time::sleep(INTERVAL).await;
+        }
+    }
 }

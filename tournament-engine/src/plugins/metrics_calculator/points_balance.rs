@@ -5,12 +5,15 @@ use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId, Team},
+    entities::competition::{Bye, Match, PhaseData, RankingId},
     plugins::{
         Phrase,
         facts::{CalculatesMetric, MatchTally},
         match_format::PointsScored,
-        metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
+        metrics_calculator::{
+            Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell, derived,
+            updated_for_each_team,
+        },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
@@ -32,8 +35,8 @@ impl PointsBalance {
     }
 
     /// The points scored minus those conceded.
-    pub fn difference(&self) -> i64 {
-        i64::from(self.scored) - i64::from(self.conceded)
+    pub fn difference(&self) -> PointsDifference {
+        PointsDifference(i64::from(self.scored) - i64::from(self.conceded))
     }
 }
 
@@ -135,19 +138,9 @@ impl MetricsCalculator for PointsBalanceCalculator {
         let PointsScored(points) = *r#match
             .tally::<PointsScored>()
             .expect("the match format tallies the points scored");
-        [Team::A, Team::B]
-            .into_iter()
-            .flat_map(|team| {
-                let (scored, conceded) = (*points.of(team), *points.of(team.opponent()));
-                r#match.rankings_of(team).iter().map(move |r_id| {
-                    let mut metric = *phase_data.rankings()[r_id]
-                        .metric::<PointsBalance>()
-                        .unwrap();
-                    metric.add(scored, conceded);
-                    (*r_id, Box::new(metric) as Metric)
-                })
-            })
-            .collect()
+        updated_for_each_team(phase_data, r#match, |balance: &mut PointsBalance, team| {
+            balance.add(*points.of(team), *points.of(team.opponent()));
+        })
     }
 
     /// A bye has no score.
@@ -180,22 +173,6 @@ impl PointsDifferenceCalculator {
             .provide(CalculatesMetric::<PointsDifference>::new())
             .require::<CalculatesMetric<PointsBalance>>("the points scored and conceded");
     }
-
-    /// The difference of every ranking whose balance the calculators before changed.
-    fn changes(phase_data: &PhaseData, old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)> {
-        old_metrics
-            .of::<PointsBalance>()
-            .map(|(r_id, _)| {
-                let balance = phase_data.rankings()[&r_id]
-                    .metric::<PointsBalance>()
-                    .unwrap();
-                (
-                    r_id,
-                    Box::new(PointsDifference(balance.difference())) as Metric,
-                )
-            })
-            .collect()
-    }
 }
 
 #[register]
@@ -210,7 +187,7 @@ impl MetricsCalculator for PointsDifferenceCalculator {
         _: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Metric)> {
-        Self::changes(phase_data, old_metrics)
+        derived(phase_data, old_metrics, PointsBalance::difference)
     }
 
     fn update_after_bye(
@@ -219,7 +196,7 @@ impl MetricsCalculator for PointsDifferenceCalculator {
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Metric)> {
-        Self::changes(phase_data, old_metrics)
+        derived(phase_data, old_metrics, PointsBalance::difference)
     }
 
     fn column(&self) -> Option<MetricColumn> {
@@ -284,10 +261,10 @@ mod tests {
         points.add(u32::MAX - 1, u32::MAX - 2);
         points.add(2, 1);
         assert_eq!(points, balance(u32::MAX, u32::MAX - 1));
-        assert_eq!(points.difference(), 1);
+        assert_eq!(points.difference(), PointsDifference(1));
         points.add(1, 2);
         assert_eq!(points, balance(u32::MAX, u32::MAX));
-        assert_eq!(points.difference(), 0);
+        assert_eq!(points.difference(), PointsDifference(0));
     }
 
     #[test]
@@ -351,11 +328,10 @@ mod tests {
     #[test]
     fn the_difference_and_the_points_scored_rank_differently() {
         let (more_scored, better_difference) = (balance(30, 28), balance(20, 10));
-        let difference = |balance: PointsBalance| PointsDifference(balance.difference());
 
         assert_eq!(
             HigherPointsDifference
-                .compare(&difference(better_difference), &difference(more_scored)),
+                .compare(&better_difference.difference(), &more_scored.difference()),
             Comparison::Better
         );
         assert_eq!(

@@ -9,7 +9,7 @@ use plugin_factory::{Plugin, axis};
 
 use crate::{
     Score,
-    entities::competition::{Bye, Match, PhaseData, Ranking, RankingId},
+    entities::competition::{Bye, Match, PhaseData, Ranking, RankingId, Team},
     map::Map,
     plugins::Phrase,
     type_map::{TypeMapValue, downcast_unchecked_ref},
@@ -134,6 +134,39 @@ pub trait MetricsCalculator: Plugin + DynClone {
 }
 
 dyn_clone::clone_trait_object!(MetricsCalculator);
+
+/// The metric `M` of every ranking of `match`, as `update` changes it for the ranking's team.
+fn updated_for_each_team<M: TypeMapValue + Copy>(
+    phase_data: &PhaseData,
+    r#match: &Match,
+    update: impl Fn(&mut M, Team),
+) -> Vec<(RankingId, Metric)> {
+    let mut updated = Vec::new();
+    for team in [Team::A, Team::B] {
+        for r_id in r#match.rankings_of(team) {
+            let mut metric = *phase_data.rankings()[r_id].metric::<M>().unwrap();
+            update(&mut metric, team);
+            updated.push((*r_id, Box::new(metric) as Metric));
+        }
+    }
+    updated
+}
+
+/// The metric `D`, as `derive` makes it of the metric `M`, of every ranking whose `M` the
+/// calculators that ran before changed.
+fn derived<M: TypeMapValue, D: TypeMapValue>(
+    phase_data: &PhaseData,
+    old_metrics: &OldMetrics,
+    derive: impl Fn(&M) -> D,
+) -> Vec<(RankingId, Metric)> {
+    old_metrics
+        .of::<M>()
+        .map(|(r_id, _)| {
+            let metric = phase_data.rankings()[&r_id].metric::<M>().unwrap();
+            (r_id, Box::new(derive(metric)) as Metric)
+        })
+        .collect()
+}
 
 /// A column of a table of standings showing one metric: its header and the cell of every
 /// ranking's value.

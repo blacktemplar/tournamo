@@ -4,12 +4,15 @@ use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId, Team},
+    entities::competition::{Bye, Match, PhaseData, RankingId},
     plugins::{
         Phrase,
         facts::{CalculatesMetric, MatchTally},
         match_format::GamesWon,
-        metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
+        metrics_calculator::{
+            Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell, derived,
+            updated_for_each_team,
+        },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
@@ -25,9 +28,14 @@ pub struct GamesBalance {
 }
 
 impl GamesBalance {
+    fn add(&mut self, won: u32, lost: u32) {
+        self.won = self.won.saturating_add(won);
+        self.lost = self.lost.saturating_add(lost);
+    }
+
     /// The games won minus those lost.
-    pub fn difference(&self) -> i64 {
-        i64::from(self.won) - i64::from(self.lost)
+    pub fn difference(&self) -> GamesDifference {
+        GamesDifference(i64::from(self.won) - i64::from(self.lost))
     }
 }
 
@@ -128,20 +136,9 @@ impl MetricsCalculator for GamesBalanceCalculator {
         let GamesWon(games) = *r#match
             .tally::<GamesWon>()
             .expect("the match format tallies the games won");
-        [Team::A, Team::B]
-            .into_iter()
-            .flat_map(|team| {
-                let (won, lost) = (*games.of(team), *games.of(team.opponent()));
-                r#match.rankings_of(team).iter().map(move |r_id| {
-                    let mut metric = *phase_data.rankings()[r_id]
-                        .metric::<GamesBalance>()
-                        .unwrap();
-                    metric.won = metric.won.saturating_add(won);
-                    metric.lost = metric.lost.saturating_add(lost);
-                    (*r_id, Box::new(metric) as Metric)
-                })
-            })
-            .collect()
+        updated_for_each_team(phase_data, r#match, |balance: &mut GamesBalance, team| {
+            balance.add(*games.of(team), *games.of(team.opponent()));
+        })
     }
 
     /// A bye has no games.
@@ -174,22 +171,6 @@ impl GamesDifferenceCalculator {
             .provide(CalculatesMetric::<GamesDifference>::new())
             .require::<CalculatesMetric<GamesBalance>>("the games won and lost");
     }
-
-    /// The difference of every ranking whose balance the calculators before changed.
-    fn changes(phase_data: &PhaseData, old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)> {
-        old_metrics
-            .of::<GamesBalance>()
-            .map(|(r_id, _)| {
-                let balance = phase_data.rankings()[&r_id]
-                    .metric::<GamesBalance>()
-                    .unwrap();
-                (
-                    r_id,
-                    Box::new(GamesDifference(balance.difference())) as Metric,
-                )
-            })
-            .collect()
-    }
 }
 
 #[register]
@@ -204,7 +185,7 @@ impl MetricsCalculator for GamesDifferenceCalculator {
         _: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Metric)> {
-        Self::changes(phase_data, old_metrics)
+        derived(phase_data, old_metrics, GamesBalance::difference)
     }
 
     fn update_after_bye(
@@ -213,7 +194,7 @@ impl MetricsCalculator for GamesDifferenceCalculator {
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Metric)> {
-        Self::changes(phase_data, old_metrics)
+        derived(phase_data, old_metrics, GamesBalance::difference)
     }
 
     fn column(&self) -> Option<MetricColumn> {
@@ -337,10 +318,9 @@ mod tests {
     #[test]
     fn the_difference_and_the_games_won_rank_differently() {
         let (more_won, better_difference) = (balance(6, 4), balance(4, 0));
-        let difference = |balance: GamesBalance| GamesDifference(balance.difference());
 
         assert_eq!(
-            HigherGamesDifference.compare(&difference(better_difference), &difference(more_won)),
+            HigherGamesDifference.compare(&better_difference.difference(), &more_won.difference()),
             Comparison::Better
         );
         assert_eq!(

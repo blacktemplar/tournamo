@@ -2,11 +2,14 @@ use plugin_factory::{Plugin, compatibility::Declaration, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId, ResultOfTeam, Team},
+    entities::competition::{Bye, Match, PhaseData, RankingId, ResultOfTeam},
     plugins::{
         Phrase,
         facts::CalculatesMetric,
-        metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
+        metrics_calculator::{
+            Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell,
+            updated_for_each_team,
+        },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     type_map::TypeMapValue,
@@ -167,23 +170,15 @@ impl MetricsCalculator for WinsDrawsLossesCalculator {
         _: &OldMetrics,
     ) -> Vec<(RankingId, Metric)> {
         let result = r#match.result().expect("a reported match is finished");
-        [Team::A, Team::B]
-            .into_iter()
-            .flat_map(|team| {
-                let result = result.for_team(team);
-                r#match.rankings_of(team).iter().map(move |r_id| {
-                    let mut metric = *phase_data.rankings()[r_id]
-                        .metric::<WinsDrawsLosses>()
-                        .unwrap();
-                    match result {
-                        ResultOfTeam::Win => metric.wins += 1,
-                        ResultOfTeam::Draw => metric.draws += 1,
-                        ResultOfTeam::Loss => metric.losses += 1,
-                    }
-                    (*r_id, Box::new(metric) as Metric)
-                })
-            })
-            .collect()
+        updated_for_each_team(
+            phase_data,
+            r#match,
+            |metric: &mut WinsDrawsLosses, team| match result.for_team(team) {
+                ResultOfTeam::Win => metric.wins += 1,
+                ResultOfTeam::Draw => metric.draws += 1,
+                ResultOfTeam::Loss => metric.losses += 1,
+            },
+        )
     }
 
     fn update_after_bye(

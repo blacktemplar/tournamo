@@ -635,9 +635,16 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   *Reopen*: a button without text covering the card, named for screen readers
   ("Details of the result of match 1"), its focus ring around the card. On
   every screen alike, rather than in a second row on a phone: a finished match
-  keeps to one row, and a fixture's rubbers would not fit one. Its parts are a table, a row each, the winner's values
-  marked with ✓ as in the list of matches, rather than a column naming the
-  winner, which long names would push off a phone.
+  keeps to one row, and a fixture's rubbers would not fit one. Its parts are a
+  table, a row each, the winner's values marked with ✓ as in the list of
+  matches, rather than a column naming the winner, which long names would push
+  off a phone. What shows that a finished match opens is its score, underlined
+  as a link is (opening changes nothing), in the list, the bracket and the
+  cross table alike, since touch has no hover to tint it; its colour stays, so
+  that finished matches still recede. A match showing no score is not marked:
+  it opens to no more than who won. Rejected: a *Details* label or an icon by every
+  finished match (room in a row kept to one line), a chevron (the card steps
+  through rounds by chevrons).
 
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the match formats of their rubbers, live reporting (an `UpdatePlay` on open

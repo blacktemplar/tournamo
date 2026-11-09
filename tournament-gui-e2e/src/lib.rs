@@ -734,14 +734,20 @@ impl Gui {
     /// at what they click: WebDriver would click it where it is if it is in the window at all, even
     /// under the bar staying on top.
     async fn click_in_sight(&self, element: &WebElement) -> WebDriverResult<()> {
+        self.scroll_to_middle(element).await?;
+        element.click().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Scrolls `element` into the middle of the window, clear of the bar staying on top.
+    async fn scroll_to_middle(&self, element: &WebElement) -> WebDriverResult<()> {
         self.driver
             .execute(
                 "arguments[0].scrollIntoView({ block: 'center', inline: 'nearest' });",
                 vec![element.to_json()?],
             )
             .await?;
-        element.click().await?;
-        Page::pause().await;
         Ok(())
     }
 
@@ -782,6 +788,30 @@ impl Gui {
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         // where the pointer is still
         self.driver.action_chain().click().perform().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Taps the middle of the scores of the finished match numbered `number` in the list, once
+    /// they are in the middle of the window: what lies on top of them takes the tap, e.g. the
+    /// button opening the match's details, which covers the match.
+    pub async fn tap_scores_of(&self, number: usize) -> WebDriverResult<()> {
+        let scores = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol[@id = 'match-list']/li[span[@class = 'number'] = '{number}']\
+                 //span[contains(concat(' ', @class, ' '), ' scores ')]"
+            )))
+            .and_displayed()
+            .first()
+            .await?;
+        self.scroll_to_middle(&scores).await?;
+        self.driver
+            .action_chain()
+            .move_to_element_center(&scores)
+            .click()
+            .perform()
+            .await?;
         Page::pause().await;
         Ok(())
     }

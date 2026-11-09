@@ -451,7 +451,13 @@ async fn a_knockout_shows_the_score_in_its_bracket() {
 
         gui.expect_bracket_scores_either_way("3–1").await?;
         gui.page.check_accessibility().await?;
-        // the pairing shows what was reported for it
+        // its score, underlined, shows that the pairing opens what was reported for it
+        assert_eq!(
+            gui.page
+                .style_of(".bracket .scores", "text-decoration-line")
+                .await?,
+            "underline"
+        );
         gui.click_labelled("Details of the result of match 1")
             .await?;
         gui.expect_reported_result(&[&[]], &[], "Match: Alice wins")
@@ -488,9 +494,41 @@ async fn the_details_of_a_finished_match_show_its_games() {
     .await;
 }
 
+/// A finished match shows that it opens by its score, underlined as a link is, as a phone has no
+/// hover to show it; a tap on the score opens what was reported for it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_tap_on_the_underlined_score_of_a_finished_match_opens_its_details() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Best of games").await?;
+        gui.enter_result("ali 21-17 19-21 21-15").await?;
+        gui.page.resize(390, 844).await?;
+        gui.expect_finished(&["1"]).await?;
+
+        assert_eq!(
+            gui.page
+                .style_of("#match-list .result.scores", "text-decoration-line")
+                .await?,
+            "underline"
+        );
+        gui.tap_scores_of(1).await?;
+
+        gui.expect_reported_result(
+            &[
+                &["21", "17", "19", "21", "21", "15"],
+                &["17", "21", "21", "19", "15", "21"],
+            ],
+            &["21", "21", "21"],
+            "Match: Alice wins (2–1)",
+        )
+        .await
+    })
+    .await;
+}
+
 /// The cross table shows the games each side won of a best of, from the row's side, a win in
-/// bold; a screen reader says them after how the match ended. A click on a match opens its
-/// details.
+/// bold; a screen reader says them after how the match ended. A click on a match, its score
+/// underlined, opens its details.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_cross_table_shows_the_games_won_and_opens_the_details() {
@@ -513,6 +551,12 @@ async fn the_cross_table_shows_the_games_won_and_opens_the_details() {
         let win = gui.page.style_of(".outcome.win", "font-weight").await?;
         let loss = gui.page.style_of(".outcome.loss", "font-weight").await?;
         assert!(win > loss, "{win} {loss}");
+        assert_eq!(
+            gui.page
+                .style_of(".outcome.win", "text-decoration-line")
+                .await?,
+            "underline"
+        );
         gui.page.check_accessibility().await?;
 
         gui.click_labelled("Details of the result of match 1")

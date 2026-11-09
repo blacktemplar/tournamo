@@ -774,7 +774,8 @@ fn with_parts_won(tr: &Translator, said: String, parts_won: Option<Sides<u32>>) 
 /// showing it, read-only: a row of each of its parts, e.g. its games, with their values and who
 /// won them, then the match's own values and result. The button has no text: it covers the
 /// nearest positioned element around it, the match's card or pairing, so that a click anywhere on
-/// it opens the dialog, and is named for screen readers.
+/// it opens the dialog, and is named for screen readers. The stylesheet underlines the score
+/// shown with it, as a link, which tells touch, without hover, that the match opens.
 #[component]
 pub fn ResultDetails(row: MatchRow) -> Element {
     let ctx = use_context::<Ctx>();

@@ -1695,6 +1695,16 @@ button.match-details:hover {
   position: relative;
 }
 
+/* the score of a match that opens, underlined as a link is, as opening only shows more: it tells
+ * touch, which has no hover, that the match opens, without taking room in its row; its colour
+ * stays, so that finished matches still recede */
+.match:has(> .report .match-details) .result.scores,
+.pairing:has(> .match-details) .scores,
+.cross-table .played:has(> .match-details) .outcome.scored {
+  text-decoration-line: underline;
+  text-underline-offset: 0.2em;
+}
+
 /* the parts of a finished match in its dialog, e.g. its games, a row each; names wrap rather than
  * widen it beyond a phone */
 .reported-parts th,

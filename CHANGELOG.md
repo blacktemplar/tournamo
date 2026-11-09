@@ -54,12 +54,15 @@ a file whose `"format"` changes is migrated, not refused.
   and a game entered after the match was decided says at which games it was
   (3–0). A click on a finished match with more than who won, in the list of
   matches or in the bracket, shows what was reported for it: each game with
-  each side's score, the winner's marked, and the result of the match.
+  each side's score, the winner's marked, and the result of the match. Its
+  score is underlined, as a link is, so that it is clear without hovering, as
+  on a phone, that the match opens.
 - The cross table shows a match's result as it was entered, from the side of
   the row: its score (21–15), or the games won of a best of (3–2), in place of
   1, ½ and 0, which stay for matches entered by who won; a win is bold as well
   as tinted. Screen readers say the score after how the match ended (won,
-  3–2). A click on such a match opens what was reported for it.
+  3–2). A click on such a match, its score underlined as in the list, opens
+  what was reported for it.
 - The command line reports scores, e.g. `report 3 21-17 19-21 21-15` (or
   `21–17`, as copied from its list of matches), and lists them with each
   finished match, a best of with its games won.

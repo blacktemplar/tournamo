@@ -89,6 +89,8 @@ fn Cell(played: CrossMatch) -> Element {
         None => return rsx! {},
     };
     let outcome = tr.get(outcome);
+    // a score, underlined, shows that the match opens, as in the list of matches
+    let scored = played.score.is_some();
     // a score is said after how the match ended, as an overridden result need not follow from it
     let (shown, said) = match played.score {
         Some(score) => {
@@ -106,7 +108,7 @@ fn Cell(played: CrossMatch) -> Element {
     let row = played.row;
     rsx! {
         span { class: "played",
-            span { class: "outcome {class}",
+            span { class: "outcome {class}", class: if scored { "scored" },
                 span { aria_hidden: "true", "{shown}" }
                 span { class: "visually-hidden", "{said}" }
             }

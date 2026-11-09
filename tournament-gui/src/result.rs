@@ -211,11 +211,7 @@ fn QuickValues(
             capitalized(&tr.plugin_phrase(match_format, PluginText::Level(name.key()), name));
         t!(tr, "part-numbered", name = name.as_str(), number = *number)
     });
-    let kind = field.kind;
     let input = |team: Team, name: &str| {
-        let (path, key) = (quick.path.clone(), field.key.clone());
-        let entered = field.entered.of(team).clone();
-        let invalid = entered.is_some();
         let value_of = label.as_str();
         let aria_label = match &part {
             Some(part) => t!(
@@ -235,54 +231,17 @@ fn QuickValues(
             ),
         };
         rsx! {
-            input {
-                r#type: "number",
-                // a decimal may be negative
-                min: (kind == ValueKind::Count).then_some("0"),
-                max: (kind == ValueKind::Count).then_some("65535"),
-                // a minus as well for a decimal, where the keyboard of decimals has none
-                inputmode: if kind == ValueKind::Count { "numeric" } else { "text" },
-                step: if kind == ValueKind::Count { "1" } else { "any" },
-                disabled,
-                id: value_id(&format!("quick-value-{number}"), &quick.path, &field.key, team),
+            ValueInput {
+                form,
+                path: quick.path.clone(),
+                field: field.clone(),
+                team,
+                prefix: format!("quick-value-{number}"),
                 aria_label,
-                aria_invalid: invalid.then_some("true"),
-                aria_describedby: invalid.then(|| format!("quick-issues-{number}")),
-                value: entered.unwrap_or_else(|| shown(*field.values.of(team))),
-                onblur: {
-                    let (path, key) = (path.clone(), key.clone());
-                    move |_| {
-                        let prefix = format!("quick-value-{number}");
-                        if let Some(form) = form.write().as_mut() {
-                            complete_score(form, &prefix, &path, &key, team, false);
-                        }
-                    }
-                },
-                onkeydown: {
-                    let (path, key) = (path.clone(), key.clone());
-                    move |event: KeyboardEvent| {
-                        let prefix = format!("quick-value-{number}");
-                        if is_tab(&event)
-                            && let Some(form) = form.write().as_mut()
-                            && complete_score(form, &prefix, &path, &key, team, true)
-                        {
-                            event.prevent_default();
-                        }
-                    }
-                },
-                onmounted: move |event| {
-                    if team == Team::A
-                        && let Some(on_mounted) = on_mounted
-                    {
-                        on_mounted.call(event);
-                    }
-                },
-                oninput: move |event: FormEvent| {
-                    if let Some(form) = form.write().as_mut() {
-                        form.enter(&path, &key, team, &event.value());
-                    }
-                    on_input.call(());
-                },
+                issues: format!("quick-issues-{number}"),
+                disabled,
+                on_mounted: on_mounted.filter(|_| team == Team::A),
+                on_input,
             }
         }
     };
@@ -311,7 +270,7 @@ pub fn EnterResult(
 ) -> Element {
     let ctx = use_context::<Ctx>();
     // the form while the dialog is open
-    let mut entering = use_signal(|| None::<Signal<ResultForm>>);
+    let mut entering = use_signal(|| None::<ResultForm>);
     let mut error = use_signal(|| None::<Text>);
     // whether results may be chosen against those the values suggest
     let mut overriding = use_signal(|| false);
@@ -330,6 +289,8 @@ pub fn EnterResult(
     } else {
         ("open-result", t!(tr, "open-result-of", number = row.number))
     };
+    let view = entering.read().as_ref().map(ResultForm::view);
+    let needs_choice = view.as_ref().is_some_and(|view| view.root.needs_choice);
     rsx! {
         button {
             class: if more { "details quiet small" } else { "enter-result" },
@@ -350,14 +311,14 @@ pub fn EnterResult(
                     error.set(None);
                     // a result chosen already, e.g. that of a match reopened, shows as chosen
                     overriding.set(form.is_chosen());
-                    entering.set(Some(Signal::new(form)));
+                    entering.set(Some(form));
                     focus_later(&["#result-form input", "#result-form select"]);
                 }
             },
             {tr.get(label)}
         }
         Dialog {
-            open: Some(entering.read().is_some()),
+            open: Some(view.is_some()),
             on_open_change: move |open: bool| {
                 if !open {
                     entering.set(None);
@@ -365,13 +326,16 @@ pub fn EnterResult(
             },
             DialogTitle { {t!(tr, "result-title", number = row.number)} }
             DialogDescription { {t!(tr, "result-description", a = a.as_str(), b = b.as_str())} }
-            if let Some(mut form) = entering() {
+            if let Some(view) = view {
                 form {
                     id: "result-form",
                     class: "dialog-form",
                     onsubmit: move |event| {
                         event.prevent_default();
-                        match ctx.try_act(|session| session.report_form(&form.read())) {
+                        let Some(form) = entering.read().clone() else {
+                            return;
+                        };
+                        match ctx.try_act(|session| session.report_form(&form)) {
                             Ok(reported) => {
                                 entering.set(None);
                                 ctx.announce(Announcement::Reported(reported));
@@ -381,9 +345,9 @@ pub fn EnterResult(
                         }
                     },
                     ResultPart {
-                        form,
-                        part: form.read().view().root,
-                        match_format: form.read().view().match_format,
+                        form: entering,
+                        part: view.root,
+                        match_format: view.match_format,
                         overriding: overriding(),
                         a: a.clone(),
                         b: b.clone(),
@@ -394,13 +358,15 @@ pub fn EnterResult(
                         }
                     }
                     div { class: "dialog-buttons",
-                        if !form.read().view().root.needs_choice {
+                        if !needs_choice {
                             button {
                                 class: "quiet small muted override",
                                 r#type: "button",
                                 onclick: move |_| {
                                     if overriding() {
-                                        form.write().follow_suggestions();
+                                        if let Some(form) = entering.write().as_mut() {
+                                            form.follow_suggestions();
+                                        }
                                         overriding.set(false);
                                     } else {
                                         overriding.set(true);
@@ -431,7 +397,7 @@ pub fn EnterResult(
 /// and `b`: its values, its parts, then its result, to be chosen if `overriding`.
 #[component]
 fn ResultPart(
-    form: Signal<ResultForm>,
+    form: Signal<Option<ResultForm>>,
     part: PartView,
     match_format: &'static str,
     overriding: bool,
@@ -501,7 +467,7 @@ fn ResultPart(
 /// named, if it is not the match.
 #[component]
 fn ResultField(
-    form: Signal<ResultForm>,
+    form: Signal<Option<ResultForm>>,
     path: Vec<usize>,
     field: FieldView,
     within: Option<String>,
@@ -516,21 +482,15 @@ fn ResultField(
         PluginText::EnteredValue(field.label.key()),
         &field.label,
     ));
-    let kind = field.kind;
     let issues_id = issues_id(&path, &field.key);
     let input = |team: Team, name: &str| {
-        let (path, key) = (path.clone(), field.key.clone());
-        let entered = field.entered.of(team).clone();
-        let invalid = entered.is_some();
         rsx! {
-            input {
-                r#type: "number",
-                // a decimal may be negative
-                min: (kind == ValueKind::Count).then_some("0"),
-                max: (kind == ValueKind::Count).then_some("65535"),
-                // a minus as well for a decimal, where the keyboard of decimals has none
-                inputmode: if kind == ValueKind::Count { "numeric" } else { "text" },
-                step: if kind == ValueKind::Count { "1" } else { "any" },
+            ValueInput {
+                form,
+                path: path.clone(),
+                field: field.clone(),
+                team,
+                prefix: "result-value",
                 aria_label: match &within {
                     Some(part) => {
                         t!(
@@ -540,36 +500,7 @@ fn ResultField(
                     }
                     None => t!(tr, "value-of", value = label.as_str(), team = name),
                 },
-                aria_invalid: invalid.then_some("true"),
-                aria_describedby: invalid.then(|| issues_id.clone()),
-                id: value_id("result-value", &path, &field.key, team),
-                value: entered.unwrap_or_else(|| shown(*field.values.of(team))),
-                onblur: {
-                    let (path, key) = (path.clone(), key.clone());
-                    move |_| {
-                        complete_score(&mut form.write(), "result-value", &path, &key, team, false);
-                    }
-                },
-                onkeydown: {
-                    let (path, key) = (path.clone(), key.clone());
-                    move |event: KeyboardEvent| {
-                        if is_tab(&event)
-                            && complete_score(
-                                &mut form.write(),
-                                "result-value",
-                                &path,
-                                &key,
-                                team,
-                                true,
-                            )
-                        {
-                            event.prevent_default();
-                        }
-                    }
-                },
-                oninput: move |event: FormEvent| {
-                    form.write().enter(&path, &key, team, &event.value());
-                },
+                issues: issues_id.clone(),
             }
         }
     };
@@ -592,6 +523,73 @@ fn ResultField(
             for warning in &field.warnings {
                 p { class: "warnings", role: "status", {tr.sentence(warning)} }
             }
+        }
+    }
+}
+
+/// The input of `team`'s value of `field` of the part at `path` of `form`, with the id made of
+/// `prefix` ([`value_id`]), named `aria_label`, and described by the element `issues` while what
+/// was typed is not taken. Once left, it completes the score ([`complete_score`]).
+#[component]
+fn ValueInput(
+    form: Signal<Option<ResultForm>>,
+    path: Vec<usize>,
+    field: FieldView,
+    team: Team,
+    prefix: String,
+    aria_label: String,
+    issues: String,
+    #[props(default)] disabled: bool,
+    on_mounted: Option<EventHandler<MountedEvent>>,
+    on_input: Option<EventHandler<()>>,
+) -> Element {
+    let complete = use_callback({
+        let (prefix, path, key) = (prefix.clone(), path.clone(), field.key.clone());
+        move |tabbing: bool| {
+            form.write()
+                .as_mut()
+                .is_some_and(|form| complete_score(form, &prefix, &path, &key, team, tabbing))
+        }
+    });
+    let count = field.kind == ValueKind::Count;
+    let entered = field.entered.of(team).clone();
+    let invalid = entered.is_some();
+    rsx! {
+        input {
+            r#type: "number",
+            // a decimal may be negative
+            min: count.then_some("0"),
+            max: count.then_some("65535"),
+            // a minus as well for a decimal, where the keyboard of decimals has none
+            inputmode: if count { "numeric" } else { "text" },
+            step: if count { "1" } else { "any" },
+            disabled,
+            id: value_id(&prefix, &path, &field.key, team),
+            aria_label,
+            aria_invalid: invalid.then_some("true"),
+            aria_describedby: invalid.then_some(issues),
+            value: entered.unwrap_or_else(|| shown(*field.values.of(team))),
+            onblur: move |_| {
+                complete(false);
+            },
+            onkeydown: move |event: KeyboardEvent| {
+                if is_tab(&event) && complete(true) {
+                    event.prevent_default();
+                }
+            },
+            onmounted: move |event| {
+                if let Some(on_mounted) = on_mounted {
+                    on_mounted.call(event);
+                }
+            },
+            oninput: move |event: FormEvent| {
+                if let Some(form) = form.write().as_mut() {
+                    form.enter(&path, &field.key, team, &event.value());
+                }
+                if let Some(on_input) = on_input {
+                    on_input.call(());
+                }
+            },
         }
     }
 }
@@ -678,7 +676,7 @@ fn shown(value: Option<EnteredValue>) -> String {
 /// which is offered if `overriding` or if only a choice decides the part.
 #[component]
 fn ResultChoice(
-    form: Signal<ResultForm>,
+    form: Signal<Option<ResultForm>>,
     part: PartView,
     name: String,
     overriding: bool,
@@ -740,7 +738,9 @@ fn ResultChoice(
                         "b" => Some(MatchResult::BWins),
                         _ => None,
                     };
-                    form.write().choose(&path, result);
+                    if let Some(form) = form.write().as_mut() {
+                        form.choose(&path, result);
+                    }
                 },
                 option { value: "", selected: chosen.is_none(), {suggested} }
                 for result in [MatchResult::AWins, MatchResult::Draw, MatchResult::BWins] {

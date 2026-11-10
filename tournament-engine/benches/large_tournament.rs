@@ -1,6 +1,6 @@
 //! Benchmarks a whole tournament with a large `RandomRounds` phase that calculates every metric
-//! this crate offers, and a round trip of the finished competition through both serialization
-//! formats.
+//! this crate offers, reading the standings of the finished phase, and a round trip of the
+//! finished competition through both serialization formats.
 //!
 //! The number of entrants defaults to 1000 and can be configured through the `BENCH_ENTRANTS`
 //! environment variable, which takes a comma separated list of entrant counts that are all
@@ -53,6 +53,23 @@ fn full_tournament(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmarks reading the standings of the phase a whole tournament leaves behind, i.e. ranking
+/// all of its rankings by its four criteria.
+///
+/// Playing the tournament happens once per entrant count, outside of the measurement.
+fn standings(c: &mut Criterion) {
+    let mut group = c.benchmark_group("standings");
+    for entrants in entrant_counts() {
+        let sm = tournament::run_tournament(entrants);
+        let phase = &sm.current().phases()[&tournament::phase_id()];
+
+        group.bench_with_input(BenchmarkId::from_parameter(entrants), phase, |b, phase| {
+            b.iter(|| phase.standings());
+        });
+    }
+    group.finish();
+}
+
 /// Benchmarks serializing the competition a whole tournament leaves behind and deserializing it
 /// again, once through [`postcard`] as a compact binary format and once through [`serde_json`] as a
 /// text one.
@@ -94,5 +111,10 @@ fn serialization_round_trip(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, full_tournament, serialization_round_trip);
+criterion_group!(
+    benches,
+    full_tournament,
+    standings,
+    serialization_round_trip
+);
 criterion_main!(benches);

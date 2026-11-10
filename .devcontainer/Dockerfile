@@ -61,7 +61,8 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf \
     && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 # Claude Code for the terminal; Zed's Claude Agent brings its own
-RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+ARG CLAUDE_CODE_VERSION=2.1.322
+RUN npm install -g "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION" && npm cache clean --force
 COPY managed-settings.json /etc/claude-code/managed-settings.json
 
 # gh with the read-only token from the host (README.md, "GitHub CLI")

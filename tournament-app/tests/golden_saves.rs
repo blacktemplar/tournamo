@@ -93,8 +93,12 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
             replayed == as_read(competition),
             "{save} replays into another competition than it was saved as"
         );
-        let file: Value = serde_json::from_str(file).unwrap();
         let saved: Value = serde_json::from_str(competition).unwrap();
+        assert!(
+            ranks_in(&replayed) == ranks_in(&saved),
+            "{save} replays into other ranks than it was saved with"
+        );
+        let file: Value = serde_json::from_str(file).unwrap();
         assert!(
             file.get("competition").is_none_or(|held| *held == saved),
             "{save} holds another competition than it was saved as"
@@ -107,6 +111,26 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
 fn as_read(competition: &str) -> Value {
     let competition: Competition = serde_json::from_str(competition).unwrap();
     serde_json::to_value(competition).unwrap()
+}
+
+/// What a serialized competition says of the ranks in its phases: per phase the order of the
+/// rankings and the ranks of each.
+fn ranks_in(competition: &Value) -> Vec<Value> {
+    competition["phases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|phase| {
+            let data = &phase["data"];
+            let rankings: Vec<_> = data["rankings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| (&r["id"], &r["rank"], &r["unique_rank"]))
+                .collect();
+            serde_json::json!([data["ranking_ids_ordered_by_unique_rank"], rankings])
+        })
+        .collect()
 }
 
 /// Saves of versions that did not store the competition get it when they are stored.

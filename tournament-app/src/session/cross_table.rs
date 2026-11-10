@@ -29,7 +29,11 @@ impl Session {
             pairs.push((*a, *b, r#match));
         }
         // in the order of the standings
-        let ranked: Vec<_> = data.standings().collect();
+        let ranked: Vec<_> = phase
+            .standings()
+            .iter()
+            .map(|standing| standing.ranking())
+            .collect();
         let index: HashMap<RankingId, usize> = ranked
             .iter()
             .enumerate()

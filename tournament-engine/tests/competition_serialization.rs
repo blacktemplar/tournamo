@@ -215,14 +215,16 @@ fn assert_same_competition(left: &Competition, right: &Competition) {
             .get(&phase.id())
             .expect("the phase must exist");
         assert_eq!(phase.id(), other.id());
+        let (standings, other_standings) = (phase.standings(), other.standings());
         let (phase, other) = (phase.data(), other.data());
         assert_eq!(phase.seed(), other.seed());
-        assert_eq!(phase.standings().len(), other.standings().len());
-        for (ranking, other_ranking) in phase.standings().zip(other.standings()) {
+        assert_eq!(standings.len(), other_standings.len());
+        for (standing, other_standing) in standings.iter().zip(other_standings.iter()) {
+            let (ranking, other_ranking) = (standing.ranking(), other_standing.ranking());
             assert_eq!(ranking.id(), other_ranking.id());
             assert_eq!(ranking.entrants(), other_ranking.entrants());
-            assert_eq!(ranking.rank(), other_ranking.rank());
-            assert_eq!(ranking.unique_rank(), other_ranking.unique_rank());
+            assert_eq!(standing.rank(), other_standing.rank());
+            assert_eq!(standing.unique_rank(), other_standing.unique_rank());
             assert_eq!(
                 ranking.initial_unique_rank(),
                 other_ranking.initial_unique_rank()
@@ -288,7 +290,7 @@ fn a_started_competition_round_trips() {
     assert_eq!(phase.matches().len(), 2);
     // the metrics of a started competition are all at their default value, so this only shows
     // that they exist at all
-    for ranking in phase.standings() {
+    for ranking in phase.rankings().values() {
         assert_eq!(ranking.metric::<Points>(), Some(&Points(Score::ZERO)));
     }
     assert_same_competition(sm.current(), &competition);

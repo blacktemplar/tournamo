@@ -6,7 +6,7 @@ use plugin_factory::{Plugin, axis, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{PhaseData, Ranking, RankingId},
+    entities::competition::{PhaseData, Ranking},
     plugins::facts::CalculatesMetric,
     type_map::TypeMapValue,
 };
@@ -27,23 +27,24 @@ impl HierarchicalRanker {
         &self.0
     }
 
-    /// The new rank of every ranking of `phase_data`.
+    /// Every ranking of `phase_data` with its rank, ordered by rank.
     ///
     /// The ranks satisfy the following invariant: ordered by rank, the first ranking has rank 1 and
     /// every following one has either the rank of its predecessor or rank `index + 1`. Equal ranks
     /// are therefore ties, and the rank after a tie skips the tied ranks.
-    pub fn update_ranks(&mut self, phase_data: &PhaseData) -> Vec<(RankingId, NonZeroU32)> {
-        let mut rankings_with_new_ranks: Vec<(&Ranking, NonZeroU32)> = phase_data
-            .standings()
+    pub(crate) fn rank<'a>(&self, phase_data: &'a PhaseData) -> Vec<(&'a Ranking, NonZeroU32)> {
+        let mut ranked: Vec<(&Ranking, NonZeroU32)> = phase_data
+            .rankings()
+            .values()
             .map(|ranking| (ranking, NonZeroU32::MIN))
             .collect();
 
-        let mut slices = vec![rankings_with_new_ranks.as_mut_slice()];
-        for slice_ranker in &mut self.0 {
+        let mut slices = vec![ranked.as_mut_slice()];
+        for slice_ranker in &self.0 {
             slices = slices
                 .drain(..)
                 .flat_map(|slice| {
-                    slice_ranker.update_ranks(phase_data, slice);
+                    slice_ranker.rank(phase_data, slice);
                     slice
                         .chunk_by_mut(|(_, r1), (_, r2)| r1 == r2)
                         .filter(|s| s.len() > 1)
@@ -54,17 +55,14 @@ impl HierarchicalRanker {
             }
         }
 
-        rankings_with_new_ranks
-            .into_iter()
-            .map(|(ranking, rank)| (ranking.id(), rank))
-            .collect()
+        ranked
     }
 }
 
 /// Ranks rankings that are tied so far, as one step of a [`HierarchicalRanker`].
 ///
-/// A slice ranker sorting by a single metric is best written as a [`RankingCriterion`]. A slice
-/// ranker may keep state as a [`PhaseFormat`](super::phase_format::PhaseFormat) does.
+/// A slice ranker sorting by a single metric is best written as a [`RankingCriterion`]. It ranks
+/// whenever the standings of its phase are read, by what the phase holds, so it keeps no state.
 #[axis]
 pub trait SliceRanker: Plugin + DynClone {
     /// Reorders `slice` by the new ranks and assigns them.
@@ -72,7 +70,7 @@ pub trait SliceRanker: Plugin + DynClone {
     /// All rankings of `slice` come in with the same rank `r`. Afterwards, ordered as the slice
     /// is, the first ranking must have rank `r` and every following one either the rank of its
     /// predecessor or rank `r + index`.
-    fn update_ranks(&mut self, phase_data: &PhaseData, slice: &mut [(&Ranking, NonZeroU32)]);
+    fn rank(&self, phase_data: &PhaseData, slice: &mut [(&Ranking, NonZeroU32)]);
 }
 
 dyn_clone::clone_trait_object!(SliceRanker);
@@ -132,8 +130,8 @@ macro_rules! register_criterion {
     ($criterion:ty) => {
         #[::plugin_factory::register]
         impl $crate::plugins::ranker::SliceRanker for $criterion {
-            fn update_ranks(
-                &mut self,
+            fn rank(
+                &self,
                 _: &$crate::PhaseData,
                 slice: &mut [(&$crate::Ranking, ::std::num::NonZeroU32)],
             ) {
@@ -150,8 +148,8 @@ pub fn requires_metric<C: RankingCriterion>(declaration: &mut Declaration) {
     declaration.require::<CalculatesMetric<C::Metric>>(type_name::<C::Metric>());
 }
 
-/// Reorders `slice` by `criterion` and assigns the new ranks, as [`SliceRanker::update_ranks`]
-/// requires. Rankings that `criterion` finds equal stay tied, in the order they came in.
+/// Reorders `slice` by `criterion` and assigns the new ranks, as [`SliceRanker::rank`] requires.
+/// Rankings that `criterion` finds equal stay tied, in the order they came in.
 ///
 /// # Panics
 /// Panics if a ranking of `slice` does not hold the metric of `criterion`, i.e. if the phase does
@@ -160,8 +158,8 @@ pub fn rank_by<C: RankingCriterion>(criterion: &C, slice: &mut [(&Ranking, NonZe
     let Some(&(_, start_rank)) = slice.first() else {
         return;
     };
-    // This runs for every reported match result, so every value is looked up once here rather than
-    // on every comparison of the sort below.
+    // This runs whenever standings are read, so every value is looked up once here rather than on
+    // every comparison of the sort below.
     let mut sorted = slice
         .iter()
         .map(|&(ranking, _)| {

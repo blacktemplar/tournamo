@@ -4,7 +4,7 @@ use dyn_clone::DynClone;
 use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
 use crate::{
-    entities::competition::{Bye, NewMatch, PhaseData},
+    entities::competition::{Bye, NewMatch, PhaseView},
     plugins::{Phrase, facts::NoDraws},
     type_map::TypeMap,
 };
@@ -13,8 +13,8 @@ use crate::{
 ///
 /// A format may keep state in `self` and update it in [`Self::create_new_matches`], in a field
 /// left out of its schema with `#[plugin(skip)]`. That state is serialized together with the
-/// phase, and it must only depend on the [`PhaseData`] and the calls the format has seen, so that
-/// replaying the transition log recomputes it.
+/// phase, and it must only depend on what the [`PhaseView`]s showed the format and the calls it has
+/// seen, so that replaying the transition log recomputes it.
 ///
 /// [`Any`] is a supertrait, so that a consumer can downcast a format it knows to its type, e.g. to
 /// read the [`Bracket`] of a [`SingleElimination`].
@@ -32,7 +32,11 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
     /// Called when the phase starts and again after every reported match result. Scheduling a bye
     /// does not lead to another call.
     ///
-    /// An implementation must only schedule rankings of `phase_data`, must not return a match or a
+    /// `phase` holds the data of the phase and, when asked for, its standings, which count every
+    /// result reported so far and every bye reached. A format reading a metric, from the standings
+    /// or the data, must require it in its declaration ([`CalculatesMetric`]), as a criterion does.
+    ///
+    /// An implementation must only schedule rankings of the phase, must not return a match or a
     /// bye whose id already exists in the phase, and must not put the same ranking into two matches
     /// or byes of the same round. Rounds have to order the matches of each ranking by when they are
     /// played, since metrics such as [`RoundOfFirstLoss`] read a later round as a later match.
@@ -47,9 +51,10 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
     /// [`MatchAnnotation`](crate::plugins::facts::MatchAnnotation) in its declaration, so that the
     /// plugins reading it can require it.
     ///
+    /// [`CalculatesMetric`]: crate::plugins::facts::CalculatesMetric
     /// [`RoundOfFirstLoss`]: super::metrics_calculator::round_of_first_loss::RoundOfFirstLoss
     /// [`Annotated::with_annotation`]: crate::entities::competition::Annotated::with_annotation
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule;
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule;
 
     /// The fewest entrants this format schedules matches for, 2 unless it says otherwise; with
     /// fewer, it schedules none. The start is not refused for it, so that a log started with fewer

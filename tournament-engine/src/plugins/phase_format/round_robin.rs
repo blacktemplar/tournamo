@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, config::PluginConfig, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::PhaseData,
+    entities::competition::PhaseView,
     plugins::{
         metrics_calculator::{
             buchholz::{MoreSonnebornBerger, SonnebornBergerCalculator},
@@ -49,7 +49,8 @@ impl PhaseFormat for RoundRobin {
         }
     }
 
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+        let phase_data = phase.data();
         // all rounds are scheduled at once
         if phase_data.has_schedule() {
             return Schedule::default();
@@ -72,7 +73,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::entities::competition::{Bye, Match, PhaseBuilder};
+    use crate::entities::competition::{Bye, Match, PhaseBuilder, PhaseData};
 
     /// A format asking for no numbers gets its matches numbered in the order it scheduled them.
     #[test]

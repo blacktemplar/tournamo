@@ -64,22 +64,25 @@ bracket, a structure it would otherwise rebuild on every reported result).
 following the phase's progress take `&mut self` and the phase's data:
 
 ```rust
-fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule;      // PhaseFormat
-fn update_ranks(&mut self, phase_data: &PhaseData,
-                slice: &mut [(&Ranking, NonZeroU32)]);                     // SliceRanker
+fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule;       // PhaseFormat
 fn update_after_match_result(&mut self, phase_data: &PhaseData, /* ... */)
     -> Vec<(RankingId, Metric)>;                                           // MetricsCalculator
 ```
 
 Methods describing configuration (`default_metric_value`) stay `&self`; whether
-a format allows draws is the fact `NoDraws` (below).
+a format allows draws is the fact `NoDraws` (below). A slice ranker follows no
+progress: it ranks whenever the standings are read (see
+[Metrics](#metrics-plugin-produced-ranking-data)), so `SliceRanker::rank` takes
+`&self`.
 
 - **`PhaseData` is everything in a `Phase` but its plugins** (rankings, matches,
   byes, seed). A call borrows a plugin field mutably and `data` immutably, two
   disjoint fields, so no plugin is moved out. A plugin therefore does not see
   the other plugins; what it needs of them reaches it through `PhaseData`
-  (metrics, annotations). `data` is a nested field, not `#[serde(flatten)]`,
-  which postcard cannot read.
+  (metrics, annotations). The format gets a `PhaseView`: the data, and the
+  standings on request, ranked by the ranker, a third field borrowed
+  immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
+  cannot read.
 - **State is a field left out of the schema**: `#[plugin(skip)]` plus
   `#[serde(default)]`. A plugin built from a configuration starts at the
   default; a saved one comes back with its state. It is always serialized
@@ -307,9 +310,33 @@ the pre-update values through `OldMetrics::of::<M>()` and the new ones in
   pre-extracted columns of every metric was measured ~20% slower on
   `large_tournament`.
 
+**Ranks are computed when the standings are read**; only the metrics are
+stored. `Phase::standings` ranks the rankings by the phase's slice rankers on
+every call and returns them best first, each with its rank and its unique rank
+(the rank, ties broken by the initial unique rank). The standings borrow the
+phase, so they are never stale; a reader asks once and keeps them. A format
+asks through the `PhaseView` it schedules with, as a Swiss system will once per
+round; the standings count every result reported and every bye reached.
+Sorting after every result made each replay (undo, redo, loading, editing a
+phase) sort once per result in the log, about 90% of its time. Natively, on the
+`large_tournament` benchmark (1000 entrants, 5000 results, every metric, four
+criteria):
+
+| ranks | replay (`full_tournament`) |
+|---|---|
+| sorted and stored after every result | 644 ms |
+| computed when the standings are read | 58 ms |
+
+Reading the standings there sorts once: 0.08 ms.
+
 Rejected: string-keyed metrics; a fixed `RankData` comparison per ranking type;
 discovering produced metrics by running calculation; recomputing all metrics
-per result (cost grows with the tournament on the hottest path).
+per result (cost grows with the tournament on the hottest path); ranks stored
+and sorted after every result (most of a replay, for standings nobody reads in
+between); a cache of the standings in the phase (interior mutability, for a
+sort of 0.08 ms); computing the metrics when read as well (most of the
+remaining replay, but every calculator would be rewritten from its incremental
+updates).
 
 ## Scores
 
@@ -469,8 +496,8 @@ missing ranking has a bye, was knocked out or is not scheduled yet.
   playable. For a format scheduling round by round that is when it is
   scheduled; for a round robin, which schedules everything at once, later, so
   the standings never count a bye of a round the ranking has not reached. Then
-  `MetricsCalculator::update_after_bye` runs and the phase re-ranks. After a
-  result only the byes of that match's rankings are checked.
+  `MetricsCalculator::update_after_bye` runs. After a result only the byes of
+  that match's rankings are checked.
 - **`update_after_bye` has no default**: whether a bye counts differs per
   metric (points: configurable; rounds of loss: no; Buchholz: the bye's points
   count for opponents), and the compiler makes every calculator answer.
@@ -734,7 +761,10 @@ replay it to show it read-only instead (*planned*), and to tell a replay that
 comes out otherwise. The log stays what
 is loaded; the competition is only read in place of it. Its serialized form is
 a persistence contract too, kept loading by converters where it changes.
-Older versions ignore it, so it does not raise the file's format.
+Older versions ignore it, so it does not raise the file's format. It still
+holds the rank and unique rank of every ranking and the order of the standings,
+as when they were stored: a phase computes them when it is written, and reads
+but drops them when it is read (see [Metrics](#metrics-plugin-produced-ranking-data)).
 
 Rejected: every version of every transition (unbounded, and keeps old bugs);
 only the competition (no undo, no history); a smaller, display-only archive
@@ -1383,16 +1413,22 @@ page is built by its own tool (trunk, dx) in its own hook and fails on its own.
 ### Performance
 
 Fine for the first use cases (20–50 entrants). Undo, redo and loading replay
-the whole log, which at 1000 entrants and 5000 results takes ~1.8 s in wasm and
+the whole log, which at 1000 entrants and 5000 results took ~1.8 s in wasm and
 several seconds on a phone, missing the requirement (< 1 s with 500 entrants on
-a mid-range phone). *Planned:* snapshot checkpoints; reading the competition
-stored next to the log takes 13 ms at 1000 entrants and 29 ms at 2000 (Chrome,
-JSON), against 1.3 s and 6.3 s to replay its log. The UI shows one round of
-matches at a time rather than thousands of rows.
+a mid-range phone), while ranks were sorted after every result. Computing them
+when the standings are read (see [Metrics](#metrics-plugin-produced-ranking-data))
+cut that replay natively from 644 ms to 58 ms (`full_tournament`); reading the
+standings takes 0.08 ms, and serializing the competition 0.1–0.2 ms more than
+before, as it sorts once. Wasm and phones are not measured again yet.
+*Planned:* snapshot checkpoints; reading the competition stored next to the log
+takes 13 ms at 1000 entrants and 29 ms at 2000 (Chrome, JSON), against 1.3 s
+and 6.3 s to replay its log (measured while ranks were sorted after every
+result). The UI shows one round of matches at a time rather than thousands of
+rows.
 
-Measured with the `large_tournament` benchmark's competition (1000 entrants,
-random rounds over 10 rounds, every metric, 4 criteria), the engine in wasm, in
-ms:
+Measured while ranks were sorted after every result, with the
+`large_tournament` benchmark's competition (1000 entrants, random rounds over
+10 rounds, every metric, 4 criteria), the engine in wasm, in ms:
 
 | results reported | report one | undo / redo / load (replay) | native undo |
 |---|---|---|---|
@@ -1401,8 +1437,9 @@ ms:
 | 4999 | 0.5 | 1680–1810 | 1120 |
 
 Building 5000 match rows and 1000 standings rows takes 2–4 ms; saving the log as
-JSON 3–8 ms. In headless Chrome with all rows on the page and 2500 results, in
-ms until the page shows the change (4× CPU is a mid-range phone):
+JSON 3–8 ms. In headless Chrome, also measured then, with all rows on the page
+and 2500 results, in ms until the page shows the change (4× CPU is a mid-range
+phone):
 
 | | Leptos 1× | Dioxus 1× | Leptos 4× CPU | Dioxus 4× CPU |
 |---|---|---|---|---|

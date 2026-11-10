@@ -99,7 +99,7 @@ pub fn run_tournament(entrants: usize) -> CompetitionStateMachine {
         .unwrap();
     // this creates the rankings, initializes all metrics and schedules the matches of all rounds
     sm.apply_transition(StartCompetition).unwrap();
-    // every single result updates all metrics and reranks the whole phase
+    // every single result updates all metrics
     for (match_id, result) in reporting_schedule(&sm) {
         sm.apply_transition(ReportMatchResult::new(phase_id(), match_id, result))
             .unwrap();

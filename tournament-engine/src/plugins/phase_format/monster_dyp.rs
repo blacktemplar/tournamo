@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::competition::{Bye, NewMatch, PhaseData},
+    entities::competition::{Bye, NewMatch, PhaseView},
     plugins::{
         facts::EntrantsPerRanking,
         metrics_calculator::{
@@ -86,7 +86,8 @@ impl PhaseFormat for MonsterDyp {
         4
     }
 
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+        let phase_data = phase.data();
         // all rounds are scheduled at once
         if phase_data.has_schedule() || phase_data.rankings().len() < 4 {
             return Schedule::default();
@@ -134,7 +135,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{Match, MatchResult, Phase, PhaseBuilder, RankingId},
+        entities::competition::{Match, MatchResult, Phase, PhaseBuilder, PhaseData, RankingId},
         map::Map,
         plugins::metrics_calculator::wins_draws_losses::{
             WinsDrawsLosses, WinsDrawsLossesCalculator,

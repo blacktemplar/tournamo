@@ -599,16 +599,18 @@ impl Session {
             .iter()
             .filter_map(|calculator| calculator.column())
             .collect();
+        let standings = phase.standings();
         let phase = phase.data();
         let header: Vec<_> = ["#", "name"]
             .into_iter()
             .chain(columns.iter().map(MetricColumn::header))
             .collect();
-        let rows: Vec<_> = phase
-            .standings()
-            .map(|ranking| {
+        let rows: Vec<_> = standings
+            .iter()
+            .map(|standing| {
+                let ranking = standing.ranking();
                 [
-                    ranking.rank().to_string(),
+                    standing.rank().to_string(),
                     self.team_name(phase, &[ranking.id()]),
                 ]
                 .into_iter()

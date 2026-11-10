@@ -13,7 +13,7 @@ use vec1::Vec1;
 use crate::{
     entities::competition::{
         Annotated, Bye, Match, MatchId, MatchResult, NewMatch, Phase, PhaseBuilder, PhaseData,
-        RankingId,
+        PhaseView, RankingId,
     },
     plugins::phase_format::{PhaseFormat, Schedule},
     type_map::TypeMap,
@@ -53,7 +53,8 @@ struct FixedMatches {
 
 #[register]
 impl PhaseFormat for FixedMatches {
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+        let phase_data = phase.data();
         let all_matches: Vec<_> = self
             .matches
             .iter()

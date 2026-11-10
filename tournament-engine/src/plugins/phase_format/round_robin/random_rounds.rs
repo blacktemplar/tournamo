@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::PhaseData,
+    entities::competition::PhaseView,
     plugins::{
         metrics_calculator::{
             buchholz::{
@@ -72,7 +72,8 @@ impl PhaseFormat for RandomRounds {
         }
     }
 
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+        let phase_data = phase.data();
         // all rounds are scheduled at once
         if phase_data.has_schedule() {
             return Schedule::default();
@@ -101,7 +102,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::entities::competition::{Bye, Match, PhaseBuilder};
+    use crate::entities::competition::{Bye, Match, PhaseBuilder, PhaseData};
 
     fn assert_every_pair_played_at_most_once(phase: &PhaseData) {
         assert!(phase.matches().values().all(|m| m.team_a().len() == 1));

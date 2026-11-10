@@ -7,7 +7,7 @@ use plugin_factory::{Plugin, compatibility::Declaration, config::PluginConfig, r
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{PhaseData, Team},
+    entities::competition::{PhaseData, PhaseView, Team},
     plugins::{
         facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
@@ -201,7 +201,8 @@ impl PhaseFormat for DoubleElimination {
         }
     }
 
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+        let phase_data = phase.data();
         let reset = self.grand_final_reset;
         self.bracket
             .get_or_insert_with(|| bracket(phase_data, reset))
@@ -467,12 +468,12 @@ mod tests {
     /// The rank and the round of elimination of every entrant, ordered by seed.
     fn standings(phase: &Phase) -> Vec<(u32, Option<u32>)> {
         phase
-            .data()
-            .rankings()
-            .values()
-            .map(|ranking| {
-                let eliminated = ranking.metric::<RoundOfElimination>().unwrap().0;
-                (ranking.rank().get(), eliminated.map(NonZeroU32::get))
+            .standings()
+            .iter()
+            .sorted_by_key(|standing| standing.ranking().initial_unique_rank())
+            .map(|standing| {
+                let eliminated = standing.ranking().metric::<RoundOfElimination>().unwrap().0;
+                (standing.rank().get(), eliminated.map(NonZeroU32::get))
             })
             .collect()
     }

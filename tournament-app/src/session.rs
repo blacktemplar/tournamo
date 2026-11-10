@@ -837,7 +837,8 @@ impl Session {
     /// tied, by the names of their entrants, each team by its entrants; `None` before the start or
     /// while a match has no result.
     pub fn winners(&self) -> Option<Vec<Vec<EntrantRow>>> {
-        let data = self.started_phase()?.data();
+        let phase = self.started_phase()?;
+        let data = phase.data();
         if data
             .matches()
             .values()
@@ -845,10 +846,11 @@ impl Session {
         {
             return None;
         }
-        let mut winners: Vec<_> = data
-            .standings()
-            .filter(|ranking| ranking.rank() == NonZeroU32::MIN)
-            .map(|ranking| self.team(data, &[ranking.id()]))
+        let standings = phase.standings();
+        let mut winners: Vec<_> = standings
+            .iter()
+            .filter(|standing| standing.rank() == NonZeroU32::MIN)
+            .map(|standing| self.team(data, &[standing.ranking().id()]))
             .collect();
         // tied teams are in no order of their own
         winners.sort_by_cached_key(|team| {
@@ -1396,6 +1398,7 @@ impl Session {
         });
         let data = phase.data();
         let finished = data.matches().values().all(Match::is_finished);
+        let standings = phase.standings();
         Some(Standings {
             columns: columns
                 .iter()
@@ -1410,19 +1413,22 @@ impl Session {
                     }
                 })
                 .collect(),
-            rows: data
-                .standings()
-                .map(|ranking| StandingRow {
-                    rank: ranking.rank(),
-                    entrants: self.team(data, &[ranking.id()]),
-                    played: ranking.played_matches().len(),
-                    cells: columns
-                        .iter()
-                        .map(|(_, column)| {
-                            Some(standing_cell(phase, ranking, column.cell(ranking)?))
-                        })
-                        .collect(),
-                    medal: finished.then(|| Medal::of(ranking.rank())).flatten(),
+            rows: standings
+                .iter()
+                .map(|standing| {
+                    let ranking = standing.ranking();
+                    StandingRow {
+                        rank: standing.rank(),
+                        entrants: self.team(data, &[ranking.id()]),
+                        played: ranking.played_matches().len(),
+                        cells: columns
+                            .iter()
+                            .map(|(_, column)| {
+                                Some(standing_cell(phase, ranking, column.cell(ranking)?))
+                            })
+                            .collect(),
+                        medal: finished.then(|| Medal::of(standing.rank())).flatten(),
+                    }
                 })
                 .collect(),
         })

@@ -4,15 +4,18 @@ use itertools::{Either, Itertools};
 use plugin_factory::{compatibility::Declaration, config::Config, draft::Draft};
 use rand::{RngExt, rngs::StdRng, seq::SliceRandom};
 use rand_seeder::Seeder;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::{Uuid, uuid};
 use vec1::{Vec1, vec1};
 
 #[cfg(feature = "test-util")]
 use crate::plugins::PhasePluginsBuilder;
 use crate::{
-    entities::details::{Decision, Part, Values},
-    map::{IdAble, IdMap},
+    entities::{
+        details::{Decision, Part, Values},
+        standings::{Standing, Standings},
+    },
+    map::{IdAble, IdMap, Map},
     plugins::{
         PhasePlugins,
         facts::EntrantsPerRanking,
@@ -245,22 +248,21 @@ impl PhaseId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct Phase {
     id: PhaseId,
     phase_format: Box<dyn PhaseFormat>,
     ranker: HierarchicalRanker,
     metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
-    // phases saved by 0.3.0 and earlier knew only who won
-    #[serde(default = "match_format::default")]
     match_format: Box<dyn MatchFormat>,
     data: PhaseData,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/// Everything a [`Phase`] holds but its plugins: its rankings, matches, byes and seed. Where the
+/// rankings stand depends on how the phase ranks them, see [`Phase::standings`].
+#[derive(Debug)]
 pub struct PhaseData {
     rankings: IdMap<Ranking>,
-    ranking_ids_ordered_by_unique_rank: Vec<RankingId>,
     matches: IdMap<Match>,
     byes: IdMap<Bye>,
     seed: Seed,
@@ -278,13 +280,6 @@ impl PhaseData {
     /// The rankings of this phase, ordered by their [`Ranking::initial_unique_rank`].
     pub fn rankings(&self) -> &IdMap<Ranking> {
         &self.rankings
-    }
-
-    /// The rankings of this phase ordered by their [`Ranking::unique_rank`], i.e. best first.
-    pub fn standings(&self) -> impl ExactSizeIterator<Item = &Ranking> {
-        self.ranking_ids_ordered_by_unique_rank
-            .iter()
-            .map(|id| &self.rankings[id])
     }
 
     pub fn matches(&self) -> &IdMap<Match> {
@@ -313,6 +308,24 @@ impl PhaseData {
     }
 }
 
+/// A phase as its format sees it when scheduling: its data, and its standings when asked for.
+#[derive(Debug, Clone, Copy)]
+pub struct PhaseView<'a> {
+    data: &'a PhaseData,
+    ranker: &'a HierarchicalRanker,
+}
+
+impl<'a> PhaseView<'a> {
+    pub fn data(&self) -> &'a PhaseData {
+        self.data
+    }
+
+    /// The standings, sorted on every call: ask once and keep them.
+    pub fn standings(&self) -> Standings<'a> {
+        Standings::new(self.ranker.rank(self.data))
+    }
+}
+
 impl Phase {
     /// A phase without rankings, matches and byes yet.
     fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
@@ -321,7 +334,6 @@ impl Phase {
             id,
             data: PhaseData {
                 rankings: IdMap::new(),
-                ranking_ids_ordered_by_unique_rank: vec![],
                 matches: IdMap::new(),
                 byes: IdMap::new(),
                 seed,
@@ -340,6 +352,16 @@ impl Phase {
     /// The rankings, matches and seed of this phase, i.e. everything but its plugins.
     pub fn data(&self) -> &PhaseData {
         &self.data
+    }
+
+    /// The standings of this phase, sorted on every call: a caller reading them more than once
+    /// keeps them.
+    pub fn standings(&self) -> Standings<'_> {
+        PhaseView {
+            data: &self.data,
+            ranker: &self.ranker,
+        }
+        .standings()
     }
 
     /// The calculators of this phase's metrics, in the order they run in.
@@ -379,16 +401,13 @@ impl Phase {
     }
 
     pub(crate) fn start(&mut self, ranking_entrants: Vec<Vec1<EntrantId>>) {
-        let (ordered_ranking_ids, rankings) = ranking_entrants
+        self.data.rankings = ranking_entrants
             .into_iter()
             .enumerate()
             .map(|(index, entrants)| {
-                let ranking = Ranking::new(entrants, NonZeroU32::new(index as u32 + 1).unwrap());
-                (ranking.id(), ranking)
+                Ranking::new(entrants, NonZeroU32::new(index as u32 + 1).unwrap())
             })
-            .unzip();
-        self.data.rankings = rankings;
-        self.data.ranking_ids_ordered_by_unique_rank = ordered_ranking_ids;
+            .collect();
         self.initialize_metrics();
         self.create_new_matches();
     }
@@ -416,10 +435,14 @@ impl Phase {
         }
     }
 
-    /// Adds the matches and byes the phase format schedules next, and updates the metrics and the
-    /// ranks for every new bye.
+    /// Adds the matches and byes the phase format schedules next, and updates the metrics for every
+    /// new bye its ranking reaches.
     pub(crate) fn create_new_matches(&mut self) {
-        let Schedule { matches, byes } = self.phase_format.create_new_matches(&self.data);
+        let view = PhaseView {
+            data: &self.data,
+            ranker: &self.ranker,
+        };
+        let Schedule { matches, byes } = self.phase_format.create_new_matches(&view);
         // check requirements of create_new_matches
         debug_assert!(
             matches
@@ -482,17 +505,14 @@ impl Phase {
         );
 
         // The format is not asked again afterwards, even though a bye reached may have changed the
-        // ranks: only a reported result makes it schedule.
-        if self.reach_byes(new_bye_ids) {
-            self.update_ranks();
-        }
+        // standings: only a reported result makes it schedule.
+        self.reach_byes(new_bye_ids);
     }
 
     /// Marks those of the byes `candidates` (in this order) whose ranking has no open match in an
     /// earlier round as reached, and updates the metrics for each, as if they were matches reported
-    /// as soon as they can be played. Returns whether any was reached.
-    fn reach_byes(&mut self, candidates: impl IntoIterator<Item = ByeId>) -> bool {
-        let mut reached_any = false;
+    /// as soon as they can be played.
+    fn reach_byes(&mut self, candidates: impl IntoIterator<Item = ByeId>) {
         for bye_id in candidates {
             let bye = &self.data.byes[&bye_id];
             if bye.reached {
@@ -511,9 +531,7 @@ impl Phase {
             self.update_metrics(|metrics_calculator, data, old_metrics| {
                 metrics_calculator.update_after_bye(data, &data.byes[&bye_id], old_metrics)
             });
-            reached_any = true;
         }
-        reached_any
     }
 
     /// Reports `decision` alone for the match `match_id`, see [`Phase::report_match`].
@@ -558,7 +576,6 @@ impl Phase {
             .map(Bye::id)
             .collect();
         self.reach_byes(candidates);
-        self.update_ranks();
         self.create_new_matches();
     }
 
@@ -596,54 +613,161 @@ impl Phase {
             }
         }
     }
+}
 
-    fn update_ranks(&mut self) {
-        let new_ranks = self.ranker.update_ranks(&self.data);
-        for (rank_id, new_rank) in new_ranks {
-            self.data.rankings.get_mut(&rank_id).unwrap().rank = new_rank;
+// A phase is saved as it was when its rankings stored their ranks and its data the order of its
+// standings: they are computed when it is written, and read but dropped when it is read, since a
+// format that is not self-describing cannot skip them.
+impl Serialize for Phase {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        #[serde(rename = "Phase")]
+        struct Saved<'a> {
+            id: PhaseId,
+            phase_format: &'a dyn PhaseFormat,
+            ranker: &'a HierarchicalRanker,
+            metrics_calculators: &'a [Box<dyn MetricsCalculator>],
+            match_format: &'a dyn MatchFormat,
+            data: SavedData<'a>,
         }
-        self.update_ranking_ordering_and_unique_ranks();
-    }
+        #[derive(Serialize)]
+        #[serde(rename = "PhaseData")]
+        struct SavedData<'a> {
+            rankings: Vec<SavedRanking<'a>>,
+            ranking_ids_ordered_by_unique_rank: Vec<RankingId>,
+            matches: &'a IdMap<Match>,
+            byes: &'a IdMap<Bye>,
+            seed: Seed,
+        }
+        #[derive(Serialize)]
+        #[serde(rename = "Ranking")]
+        struct SavedRanking<'a> {
+            id: RankingId,
+            entrants: &'a Vec1<EntrantId>,
+            initial_unique_rank: NonZeroU32,
+            unique_rank: NonZeroU32,
+            rank: NonZeroU32,
+            played_matches: &'a [MatchId],
+            metrics: &'a TypeMap,
+        }
 
-    fn update_ranking_ordering_and_unique_ranks(&mut self) {
-        // `sort_by_key` would look every ranking up twice per comparison, whereas the cached
-        // variant looks every ranking up exactly once
-        self.data
-            .ranking_ids_ordered_by_unique_rank
-            .sort_by_cached_key(|id| {
-                let ranking = &self.data.rankings[id];
-                (ranking.rank(), ranking.initial_unique_rank())
-            });
-        // set unique ranks
-        for (index, ranking_id) in self
-            .data
-            .ranking_ids_ordered_by_unique_rank
+        let standings = self.standings();
+        let standing_of: Map<RankingId, &Standing> = standings
             .iter()
-            .enumerate()
-        {
-            self.data.rankings.get_mut(ranking_id).unwrap().unique_rank =
-                NonZeroU32::new(index as u32 + 1).unwrap()
+            .map(|standing| (standing.ranking().id(), standing))
+            .collect();
+        let rankings = self
+            .data
+            .rankings
+            .values()
+            .map(|ranking| {
+                let standing = standing_of[&ranking.id];
+                SavedRanking {
+                    id: ranking.id,
+                    entrants: &ranking.entrants,
+                    initial_unique_rank: ranking.initial_unique_rank,
+                    unique_rank: standing.unique_rank(),
+                    rank: standing.rank(),
+                    played_matches: &ranking.played_matches,
+                    metrics: &ranking.metrics,
+                }
+            })
+            .collect();
+        Saved {
+            id: self.id,
+            phase_format: &*self.phase_format,
+            ranker: &self.ranker,
+            metrics_calculators: &self.metrics_calculators,
+            match_format: &*self.match_format,
+            data: SavedData {
+                rankings,
+                ranking_ids_ordered_by_unique_rank: standings
+                    .iter()
+                    .map(|standing| standing.ranking().id())
+                    .collect(),
+                matches: &self.data.matches,
+                byes: &self.data.byes,
+                seed: self.data.seed,
+            },
         }
-        // check requirements of [`HierarchicalRanker::update_ranks`]
-        debug_assert!(
-            self.data.rankings[&self.data.ranking_ids_ordered_by_unique_rank[0]].rank.get() == 1 &&
-            self.data.ranking_ids_ordered_by_unique_rank
-                .iter()
-                .map(|id| &self.data.rankings[id])
-                .enumerate()
-                .array_windows()
-                .all(|[(_, r1), (i2, r2)]| r1.rank == r2.rank || r2.rank.get() == i2 as u32 + 1)
-        );
+        .serialize(serializer)
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for Phase {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(rename = "Phase")]
+        struct Saved {
+            id: PhaseId,
+            phase_format: Box<dyn PhaseFormat>,
+            ranker: HierarchicalRanker,
+            metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
+            // phases saved by 0.3.0 and earlier knew only who won
+            #[serde(default = "match_format::default")]
+            match_format: Box<dyn MatchFormat>,
+            data: SavedData,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename = "PhaseData")]
+        struct SavedData {
+            rankings: Vec<SavedRanking>,
+            #[serde(rename = "ranking_ids_ordered_by_unique_rank")]
+            _ranking_ids_ordered_by_unique_rank: Vec<RankingId>,
+            matches: IdMap<Match>,
+            byes: IdMap<Bye>,
+            seed: Seed,
+        }
+        #[derive(Deserialize)]
+        #[serde(rename = "Ranking")]
+        struct SavedRanking {
+            id: RankingId,
+            entrants: Vec1<EntrantId>,
+            initial_unique_rank: NonZeroU32,
+            #[serde(rename = "unique_rank")]
+            _unique_rank: NonZeroU32,
+            #[serde(rename = "rank")]
+            _rank: NonZeroU32,
+            played_matches: Vec<MatchId>,
+            metrics: TypeMap,
+        }
+
+        let saved = Saved::deserialize(deserializer)?;
+        let rankings = saved
+            .data
+            .rankings
+            .into_iter()
+            .map(|ranking| Ranking {
+                id: ranking.id,
+                entrants: ranking.entrants,
+                initial_unique_rank: ranking.initial_unique_rank,
+                played_matches: ranking.played_matches,
+                metrics: ranking.metrics,
+            })
+            .collect();
+        Ok(Phase {
+            id: saved.id,
+            phase_format: saved.phase_format,
+            ranker: saved.ranker,
+            metrics_calculators: saved.metrics_calculators,
+            match_format: saved.match_format,
+            data: PhaseData {
+                rankings,
+                matches: saved.data.matches,
+                byes: saved.data.byes,
+                seed: saved.data.seed,
+            },
+        })
+    }
+}
+
+/// The entrants ranked together in a phase, with the matches they played and their metrics. Where
+/// they stand is in the [`Standings`] of the phase.
+#[derive(Debug)]
 pub struct Ranking {
     id: RankingId,
     entrants: Vec1<EntrantId>,
     initial_unique_rank: NonZeroU32,
-    unique_rank: NonZeroU32,
-    rank: NonZeroU32,
     played_matches: Vec<MatchId>,
     metrics: TypeMap,
 }
@@ -675,7 +799,7 @@ fn derive_id(
 }
 
 impl Ranking {
-    pub fn new(entrants: Vec1<EntrantId>, unique_rank: NonZeroU32) -> Self {
+    pub fn new(entrants: Vec1<EntrantId>, initial_unique_rank: NonZeroU32) -> Self {
         let id = RankingId(derive_id(
             &NAMESPACE_RANKING,
             entrants.iter().map(|e| e.0),
@@ -684,9 +808,7 @@ impl Ranking {
         Self {
             id,
             entrants,
-            initial_unique_rank: unique_rank,
-            unique_rank,
-            rank: NonZeroU32::new(1).unwrap(),
+            initial_unique_rank,
             played_matches: Vec::new(),
             metrics: TypeMap::new(),
         }
@@ -700,16 +822,8 @@ impl Ranking {
         &self.entrants
     }
 
-    /// The unique rank of the ranking, which is guaranteed to be [`Ranking::rank`] with tie
-    /// breaking equal values by their [`Ranking::initial_unique_rank`].
-    pub fn unique_rank(&self) -> NonZeroU32 {
-        self.unique_rank
-    }
-
-    pub fn rank(&self) -> NonZeroU32 {
-        self.rank
-    }
-
+    /// The place of the ranking when the phase started, unique within the phase. It breaks the
+    /// ties of the [`Standings`].
     pub fn initial_unique_rank(&self) -> NonZeroU32 {
         self.initial_unique_rank
     }
@@ -1224,15 +1338,13 @@ impl PhaseBuilder {
             .build()
             .expect("the plugins of the phase can be ordered");
         let mut phase = Phase::new(PhaseId::new(Uuid::nil()), plugins, Seed::default());
-        let rankings: Vec<_> = (0..self.players)
+        phase.data.rankings = (0..self.players)
             .map(|index| {
                 let entrant_id = EntrantId::new(Uuid::from_u128(index.into()));
-                let unique_rank = NonZeroU32::new(index + 1).unwrap();
-                Ranking::new(vec1![entrant_id], unique_rank)
+                let initial_unique_rank = NonZeroU32::new(index + 1).unwrap();
+                Ranking::new(vec1![entrant_id], initial_unique_rank)
             })
             .collect();
-        phase.data.ranking_ids_ordered_by_unique_rank = rankings.iter().map(Ranking::id).collect();
-        phase.data.rankings = rankings.into_iter().collect();
         phase.initialize_metrics();
         phase
     }
@@ -1251,7 +1363,8 @@ mod tests {
     fn played(phase: &Phase, ranking_index: usize) -> &[MatchId] {
         phase
             .data()
-            .standings()
+            .rankings()
+            .values()
             .nth(ranking_index)
             .unwrap()
             .played_matches()

@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, compatibility::Declaration, config::PluginConfig, r
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::PhaseData,
+    entities::competition::{PhaseData, PhaseView},
     plugins::{
         facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
@@ -184,7 +184,8 @@ impl PhaseFormat for SingleElimination {
         }
     }
 
-    fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+        let phase_data = phase.data();
         let third_place_match = self.third_place_match;
         self.bracket
             .get_or_insert_with(|| bracket(phase_data, third_place_match))

@@ -5,7 +5,8 @@ use rand::{RngExt, rng};
 use tournament_engine::{
     AddEntrant, AddPhase, Competition, CompetitionStateMachine, CompetitionStateMachineExt,
     Entrant, EntrantId, MatchId, MatchResult, NewMatch, PhaseId, PhasePluginsBuilder, Ranking,
-    RemoveEntrant, ReportMatchResult, Score, Seed, SetCompetitionSeed, StartCompetition,
+    RemoveEntrant, ReportMatchResult, Score, Seed, SetCompetitionSeed, Standing, Standings,
+    StartCompetition,
     plugins::{
         metrics_calculator::{
             Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
@@ -73,6 +74,14 @@ fn assert_metrics(
     );
 }
 
+/// Where `ranking` stands in `standings`.
+fn standing_of<'a>(standings: &Standings<'a>, ranking: &Ranking) -> Standing<'a> {
+    *standings
+        .iter()
+        .find(|standing| standing.ranking().id() == ranking.id())
+        .expect("every ranking of the phase is in its standings")
+}
+
 #[test]
 fn full_tournament() {
     let entrant_a = entrant();
@@ -123,13 +132,17 @@ fn full_tournament() {
     assert!(sm.current().is_started());
     let phase = &sm.current().phases().values().next().unwrap();
     assert_eq!(phase.id(), phase_id);
+    let standings = phase.standings();
     let phase = phase.data();
     assert_eq!(phase.rankings().len(), 4);
     assert!(phase.rankings().values().all(|t| t.entrants().len() == 1));
-    let ranking_id_by_initial_rank = phase.standings().map(Ranking::id).collect_vec();
-    let entrants_by_initial_rank = phase
-        .standings()
-        .map(|ranking| ranking.entrants()[0])
+    let ranking_id_by_initial_rank = standings
+        .iter()
+        .map(|standing| standing.ranking().id())
+        .collect_vec();
+    let entrants_by_initial_rank = standings
+        .iter()
+        .map(|standing| standing.ranking().entrants()[0])
         .collect_vec();
 
     assert_eq!(
@@ -143,14 +156,14 @@ fn full_tournament() {
         .iter()
         .counts()
     );
-    assert!(phase.standings().enumerate().all(|(index, r)| {
-        r.unique_rank() == NonZeroU32::new(index as u32 + 1).unwrap()
-            && r.initial_unique_rank() == r.unique_rank()
-            && r.rank() == NonZeroU32::new(1).unwrap()
+    assert!(standings.iter().enumerate().all(|(index, s)| {
+        s.unique_rank() == NonZeroU32::new(index as u32 + 1).unwrap()
+            && s.ranking().initial_unique_rank() == s.unique_rank()
+            && s.rank() == NonZeroU32::new(1).unwrap()
     }));
     // every metric starts out at its default value
-    for ranking in phase.standings() {
-        assert_metrics(ranking, None, (0, 0, 0), 0, &[], 0, 0);
+    for standing in standings.iter() {
+        assert_metrics(standing.ranking(), None, (0, 0, 0), 0, &[], 0, 0);
     }
     let matches = phase.matches();
     assert_eq!(matches.len(), 2);
@@ -196,7 +209,9 @@ fn full_tournament() {
     .unwrap();
 
     // asserts after the first round of single elimination
-    let phase = sm.current().phases().values().next().unwrap().data();
+    let phase = sm.current().phases().values().next().unwrap();
+    let standings = phase.standings();
+    let phase = phase.data();
     let matches = phase.matches();
     let match_0_vs_3 = &matches[&match_0_vs_3_id];
     let match_1_vs_2 = &matches[&match_1_vs_2_id];
@@ -208,18 +223,21 @@ fn full_tournament() {
     let ranking_1 = &rankings[&ranking_id_by_initial_rank[1]];
     let ranking_2 = &rankings[&ranking_id_by_initial_rank[2]];
     let ranking_3 = &rankings[&ranking_id_by_initial_rank[3]];
+    let [standing_0, standing_1, standing_2, standing_3] =
+        [ranking_0, ranking_1, ranking_2, ranking_3]
+            .map(|ranking| standing_of(&standings, ranking));
 
-    assert_eq!(ranking_0.rank(), NonZeroU32::new(3).unwrap());
-    assert_eq!(ranking_0.unique_rank(), NonZeroU32::new(3).unwrap());
+    assert_eq!(standing_0.rank(), NonZeroU32::new(3).unwrap());
+    assert_eq!(standing_0.unique_rank(), NonZeroU32::new(3).unwrap());
     assert_eq!(ranking_0.initial_unique_rank(), NonZeroU32::new(1).unwrap());
-    assert_eq!(ranking_1.rank(), NonZeroU32::new(1).unwrap());
-    assert_eq!(ranking_1.unique_rank(), NonZeroU32::new(1).unwrap());
+    assert_eq!(standing_1.rank(), NonZeroU32::new(1).unwrap());
+    assert_eq!(standing_1.unique_rank(), NonZeroU32::new(1).unwrap());
     assert_eq!(ranking_1.initial_unique_rank(), NonZeroU32::new(2).unwrap());
-    assert_eq!(ranking_2.rank(), NonZeroU32::new(3).unwrap());
-    assert_eq!(ranking_2.unique_rank(), NonZeroU32::new(4).unwrap());
+    assert_eq!(standing_2.rank(), NonZeroU32::new(3).unwrap());
+    assert_eq!(standing_2.unique_rank(), NonZeroU32::new(4).unwrap());
     assert_eq!(ranking_2.initial_unique_rank(), NonZeroU32::new(3).unwrap());
-    assert_eq!(ranking_3.rank(), NonZeroU32::new(1).unwrap());
-    assert_eq!(ranking_3.unique_rank(), NonZeroU32::new(2).unwrap());
+    assert_eq!(standing_3.rank(), NonZeroU32::new(1).unwrap());
+    assert_eq!(standing_3.unique_rank(), NonZeroU32::new(2).unwrap());
     assert_eq!(ranking_3.initial_unique_rank(), NonZeroU32::new(4).unwrap());
     // assert metrics: every ranking played exactly one match, so the buchholz of the two losers
     // is the three points of the winner that knocked them out, whereas the two winners beat
@@ -254,7 +272,9 @@ fn full_tournament() {
     .unwrap();
 
     // final asserts
-    let phase = sm.current().phases().values().next().unwrap().data();
+    let phase = sm.current().phases().values().next().unwrap();
+    let standings = phase.standings();
+    let phase = phase.data();
     let matches = phase.matches();
     let match_0_vs_3 = &matches[&match_0_vs_3_id];
     let match_1_vs_2 = &matches[&match_1_vs_2_id];
@@ -269,18 +289,21 @@ fn full_tournament() {
     let ranking_1 = &rankings[&ranking_id_by_initial_rank[1]];
     let ranking_2 = &rankings[&ranking_id_by_initial_rank[2]];
     let ranking_3 = &rankings[&ranking_id_by_initial_rank[3]];
+    let [standing_0, standing_1, standing_2, standing_3] =
+        [ranking_0, ranking_1, ranking_2, ranking_3]
+            .map(|ranking| standing_of(&standings, ranking));
 
-    assert_eq!(ranking_0.rank(), NonZeroU32::new(3).unwrap());
-    assert_eq!(ranking_0.unique_rank(), NonZeroU32::new(3).unwrap());
+    assert_eq!(standing_0.rank(), NonZeroU32::new(3).unwrap());
+    assert_eq!(standing_0.unique_rank(), NonZeroU32::new(3).unwrap());
     assert_eq!(ranking_0.initial_unique_rank(), NonZeroU32::new(1).unwrap());
-    assert_eq!(ranking_1.rank(), NonZeroU32::new(2).unwrap());
-    assert_eq!(ranking_1.unique_rank(), NonZeroU32::new(2).unwrap());
+    assert_eq!(standing_1.rank(), NonZeroU32::new(2).unwrap());
+    assert_eq!(standing_1.unique_rank(), NonZeroU32::new(2).unwrap());
     assert_eq!(ranking_1.initial_unique_rank(), NonZeroU32::new(2).unwrap());
-    assert_eq!(ranking_2.rank(), NonZeroU32::new(3).unwrap());
-    assert_eq!(ranking_2.unique_rank(), NonZeroU32::new(4).unwrap());
+    assert_eq!(standing_2.rank(), NonZeroU32::new(3).unwrap());
+    assert_eq!(standing_2.unique_rank(), NonZeroU32::new(4).unwrap());
     assert_eq!(ranking_2.initial_unique_rank(), NonZeroU32::new(3).unwrap());
-    assert_eq!(ranking_3.rank(), NonZeroU32::new(1).unwrap());
-    assert_eq!(ranking_3.unique_rank(), NonZeroU32::new(1).unwrap());
+    assert_eq!(standing_3.rank(), NonZeroU32::new(1).unwrap());
+    assert_eq!(standing_3.unique_rank(), NonZeroU32::new(1).unwrap());
     assert_eq!(ranking_3.initial_unique_rank(), NonZeroU32::new(4).unwrap());
     // assert metrics
     // the only opponent of `0` is the winner `3` (6 points), whose own buchholz is 3

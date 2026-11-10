@@ -10,9 +10,11 @@ pub use entities::competition::PhaseBuilder;
 pub use entities::{
     competition::{
         Annotated, Bye, ByeId, Competition, Entrant, EntrantId, Match, MatchId, MatchResult,
-        NewMatch, Phase, PhaseData, PhaseId, Ranking, RankingId, ResultOfTeam, Seed, Team,
+        NewMatch, Phase, PhaseData, PhaseId, PhaseView, Ranking, RankingId, ResultOfTeam, Seed,
+        Team,
     },
     details::{Decision, EnteredValue, FieldKey, Part, ResultReason, Sides, Values},
+    standings::{Standing, Standings},
 };
 pub use plugins::PhasePlugins;
 #[cfg(feature = "test-util")]

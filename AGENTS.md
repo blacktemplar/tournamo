@@ -3,6 +3,8 @@
 This file provides guidance to AI agents when working with code in this repository.
 
 > **Commit your work, one logical unit per commit.** You may commit without being asked, and should: keep independent changes in separate commits, one feature (or fix) per commit; a big feature may be split into several commits. Every commit must be valid on its own: the pre-commit hooks and the tests pass on it (see *Commands*).
+>
+> **Never commit to `main`: changes reach it only through pull requests.** If the checkout is on `main`, branch off the latest `main` before your first change and commit there. The user pushes the branch and opens the pull request, unless they ask you to (the dev container cannot push).
 
 ## Commands
 

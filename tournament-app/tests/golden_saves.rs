@@ -19,8 +19,10 @@ use plugin_factory::{
     PluginType as _,
     config::{Path as ConfigPath, PluginConfig},
 };
+use serde::de::IgnoredAny;
 use serde_json::Value;
 use tournament_app::{
+    file::{self, File},
     result_form::ResultForm,
     session::Session,
     storage::{MemoryStorage, Storage as _},
@@ -90,7 +92,7 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
 
         let replayed = serde_json::to_value(session.competition()).unwrap();
         assert!(
-            replayed == as_read(competition),
+            replayed == as_read(file, competition),
             "{save} replays into another competition than it was saved as"
         );
         let saved: Value = serde_json::from_str(competition).unwrap();
@@ -106,10 +108,15 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
     }
 }
 
-/// A saved competition as this version reads it and would save it: where the serialized form of a
-/// competition changed, an older one is read by a converter.
-fn as_read(competition: &str) -> Value {
-    let competition: Competition = serde_json::from_str(competition).unwrap();
+/// The competition saved with `file` as this version reads it and would save it: one of an older
+/// format is converted first, as the competition in `file` would be.
+fn as_read(file: &str, competition: &str) -> Value {
+    let format = serde_json::from_str::<File<IgnoredAny, IgnoredAny>>(file)
+        .unwrap()
+        .format;
+    let mut competition = serde_json::from_str(competition).unwrap();
+    file::upgrade_competition(&mut competition, format);
+    let competition: Competition = serde_json::from_value(competition).unwrap();
     serde_json::to_value(competition).unwrap()
 }
 
@@ -145,7 +152,7 @@ fn every_golden_save_is_stored_with_the_competition_it_was_saved_as() {
         let stored = now(storage.read(session.key())).unwrap().unwrap();
         let stored: Value = serde_json::from_str(&stored.record).unwrap();
         assert!(
-            stored["competition"] == as_read(competition),
+            stored["competition"] == as_read(file, competition),
             "{save} is stored with another competition than it was saved as"
         );
     }

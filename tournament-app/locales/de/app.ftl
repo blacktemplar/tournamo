@@ -12,7 +12,10 @@ error-invalid-phase = so kann die Phase nicht gespielt werden; das Formular zeig
 error-phase-already-added = das Turnier hat schon eine Phase, und mehr als eine wird nicht unterstützt
 error-phase-added-after-start = das Turnier hat begonnen, daher kann keine Phase mehr hinzugefügt werden
 error-no-phase = das Turnier hat noch keine Phase
-error-result-does-not-fit = so geändert spielt die Phase Spiel { $number } nicht, das schon ein Ergebnis hat; um sie so zu ändern, muss zuerst Spiel { $number } wieder geöffnet werden
+error-result-does-not-fit = { $count ->
+        [one] so geändert spielt die Phase Spiel { $numbers } nicht, das schon ein Ergebnis hat; um sie so zu ändern, muss zuerst Spiel { $numbers } wieder geöffnet werden
+       *[other] so geändert spielt die Phase die Spiele { $numbers } nicht, die schon Ergebnisse haben; um sie so zu ändern, müssen zuerst die Spiele { $numbers } wieder geöffnet werden
+    }
 error-phase-change-does-not-fit = so kann die Phase nicht geändert werden, da eine spätere Änderung nicht mehr dazu passt: { $reason }
 error-started-already = das Turnier hat schon begonnen
 error-too-few-entrants = ein Turnier braucht mindestens zwei Teilnehmer
@@ -36,7 +39,10 @@ error-scores-undecided = die eingegebenen Spielstände sagen nicht, wer Spiel { 
 error-result-against-scores = das für Spiel { $number } eingegebene Ergebnis ist nicht das, das seine Spielstände sagen
 error-match-not-reported = das Spiel hat kein Ergebnis, das zurückgenommen werden könnte
 error-result-depended-on = ein späteres Ergebnis hängt von diesem ab; nimm zuerst jenes zurück
-error-result-depended-on-by = das Ergebnis von Spiel { $number } hängt von diesem ab; zuerst muss Spiel { $number } wieder geöffnet werden
+error-result-depended-on-by = { $count ->
+        [one] das Ergebnis von Spiel { $numbers } hängt von diesem ab; zuerst muss Spiel { $numbers } wieder geöffnet werden
+       *[other] die Ergebnisse der Spiele { $numbers } hängen von diesem ab; zuerst müssen die Spiele { $numbers } wieder geöffnet werden
+    }
 error-nothing-to-undo = es gibt nichts rückgängig zu machen
 error-nothing-to-redo = es gibt nichts wiederherzustellen
 error-competition-not-found = dieses Turnier gibt es nicht

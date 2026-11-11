@@ -16,6 +16,9 @@ a file whose `"format"` changes is migrated, not refused.
   its log; a file of an older format is converted when read, by
   `tournament_app::file::File::read` (`file::upgrade_competition` for the
   competition alone).
+- Reopening a match that later results depend on, or changing the phase in a
+  way that results already reported do not fit, says which matches are in the
+  way: all of them at once, rather than one at a time.
 
 ## [0.4.0] - 2026-11-09
 

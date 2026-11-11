@@ -30,8 +30,9 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::{
-        AddEntrantError, AddPhaseError, ImportError, LoadError, NoPhase, NothingToUndo,
-        PhaseDraftError, ReportEnteredError, ReportError, StartError, UndoReportError,
+        AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
+        NothingToUndo, PhaseDraftError, ReportEnteredError, ReportError, StartError,
+        UndoReportError,
     },
     result_form::PartView,
     session::Session,
@@ -131,6 +132,20 @@ fn an_error_is_said_in_the_language() {
     );
 }
 
+/// A message naming several matches says so in the plural.
+#[test]
+fn several_matches_are_named_in_the_plural() {
+    let translator = Translator::new(Language::German, &[]);
+
+    assert_eq!(
+        translator
+            .message(&UndoReportError::DependedOnBy(vec![3, 4]))
+            .replace(['\u{2068}', '\u{2069}'], ""),
+        "die Ergebnisse der Spiele 3, 4 hängen von diesem ab; zuerst müssen die Spiele 3, 4 wieder \
+         geöffnet werden"
+    );
+}
+
 #[test]
 fn an_error_says_in_english_what_its_display_says() {
     /// What `error` says through its message in English, without the marks isolating its values,
@@ -172,8 +187,11 @@ fn an_error_says_in_english_what_its_display_says() {
         both(ImportError::Damaged(
             serde_json::from_str::<u32>("x").unwrap_err(),
         )),
+        both(EditPhaseError::ResultDoesNotFit(vec![1])),
+        both(EditPhaseError::ResultDoesNotFit(vec![1, 2])),
         both(UndoReportError::DependedOn),
-        both(UndoReportError::DependedOnBy(3)),
+        both(UndoReportError::DependedOnBy(vec![3])),
+        both(UndoReportError::DependedOnBy(vec![3, 4, 10])),
         both(NothingToUndo),
     ] {
         assert_eq!(message, display);

@@ -6,7 +6,7 @@ use std::{any::Any, fmt::Debug};
 use thiserror::Error;
 use undoable_state_machine::{
     LogEntry, LogEntryKind, SessionHistory, StateMachine, StateMachineError, Transition,
-    TransitionId,
+    TransitionError, TransitionId,
 };
 
 use crate::{
@@ -128,9 +128,43 @@ pub enum ReconfigurePhaseError {
     Rejected(#[from] StateMachineError),
 }
 
+/// A change to the log that is not made, for [`CompetitionStateMachineExt::conflicts_of`].
+#[derive(Debug, Clone, Copy)]
+pub enum Change<'a> {
+    /// Undoing the [`LogEntryKind::Apply`] with this id.
+    Undo(TransitionId),
+    /// Replacing the transition of the [`LogEntryKind::Apply`] `target` by `with`.
+    Replace {
+        target: TransitionId,
+        with: &'a dyn CompetitionTransition,
+    },
+}
+
+/// A reported result that would no longer apply after a [`Change`]: the one the log entry `entry`
+/// reported for the match `match_id` of the phase `phase_id`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Conflict {
+    pub entry: TransitionId,
+    pub phase_id: PhaseId,
+    pub match_id: MatchId,
+}
+
+/// Why the conflicts of a [`Change`] cannot be listed.
+#[derive(Debug, Error)]
+pub enum ConflictsError {
+    /// The change targets no [`LogEntryKind::Apply`] in effect.
+    #[error("the entry to change is not in effect")]
+    NotInEffect,
+    /// The transition the [`LogEntryKind::Apply`] with this id runs, or the one a
+    /// [`Change::Replace`] runs in its place, would not apply, and reports no result.
+    #[error("a change that reports no result would no longer apply")]
+    Other(TransitionId, #[source] TransitionError),
+}
+
 /// Applying a transition without building its log entry, undoing a change by what it did, and
 /// reconfiguring a phase by its id rather than by the [`TransitionId`] of the log entry that added
-/// it, which is all [`CompetitionStateMachine`] itself takes.
+/// it, which is all [`CompetitionStateMachine`] itself takes; finding those entries, and what a
+/// change of them would conflict with.
 ///
 /// What a session appends as one of its actions goes through its [`SessionHistory`], so that
 /// [`SessionHistory::undo_last`] and [`SessionHistory::redo_last`] undo and redo it. A
@@ -298,6 +332,87 @@ pub trait CompetitionStateMachineExt {
         phase_id: PhaseId,
         plugins: PhasePlugins,
     ) -> Result<Option<TransitionId>, ReconfigurePhaseError>;
+
+    /// The id of the log entry in effect that reported the result of the match `match_id` of the
+    /// phase `phase_id`: the latest [`ReportMatchResult`] in effect for it, which
+    /// [`Self::undo_match_result`] undoes. `None` if there is none.
+    fn reported_by(&self, phase_id: PhaseId, match_id: MatchId) -> Option<TransitionId>;
+
+    /// The id of the [`AddPhase`] entry in effect that added the phase `phase_id`, which
+    /// [`Self::reconfigure_phase`] replaces. `None` if there is none.
+    fn added_by(&self, phase_id: PhaseId) -> Option<TransitionId>;
+
+    /// The reported results that would no longer apply if `change` were made, in log order: each
+    /// result whose match the changed competition does not schedule, has finished already or does
+    /// not accept the result for, and every result that depends on one of those. Empty if the
+    /// change would be accepted. The log and the competition are not changed.
+    ///
+    /// Only a [`ReportMatchResult`] is taken for a reported result. Listing them replays the log,
+    /// as making the change does, so it is meant for after a change was refused, e.g. by
+    /// [`Self::undo_match_result`], to name every result in its way.
+    ///
+    /// # Errors
+    /// Returns [`ConflictsError::NotInEffect`] if `change` targets no [`LogEntryKind::Apply`] in
+    /// effect, and [`ConflictsError::Other`] if a transition reporting no result would not apply,
+    /// such as the one `change` replaces with.
+    ///
+    /// # Examples
+    /// ```
+    /// # use tournament_engine::{
+    /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
+    /// #     EntrantId, MatchId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult,
+    /// #     Seed, SetCompetitionSeed, StartCompetition,
+    /// #     plugins::phase_format::SingleElimination,
+    /// #     transitions::{Change, Conflict},
+    /// #     uuid::Uuid,
+    /// # };
+    /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
+    /// # let mut machine = CompetitionStateMachine::default();
+    /// # machine.apply_transition(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")))?;
+    /// # for entrant in 0..4 {
+    /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
+    /// #     machine.apply_transition(AddEntrant::new(entrant))?;
+    /// # }
+    /// # let plugins = PhasePluginsBuilder::new()
+    /// #     .format(SingleElimination::new())
+    /// #     .build()?;
+    /// # machine.apply_transition(AddPhase::new(phase_id, plugins))?;
+    /// # machine.apply_transition(StartCompetition)?;
+    /// # let matches = |machine: &CompetitionStateMachine| -> Vec<MatchId> {
+    /// #     let phase = &machine.current().phases()[&phase_id];
+    /// #     phase.data().matches().keys().copied().collect()
+    /// # };
+    /// // a knockout between four entrants: both semifinals reported, then the final
+    /// let semifinals = matches(&machine);
+    /// let first = machine.apply_transition(ReportMatchResult::new(
+    ///     phase_id,
+    ///     semifinals[0],
+    ///     MatchResult::AWins,
+    /// ))?;
+    /// machine.apply_transition(ReportMatchResult::new(
+    ///     phase_id,
+    ///     semifinals[1],
+    ///     MatchResult::AWins,
+    /// ))?;
+    /// let r#final = matches(&machine)[2];
+    /// let final_reported = machine.apply_transition(ReportMatchResult::new(
+    ///     phase_id,
+    ///     r#final,
+    ///     MatchResult::BWins,
+    /// ))?;
+    ///
+    /// // without the first semifinal, the final is not played
+    /// assert_eq!(
+    ///     machine.conflicts_of(Change::Undo(first))?,
+    ///     [Conflict {
+    ///         entry: final_reported,
+    ///         phase_id,
+    ///         match_id: r#final
+    ///     }]
+    /// );
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    fn conflicts_of(&self, change: Change<'_>) -> Result<Vec<Conflict>, ConflictsError>;
 }
 
 impl CompetitionStateMachineExt for CompetitionStateMachine {
@@ -330,14 +445,8 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         match_id: MatchId,
     ) -> Result<TransitionId, UndoMatchResultError> {
         let target = self
-            .rev_in_effect()
-            .find(|entry| {
-                applied::<ReportMatchResult>(entry).is_some_and(|report| {
-                    (report.phase_id(), report.match_id()) == (phase_id, match_id)
-                })
-            })
-            .ok_or(UndoMatchResultError::NotReported)?
-            .id();
+            .reported_by(phase_id, match_id)
+            .ok_or(UndoMatchResultError::NotReported)?;
         let id = TransitionId::new();
         history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
         Ok(id)
@@ -349,7 +458,9 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         phase_id: PhaseId,
         plugins: PhasePlugins,
     ) -> Result<Option<TransitionId>, ReconfigurePhaseError> {
-        let target = added_phase(self, phase_id).ok_or(ReconfigurePhaseError::NotAdded)?;
+        let target = self
+            .added_by(phase_id)
+            .ok_or(ReconfigurePhaseError::NotAdded)?;
         if self
             .current()
             .phase(&phase_id)
@@ -365,17 +476,63 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         )?;
         Ok(Some(id))
     }
-}
 
-/// The id of the [`AddPhase`] entry in effect that added the phase `phase_id`.
-///
-/// A replacement of an [`AddPhase`] made by [`CompetitionStateMachineExt::reconfigure_phase`]
-/// adds the same phase, so the entry is found by the id of the phase it adds itself.
-fn added_phase(machine: &CompetitionStateMachine, phase_id: PhaseId) -> Option<TransitionId> {
-    machine
-        .rev_in_effect()
-        .find(|entry| applied::<AddPhase>(entry).is_some_and(|added| added.id() == phase_id))
-        .map(LogEntry::id)
+    fn reported_by(&self, phase_id: PhaseId, match_id: MatchId) -> Option<TransitionId> {
+        self.rev_in_effect()
+            .find(|entry| {
+                applied::<ReportMatchResult>(entry).is_some_and(|report| {
+                    (report.phase_id(), report.match_id()) == (phase_id, match_id)
+                })
+            })
+            .map(LogEntry::id)
+    }
+
+    fn added_by(&self, phase_id: PhaseId) -> Option<TransitionId> {
+        // a replacement of an `AddPhase` made by `reconfigure_phase` adds the same phase, so the
+        // entry is found by the id of the phase it adds itself
+        self.rev_in_effect()
+            .find(|entry| applied::<AddPhase>(entry).is_some_and(|added| added.id() == phase_id))
+            .map(LogEntry::id)
+    }
+
+    fn conflicts_of(&self, change: Change<'_>) -> Result<Vec<Conflict>, ConflictsError> {
+        let (Change::Undo(target) | Change::Replace { target, .. }) = change;
+        if self.effective_transition(target).is_none() {
+            return Err(ConflictsError::NotInEffect);
+        }
+        // as `StateMachine` replays its log, but with `change` made, and skipping each report that
+        // does not apply rather than stopping there: the matches it would have scheduled are
+        // missing then, so the reports depending on it are skipped as well
+        let mut competition = Competition::default();
+        let mut conflicts = Vec::new();
+        for entry in self.log() {
+            // `None` for any entry but an `Apply` in effect; that of its replacement if replaced
+            let Some(transition) = self.effective_transition(entry.id()) else {
+                continue;
+            };
+            let transition: &dyn CompetitionTransition = match change {
+                Change::Undo(_) if entry.id() == target => continue,
+                Change::Replace { with, .. } if entry.id() == target => with,
+                _ => &**transition,
+            };
+            if let Err(error) = transition.check_applicable(&competition) {
+                let transition: &dyn Any = transition;
+                let Some(report) = transition.downcast_ref::<ReportMatchResult>() else {
+                    return Err(ConflictsError::Other(entry.id(), error));
+                };
+                conflicts.push(Conflict {
+                    entry: entry.id(),
+                    phase_id: report.phase_id(),
+                    match_id: report.match_id(),
+                });
+                continue;
+            }
+            transition
+                .apply(&mut competition)
+                .map_err(|error| ConflictsError::Other(entry.id(), error))?;
+        }
+        Ok(conflicts)
+    }
 }
 
 /// The transition `entry` applies, if it applies one of type `T`.
@@ -391,6 +548,8 @@ fn applied<T: CompetitionTransition>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use plugin_factory::config::Config;
     use uuid::Uuid;
     #[cfg(target_arch = "wasm32")]
@@ -398,7 +557,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        Entrant, EntrantId, MatchResult, PhasePluginsBuilder, Seed,
+        Entrant, EntrantId, Match, MatchResult, PhasePluginsBuilder, Seed,
         plugins::{
             metrics_calculator::{WinsDrawsLosses, WinsDrawsLossesCalculator},
             phase_format::{MonsterDyp, SingleElimination},
@@ -421,11 +580,17 @@ mod tests {
     /// A started knockout between four entrants, which schedules two semifinals and, once both of
     /// them are reported, the final.
     fn knockout() -> CompetitionStateMachine {
+        knockout_of(4)
+    }
+
+    /// A started knockout between `entrants` entrants, which schedules a match once the matches
+    /// deciding who plays it are reported.
+    fn knockout_of(entrants: u128) -> CompetitionStateMachine {
         let mut machine = CompetitionStateMachine::default();
         machine
             .apply_transition(SetCompetitionSeed::new(Seed::new(*b"undo-test!!!")))
             .unwrap();
-        for entrant in 0..4 {
+        for entrant in 0..entrants {
             let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
             machine.apply_transition(AddEntrant::new(entrant)).unwrap();
         }
@@ -468,6 +633,27 @@ mod tests {
                 MatchResult::AWins,
             ))
             .expect("the match must be reportable")
+    }
+
+    /// Reports every match until none is open, returning the entry reporting each.
+    fn play_out(machine: &mut CompetitionStateMachine) -> HashMap<MatchId, TransitionId> {
+        let mut reports = HashMap::new();
+        while let Some(open) = matches(machine)
+            .into_iter()
+            .find(|&r#match| result_of(machine, r#match).is_none())
+        {
+            reports.insert(open, report(machine, open));
+        }
+        reports
+    }
+
+    /// The conflict of the result `entry` reported for the match `match_id` of the phase.
+    fn conflict(entry: TransitionId, match_id: MatchId) -> Conflict {
+        Conflict {
+            entry,
+            phase_id: phase_id(),
+            match_id,
+        }
     }
 
     #[test]
@@ -744,5 +930,155 @@ mod tests {
             Err(undoable_state_machine::UndoLastError::Rejected(_))
         ));
         assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
+    }
+
+    /// The final is scheduled once both semifinals are reported, but undoing one of them takes
+    /// back no result of the final, which is not reported yet.
+    #[test]
+    fn undoing_a_result_no_reported_result_depends_on_conflicts_with_nothing() {
+        let mut machine = knockout();
+        let semifinals = matches(&machine);
+        let first = report(&mut machine, semifinals[0]);
+        report(&mut machine, semifinals[1]);
+
+        assert_eq!(machine.conflicts_of(Change::Undo(first)).unwrap(), []);
+        machine
+            .undo_match_result(&mut SessionHistory::new(), phase_id(), semifinals[0])
+            .expect("no reported result depends on the semifinal");
+    }
+
+    #[test]
+    fn undoing_a_semifinal_conflicts_with_the_final_reported() {
+        let mut machine = knockout();
+        let semifinals = matches(&machine);
+        let first = report(&mut machine, semifinals[0]);
+        report(&mut machine, semifinals[1]);
+        let r#final = matches(&machine)[2];
+        let final_reported = report(&mut machine, r#final);
+        let log_len = machine.log().len();
+
+        let conflicts = machine.conflicts_of(Change::Undo(first)).unwrap();
+
+        assert_eq!(conflicts, [conflict(final_reported, r#final)]);
+        assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
+        assert_eq!(result_of(&machine, semifinals[0]), Some(MatchResult::AWins));
+        assert!(matches!(
+            machine.undo_match_result(&mut SessionHistory::new(), phase_id(), semifinals[0]),
+            Err(UndoMatchResultError::Rejected(_))
+        ));
+    }
+
+    /// Without a quarterfinal, the semifinal its winner plays is not scheduled, and so neither is
+    /// the final, which the winner of that semifinal plays; the other semifinal is played anyway.
+    #[test]
+    fn the_conflicts_of_an_undo_are_every_result_depending_on_it_in_turn() {
+        let mut machine = knockout_of(8);
+        let reports = play_out(&mut machine);
+        let quarterfinal = matches(&machine)[0];
+        let data = machine.current().phases()[&phase_id()].data();
+        let winner = data.matches()[&quarterfinal].team_a()[0];
+        let later = |round: u32| {
+            data.matches()
+                .values()
+                .filter(move |r#match| r#match.round().get() == round)
+        };
+        let [semifinal] = later(2)
+            .filter(|r#match| {
+                r#match.team_a().contains(&winner) || r#match.team_b().contains(&winner)
+            })
+            .map(Match::id)
+            .collect::<Vec<_>>()[..]
+        else {
+            panic!("the winner of the quarterfinal plays one semifinal");
+        };
+        let [r#final] = later(3).map(Match::id).collect::<Vec<_>>()[..] else {
+            panic!("a knockout without a match for third place has one final");
+        };
+
+        let conflicts = machine
+            .conflicts_of(Change::Undo(reports[&quarterfinal]))
+            .unwrap();
+
+        assert_eq!(
+            conflicts,
+            [
+                conflict(reports[&semifinal], semifinal),
+                conflict(reports[&r#final], r#final)
+            ]
+        );
+    }
+
+    /// Only the report in effect for a match is listed, not one undone before the match was
+    /// reported again.
+    #[test]
+    fn a_result_reported_again_conflicts_by_the_report_in_effect() {
+        let mut machine = knockout();
+        let semifinals = matches(&machine);
+        let first = report(&mut machine, semifinals[0]);
+        report(&mut machine, semifinals[1]);
+        let r#final = matches(&machine)[2];
+        let reported = report(&mut machine, r#final);
+        undo(&mut machine, reported);
+        let reported_again = report(&mut machine, r#final);
+
+        let conflicts = machine.conflicts_of(Change::Undo(first)).unwrap();
+
+        assert_eq!(conflicts, [conflict(reported_again, r#final)]);
+    }
+
+    /// The teams of a Monster DYP are pairs, so it schedules none of the matches of the knockout
+    /// whose results were reported.
+    #[test]
+    fn a_replaced_phase_conflicts_with_the_results_of_matches_it_does_not_schedule() {
+        let mut machine = knockout();
+        let reports = play_out(&mut machine);
+        let monster_dyp = AddPhase::new(
+            phase_id(),
+            PhasePluginsBuilder::new()
+                .format(MonsterDyp::new(1))
+                .build()
+                .unwrap(),
+        );
+        let target = machine.added_by(phase_id()).unwrap();
+
+        let conflicts = machine
+            .conflicts_of(Change::Replace {
+                target,
+                with: &monster_dyp,
+            })
+            .unwrap();
+
+        let reported: Vec<_> = matches(&machine)
+            .into_iter()
+            .map(|r#match| conflict(reports[&r#match], r#match))
+            .collect();
+        assert_eq!(conflicts, reported);
+    }
+
+    #[test]
+    fn only_a_change_of_an_entry_in_effect_has_conflicts() {
+        let mut machine = knockout();
+        let first = matches(&machine)[0];
+        let reported = report(&mut machine, first);
+        let undone = undo(&mut machine, reported);
+        let unchanged = AddPhase::new(phase_id(), PhasePluginsBuilder::new().build().unwrap());
+
+        for change in [
+            Change::Undo(reported),
+            Change::Undo(undone),
+            Change::Undo(TransitionId::new()),
+            Change::Replace {
+                target: reported,
+                with: &unchanged,
+            },
+        ] {
+            assert!(
+                matches!(
+                    machine.conflicts_of(change),
+                    Err(ConflictsError::NotInEffect)
+                ),
+                "{change:?}"
+            );
+        }
     }
 }

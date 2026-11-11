@@ -93,14 +93,12 @@ pub enum EditPhaseError {
     /// No phase can be built from the draft, see [`AddPhaseError::Invalid`].
     #[error("the phase cannot be played this way; the form shows what to change")]
     Invalid(Vec<Issue>),
-    /// The edited phase does not play the match of this number (see
-    /// [`MatchRow::number`](crate::view::MatchRow::number)) as it was reported, e.g. since its
-    /// format does not schedule it; reopening it allows the edit.
-    #[error(
-        "the phase changed this way does not play match {0}, which has a result; reopen that match \
-         first to change the phase this way"
-    )]
-    ResultDoesNotFit(usize),
+    /// The edited phase does not play the matches of these numbers (see
+    /// [`MatchRow::number`](crate::view::MatchRow::number)), ascending and at least one, as they
+    /// were reported, e.g. since its format does not schedule them; reopening them allows the
+    /// edit.
+    #[error("{}", result_does_not_fit(.0))]
+    ResultDoesNotFit(Vec<usize>),
     /// The edited phase does not fit another change made after the phase was added.
     #[error("the phase cannot be changed this way, since a later change no longer fits it: {0}")]
     DoesNotFit(TransitionError),
@@ -206,11 +204,49 @@ pub enum UndoReportError {
     /// participants of; it has to be undone first.
     #[error("a later result depends on this one; undo that one first")]
     DependedOn,
-    /// The result of the match of this number (see
-    /// [`MatchRow::number`](crate::view::MatchRow::number)) depends on this one, e.g. that of the
-    /// final the undone semifinal decided the participants of; it has to be undone first.
-    #[error("the result of match {0} depends on this one; reopen that match first")]
-    DependedOnBy(usize),
+    /// The results of the matches of these numbers (see
+    /// [`MatchRow::number`](crate::view::MatchRow::number)), ascending and at least one, depend on
+    /// this one, e.g. that of the final the undone semifinal decided the participants of; they
+    /// have to be undone first.
+    #[error("{}", depended_on_by(.0))]
+    DependedOnBy(Vec<usize>),
+}
+
+/// What [`EditPhaseError::ResultDoesNotFit`] says in English of the matches `numbers`.
+fn result_does_not_fit(numbers: &[usize]) -> String {
+    match numbers {
+        [number] => format!(
+            "the phase changed this way does not play match {number}, which has a result; reopen \
+             that match first to change the phase this way"
+        ),
+        numbers => format!(
+            "the phase changed this way does not play matches {}, which have results; reopen \
+             those matches first to change the phase this way",
+            listed(numbers)
+        ),
+    }
+}
+
+/// What [`UndoReportError::DependedOnBy`] says in English of the matches `numbers`.
+fn depended_on_by(numbers: &[usize]) -> String {
+    match numbers {
+        [number] => {
+            format!("the result of match {number} depends on this one; reopen that match first")
+        }
+        numbers => format!(
+            "the results of matches {} depend on this one; reopen those matches first",
+            listed(numbers)
+        ),
+    }
+}
+
+/// The numbers of matches as a message lists them: `5, 7, 9`.
+fn listed(numbers: &[usize]) -> String {
+    numbers
+        .iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// The session has done nothing it has not undone.
@@ -345,9 +381,9 @@ impl Message for EditPhaseError {
         match self {
             Self::NoPhase(no_phase) => no_phase.text(),
             Self::Invalid(_) => Text::new("error-invalid-phase"),
-            Self::ResultDoesNotFit(number) => {
-                Text::new("error-result-does-not-fit").with("number", *number)
-            }
+            Self::ResultDoesNotFit(numbers) => Text::new("error-result-does-not-fit")
+                .with("count", numbers.len())
+                .with("numbers", listed(numbers)),
             Self::DoesNotFit(error) => {
                 Text::new("error-phase-change-does-not-fit").with("reason", error.to_string())
             }
@@ -430,9 +466,9 @@ impl Message for UndoReportError {
             Self::UnknownMatch => Text::new("error-unknown-match"),
             Self::NotReported => Text::new("error-match-not-reported"),
             Self::DependedOn => Text::new("error-result-depended-on"),
-            Self::DependedOnBy(number) => {
-                Text::new("error-result-depended-on-by").with("number", *number)
-            }
+            Self::DependedOnBy(numbers) => Text::new("error-result-depended-on-by")
+                .with("count", numbers.len())
+                .with("numbers", listed(numbers)),
         }
     }
 }

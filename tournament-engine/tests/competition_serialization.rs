@@ -4,7 +4,7 @@
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt, Entrant, EntrantId, Match, MatchId, MatchResult, PhaseData,
@@ -420,38 +420,6 @@ fn a_round_trip_does_not_change_the_serialized_form() {
     let sm = competition_in_the_final();
 
     let competition = round_trip(&round_trip(sm.current()));
-
-    assert_eq!(serialized(&competition), serialized(sm.current()));
-}
-
-/// Matches saved by 0.3.0 and earlier hold a `result` and their `annotations` where their
-/// `contest` is now, and no `tallies`.
-#[test]
-fn a_competition_saved_before_contests_still_loads() {
-    fn to_results(value: &mut Value, matches: &mut usize) {
-        match value {
-            Value::Object(object) if object.contains_key("team_a") => {
-                assert_eq!(object.remove("tallies").unwrap(), json!([]));
-                let contest = object.remove("contest").unwrap();
-                assert_eq!(contest["values"], json!([]));
-                assert_eq!(contest["parts"], json!([]));
-                let result = contest["decision"].get("result").cloned();
-                object.insert("result".to_owned(), result.unwrap_or(Value::Null));
-                object.insert("annotations".to_owned(), contest["annotations"].clone());
-                *matches += 1;
-            }
-            Value::Object(object) => object.values_mut().for_each(|v| to_results(v, matches)),
-            Value::Array(array) => array.iter_mut().for_each(|v| to_results(v, matches)),
-            _ => {}
-        }
-    }
-    let sm = competition_in_the_final();
-    let mut saved = serialized(sm.current());
-    let mut matches = 0;
-    to_results(&mut saved, &mut matches);
-    assert!(matches > 0);
-
-    let competition: Competition = serde_json::from_value(saved).unwrap();
 
     assert_eq!(serialized(&competition), serialized(sm.current()));
 }

@@ -5,7 +5,8 @@
 //!
 //! A session is exported by [`Session::export`](crate::session::Session::export) and imported by
 //! [`Session::import`](crate::session::Session::import); what is stored of a competition is
-//! exported by [`Stored::export`] even if it no longer loads.
+//! exported by [`Stored::export`] even if it no longer loads. Every file is read by [`File::read`],
+//! which converts a file of an older format first.
 
 use std::fmt::{self, Display};
 
@@ -15,10 +16,11 @@ use serde::{
 };
 use serde_json::Value;
 
+pub use self::convert::upgrade_competition;
 use crate::{error::ImportError, storage::Stored};
 
-/// The version of the format of a file, its `"format"`, raised with every change an older version
-/// cannot read. A file without one is of the first.
+/// The version of the format of a file, its `"format"`, raised with every change of what is saved
+/// that needs a converter or that an older version cannot read. A file without one is of the first.
 ///
 /// Deserializing refuses a format newer than [`Format::CURRENT`] (or 0), so that a file of a newer
 /// version is told apart from a broken one.
@@ -86,13 +88,14 @@ pub struct File<L, P, C = IgnoredAny> {
 }
 
 impl<L: DeserializeOwned, P: DeserializeOwned> File<L, P> {
-    /// The file whose JSON is `file`.
+    /// The file whose JSON is `file`, read as of [`Format::CURRENT`]: a file of an older format is
+    /// converted first.
     ///
     /// # Errors
     /// Returns [`ImportError::NoCompetition`] if it is no JSON object with a log and people and,
     /// if any, a format, [`ImportError::Newer`] if its format is newer than [`Format::CURRENT`],
     /// and [`ImportError::Damaged`] if its log or people do not load.
-    pub(crate) fn read(file: &str) -> Result<Self, ImportError> {
+    pub fn read(file: &str) -> Result<Self, ImportError> {
         // checked before reading the rest, which may take long, so as to tell a file of a newer
         // version or none at all from a damaged one
         let head: Head = serde_json::from_str(file).map_err(ImportError::NoCompetition)?;
@@ -101,21 +104,27 @@ impl<L: DeserializeOwned, P: DeserializeOwned> File<L, P> {
                 "the file holds no object with a log and people",
             ))
         };
-        if let Some(format) = head.format {
-            let format = format
+        let format = match head.format {
+            Some(format) => format
                 .as_u64()
                 .and_then(|format| u32::try_from(format).ok())
                 .map(Format)
                 .filter(|format| *format >= Format::FIRST)
-                .ok_or_else(no_competition)?;
-            if format > Format::CURRENT {
-                return Err(ImportError::Newer(format));
-            }
+                .ok_or_else(no_competition)?,
+            None => Format::FIRST,
+        };
+        if format > Format::CURRENT {
+            return Err(ImportError::Newer(format));
         }
         if !head.log || !head.people {
             return Err(no_competition());
         }
-        serde_json::from_str(file).map_err(ImportError::Damaged)
+        if format == Format::CURRENT {
+            return serde_json::from_str(file).map_err(ImportError::Damaged);
+        }
+        let mut file = serde_json::from_str(file).map_err(ImportError::Damaged)?;
+        convert::upgrade(&mut file, format);
+        serde_json::from_value(file).map_err(ImportError::Damaged)
     }
 }
 
@@ -194,6 +203,8 @@ pub(crate) fn to_record<L: Serialize, P: Serialize, C: Serialize>(file: File<L, 
 pub(crate) fn to_json<L: Serialize, P: Serialize, C: Serialize>(file: &File<L, P, C>) -> String {
     serde_json::to_string_pretty(file).expect("a competition's file serializes as JSON")
 }
+
+mod convert;
 
 #[cfg(test)]
 mod tests {

@@ -20,8 +20,8 @@ use plugin_factory::{
 };
 use thiserror::Error;
 use tournament_app::{
-    error as app_error,
-    file::File,
+    error::{self as app_error, ImportError},
+    file::{File, Format},
     i18n::{Language, Translator},
     session::Session as AppSession,
     view,
@@ -124,11 +124,8 @@ pub enum Error {
     Configuration(#[from] ConfigError),
     #[error("cannot read {name}: {source}")]
     Read { name: String, source: io::Error },
-    #[error("{name} is not a competition saved by this CLI: {source}")]
-    Load {
-        name: String,
-        source: serde_json::Error,
-    },
+    #[error("{name} is not a competition saved by this CLI: {}", not_loaded(.source))]
+    Load { name: String, source: ImportError },
     #[error("cannot serialize the competition: {0}")]
     Serialize(serde_json::Error),
     #[error("cannot save {name}: {source}")]
@@ -177,11 +174,15 @@ impl Session {
     /// replays into a competition.
     pub fn load(storage: impl Storage + 'static, name: impl Into<String>) -> Result<Self, Error> {
         let name = name.into();
-        let bytes = match storage.read(&name) {
-            Ok(bytes) => bytes,
+        let text = storage.read(&name).and_then(|bytes| {
+            String::from_utf8(bytes)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        });
+        let text = match text {
+            Ok(text) => text,
             Err(source) => return Err(Error::Read { name, source }),
         };
-        let file: File<_, _> = serde_json::from_slice(&bytes).map_err(|source| Error::Load {
+        let file = File::read(&text).map_err(|source| Error::Load {
             name: name.clone(),
             source,
         })?;
@@ -697,6 +698,19 @@ fn format_names() -> Vec<String> {
         .entries()
         .map(format_name)
         .collect()
+}
+
+/// Why a file is not loaded, as [`Error::Load`] says it: where reading it stopped, or which formats
+/// this version reads.
+fn not_loaded(error: &ImportError) -> String {
+    match error {
+        ImportError::NoCompetition(error) | ImportError::Damaged(error) => error.to_string(),
+        ImportError::Newer(format) => format!(
+            "the file is of format {format}, this version reads formats {} to {}",
+            Format::FIRST,
+            Format::CURRENT
+        ),
+    }
 }
 
 /// Names the format and the ranking `answers`, the answers of a phase draft, configure in
@@ -2129,10 +2143,10 @@ mod tests {
         saved["format"] = 3.into();
         storage.write("cup", saved.to_string().as_bytes()).unwrap();
 
-        let Err(Error::Load { source, .. }) = Session::load(storage, "cup") else {
+        let Err(error @ Error::Load { .. }) = Session::load(storage, "cup") else {
             panic!("a file of a newer format must not load");
         };
-        assert!(source.to_string().contains("format 3"), "{source}");
+        assert!(error.to_string().contains("format 3"), "{error}");
     }
 
     #[test]

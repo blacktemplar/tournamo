@@ -7,7 +7,6 @@
 //! starts with nothing to undo.
 
 use std::{
-    any::Any,
     collections::{BTreeMap, HashMap, HashSet},
     num::NonZeroU32,
 };
@@ -30,11 +29,11 @@ use tournament_engine::{
         ranker::SliceRanker,
     },
     transitions::{
-        self as engine, CompetitionAlreadyStarted, ReconfigurePhaseError, UndoMatchResultError,
+        self as engine, Change, CompetitionAlreadyStarted, ConflictsError, ReconfigurePhaseError,
+        UndoMatchResultError,
     },
     undoable_state_machine::{
-        LogEntry, LogEntryKind, RedoLastError, SessionHistory, StateMachineError, TransitionError,
-        UndoLastError,
+        LogEntry, RedoLastError, SessionHistory, StateMachineError, TransitionError, UndoLastError,
     },
     uuid::Uuid,
 };
@@ -765,7 +764,7 @@ impl Session {
     /// # Errors
     /// Returns an error if the competition has no phase, the plugins `draft` configures do not fit
     /// together, or a change made after the phase was added, e.g. a reported result
-    /// ([`EditPhaseError::ResultDoesNotFit`]), does not fit the edited phase.
+    /// ([`EditPhaseError::ResultDoesNotFit`], naming every one), does not fit the edited phase.
     pub fn edit_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<bool, EditPhaseError> {
         let phase_id = self.phase().ok_or(NoPhase)?.id();
         let plugins = completed(draft).map_err(EditPhaseError::Invalid)?;
@@ -774,10 +773,7 @@ impl Session {
                 machine.reconfigure_phase(history, phase_id, plugins)
             })
             .map_err(|error| match error {
-                ReconfigurePhaseError::Rejected(error) => match self.reported_number(&error) {
-                    Some(number) => EditPhaseError::ResultDoesNotFit(number),
-                    None => EditPhaseError::DoesNotFit(rejection(error)),
-                },
+                ReconfigurePhaseError::Rejected(error) => self.edit_refusal(phase_id, draft, error),
                 ReconfigurePhaseError::NotAdded => {
                     unreachable!("the phase of a session is added by an `AddPhase` in effect")
                 }
@@ -1336,7 +1332,8 @@ impl Session {
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, the match has no
-    /// result, or a later result depends on it.
+    /// result, or later results depend on it ([`UndoReportError::DependedOnBy`], naming every
+    /// one).
     pub fn undo_report(&mut self, id: MatchId) -> Result<Reopened, UndoReportError> {
         let phase = self.started_phase().ok_or(UndoReportError::NotStarted)?;
         let Some(r#match) = phase.data().matches().get(&id) else {
@@ -1351,9 +1348,7 @@ impl Session {
         })
         .map_err(|error| match error {
             UndoMatchResultError::NotReported => UndoReportError::NotReported,
-            UndoMatchResultError::Rejected(error) => self
-                .reported_number(&error)
-                .map_or(UndoReportError::DependedOn, UndoReportError::DependedOnBy),
+            UndoMatchResultError::Rejected(_) => self.undo_refusal(phase_id, id),
         })?;
         self.reopened.insert(id, contest);
         let matches = self
@@ -1513,25 +1508,58 @@ impl Session {
         Ok(done)
     }
 
-    /// The number of the match whose result the entry of the log that `error` names reports, if it
-    /// is one reporting a result of a match of the phase, e.g. the later result an undo refused
-    /// would no longer apply to, or the one an edit of the phase refused does not fit.
-    fn reported_number(&self, error: &StateMachineError) -> Option<usize> {
-        let StateMachineError::Transition(id, _) = error else {
-            return None;
-        };
-        let entry = self.machine.log().iter().find(|entry| entry.id() == *id)?;
-        let LogEntryKind::Apply(transition) = entry.kind() else {
-            return None;
-        };
-        let transition: &dyn Any = &**transition;
-        let reported = transition.downcast_ref::<ReportMatchResult>()?;
-        let r#match = self
-            .started_phase()?
-            .data()
-            .matches()
-            .get(&reported.match_id())?;
-        Some(number(r#match))
+    /// Why the edit of the phase `phase_id` to what `draft` configures was rejected as `rejected`:
+    /// the reported results that do not fit the edited phase, if any do.
+    fn edit_refusal(
+        &self,
+        phase_id: PhaseId,
+        draft: &Draft<PhasePlugins>,
+        rejected: StateMachineError,
+    ) -> EditPhaseError {
+        // the rejected edit took the plugins, which the draft builds again
+        let plugins = completed(draft).expect("the draft built the plugins once");
+        let edited = AddPhase::new(phase_id, plugins);
+        let conflicts = self.machine.added_by(phase_id).map(|target| {
+            self.conflicting_numbers(Change::Replace {
+                target,
+                with: &edited,
+            })
+        });
+        match conflicts {
+            Some(Ok(numbers)) if !numbers.is_empty() => EditPhaseError::ResultDoesNotFit(numbers),
+            Some(Err(ConflictsError::Other(_, error))) => EditPhaseError::DoesNotFit(error),
+            _ => EditPhaseError::DoesNotFit(rejection(rejected)),
+        }
+    }
+
+    /// Why undoing the result of the match `match_id` of the phase `phase_id` was rejected: the
+    /// results that depend on it, if they can be told.
+    fn undo_refusal(&self, phase_id: PhaseId, match_id: MatchId) -> UndoReportError {
+        let conflicts = self
+            .machine
+            .reported_by(phase_id, match_id)
+            .map(|report| self.conflicting_numbers(Change::Undo(report)));
+        match conflicts {
+            Some(Ok(numbers)) if !numbers.is_empty() => UndoReportError::DependedOnBy(numbers),
+            _ => UndoReportError::DependedOn,
+        }
+    }
+
+    /// The numbers of the matches whose results would no longer apply if `change` were made,
+    /// ascending, see
+    /// [`conflicts_of`](tournament_engine::CompetitionStateMachineExt::conflicts_of).
+    fn conflicting_numbers(&self, change: Change<'_>) -> Result<Vec<usize>, ConflictsError> {
+        let mut numbers: Vec<_> = self
+            .machine
+            .conflicts_of(change)?
+            .iter()
+            .filter_map(|conflict| {
+                let phase = self.competition().phase(&conflict.phase_id)?;
+                phase.data().matches().get(&conflict.match_id).map(number)
+            })
+            .collect();
+        numbers.sort_unstable();
+        Ok(numbers)
     }
 
     /// The match `id` with what was reported for it, if it has a result, which undoing its report

@@ -1193,7 +1193,7 @@ fn a_result_a_later_one_depends_on_is_undone_after_it() {
 
     assert!(matches!(
         session.undo_report(semifinal),
-        Err(UndoReportError::DependedOnBy(3))
+        Err(UndoReportError::DependedOnBy(numbers)) if numbers == [3]
     ));
     session.undo_report(numbered(&session, 3)).unwrap();
     let reopened = session.undo_report(semifinal).unwrap();
@@ -1201,6 +1201,26 @@ fn a_result_a_later_one_depends_on_is_undone_after_it() {
     assert_eq!(
         reopened.unscheduled, 2,
         "the final and the match for third place go with it"
+    );
+}
+
+/// The winner of a semifinal plays the final and its loser the match for third place, so undoing
+/// it names both once they have results.
+#[test]
+fn every_result_depending_on_an_undone_one_is_named() {
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    for number in 1..=4 {
+        session
+            .report(numbered(&session, number), MatchResult::AWins)
+            .unwrap();
+    }
+
+    let result = session.undo_report(numbered(&session, 1));
+
+    assert!(
+        matches!(&result, Err(UndoReportError::DependedOnBy(numbers)) if *numbers == [3, 4]),
+        "{:?}",
+        result.err()
     );
 }
 
@@ -2164,7 +2184,7 @@ fn an_edit_a_reported_result_does_not_fit_is_refused() {
     let result = session.edit_phase(&draft);
 
     assert!(
-        matches!(result, Err(EditPhaseError::ResultDoesNotFit(1))),
+        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(numbers)) if *numbers == [1]),
         "{result:?}"
     );
     assert_eq!(matches(&session)[0].result, Some(MatchResult::AWins));
@@ -2172,6 +2192,25 @@ fn an_edit_a_reported_result_does_not_fit_is_refused() {
         Session::new("cup").phase_draft_to_edit(),
         Err(NoPhase)
     ));
+}
+
+/// A refused edit names every result that does not fit it, not only the first.
+#[test]
+fn an_edit_names_every_reported_result_it_does_not_fit() {
+    let mut session = Given::new().started();
+    for number in 1..=2 {
+        session
+            .report(numbered(&session, number), MatchResult::AWins)
+            .unwrap();
+    }
+    let draft = session.phase_draft(MonsterDyp::ID).unwrap();
+
+    let result = session.edit_phase(&draft);
+
+    assert!(
+        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(numbers)) if *numbers == [1, 2]),
+        "{result:?}"
+    );
 }
 
 /// The matches of the phase that have a result, with that result.

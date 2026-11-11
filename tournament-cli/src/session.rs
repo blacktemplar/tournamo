@@ -1096,8 +1096,8 @@ mod tests {
 
         assert!(
             matches!(
-                result,
-                Err(Error::EditPhase(EditPhaseError::ResultDoesNotFit(1)))
+                &result,
+                Err(Error::EditPhase(EditPhaseError::ResultDoesNotFit(numbers))) if *numbers == [1]
             ),
             "{result:?}"
         );

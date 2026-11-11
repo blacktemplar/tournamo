@@ -13,7 +13,12 @@ error-invalid-phase = the phase cannot be played this way; the form shows what t
 error-phase-already-added = the competition already has a phase, and only one is supported
 error-phase-added-after-start = the competition has started, so no phase can be added anymore
 error-no-phase = the competition has no phase yet
-error-result-does-not-fit = the phase changed this way does not play match { $number }, which has a result; reopen that match first to change the phase this way
+# $count: how many matches that have a result the changed phase does not play; $numbers: their
+# numbers, e.g. "5, 7, 9"
+error-result-does-not-fit = { $count ->
+        [one] the phase changed this way does not play match { $numbers }, which has a result; reopen that match first to change the phase this way
+       *[other] the phase changed this way does not play matches { $numbers }, which have results; reopen those matches first to change the phase this way
+    }
 # $reason: in English, from the engine
 error-phase-change-does-not-fit = the phase cannot be changed this way, since a later change no longer fits it: { $reason }
 error-started-already = the competition has started already
@@ -40,8 +45,12 @@ error-scores-undecided = the scores entered do not say who won match { $number }
 error-result-against-scores = the result entered for match { $number } is not the one its scores say
 error-match-not-reported = the match has no result that could be undone
 error-result-depended-on = a later result depends on this one; undo that one first
-# $number: the number of the match whose result depends on the one to reopen
-error-result-depended-on-by = the result of match { $number } depends on this one; reopen that match first
+# $count: how many matches have a result depending on the one to reopen; $numbers: their numbers,
+# e.g. "5, 7, 9"
+error-result-depended-on-by = { $count ->
+        [one] the result of match { $numbers } depends on this one; reopen that match first
+       *[other] the results of matches { $numbers } depend on this one; reopen those matches first
+    }
 error-nothing-to-undo = there is nothing to undo
 error-nothing-to-redo = there is nothing to redo
 error-competition-not-found = there is no such competition

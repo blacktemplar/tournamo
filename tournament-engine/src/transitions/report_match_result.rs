@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use undoable_state_machine::{Transition, TransitionError};
 
@@ -12,66 +12,13 @@ use crate::{
 };
 
 /// Reports how a match was decided, which finishes it, with the values and parts entered for it.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ReportMatchResult {
     phase_id: PhaseId,
     match_id: MatchId,
     decision: Decision,
     values: Values,
     parts: Vec<Part>,
-}
-
-impl<'de> Deserialize<'de> for ReportMatchResult {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(rename = "ReportMatchResult")]
-        struct Current {
-            phase_id: PhaseId,
-            match_id: MatchId,
-            decision: Decision,
-            values: Values,
-            parts: Vec<Part>,
-        }
-        // Logged in JSON by 0.3.0 and earlier: a `match_result` in place of the `decision`.
-        #[derive(Deserialize)]
-        #[serde(rename = "ReportMatchResult")]
-        struct Saved {
-            phase_id: PhaseId,
-            match_id: MatchId,
-            #[serde(default)]
-            decision: Option<Decision>,
-            #[serde(default)]
-            match_result: Option<MatchResult>,
-            #[serde(default)]
-            values: Values,
-            #[serde(default)]
-            parts: Vec<Part>,
-        }
-
-        if deserializer.is_human_readable() {
-            let saved = Saved::deserialize(deserializer)?;
-            let decision = saved
-                .decision
-                .or(saved.match_result.map(Decision::new))
-                .ok_or_else(|| serde::de::Error::missing_field("decision"))?;
-            Ok(Self {
-                phase_id: saved.phase_id,
-                match_id: saved.match_id,
-                decision,
-                values: saved.values,
-                parts: saved.parts,
-            })
-        } else {
-            let current = Current::deserialize(deserializer)?;
-            Ok(Self {
-                phase_id: current.phase_id,
-                match_id: current.match_id,
-                decision: current.decision,
-                values: current.values,
-                parts: current.parts,
-            })
-        }
-    }
 }
 
 impl ReportMatchResult {

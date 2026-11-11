@@ -19,7 +19,7 @@ use crate::{
     plugins::{
         PhasePlugins,
         facts::EntrantsPerRanking,
-        match_format::{self, MatchFormat},
+        match_format::MatchFormat,
         metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
         ranker::{HierarchicalRanker, SliceRanker},
@@ -703,8 +703,6 @@ impl<'de> Deserialize<'de> for Phase {
             phase_format: Box<dyn PhaseFormat>,
             ranker: HierarchicalRanker,
             metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
-            // phases saved by 0.3.0 and earlier knew only who won
-            #[serde(default = "match_format::default")]
             match_format: Box<dyn MatchFormat>,
             data: SavedData,
         }
@@ -897,7 +895,7 @@ pub struct MatchId(Uuid);
 /// describes it, keyed by type, such as which stage of a knockout it belongs to. The
 /// [`PhaseFormat`] scheduling the match gives them when creating it as a [`NewMatch`], with
 /// [`Annotated::with_annotation`].
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Match {
     id: MatchId,
     team_a: Vec1<RankingId>,
@@ -906,71 +904,6 @@ pub struct Match {
     number: NonZeroU32,
     contest: Part,
     tallies: TypeMap,
-}
-
-impl<'de> Deserialize<'de> for Match {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(rename = "Match")]
-        struct Current {
-            id: MatchId,
-            team_a: Vec1<RankingId>,
-            team_b: Vec1<RankingId>,
-            round: NonZeroU32,
-            number: NonZeroU32,
-            contest: Part,
-            tallies: TypeMap,
-        }
-        // Saved in JSON by 0.3.0 and earlier: a `result` and the `annotations` in place of the
-        // `contest`, and no `tallies`, which their match format did not have.
-        #[derive(Deserialize)]
-        #[serde(rename = "Match")]
-        struct Saved {
-            id: MatchId,
-            team_a: Vec1<RankingId>,
-            team_b: Vec1<RankingId>,
-            round: NonZeroU32,
-            number: NonZeroU32,
-            contest: Option<Part>,
-            #[serde(default)]
-            result: Option<MatchResult>,
-            #[serde(default)]
-            annotations: TypeMap,
-            #[serde(default)]
-            tallies: TypeMap,
-        }
-
-        let current = if deserializer.is_human_readable() {
-            let saved = Saved::deserialize(deserializer)?;
-            let contest = saved.contest.unwrap_or_else(|| {
-                let contest = Part::new().with_annotations(saved.annotations);
-                match saved.result {
-                    Some(result) => contest.with_decision(result),
-                    None => contest,
-                }
-            });
-            Current {
-                id: saved.id,
-                team_a: saved.team_a,
-                team_b: saved.team_b,
-                round: saved.round,
-                number: saved.number,
-                contest,
-                tallies: saved.tallies,
-            }
-        } else {
-            Current::deserialize(deserializer)?
-        };
-        Ok(Match {
-            id: current.id,
-            team_a: current.team_a,
-            team_b: current.team_b,
-            round: current.round,
-            number: current.number,
-            contest: current.contest,
-            tallies: current.tallies,
-        })
-    }
 }
 
 /// A match a [`PhaseFormat`] schedules, see [`Schedule`]: who plays it in which round, what it is

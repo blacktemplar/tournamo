@@ -10,6 +10,13 @@ a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Changed
+
+- Library users: the engine reads only the current layout of a competition and
+  its log; a file of an older format is converted when read, by
+  `tournament_app::file::File::read` (`file::upgrade_competition` for the
+  competition alone).
+
 ## [0.4.0] - 2026-11-09
 
 Competitions saved with 0.3.0 and earlier open unchanged. Earlier versions

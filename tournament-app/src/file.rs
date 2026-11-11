@@ -5,7 +5,8 @@
 //!
 //! A session is exported by [`Session::export`](crate::session::Session::export) and imported by
 //! [`Session::import`](crate::session::Session::import); what is stored of a competition is
-//! exported by [`Stored::export`] even if it no longer loads.
+//! exported by [`Stored::export`] even if it no longer loads. Every file is read by [`File::read`],
+//! which converts a file of an older format first.
 
 use std::fmt::{self, Display};
 

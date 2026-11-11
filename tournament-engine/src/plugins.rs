@@ -116,8 +116,6 @@ pub struct PhasePlugins {
         default = Box::new(phase_format::RoundRobin)
     )]
     format: Box<dyn PhaseFormat>,
-    // phases added by 0.3.0 and earlier knew only who won
-    #[serde(default = "match_format::default")]
     #[plugin(
         label = "match format",
         description = "what is entered for a match",
@@ -917,6 +915,7 @@ mod tests {
             .build();
         let saved = serde_json::json!({
             "format": {"type": RoundRobin::ID, "value": null},
+            "match_format": {"type": WinnerOnly::ID, "value": null},
             "ranking": [],
             "metrics": [
                 {"type": CircularCalculator::ID, "value": null},

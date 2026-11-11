@@ -160,11 +160,16 @@ mod v2 {
 
 #[cfg(test)]
 mod tests {
+    use plugin_factory::PluginType as _;
     use serde_json::json;
+    use tournament_engine::{
+        Competition, CompetitionStateMachine, MatchResult, plugins::phase_format::SingleElimination,
+    };
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
+    use crate::{file::File, people::People, session::Session};
 
     /// `entry`, an entry of the log of a file of the first format, as the current format holds it.
     fn upgraded_entry(entry: Value) -> Value {
@@ -427,6 +432,96 @@ mod tests {
         upgrade_competition(&mut competition, Format::CURRENT);
 
         assert_eq!(competition, unchanged);
+    }
+
+    /// A knockout of four entrants with both semifinals reported, and so its final scheduled.
+    fn knockout_before_its_final() -> Session {
+        let mut session = Session::new("cup");
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            session.add_entrant(name).unwrap();
+        }
+        let draft = session.phase_draft(SingleElimination::ID).unwrap();
+        session.add_phase(&draft).unwrap();
+        session.start().unwrap();
+        for _ in 0..2 {
+            let semifinal = session.playable()[0].id;
+            session.report(semifinal, MatchResult::AWins).unwrap();
+        }
+        session
+    }
+
+    /// `file`, as this version writes it, as a file of the first format holds it: its reports name
+    /// their result, its phases have no match format, and its matches hold their result and
+    /// annotations. Panics if `file` holds anything the first format cannot.
+    fn as_of_the_first_format(file: &mut Value) {
+        let winner_only = json!({ "type": "tournament_engine::winner_only", "value": null });
+        file["format"] = json!(1);
+        let mut reports = 0;
+        for entry in file["log"].as_array_mut().unwrap() {
+            let Some(transition) = entry.pointer_mut("/kind/Apply") else {
+                continue;
+            };
+            match transition["type"].as_str().unwrap() {
+                "tournament_engine::report_match_result" => {
+                    let report = transition["value"].as_object_mut().unwrap();
+                    let decision = report.remove("decision").unwrap();
+                    assert_eq!(decision["reason"], Value::Null);
+                    assert_eq!(report.remove("values"), Some(json!([])));
+                    assert_eq!(report.remove("parts"), Some(json!([])));
+                    report.insert("match_result".to_owned(), decision["result"].clone());
+                    reports += 1;
+                }
+                "tournament_engine::add_phase" => {
+                    let plugins = transition["value"]["plugins"].as_object_mut().unwrap();
+                    assert_eq!(plugins.remove("match_format"), Some(winner_only.clone()));
+                }
+                _ => {}
+            }
+        }
+        let mut results = Vec::new();
+        for phase in file["competition"]["phases"].as_array_mut().unwrap() {
+            let phase = phase.as_object_mut().unwrap();
+            assert_eq!(phase.remove("match_format"), Some(winner_only.clone()));
+            for r#match in phase["data"]["matches"].as_array_mut().unwrap() {
+                let r#match = r#match.as_object_mut().unwrap();
+                assert_eq!(r#match.remove("tallies"), Some(json!([])));
+                let contest = r#match.remove("contest").unwrap();
+                assert_eq!([&contest["values"], &contest["parts"]], [&json!([]); 2]);
+                let result = match &contest["decision"] {
+                    Value::Null => Value::Null,
+                    decision => {
+                        assert_eq!(decision["reason"], Value::Null);
+                        decision["result"].clone()
+                    }
+                };
+                results.push(result.clone());
+                r#match.insert("result".to_owned(), result);
+                r#match.insert("annotations".to_owned(), contest["annotations"].clone());
+            }
+        }
+        assert!(reports > 0, "the log reports results");
+        assert!(results.contains(&Value::Null) && results.iter().any(Value::is_string));
+    }
+
+    /// A file of the first format is read into the competition it holds, both by replaying its log
+    /// and as the competition it holds next to the log.
+    #[test]
+    fn a_file_of_the_first_format_is_read_into_the_competition_it_holds() {
+        let session = knockout_before_its_final();
+        let mut file: Value = serde_json::from_str(&session.export()).unwrap();
+        as_of_the_first_format(&mut file);
+
+        let read = File::<CompetitionStateMachine, People>::read(&file.to_string()).unwrap();
+        let mut held = file["competition"].take();
+        upgrade_competition(&mut held, Format::FIRST);
+        let held: Competition = serde_json::from_value(held).unwrap();
+
+        let competition = serde_json::to_value(session.competition()).unwrap();
+        assert_eq!(
+            serde_json::to_value(read.log.current()).unwrap(),
+            competition
+        );
+        assert_eq!(serde_json::to_value(held).unwrap(), competition);
     }
 
     /// What a converter does not recognise is left for the typed read to refuse.

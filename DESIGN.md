@@ -760,8 +760,9 @@ log, and so does the browser's storage (which stores the file), for a version th
 replay it to show it read-only instead (*planned*), and to tell a replay that
 comes out otherwise. The log stays what
 is loaded; the competition is only read in place of it. Its serialized form is
-a persistence contract too, kept loading by converters where it changes.
-Older versions ignore it, so it does not raise the file's format. It still
+a persistence contract too: a change of it raises the file's format and adds a
+converter, as one of the log does (see [Golden saves](#golden-saves)). Holding
+it did not raise the format, since older versions ignore it. It still
 holds the rank and unique rank of every ranking and the order of the standings,
 as when they were stored: a phase computes them when it is written, and reads
 but drops them when it is read (see [Metrics](#metrics-plugin-produced-ranking-data)).
@@ -804,6 +805,26 @@ change of how old competitions are shown, which drops the save and goes into
 The serialized competition is the expected result, compared as JSON since
 `Competition` has no `PartialEq`, so a test also catches nondeterminism (e.g.
 iterating a `HashMap`) and differences between native and wasm.
+
+**Older layouts are converted, then read by the current types.** A change of
+what is saved raises the file's format (`file::Format`) and adds one converter
+from the format before to the chain in `tournament-app/src/file/convert.rs`:
+a function on the untyped JSON of a log entry and one on that of the
+competition, each writing literal JSON of its format, never through the
+engine's types, which keep changing. Reading a file of an older format applies
+the converters one format at a time and only then deserializes; a file of the
+current format is read directly. So a change costs one small function rather
+than a reader in every changed type, listing all its fields again; the engine's
+types read only the current layout, and no old struct is kept. The crate does
+not build while a format lacks its converter, and a converter, like a save, is
+never changed once released. The golden saves of older versions are what shows
+that the chain reads them. Only a file is versioned: a consumer that serializes
+a bare `Competition` or log by itself reads back only what the current version
+writes.
+
+Rejected: typed readers per changed type (each repeats all its fields, and
+they live in the engine), a crate for versioned structs (keeps every old
+struct).
 
 ## Progression as an undoable state machine
 
@@ -1018,17 +1039,18 @@ through a `BroadcastChannel`.
   [Offline and installing](#offline-and-installing).
 - **Files are the CLI's**: `{"format", "log", "people", "competition"}` plus `"name"`, so
   competitions move between CLI and GUI. `"format"` (`file::Format`, first, a
-  missing one is 1) is raised with a change older versions cannot read; a newer
-  one is refused as such rather than as a broken log, and a later version can
-  migrate older ones; so can a record in IndexedDB. Importing makes a new
-  competition under a new key, numbered (`Cup (2)`) if the name exists (a
-  number, not a translated word in stored data). Exporting from the list writes
-  the stored record as it is, with the name, so a log that no longer replays can
-  still be exported. Files are not compressed: gzip would make them about 3.5×
-  smaller, but compressing takes longer than serializing (in Chrome
-  `CompressionStream` at its default level ~170 ms for 7 MB, blocking the page;
-  `flate2` at level 1 ~50 ms). It can be added later without breaking older
-  files, which a reader tells apart by gzip's first bytes (`1f 8b`).
+  missing one is 1) is raised with every change of what is saved; a newer one
+  is refused as such rather than as a broken log, and older ones are converted
+  when read (see [Golden saves](#golden-saves)), a record in IndexedDB as well.
+  Importing makes a new competition under a new key, numbered (`Cup (2)`) if
+  the name exists (a number, not a translated word in stored data). Exporting
+  from the list writes the stored record as it is, with the name, so a log that
+  no longer replays can still be exported. Files are not compressed: gzip would
+  make them about 3.5× smaller, but compressing takes longer than serializing
+  (in Chrome `CompressionStream` at its default level ~170 ms for 7 MB,
+  blocking the page; `flate2` at level 1 ~50 ms). It can be added later without
+  breaking older files, which a reader tells apart by gzip's first bytes
+  (`1f 8b`).
 - **The competition open is in the URL** after `#`, and a fragment naming none
   shows the list saying so. Renaming changes only the
   listing (the name is not in the log); deleting removes everything in one

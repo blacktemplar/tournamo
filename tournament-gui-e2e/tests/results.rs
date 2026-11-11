@@ -217,7 +217,6 @@ async fn tab_out_of_a_score_completed_moves_into_the_game_it_makes_needed() {
         gui.click("Add phase").await?;
         gui.click("Start").await?;
         gui.enter_in_part_in_row("Game 1, match 1", 0, "17").await?;
-        gui.enter_in_part_in_row("Game 1, match 1", 1, "21").await?;
 
         // the second side, after which Tab would leave the games shown so far
         gui.enter_in_part_in_row("Game 2, match 1", 1, "15").await?;

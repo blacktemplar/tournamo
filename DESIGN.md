@@ -1211,6 +1211,15 @@ frontend); the questionnaire one question at a time (long, and a correction
 walks through everything); replacing the draft by the format's defaults (loses
 other changes); native selects (no descriptions where the choice is made).
 
+Also rejected: the draft offering the suggestions itself, through a function a
+field of the composite names, so that `Draft::default_value` and
+`with_defaults` include them. It would spare a consumer the choice between the
+draft's defaults and those of `PhasePlugins`, but only the app and the CLI
+make it. It would move a tournament concept into `plugin-factory`, where a
+default would then depend on the answers before it. And a match format joining
+the suggestions does not need it: the functions of `PhasePlugins` see every
+answer already.
+
 ### Running a competition
 
 - **One list of matches at a time**: a round, or those **playable now**

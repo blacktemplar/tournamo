@@ -1518,7 +1518,7 @@ impl Session {
     ) -> EditPhaseError {
         // the rejected edit took the plugins, which the draft builds again
         let plugins = completed(draft).expect("the draft built the plugins once");
-        let edited = AddPhase::new(phase_id, plugins);
+        let edited = AddPhase::new(phase_id, plugins).into();
         let conflicts = self.machine.added_by(phase_id).map(|target| {
             self.conflicting_numbers(Change::Replace {
                 target,
@@ -1869,7 +1869,7 @@ async fn read<S: Storage>(storage: &S, key: CompetitionKey) -> Result<Stored, Lo
 }
 
 /// A stored record as a session reads it: the entries of its log, not replayed yet.
-type Record = File<Vec<LogEntry<Box<dyn CompetitionTransition>>>, People>;
+type Record = File<Vec<LogEntry<CompetitionTransition>>, People>;
 
 /// Every plugin of `axis`, in the order of their ids.
 fn plugins(axis: AnyAxis) -> Vec<Plugin> {

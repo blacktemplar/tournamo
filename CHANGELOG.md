@@ -5,13 +5,18 @@ they saved. The format follows [Keep a Changelog](https://keepachangelog.com),
 and versions follow [Semantic Versioning](https://semver.org).
 
 From 0.1.0 on, competitions saved by an earlier version keep opening in every
-later one: the tags in a saved log (`tournament_engine::...`) never change, and
-a file whose `"format"` changes is migrated, not refused.
+later one: a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
 ### Changed
 
+- A competition is saved in format 3: each change in its log is written under
+  its name, `{"AddEntrant": {...}}`, rather than as its `"type"`
+  (`"tournament_engine::add_entrant"`) and `"value"`. Competitions of formats 1
+  and 2 open unchanged; earlier versions refuse format 3 as a file of a newer
+  version, and cannot open the competitions this version changes in the
+  browser.
 - Library users: the engine reads only the current layout of a competition and
   its log; a file of an older format is converted when read, by
   `tournament_app::file::File::read` (`file::upgrade_competition` for the

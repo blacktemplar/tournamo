@@ -3,7 +3,7 @@ use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
     entities::competition::{Competition, Seed},
-    transitions::{CompetitionTransition, ensure_not_started},
+    transitions::ensure_not_started,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,6 +28,3 @@ impl Transition<Competition> for SetCompetitionSeed {
         Ok(())
     }
 }
-
-#[typetag::serde(name = "tournament_engine::set_competition_seed")]
-impl CompetitionTransition for SetCompetitionSeed {}

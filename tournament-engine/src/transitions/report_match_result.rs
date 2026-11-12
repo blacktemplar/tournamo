@@ -8,7 +8,6 @@ use crate::{
         details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
     },
     plugins::match_format::Misfit,
-    transitions::CompetitionTransition,
 };
 
 /// Reports how a match was decided, which finishes it, with the values and parts entered for it.
@@ -129,6 +128,3 @@ impl Transition<Competition> for ReportMatchResult {
         Ok(())
     }
 }
-
-#[typetag::serde(name = "tournament_engine::report_match_result")]
-impl CompetitionTransition for ReportMatchResult {}

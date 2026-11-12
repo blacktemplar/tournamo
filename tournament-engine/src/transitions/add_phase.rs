@@ -6,7 +6,7 @@ use undoable_state_machine::{Transition, TransitionError};
 use crate::{
     entities::competition::{Competition, PhaseId},
     plugins::PhasePlugins,
-    transitions::{CompetitionTransition, ensure_not_started},
+    transitions::ensure_not_started,
 };
 
 /// Adds the phase to a competition that has not started yet. A competition has a single phase.
@@ -71,6 +71,3 @@ impl Transition<Competition> for AddPhase {
         Ok(())
     }
 }
-
-#[typetag::serde(name = "tournament_engine::add_phase")]
-impl CompetitionTransition for AddPhase {}

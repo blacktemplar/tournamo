@@ -16,6 +16,10 @@ impl RemoveEntrant {
     pub fn new(entrant_id: EntrantId) -> Self {
         Self { entrant_id }
     }
+
+    pub fn entrant_id(&self) -> EntrantId {
+        self.entrant_id
+    }
 }
 
 /// Why a [`RemoveEntrant`] does not apply, besides

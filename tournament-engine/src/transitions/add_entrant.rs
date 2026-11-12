@@ -16,6 +16,10 @@ impl AddEntrant {
     pub fn new(entrant: Entrant) -> Self {
         Self { entrant }
     }
+
+    pub fn entrant(&self) -> &Entrant {
+        &self.entrant
+    }
 }
 
 /// Why an [`AddEntrant`] does not apply, besides

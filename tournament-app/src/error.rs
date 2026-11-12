@@ -249,15 +249,33 @@ fn listed(numbers: &[usize]) -> String {
         .join(", ")
 }
 
-/// The session has done nothing it has not undone.
+/// Why [`Session::undo`](crate::session::Session::undo) undid nothing.
 #[derive(Debug, Error)]
-#[error("there is nothing to undo")]
-pub struct NothingToUndo;
+pub enum UndoError {
+    /// The session has done nothing it has not undone.
+    #[error("there is nothing to undo")]
+    NothingToUndo,
+    /// A change of another session undid the action, or does not apply without it, so nothing more
+    /// can be undone.
+    #[error(
+        "a change made elsewhere since keeps this from being undone, so nothing more can be undone"
+    )]
+    ChangedElsewhere,
+}
 
-/// The session has undone nothing since its latest action.
+/// Why [`Session::redo`](crate::session::Session::redo) redid nothing.
 #[derive(Debug, Error)]
-#[error("there is nothing to redo")]
-pub struct NothingToRedo;
+pub enum RedoError {
+    /// The session has undone nothing since its latest action.
+    #[error("there is nothing to redo")]
+    NothingToRedo,
+    /// A change of another session redid the action, or does not apply with it, so nothing more can
+    /// be redone.
+    #[error(
+        "a change made elsewhere since keeps this from being redone, so nothing more can be redone"
+    )]
+    ChangedElsewhere,
+}
 
 /// Why a stored competition was not loaded, with its source saying why that is. `E` is the error
 /// of the storage.
@@ -473,15 +491,21 @@ impl Message for UndoReportError {
     }
 }
 
-impl Message for NothingToUndo {
+impl Message for UndoError {
     fn text(&self) -> Text {
-        Text::new("error-nothing-to-undo")
+        match self {
+            Self::NothingToUndo => Text::new("error-nothing-to-undo"),
+            Self::ChangedElsewhere => Text::new("error-undo-changed-elsewhere"),
+        }
     }
 }
 
-impl Message for NothingToRedo {
+impl Message for RedoError {
     fn text(&self) -> Text {
-        Text::new("error-nothing-to-redo")
+        match self {
+            Self::NothingToRedo => Text::new("error-nothing-to-redo"),
+            Self::ChangedElsewhere => Text::new("error-redo-changed-elsewhere"),
+        }
     }
 }
 

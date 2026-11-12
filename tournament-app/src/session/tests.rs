@@ -166,7 +166,7 @@ fn a_batch_is_checked_before_any_entrant_is_added() {
     let mut session = Session::new("cup");
     session.add_entrant("Alice").unwrap();
     let before = session.export();
-    let undo = session.next_undo().cloned();
+    let undo = session.next_undo();
 
     for names in [
         ["Bob", "Alice"],
@@ -179,7 +179,7 @@ fn a_batch_is_checked_before_any_entrant_is_added() {
         let names = names.map(str::to_owned);
         assert!(session.add_named_entrants(&names).is_err());
         assert_eq!(session.export(), before);
-        assert_eq!(session.next_undo(), undo.as_ref());
+        assert_eq!(session.next_undo(), undo);
     }
 }
 
@@ -1523,7 +1523,7 @@ fn the_first_three_ranks_win_medals_once_every_match_has_a_result() {
 fn undo_and_redo_walk_back_and_forth_through_the_actions() {
     let mut session = Session::new("cup");
     assert!(
-        matches!(session.undo(), Err(NothingToUndo)),
+        matches!(session.undo(), Err(UndoError::NothingToUndo)),
         "the seed is no action of the session"
     );
     session.add_entrant("Alice").unwrap();
@@ -1532,13 +1532,13 @@ fn undo_and_redo_walk_back_and_forth_through_the_actions() {
     session.undo().unwrap();
     session.undo().unwrap();
     assert!(session.entrants().is_empty());
-    assert!(matches!(session.undo(), Err(NothingToUndo)));
+    assert!(matches!(session.undo(), Err(UndoError::NothingToUndo)));
     session.redo().unwrap();
     assert_eq!(names(&session.entrants()), ["Alice"]);
 
     session.add_entrant("Carol").unwrap();
     assert!(
-        matches!(session.redo(), Err(NothingToRedo)),
+        matches!(session.redo(), Err(RedoError::NothingToRedo)),
         "a new action discards what could be redone"
     );
     assert_eq!(names(&session.entrants()), ["Alice", "Carol"]);
@@ -1547,14 +1547,14 @@ fn undo_and_redo_walk_back_and_forth_through_the_actions() {
 #[test]
 fn the_action_an_undo_would_undo_is_told_before() {
     let mut session = Given::new().started();
-    assert_eq!(session.next_undo(), Some(&Action::Start));
+    assert_eq!(session.next_undo(), Some(Action::Start));
     let first = matches(&session).remove(0);
 
     session.report(first.id, MatchResult::AWins).unwrap();
 
     assert!(matches!(session.next_undo(), Some(Action::Report(_))));
     session.undo().unwrap();
-    assert_eq!(session.next_undo(), Some(&Action::Start));
+    assert_eq!(session.next_undo(), Some(Action::Start));
     assert_eq!(Session::new("cup").next_undo(), None);
 }
 
@@ -2286,7 +2286,7 @@ fn a_saved_competition_loads_as_it_was_saved_without_anything_to_undo() {
     assert_eq!(loaded.entrants(), session.entrants());
     assert_eq!(matches(&loaded), matches(&session));
     assert_eq!(loaded.standings(), session.standings());
-    assert!(matches!(loaded.undo(), Err(NothingToUndo)));
+    assert!(matches!(loaded.undo(), Err(UndoError::NothingToUndo)));
     // a single result can still be undone, as it is found in the log
     loaded.undo_report(numbered(&loaded, 1)).unwrap();
     assert_eq!(
@@ -2458,7 +2458,7 @@ fn a_session_catches_up_with_what_another_one_saved() {
     assert_eq!(matches(&following), matches(&changing));
     assert_eq!(following.standings(), changing.standings());
     assert!(!following.has_unsaved_changes());
-    assert!(matches!(following.undo(), Err(NothingToUndo)));
+    assert!(matches!(following.undo(), Err(UndoError::NothingToUndo)));
     assert_eq!(now(following.catch_up(&storage)).unwrap(), 0);
 }
 
@@ -2498,6 +2498,139 @@ fn catching_up_drops_the_results_taken_back() {
 
     let form = session.result_form(numbered(&session, 1)).unwrap();
     assert_eq!(form.view().root.fields[0].values, Sides::new(None, None));
+}
+
+/// The started competition of `session` saved to `storage`, and a session of another tab that
+/// loaded it.
+fn shared(session: &mut Session, storage: &MemoryStorage) -> Session {
+    now(session.save(storage)).unwrap();
+    now(Session::load(storage, session.key())).unwrap()
+}
+
+/// A result another session reported stays when this one undoes its own.
+#[test]
+fn undo_takes_back_the_session_s_own_result_and_not_one_caught_up_with() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    let mut other = shared(&mut session, &storage);
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+    now(session.save(&storage)).unwrap();
+    now(other.catch_up(&storage)).unwrap();
+    other
+        .report(numbered(&other, 2), MatchResult::BWins)
+        .unwrap();
+    now(other.save(&storage)).unwrap();
+    now(session.catch_up(&storage)).unwrap();
+
+    let undone = session.undo().unwrap();
+
+    assert!(matches!(undone, Action::Report(row) if row.number == 1));
+    let results: Vec<_> = matches(&session).iter().map(|row| row.result).collect();
+    assert_eq!(results[..2], [None, Some(MatchResult::BWins)]);
+}
+
+#[test]
+fn redo_brings_back_what_the_session_undid_after_catching_up() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    let mut other = shared(&mut session, &storage);
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+    session.undo().unwrap();
+    now(session.save(&storage)).unwrap();
+    now(other.catch_up(&storage)).unwrap();
+    other
+        .report(numbered(&other, 2), MatchResult::BWins)
+        .unwrap();
+    now(other.save(&storage)).unwrap();
+    now(session.catch_up(&storage)).unwrap();
+
+    assert!(session.actions().redo);
+    assert!(matches!(session.redo().unwrap(), Action::Report(row) if row.number == 1));
+}
+
+/// Undoing a result another session reopened already would undo an older action while the result
+/// could still come back, so the session undoes nothing more.
+#[test]
+fn a_result_another_session_reopened_leaves_nothing_to_undo() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    let mut other = shared(&mut session, &storage);
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+    now(session.save(&storage)).unwrap();
+    now(other.catch_up(&storage)).unwrap();
+    other.undo_report(numbered(&other, 1)).unwrap();
+    now(other.save(&storage)).unwrap();
+    now(session.catch_up(&storage)).unwrap();
+
+    assert!(!session.actions().undo);
+    assert_eq!(session.next_undo(), None);
+    assert!(matches!(session.undo(), Err(UndoError::ChangedElsewhere)));
+    assert!(matches!(session.undo(), Err(UndoError::NothingToUndo)));
+    assert!(
+        session.competition().is_started(),
+        "the start is not undone"
+    );
+}
+
+/// The final another session reported depends on the semifinal this one reported last.
+#[test]
+fn a_result_another_session_s_result_depends_on_is_not_undone_and_ends_undoing() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    let mut other = shared(&mut session, &storage);
+    for number in [1, 2] {
+        session
+            .report(numbered(&session, number), MatchResult::AWins)
+            .unwrap();
+    }
+    now(session.save(&storage)).unwrap();
+    now(other.catch_up(&storage)).unwrap();
+    other
+        .report(numbered(&other, 3), MatchResult::AWins)
+        .unwrap();
+    now(other.save(&storage)).unwrap();
+    now(session.catch_up(&storage)).unwrap();
+    let before = session.export();
+
+    assert!(matches!(session.next_undo(), Some(Action::Report(row)) if row.number == 2));
+    assert!(matches!(session.undo(), Err(UndoError::ChangedElsewhere)));
+
+    assert_eq!(session.export(), before);
+    assert!(!session.actions().undo);
+}
+
+/// A result this session undid and another one reported again cannot be redone, while what this
+/// session did before stays undoable.
+#[test]
+fn a_result_another_session_reported_again_leaves_nothing_to_redo() {
+    let storage = MemoryStorage::default();
+    let mut session = Given::new().started();
+    let mut other = shared(&mut session, &storage);
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+    session
+        .report(numbered(&session, 2), MatchResult::AWins)
+        .unwrap();
+    session.undo().unwrap();
+    now(session.save(&storage)).unwrap();
+    now(other.catch_up(&storage)).unwrap();
+    other
+        .report(numbered(&other, 2), MatchResult::BWins)
+        .unwrap();
+    now(other.save(&storage)).unwrap();
+    now(session.catch_up(&storage)).unwrap();
+
+    assert!(matches!(session.redo(), Err(RedoError::ChangedElsewhere)));
+
+    assert!(!session.actions().redo);
+    assert!(matches!(session.undo().unwrap(), Action::Report(row) if row.number == 1));
 }
 
 #[test]
@@ -2657,7 +2790,7 @@ fn an_exported_competition_is_imported_as_a_new_one_as_it_was() {
     assert_eq!(imported.entrants(), session.entrants());
     assert_eq!(matches(&imported), matches(&session));
     assert_eq!(imported.standings(), session.standings());
-    assert!(matches!(imported.undo(), Err(NothingToUndo)));
+    assert!(matches!(imported.undo(), Err(UndoError::NothingToUndo)));
     assert!(imported.has_unsaved_changes(), "nothing of it is saved yet");
     now(imported.save(&storage)).unwrap();
     let loaded = now(Session::load(&storage, imported.key())).unwrap();

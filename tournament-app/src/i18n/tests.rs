@@ -31,7 +31,7 @@ use super::*;
 use crate::{
     error::{
         AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
-        NothingToUndo, PhaseDraftError, ReportEnteredError, ReportError, StartError,
+        PhaseDraftError, RedoError, ReportEnteredError, ReportError, StartError, UndoError,
         UndoReportError,
     },
     result_form::PartView,
@@ -192,7 +192,10 @@ fn an_error_says_in_english_what_its_display_says() {
         both(UndoReportError::DependedOn),
         both(UndoReportError::DependedOnBy(vec![3])),
         both(UndoReportError::DependedOnBy(vec![3, 4, 10])),
-        both(NothingToUndo),
+        both(UndoError::NothingToUndo),
+        both(UndoError::ChangedElsewhere),
+        both(RedoError::NothingToRedo),
+        both(RedoError::ChangedElsewhere),
     ] {
         assert_eq!(message, display);
     }

@@ -25,6 +25,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time.
 
+### Fixed
+
+- In the browser, undoing or redoing what another tab has undone, redone or
+  built on since no longer breaks the page: it says that a change made
+  elsewhere keeps it from being undone (or redone), and nothing more can be
+  undone (or redone); what this tab did stays undoable as long as no other tab
+  touched it.
+
 ## [0.4.0] - 2026-11-09
 
 Competitions saved with 0.3.0 and earlier open unchanged. Earlier versions

@@ -53,6 +53,8 @@ error-result-depended-on-by = { $count ->
     }
 error-nothing-to-undo = there is nothing to undo
 error-nothing-to-redo = there is nothing to redo
+error-undo-changed-elsewhere = a change made elsewhere since keeps this from being undone, so nothing more can be undone
+error-redo-changed-elsewhere = a change made elsewhere since keeps this from being redone, so nothing more can be redone
 error-competition-not-found = there is no such competition
 # the messages below have a detail, in English, saying why: from the storage, from reading JSON or
 # from the engine

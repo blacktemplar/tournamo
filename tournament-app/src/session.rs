@@ -33,7 +33,8 @@ use tournament_engine::{
         UndoMatchResultError,
     },
     undoable_state_machine::{
-        LogEntry, RedoLastError, SessionHistory, StateMachineError, TransitionError, UndoLastError,
+        LogEntry, LogEntryKind, RedoLastError, SessionHistory, StateMachineError, TransitionError,
+        TransitionId, UndoLastError,
     },
     uuid::Uuid,
 };
@@ -42,8 +43,8 @@ use unicode_normalization::UnicodeNormalization as _;
 use crate::{
     error::{
         AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
-        NothingToRedo, NothingToUndo, PhaseDraftError, RemoveEntrantError, RenameEntrantError,
-        ReportEnteredError, ReportError, StartError, UndoReportError,
+        PhaseDraftError, RedoError, RemoveEntrantError, RenameEntrantError, ReportEnteredError,
+        ReportError, StartError, UndoError, UndoReportError,
     },
     file::{self, File},
     form::PhaseForm,
@@ -77,10 +78,6 @@ pub struct Session {
     people: People,
     /// What this session did, which `undo` and `redo` walk through.
     history: SessionHistory,
-    /// The actions of `history` that can be undone, the latest last, and those that can be
-    /// redone, the one undone last at the end, which it does not tell.
-    done: Vec<Action>,
-    undone: Vec<Action>,
     /// The configuration of the phase whose adding this session undid last, which the form of a
     /// new phase starts out at.
     undone_phase: Option<Config>,
@@ -115,8 +112,6 @@ impl Session {
             machine,
             people: People::default(),
             history: SessionHistory::new(),
-            done: Vec::new(),
-            undone: Vec::new(),
             undone_phase: None,
             reopened: HashMap::new(),
             people_changes: 0,
@@ -146,8 +141,6 @@ impl Session {
             machine,
             people: file.people,
             history: SessionHistory::new(),
-            done: Vec::new(),
-            undone: Vec::new(),
             undone_phase: None,
             reopened: HashMap::new(),
             people_changes: 0,
@@ -176,10 +169,10 @@ impl Session {
     /// Catches up with `stored`, what a storage holds of this session's competition: appends the
     /// entries of its log after those of the session's, each as [`Self::load`] would have
     /// replayed it, and takes the people as stored. Returns how many entries it appended. They are
-    /// no actions of this session, so there is nothing more to undo, and since they may have
-    /// reported and reopened again the matches this session reopened, the forms of those start
-    /// out empty again. [`Self::catch_up`] reads and catches up in one; reading apart lets a GUI
-    /// hold no borrow of the session while it reads.
+    /// no actions of this session, which undoes and redoes its own as before, see [`Self::undo`];
+    /// since they may have reported and reopened again the matches this session reopened, the
+    /// forms of those start out empty again. [`Self::catch_up`] reads and catches up in one;
+    /// reading apart lets a GUI hold no borrow of the session while it reads.
     ///
     /// An entry that undoes or replaces an earlier one replays the log after that one, as it did
     /// when it was appended; any other entry only applies to the current state.
@@ -254,8 +247,6 @@ impl Session {
             machine,
             people,
             history: SessionHistory::new(),
-            done: Vec::new(),
-            undone: Vec::new(),
             undone_phase: None,
             reopened: HashMap::new(),
             people_changes: 0,
@@ -383,8 +374,8 @@ impl Session {
                     .values()
                     .any(|r#match| !r#match.is_finished())
             }),
-            undo: !self.done.is_empty(),
-            redo: !self.undone.is_empty(),
+            undo: self.history.next_undo(&self.machine).is_some(),
+            redo: self.history.next_redo(&self.machine).is_some(),
         }
     }
 
@@ -493,21 +484,16 @@ impl Session {
     // exactly when it accepts adding every subsequent one, so a refusal adds none of them.
     fn add_named_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
         let id = EntrantId::new(Uuid::new_v4());
-        let action = Action::AddEntrant(EntrantRow {
-            id,
-            name: Some(name.to_owned()),
-        });
-        self.act(action, |machine, history| {
-            machine.apply_in(history, AddEntrant::new(Entrant::new(id)))
-        })
-        .map_err(|error| {
-            let error = rejection(error);
-            if error.is::<CompetitionAlreadyStarted>() {
-                AddEntrantError::Started
-            } else {
-                AddEntrantError::Rejected(error)
-            }
-        })?;
+        self.machine
+            .apply_in(&mut self.history, AddEntrant::new(Entrant::new(id)))
+            .map_err(|error| {
+                let error = rejection(error);
+                if error.is::<CompetitionAlreadyStarted>() {
+                    AddEntrantError::Started
+                } else {
+                    AddEntrantError::Rejected(error)
+                }
+            })?;
         self.people.add(Person::new(id, name));
         self.people_changes += 1;
         Ok(id)
@@ -554,20 +540,18 @@ impl Session {
     /// # Errors
     /// Returns an error if there is no such entrant, or the competition has started.
     pub fn remove_entrant(&mut self, id: EntrantId) -> Result<(), RemoveEntrantError> {
-        let action = Action::RemoveEntrant(self.entrant_row(&id));
-        self.act(action, |machine, history| {
-            machine.apply_in(history, RemoveEntrant::new(id))
-        })
-        .map_err(|error| {
-            let error = rejection(error);
-            if error.is::<CompetitionAlreadyStarted>() {
-                RemoveEntrantError::Started
-            } else if error.is::<engine::RemoveEntrantError>() {
-                RemoveEntrantError::UnknownEntrant
-            } else {
-                RemoveEntrantError::Rejected(error)
-            }
-        })?;
+        self.machine
+            .apply_in(&mut self.history, RemoveEntrant::new(id))
+            .map_err(|error| {
+                let error = rejection(error);
+                if error.is::<CompetitionAlreadyStarted>() {
+                    RemoveEntrantError::Started
+                } else if error.is::<engine::RemoveEntrantError>() {
+                    RemoveEntrantError::UnknownEntrant
+                } else {
+                    RemoveEntrantError::Rejected(error)
+                }
+            })?;
         Ok(())
     }
 
@@ -722,22 +706,21 @@ impl Session {
     /// a phase already, or it has started.
     pub fn add_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<(), AddPhaseError> {
         let plugins = completed(draft).map_err(AddPhaseError::Invalid)?;
-        self.act(Action::AddPhase, |machine, history| {
-            machine.apply_in(
-                history,
+        self.machine
+            .apply_in(
+                &mut self.history,
                 AddPhase::new(PhaseId::new(Uuid::new_v4()), plugins),
             )
-        })
-        .map_err(|error| {
-            let error = rejection(error);
-            if error.is::<CompetitionAlreadyStarted>() {
-                AddPhaseError::Started
-            } else if error.is::<engine::AddPhaseError>() {
-                AddPhaseError::PhaseAlreadyAdded
-            } else {
-                AddPhaseError::Rejected(error)
-            }
-        })?;
+            .map_err(|error| {
+                let error = rejection(error);
+                if error.is::<CompetitionAlreadyStarted>() {
+                    AddPhaseError::Started
+                } else if error.is::<engine::AddPhaseError>() {
+                    AddPhaseError::PhaseAlreadyAdded
+                } else {
+                    AddPhaseError::Rejected(error)
+                }
+            })?;
         Ok(())
     }
 
@@ -769,9 +752,8 @@ impl Session {
         let phase_id = self.phase().ok_or(NoPhase)?.id();
         let plugins = completed(draft).map_err(EditPhaseError::Invalid)?;
         let edited = self
-            .act(Action::EditPhase, |machine, history| {
-                machine.reconfigure_phase(history, phase_id, plugins)
-            })
+            .machine
+            .reconfigure_phase(&mut self.history, phase_id, plugins)
             .map_err(|error| match error {
                 ReconfigurePhaseError::Rejected(error) => self.edit_refusal(phase_id, draft, error),
                 ReconfigurePhaseError::NotAdded => {
@@ -790,20 +772,21 @@ impl Session {
         if let Some(needed @ StartError::TooFewForFormat(_)) = self.start_refusal() {
             return Err(needed);
         }
-        self.act(Action::Start, |machine, history| {
-            machine.apply_in(history, StartCompetition)
-        })
-        .map_err(|error| {
-            let error = rejection(error);
-            if error.is::<CompetitionAlreadyStarted>() {
-                return StartError::Started;
-            }
-            match error.downcast_ref() {
-                Some(engine::StartCompetitionError::NoPhases) => NoPhase.into(),
-                Some(engine::StartCompetitionError::TooFewEntrants) => StartError::TooFewEntrants,
-                None => StartError::Rejected(error),
-            }
-        })?;
+        self.machine
+            .apply_in(&mut self.history, StartCompetition)
+            .map_err(|error| {
+                let error = rejection(error);
+                if error.is::<CompetitionAlreadyStarted>() {
+                    return StartError::Started;
+                }
+                match error.downcast_ref() {
+                    Some(engine::StartCompetitionError::NoPhases) => NoPhase.into(),
+                    Some(engine::StartCompetitionError::TooFewEntrants) => {
+                        StartError::TooFewEntrants
+                    }
+                    None => StartError::Rejected(error),
+                }
+            })?;
         Ok(())
     }
 
@@ -1285,13 +1268,9 @@ impl Session {
         parts: Vec<Part>,
     ) -> Result<Reported, ReportError> {
         let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
-        let Some(r#match) = phase.data().matches().get(&id) else {
+        if !phase.data().matches().contains_key(&id) {
             return Err(ReportError::UnknownMatch);
-        };
-        let row = MatchRow {
-            result: Some(decision.result()),
-            ..self.match_row(phase, r#match)
-        };
+        }
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
         let report = values.into_iter().fold(
@@ -1299,19 +1278,20 @@ impl Session {
             |report, (key, sides)| report.with_value(key, sides),
         );
         let report = parts.into_iter().fold(report, ReportMatchResult::with_part);
-        self.act(Action::Report(row.clone()), |machine, history| {
-            machine.apply_in(history, report)
-        })
-        .map_err(|error| {
-            let error = rejection(error);
-            match error.downcast_ref() {
-                Some(engine::ReportMatchResultError::MatchAlreadyFinished) => {
-                    ReportError::AlreadyFinished
+        self.machine
+            .apply_in(&mut self.history, report)
+            .map_err(|error| {
+                let error = rejection(error);
+                match error.downcast_ref() {
+                    Some(engine::ReportMatchResultError::MatchAlreadyFinished) => {
+                        ReportError::AlreadyFinished
+                    }
+                    Some(engine::ReportMatchResultError::DrawNotAllowed) => {
+                        ReportError::DrawNotAllowed
+                    }
+                    _ => ReportError::Rejected(error),
                 }
-                Some(engine::ReportMatchResultError::DrawNotAllowed) => ReportError::DrawNotAllowed,
-                _ => ReportError::Rejected(error),
-            }
-        })?;
+            })?;
         let matches = self
             .started_phase()
             .expect("still started")
@@ -1343,13 +1323,12 @@ impl Session {
         let contest = r#match.contest().clone();
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
-        self.act(Action::Reopen(row.clone()), |machine, history| {
-            machine.undo_match_result(history, phase_id, id)
-        })
-        .map_err(|error| match error {
-            UndoMatchResultError::NotReported => UndoReportError::NotReported,
-            UndoMatchResultError::Rejected(_) => self.undo_refusal(phase_id, id),
-        })?;
+        self.machine
+            .undo_match_result(&mut self.history, phase_id, id)
+            .map_err(|error| match error {
+                UndoMatchResultError::NotReported => UndoReportError::NotReported,
+                UndoMatchResultError::Rejected(_) => self.undo_refusal(phase_id, id),
+            })?;
         self.reopened.insert(id, contest);
         let matches = self
             .started_phase()
@@ -1430,41 +1409,50 @@ impl Session {
     }
 
     /// The action [`Self::undo`] would undo now, if any, e.g. so that undoing the start, which
-    /// leaves play, is asked about first.
-    pub fn next_undo(&self) -> Option<&Action> {
-        self.done.last()
+    /// leaves play, is asked about first. `None` if there is nothing to undo, or another session
+    /// has undone the action already.
+    pub fn next_undo(&self) -> Option<Action> {
+        let id = self.history.next_undo(&self.machine)?;
+        Some(self.action_of(id))
     }
 
     /// Undoes the latest action of this session that is still in effect, which may be an
     /// [`Self::undo_report`], bringing the result back. Returns the action undone. The form of a
     /// match whose report it undoes starts out at the result, see [`Self::result_form`].
     ///
+    /// The changes of other sessions, caught up with, are not undone, and stay in effect.
+    ///
     /// # Errors
-    /// Returns [`NothingToUndo`] if every action of the session is undone.
-    pub fn undo(&mut self) -> Result<Action, NothingToUndo> {
+    /// Returns [`UndoError::NothingToUndo`] if every action of the session is undone, and
+    /// [`UndoError::ChangedElsewhere`] if a change of another session undid the action or does not
+    /// apply without it; then nothing more can be undone, while what can be redone stays.
+    pub fn undo(&mut self) -> Result<Action, UndoError> {
+        let Some(id) = self.history.next_undo(&self.machine) else {
+            // nothing to undo, or undone elsewhere, which the history fails with and ends at
+            return Err(match self.history.undo_last(&mut self.machine) {
+                Err(UndoLastError::NothingToUndo) => UndoError::NothingToUndo,
+                _ => UndoError::ChangedElsewhere,
+            });
+        };
         // read before the undo, which removes the phase, or the result
-        let phase = (self.done.last() == Some(&Action::AddPhase))
-            .then(|| self.phase().map(Phase::config))
-            .flatten();
-        let reported = match self.done.last() {
-            Some(Action::Report(row)) => self.reported_contest(row.id),
+        let phase = match self.applied(id) {
+            Some(CompetitionTransition::AddPhase(_)) => self.phase().map(Phase::config),
             _ => None,
         };
-        match self.history.undo_last(&mut self.machine) {
-            Ok(_) => {
-                let action = self.done.pop().expect("an action was undone");
-                self.undone.push(action.clone());
-                if phase.is_some() {
-                    self.undone_phase = phase;
-                }
-                self.reopened.extend(reported);
-                Ok(action)
+        let reported = match self.applied(id) {
+            Some(CompetitionTransition::ReportMatchResult(report)) => {
+                self.reported_contest(report.match_id())
             }
-            Err(UndoLastError::NothingToUndo) => Err(NothingToUndo),
-            Err(error) => unreachable!(
-                "only the session appends to its log, so its latest action can be undone: {error}"
-            ),
+            _ => None,
+        };
+        self.history
+            .undo_last(&mut self.machine)
+            .map_err(|_| UndoError::ChangedElsewhere)?;
+        if phase.is_some() {
+            self.undone_phase = phase;
         }
+        self.reopened.extend(reported);
+        Ok(self.action_of(id))
     }
 
     /// Redoes the action this session undid last, as long as it took no other action since.
@@ -1472,40 +1460,89 @@ impl Session {
     /// see [`Self::result_form`].
     ///
     /// # Errors
-    /// Returns [`NothingToRedo`] if there is no such action.
-    pub fn redo(&mut self) -> Result<Action, NothingToRedo> {
+    /// Returns [`RedoError::NothingToRedo`] if there is no such action, and
+    /// [`RedoError::ChangedElsewhere`] if a change of another session redid the action or does not
+    /// apply with it; then nothing more can be redone, while what can be undone stays.
+    pub fn redo(&mut self) -> Result<Action, RedoError> {
+        let Some(id) = self.history.next_redo(&self.machine) else {
+            // nothing to redo, or redone elsewhere, which the history fails with and ends at
+            return Err(match self.history.redo_last(&mut self.machine) {
+                Err(RedoLastError::NothingToRedo) => RedoError::NothingToRedo,
+                _ => RedoError::ChangedElsewhere,
+            });
+        };
         // read before the redo, which takes the result back
-        let reported = match self.undone.last() {
-            Some(Action::Reopen(row)) => self.reported_contest(row.id),
+        let reported = match self.machine.entry(id).map(LogEntry::kind) {
+            Some(LogEntryKind::Undo(target)) => match self.applied(*target) {
+                Some(CompetitionTransition::ReportMatchResult(report)) => {
+                    self.reported_contest(report.match_id())
+                }
+                _ => None,
+            },
             _ => None,
         };
-        match self.history.redo_last(&mut self.machine) {
-            Ok(_) => {
-                let action = self.undone.pop().expect("an action was redone");
-                self.done.push(action.clone());
-                self.reopened.extend(reported);
-                Ok(action)
-            }
-            Err(RedoLastError::NothingToRedo) => Err(NothingToRedo),
-            Err(error) => unreachable!(
-                "only the session appends to its log, so what it undid last can be redone: {error}"
-            ),
+        self.history
+            .redo_last(&mut self.machine)
+            .map_err(|_| RedoError::ChangedElsewhere)?;
+        self.reopened.extend(reported);
+        Ok(self.action_of(id))
+    }
+
+    /// The transition the log entry `id` applies, if it applies one.
+    fn applied(&self, id: TransitionId) -> Option<&CompetitionTransition> {
+        match self.machine.entry(id)?.kind() {
+            LogEntryKind::Apply(transition) => Some(transition),
+            _ => None,
         }
     }
 
-    /// Runs `run`, which appends to the log as the action `action` of the session, if anything.
-    fn act<T, E>(
-        &mut self,
-        action: Action,
-        run: impl FnOnce(&mut CompetitionStateMachine, &mut SessionHistory) -> Result<T, E>,
-    ) -> Result<T, E> {
-        let log_len = self.machine.log().len();
-        let done = run(&mut self.machine, &mut self.history)?;
-        if self.machine.log().len() > log_len {
-            self.done.push(action);
-            self.undone.clear();
+    /// The action of this session whose entry in the log is `id`, as the competition shows it
+    /// now: done, or about to be undone or redone, or just undone or redone.
+    ///
+    /// # Panics
+    /// Panics if `id` is no action of the session, or the match of a report is not scheduled, which
+    /// it is while the report is in effect, and after it was undone or before it is redone, since
+    /// only the entries before a report schedule its match.
+    fn action_of(&self, id: TransitionId) -> Action {
+        let entry = self
+            .machine
+            .entry(id)
+            .expect("an action is an entry of the log");
+        let reported = |report: &ReportMatchResult| {
+            let phase = self
+                .started_phase()
+                .expect("a match is reported once started");
+            let r#match = &phase.data().matches()[&report.match_id()];
+            MatchRow {
+                result: Some(report.match_result()),
+                ..self.match_row(phase, r#match)
+            }
+        };
+        match entry.kind() {
+            LogEntryKind::Apply(transition) => match transition {
+                CompetitionTransition::AddEntrant(added) => {
+                    Action::AddEntrant(self.entrant_row(&added.entrant().id()))
+                }
+                CompetitionTransition::RemoveEntrant(removed) => {
+                    Action::RemoveEntrant(self.entrant_row(&removed.entrant_id()))
+                }
+                CompetitionTransition::AddPhase(_) => Action::AddPhase,
+                CompetitionTransition::StartCompetition(_) => Action::Start,
+                CompetitionTransition::ReportMatchResult(report) => {
+                    Action::Report(reported(report))
+                }
+                CompetitionTransition::SetCompetitionSeed(_) => {
+                    unreachable!("the seed is applied outside the history")
+                }
+            },
+            LogEntryKind::Replace { .. } => Action::EditPhase,
+            LogEntryKind::Undo(target) => match self.applied(*target) {
+                Some(CompetitionTransition::ReportMatchResult(report)) => {
+                    Action::Reopen(reported(report))
+                }
+                _ => unreachable!("the only undo a session takes as an action reopens a match"),
+            },
         }
-        Ok(done)
     }
 
     /// Why the edit of the phase `phase_id` to what `draft` configures was rejected as `rejected`:

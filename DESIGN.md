@@ -902,14 +902,29 @@ undo entry naming its target. Operations appending an action take the history
 - **A targeted undo is an action**: after `undo-report`, `undo` brings the
   result back.
 - **Explicit targets**, so an undo means the same however logs are merged.
+- **Changes of other sessions leave the history as it is**: what this session
+  can undo and redo stays after catching up with them.
 - **Fails only because of other sessions** (a dependent change, or the action
-  undone elsewhere); then it fails rather than skipping the action.
+  undone or redone elsewhere); then it fails rather than skipping the action,
+  and that direction ends there: a failed undo leaves nothing to undo, a failed
+  redo nothing to redo, while the other direction stays. `next_undo` and
+  `next_redo` do not offer an action undone or redone elsewhere, which is
+  cheap to tell; whether a change depends on it shows only by trying, which
+  replays the log.
+- **The history holds ids, the log says what they did**: `Session` describes
+  an action (`Action`, for the announcement) from its log entry, an exhaustive
+  `match` on `CompetitionTransition`, rather than keeping descriptions next to
+  the history. What a form starts out at after an undo (the phase config, a
+  result taken back) is kept apart, since it outlives what can be redone.
 - **The seed is no action**, applied outside any history, never undone.
 
 Rejected: deriving the history from the log (`undo` after `undo-report` undid an
 unrelated change); dedicated undo/redo log entries (record navigation, not
 whose); an origin per user (a user with two sessions); persisting the history
-(not part of the competition).
+(not part of the competition); ending the history when catching up with another
+session (a result reported elsewhere would keep the operator from undoing their
+own); keeping an action to try again after it failed (it fails again until the
+other session's change is undone).
 
 ## Dependencies this implies
 

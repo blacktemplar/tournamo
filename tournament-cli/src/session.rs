@@ -20,7 +20,7 @@ use plugin_factory::{
 };
 use thiserror::Error;
 use tournament_app::{
-    error::{self as app_error, ImportError},
+    error::{self as app_error, ImportError, RedoError, UndoError},
     file::{File, Format},
     i18n::{Language, Translator},
     session::Session as AppSession,
@@ -107,6 +107,14 @@ pub enum Error {
     NothingToUndo,
     #[error("there is nothing to redo")]
     NothingToRedo,
+    #[error(
+        "a change made elsewhere since keeps this from being undone, so nothing more can be undone"
+    )]
+    UndoChangedElsewhere,
+    #[error(
+        "a change made elsewhere since keeps this from being redone, so nothing more can be redone"
+    )]
+    RedoChangedElsewhere,
     #[error("the competition has not been saved yet, so a name to save it under is needed")]
     NoName,
     #[error("there are unsaved changes; save them, or exit with --force to discard them")]
@@ -631,13 +639,19 @@ impl Session {
     /// Undoes the latest change of this session that is still in effect, which may be an
     /// `undo-report`, bringing the result back.
     fn undo(&mut self) -> Result<String, Error> {
-        self.session.undo().map_err(|_| Error::NothingToUndo)?;
+        self.session.undo().map_err(|error| match error {
+            UndoError::NothingToUndo => Error::NothingToUndo,
+            UndoError::ChangedElsewhere => Error::UndoChangedElsewhere,
+        })?;
         Ok("undone".to_owned())
     }
 
     /// Redoes the change this session undid last, as long as it made no other change since.
     fn redo(&mut self) -> Result<String, Error> {
-        self.session.redo().map_err(|_| Error::NothingToRedo)?;
+        self.session.redo().map_err(|error| match error {
+            RedoError::NothingToRedo => Error::NothingToRedo,
+            RedoError::ChangedElsewhere => Error::RedoChangedElsewhere,
+        })?;
         Ok("redone".to_owned())
     }
 

@@ -106,11 +106,27 @@ impl Session {
         machine
             .apply_transition(SetCompetitionSeed::new(Seed::new(seed)))
             .expect("a new competition must accept a seed");
-        Self {
-            key: CompetitionKey::new(Uuid::new_v4()),
-            name: name.into(),
+        Self::open(
+            CompetitionKey::new(Uuid::new_v4()),
+            name.into(),
             machine,
-            people: People::default(),
+            People::default(),
+        )
+    }
+
+    /// A session of the competition `machine` replays, stored under `key`, as nothing of it were
+    /// saved yet and the session had done nothing.
+    fn open(
+        key: CompetitionKey,
+        name: String,
+        machine: CompetitionStateMachine,
+        people: People,
+    ) -> Self {
+        Self {
+            key,
+            name,
+            machine,
+            people,
             history: SessionHistory::new(),
             undone_phase: None,
             reopened: HashMap::new(),
@@ -135,16 +151,9 @@ impl Session {
         let file = Record::read(&stored.record)?;
         let machine = CompetitionStateMachine::build(file.log).map_err(LoadError::Replay)?;
         Ok(Self {
-            key,
-            name: stored.name,
             saved_changes: machine.log().len(),
-            machine,
-            people: file.people,
-            history: SessionHistory::new(),
-            undone_phase: None,
-            reopened: HashMap::new(),
-            people_changes: 0,
             competition_saved: file.competition.is_some(),
+            ..Self::open(key, stored.name, machine, file.people)
         })
     }
 
@@ -241,18 +250,12 @@ impl Session {
             people,
             ..
         } = file;
-        Self {
-            key: CompetitionKey::new(Uuid::new_v4()),
-            name: name.into(),
+        Self::open(
+            CompetitionKey::new(Uuid::new_v4()),
+            name.into(),
             machine,
             people,
-            history: SessionHistory::new(),
-            undone_phase: None,
-            reopened: HashMap::new(),
-            people_changes: 0,
-            saved_changes: 0,
-            competition_saved: false,
-        }
+        )
     }
 
     /// The competition's file data, borrowing its log, people and competition. Its optional name

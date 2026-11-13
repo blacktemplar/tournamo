@@ -14,6 +14,7 @@ use std::{
 };
 
 pub use plugin_factory_derive::Configurable;
+use range::Narrowing;
 pub use range::{DecimalRange, IntegerRange, NumberRange};
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -596,10 +597,7 @@ impl Field {
     #[doc(hidden)]
     #[must_use]
     pub fn multiple_of(self, multiple_of: f64) -> Self {
-        self.narrowed(
-            |range| range.narrowed_to_multiples_of(multiple_of),
-            |range| range.narrowed_to_multiples_of(multiple_of),
-        )
+        self.narrowed(Narrowing::MultiplesOf(multiple_of))
     }
 
     /// This field taking only the numbers from `min` on, from `#[plugin(min = ..)]`. Called by the
@@ -610,10 +608,7 @@ impl Field {
     #[doc(hidden)]
     #[must_use]
     pub fn at_least(self, min: f64) -> Self {
-        self.narrowed(
-            |range| range.narrowed_to_at_least(min),
-            |range| range.narrowed_to_at_least(min),
-        )
+        self.narrowed(Narrowing::AtLeast(min))
     }
 
     /// This field taking only the numbers up to `max`, from `#[plugin(max = ..)]`. Called by the
@@ -624,19 +619,12 @@ impl Field {
     #[doc(hidden)]
     #[must_use]
     pub fn at_most(self, max: f64) -> Self {
-        self.narrowed(
-            |range| range.narrowed_to_at_most(max),
-            |range| range.narrowed_to_at_most(max),
-        )
+        self.narrowed(Narrowing::AtMost(max))
     }
 
-    /// This field with the range of the number it takes narrowed by `integer` or `decimal`.
-    fn narrowed(
-        mut self,
-        integer: impl FnOnce(IntegerRange) -> Result<IntegerRange, String>,
-        decimal: impl FnOnce(DecimalRange) -> Result<DecimalRange, String>,
-    ) -> Self {
-        if let Err(reason) = self.kind.narrow(integer, decimal) {
+    /// This field with the range of the number it takes narrowed `by` an attribute.
+    fn narrowed(mut self, by: Narrowing) -> Self {
+        if let Err(reason) = self.kind.narrow(by) {
             panic!(
                 "the range of the field {} cannot be narrowed: {reason}",
                 self.name
@@ -744,19 +732,15 @@ impl FieldKind {
         }
     }
 
-    /// Narrows the range of numbers this kind of answer takes by `integer` or `decimal`.
+    /// Narrows the range of numbers this kind of answer takes `by` an attribute.
     ///
     /// # Errors
     /// Returns why if it takes no number or the range cannot be narrowed.
-    fn narrow(
-        &mut self,
-        integer: impl FnOnce(IntegerRange) -> Result<IntegerRange, String>,
-        decimal: impl FnOnce(DecimalRange) -> Result<DecimalRange, String>,
-    ) -> Result<(), String> {
+    fn narrow(&mut self, by: Narrowing) -> Result<(), String> {
         match self {
-            Self::Integer(range) => *range = integer(*range)?,
-            Self::Decimal(range) => *range = decimal(*range)?,
-            Self::Optional(inner) => inner.narrow(integer, decimal)?,
+            Self::Integer(range) => *range = range.narrowed(by)?,
+            Self::Decimal(range) => *range = range.narrowed(by)?,
+            Self::Optional(inner) => inner.narrow(by)?,
             Self::Bool | Self::Plugin(_) | Self::List { .. } => {
                 return Err("it takes no number".to_owned());
             }

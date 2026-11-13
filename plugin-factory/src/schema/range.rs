@@ -105,7 +105,7 @@ impl IntegerRange {
     /// maximum.
     #[must_use]
     pub fn at_least(self, min: i64) -> Self {
-        self.narrowed_to_at_least(min as f64)
+        self.narrowed(Narrowing::AtLeast(min as f64))
             .unwrap_or_else(|reason| panic!("the range cannot be narrowed: {reason}"))
     }
 
@@ -115,7 +115,7 @@ impl IntegerRange {
     /// If `max` is not a multiple of what the range takes multiples of, or less than its minimum.
     #[must_use]
     pub fn at_most(self, max: i64) -> Self {
-        self.narrowed_to_at_most(max as f64)
+        self.narrowed(Narrowing::AtMost(max as f64))
             .unwrap_or_else(|reason| panic!("the range cannot be narrowed: {reason}"))
     }
 
@@ -132,7 +132,7 @@ impl IntegerRange {
     /// number of the range is a multiple of it.
     #[must_use]
     pub fn multiples_of(self, multiple_of: u64) -> Self {
-        self.narrowed_to_multiples_of(multiple_of as f64)
+        self.narrowed(Narrowing::MultiplesOf(multiple_of as f64))
             .unwrap_or_else(|reason| panic!("the range cannot be narrowed: {reason}"))
     }
 
@@ -143,9 +143,18 @@ impl IntegerRange {
             && value.unsigned_abs().is_multiple_of(self.multiple_of())
     }
 
+    /// This range narrowed `by` a field's attribute.
+    pub(super) fn narrowed(self, by: Narrowing) -> Result<Self, String> {
+        match by {
+            Narrowing::MultiplesOf(multiple_of) => self.narrowed_to_multiples_of(multiple_of),
+            Narrowing::AtLeast(min) => self.narrowed_to_at_least(min),
+            Narrowing::AtMost(max) => self.narrowed_to_at_most(max),
+        }
+    }
+
     /// This range narrowed to the multiples of `multiple_of`, with its bounds moved inward to the
     /// nearest of them.
-    pub(super) fn narrowed_to_multiples_of(self, multiple_of: f64) -> Result<Self, String> {
+    fn narrowed_to_multiples_of(self, multiple_of: f64) -> Result<Self, String> {
         let multiple_of = whole(multiple_of)
             .and_then(|multiple_of| u64::try_from(multiple_of).ok())
             .and_then(NonZeroU64::new)
@@ -176,23 +185,23 @@ impl IntegerRange {
     }
 
     /// This range narrowed to the numbers from `min` on, with its minimum stated.
-    pub(super) fn narrowed_to_at_least(self, min: f64) -> Result<Self, String> {
+    fn narrowed_to_at_least(self, min: f64) -> Result<Self, String> {
         let min = self.bound(min)?;
         Self {
             min_stated: true,
             ..self
         }
-        .narrowed(min.max(self.min), self.max)
+        .bounded(min.max(self.min), self.max)
     }
 
     /// This range narrowed to the numbers up to `max`, with its maximum stated.
-    pub(super) fn narrowed_to_at_most(self, max: f64) -> Result<Self, String> {
+    fn narrowed_to_at_most(self, max: f64) -> Result<Self, String> {
         let max = self.bound(max)?;
         Self {
             max_stated: true,
             ..self
         }
-        .narrowed(self.min, max.min(self.max))
+        .bounded(self.min, max.min(self.max))
     }
 
     /// `bound` as a bound of this range: a whole number and a multiple of its `multiple_of`.
@@ -207,7 +216,11 @@ impl IntegerRange {
             })
     }
 
-    fn narrowed(self, min: i64, max: i64) -> Result<Self, String> {
+    /// This range from `min` to `max`.
+    ///
+    /// # Errors
+    /// If `min` is greater than `max`.
+    fn bounded(self, min: i64, max: i64) -> Result<Self, String> {
         if min > max {
             return Err(format!("no number from {min} to {max} is {self}"));
         }
@@ -225,17 +238,14 @@ fn whole(value: f64) -> Option<i64> {
 /// that is a multiple of 2", leaving out a bound that is only a type's limit.
 impl Display for IntegerRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("a whole number")?;
-        match (self.stated_min(), self.stated_max()) {
-            (Some(min), Some(max)) => write!(f, " from {min} to {max}")?,
-            (Some(min), None) => write!(f, " of at least {min}")?,
-            (None, Some(max)) => write!(f, " of at most {max}")?,
-            (None, None) => {}
-        }
-        if self.multiple_of() != 1 {
-            write!(f, " that is a multiple of {}", self.multiple_of)?;
-        }
-        Ok(())
+        let multiple_of = (self.multiple_of() != 1).then_some(self.multiple_of);
+        describe(
+            f,
+            "a whole number",
+            self.stated_min(),
+            self.stated_max(),
+            multiple_of,
+        )
     }
 }
 
@@ -302,7 +312,7 @@ impl DecimalRange {
     /// than its maximum.
     #[must_use]
     pub fn at_least(self, min: f64) -> Self {
-        self.narrowed_to_at_least(min)
+        self.narrowed(Narrowing::AtLeast(min))
             .unwrap_or_else(|reason| panic!("the range cannot be narrowed: {reason}"))
     }
 
@@ -313,7 +323,7 @@ impl DecimalRange {
     /// its minimum.
     #[must_use]
     pub fn at_most(self, max: f64) -> Self {
-        self.narrowed_to_at_most(max)
+        self.narrowed(Narrowing::AtMost(max))
             .unwrap_or_else(|reason| panic!("the range cannot be narrowed: {reason}"))
     }
 
@@ -340,9 +350,18 @@ impl DecimalRange {
                 .is_none_or(|multiple_of| value % multiple_of == 0.0)
     }
 
+    /// This range narrowed `by` a field's attribute.
+    pub(super) fn narrowed(self, by: Narrowing) -> Result<Self, String> {
+        match by {
+            Narrowing::MultiplesOf(multiple_of) => self.narrowed_to_multiples_of(multiple_of),
+            Narrowing::AtLeast(min) => self.narrowed_to_at_least(min),
+            Narrowing::AtMost(max) => self.narrowed_to_at_most(max),
+        }
+    }
+
     /// This range narrowed to the multiples of `multiple_of`, with its bounds moved inward to the
     /// nearest of them.
-    pub(super) fn narrowed_to_multiples_of(self, multiple_of: f64) -> Result<Self, String> {
+    fn narrowed_to_multiples_of(self, multiple_of: f64) -> Result<Self, String> {
         if !is_exact_multiple_of(multiple_of) {
             return Err(format!(
                 "{multiple_of} is neither a positive whole number nor a power of two"
@@ -361,19 +380,19 @@ impl DecimalRange {
             multiple_of: Some(multiple_of),
             ..self
         }
-        .narrowed(min, max)
+        .bounded(min, max)
     }
 
     /// This range narrowed to the numbers from `min` on.
-    pub(super) fn narrowed_to_at_least(self, min: f64) -> Result<Self, String> {
+    fn narrowed_to_at_least(self, min: f64) -> Result<Self, String> {
         let min = self.bound(min)?;
-        self.narrowed(Some(self.min.map_or(min, |old| old.max(min))), self.max)
+        self.bounded(Some(self.min.map_or(min, |old| old.max(min))), self.max)
     }
 
     /// This range narrowed to the numbers up to `max`.
-    pub(super) fn narrowed_to_at_most(self, max: f64) -> Result<Self, String> {
+    fn narrowed_to_at_most(self, max: f64) -> Result<Self, String> {
         let max = self.bound(max)?;
-        self.narrowed(self.min, Some(self.max.map_or(max, |old| old.min(max))))
+        self.bounded(self.min, Some(self.max.map_or(max, |old| old.min(max))))
     }
 
     /// `bound` as a bound of this range: a finite number and a multiple of its `multiple_of`.
@@ -389,7 +408,11 @@ impl DecimalRange {
         }
     }
 
-    fn narrowed(self, min: Option<f64>, max: Option<f64>) -> Result<Self, String> {
+    /// This range with the bounds `min` and `max`, multiples of its `multiple_of`.
+    ///
+    /// # Errors
+    /// If no number is left between them.
+    fn bounded(self, min: Option<f64>, max: Option<f64>) -> Result<Self, String> {
         if let (Some(min), Some(max)) = (min, max)
             && min > max
         {
@@ -412,18 +435,42 @@ const fn is_exact_multiple_of(multiple_of: f64) -> bool {
 /// Describes the numbers, e.g. "a number of at least 0 that is a multiple of 0.25".
 impl Display for DecimalRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str("a number")?;
-        match (self.min, self.max) {
-            (Some(min), Some(max)) => write!(f, " from {min} to {max}")?,
-            (Some(min), None) => write!(f, " of at least {min}")?,
-            (None, Some(max)) => write!(f, " of at most {max}")?,
-            (None, None) => {}
-        }
-        if let Some(multiple_of) = self.multiple_of {
-            write!(f, " that is a multiple of {multiple_of}")?;
-        }
-        Ok(())
+        describe(f, "a number", self.min, self.max, self.multiple_of)
     }
+}
+
+/// Writes `numbers`, e.g. "a number", narrowed to those from `min` to `max` that are multiples of
+/// `multiple_of`, each only where given.
+fn describe<T: Display, M: Display>(
+    f: &mut Formatter<'_>,
+    numbers: &str,
+    min: Option<T>,
+    max: Option<T>,
+    multiple_of: Option<M>,
+) -> fmt::Result {
+    f.write_str(numbers)?;
+    match (min, max) {
+        (Some(min), Some(max)) => write!(f, " from {min} to {max}")?,
+        (Some(min), None) => write!(f, " of at least {min}")?,
+        (None, Some(max)) => write!(f, " of at most {max}")?,
+        (None, None) => {}
+    }
+    if let Some(multiple_of) = multiple_of {
+        write!(f, " that is a multiple of {multiple_of}")?;
+    }
+    Ok(())
+}
+
+/// How a field narrows the numbers its type takes, from its `#[plugin(multiple_of = ..)]`,
+/// `min` or `max`.
+#[derive(Debug, Clone, Copy)]
+pub(super) enum Narrowing {
+    /// To the multiples of the number, with the bounds moved inward to the nearest of them.
+    MultiplesOf(f64),
+    /// To the numbers from the number on, stated.
+    AtLeast(f64),
+    /// To the numbers up to the number, stated.
+    AtMost(f64),
 }
 
 /// The numbers a numeric field takes, as an [`OutOfRange`](crate::config::ConfigError::OutOfRange)

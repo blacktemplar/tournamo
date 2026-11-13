@@ -314,15 +314,15 @@ fn accept_defaults(draft: &mut Draft<Phase>) {
 /// The fields a UI renders for `draft`, depth first, each with whether it is answered.
 fn questions(draft: &Draft<Phase>) -> Vec<(String, bool)> {
     let mut questions = Vec::new();
-    fields(&draft.fields(), &mut questions);
+    fields(draft.fields(), &mut questions);
     questions
 }
 
-fn fields(nodes: &[FieldNode], questions: &mut Vec<(String, bool)>) {
+fn fields(nodes: Vec<FieldNode>, questions: &mut Vec<(String, bool)>) {
     for node in nodes {
         questions.push((node.path.to_string(), node.answer.is_some()));
-        for plugin in &node.plugins {
-            fields(&plugin.fields, questions);
+        for plugin in node.plugins() {
+            fields(plugin.fields(), questions);
         }
     }
 }

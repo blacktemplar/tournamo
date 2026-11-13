@@ -29,13 +29,14 @@ use std::{
 };
 
 pub use fields::{FieldNode, PluginNode};
+use fields::{Node, Position, Slot, locate, preorder};
 
 use crate::{
     Plugin,
     catalog::{AnyAxis, PluginEntry},
     compatibility::{self, Declaration, Declared, Incompatibility, OpenFacts, RequiredFact},
     config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Segment, Value},
-    schema::{Configurable, Field, FieldKind, Schema},
+    schema::{Configurable, Schema},
 };
 
 /// The answers to the schema of the composite `T` given so far, see the [module](self).
@@ -77,11 +78,11 @@ use crate::{
 ///     seedings: Vec<Box<dyn Seeding>>,
 /// }
 ///
-/// fn fields(nodes: &[FieldNode], lines: &mut Vec<String>) {
+/// fn fields(nodes: Vec<FieldNode>, lines: &mut Vec<String>) {
 ///     for node in nodes {
 ///         lines.push(format!("{}: {}", node.path, node.field.label()));
-///         for plugin in &node.plugins {
-///             fields(&plugin.fields, lines);
+///         for plugin in node.plugins() {
+///             fields(plugin.fields(), lines);
 ///         }
 ///     }
 /// }
@@ -96,7 +97,7 @@ use crate::{
 ///     .unwrap();
 ///
 /// let mut lines = Vec::new();
-/// fields(&draft.fields(), &mut lines);
+/// fields(draft.fields(), &mut lines);
 /// assert_eq!(
 ///     lines,
 ///     [
@@ -193,50 +194,24 @@ impl<T: Configurable> Draft<T> {
     /// # Errors
     /// Returns what [`Self::set`] returns for a schema default.
     pub fn with_defaults(mut self) -> Result<Self, ConfigError> {
-        self.answer_defaults(&T::schema(), &Path::ROOT)?;
+        // answering a field adds only the fields of the plugins in its answer, which follow it
+        // depth first, so the first one left is the next in that order
+        while let Some((path, default)) = self.first_default() {
+            self.set(&path, default)?;
+        }
         Ok(self)
     }
 
-    /// Answers every unanswered field of `schema`, the schema of the config at `at`, by what it
-    /// offers, see [`Self::with_defaults`].
-    fn answer_defaults(&mut self, schema: &Schema, at: &Path) -> Result<(), ConfigError> {
-        for field in schema.fields() {
-            let path = at.clone().field(field.name());
-            if self.answers.get_at(&path).is_none()
-                && let Some(default) = self.default_value(&path)?
-            {
-                self.set(&path, default)?;
-            }
-            self.answer_plugin_defaults(field.kind(), &path)?;
-        }
-        Ok(())
-    }
-
-    /// Answers the unanswered fields of the plugins answering the position of `kind` at `at`, see
-    /// [`Self::with_defaults`].
-    fn answer_plugin_defaults(&mut self, kind: &FieldKind, at: &Path) -> Result<(), ConfigError> {
-        let Some(answer) = self.answers.get_at(at).cloned() else {
-            return Ok(());
-        };
-        match (unwrapped(kind), answer) {
-            (FieldKind::List { axis, .. }, Value::Array(answers)) => {
-                for position in 0..answers.len() {
-                    let at = at.clone().index(position);
-                    self.answer_plugin_defaults(&FieldKind::Plugin(*axis), &at)?;
+    /// The first unanswered field offering an answer, depth first, and the answer it offers.
+    fn first_default(&self) -> Option<(Path, Value)> {
+        preorder(self.fields())
+            .into_iter()
+            .find_map(|node| match node {
+                Node::Field(field) if field.answer.is_none() => {
+                    Some((field.path, field.field.default_value()?.clone()))
                 }
-            }
-            (FieldKind::Plugin(axis), answer) => {
-                // an answer is checked when it is set, so it names a plugin of the axis unless it
-                // is nothing
-                if let Some(entry) = PluginConfig::from_answer(&answer)
-                    .and_then(|plugin| axis.entry(plugin.plugin()))
-                {
-                    self.answer_defaults(&entry.schema(), at)?;
-                }
-            }
-            _ => {}
-        }
-        Ok(())
+                _ => None,
+            })
     }
 
     /// The answers given so far, as the config of the composite.
@@ -246,8 +221,23 @@ impl<T: Configurable> Draft<T> {
 
     /// The fields in schema order, each with its answer and the fields of its chosen plugins.
     /// Unanswered fields are included; defaults and implied plugins are not added.
-    pub fn fields(&self) -> Vec<FieldNode> {
-        fields::fields(&T::schema(), &self.answers, &Path::ROOT)
+    pub fn fields(&self) -> Vec<FieldNode<'_>> {
+        fields::fields(&T::schema(), &self.answers)
+    }
+
+    /// The field at `path`, or [`None`] if `path` addresses no field of the answers, e.g. a
+    /// position in a list.
+    pub fn field_at(&self, path: &Path) -> Option<FieldNode<'_>> {
+        match locate(&T::schema(), &self.answers, path).ok()? {
+            Position::Field(node) => Some(node),
+            Position::Item { .. } => None,
+        }
+    }
+
+    /// The plugin answering the field or the position in a list at `path`, or [`None`] if there
+    /// is none.
+    pub fn plugin_at(&self, path: &Path) -> Option<PluginNode<'_>> {
+        locate(&T::schema(), &self.answers, path).ok()?.plugin()
     }
 
     /// Answers the position at `path` with `answer`: a field, a position in a list, or the
@@ -274,8 +264,9 @@ impl<T: Configurable> Draft<T> {
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers. Nothing
     /// is changed then.
     pub fn unset(&mut self, path: &Path) -> Result<(), ConfigError> {
-        let position = locate(&T::schema(), &self.answers, path)?;
-        if position.field.is_none() && position.answer.is_none() {
+        if let Position::Item { list, index, .. } = locate(&T::schema(), &self.answers, path)?
+            && list.answer.and_then(Value::as_array).map(Vec::len) == Some(index)
+        {
             return Err(ConfigError::UnknownField { path: path.clone() });
         }
         edit(&mut self.answers, path, None);
@@ -291,24 +282,27 @@ impl<T: Configurable> Draft<T> {
     /// # Errors
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers.
     pub fn default_value(&self, path: &Path) -> Result<Option<Value>, ConfigError> {
-        let schema = T::schema();
-        let Some(field) = locate(&schema, &self.answers, path)?.field else {
-            return Ok(None);
-        };
-        Ok(field.default_value().cloned())
+        Ok(match locate(&T::schema(), &self.answers, path)? {
+            Position::Field(node) => node.field.default_value().cloned(),
+            Position::Item { .. } => None,
+        })
     }
 
     /// Whether the field at `path` matters with the answers given: not if the composite provides
-    /// the fact that makes it irrelevant (see [`Field::irrelevant_with`]), its context or a plugin
+    /// the fact that makes it irrelevant, see [`Field::irrelevant_with`], its context or a plugin
     /// answered so far; a position in a list always does. A UI may leave out a field that does
     /// not; it is answered all the same.
+    ///
+    /// [`Field::irrelevant_with`]: crate::schema::Field::irrelevant_with
     ///
     /// # Errors
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers.
     pub fn is_relevant(&self, path: &Path) -> Result<bool, ConfigError> {
         let schema = T::schema();
-        let position = locate(&schema, &self.answers, path)?;
-        let Some(fact) = position.field.and_then(|field| field.irrelevant_with()) else {
+        let Position::Field(node) = locate(&schema, &self.answers, path)? else {
+            return Ok(true);
+        };
+        let Some(fact) = node.field.irrelevant_with() else {
             return Ok(true);
         };
         let provided = self.context.provides_type(fact)
@@ -328,27 +322,24 @@ impl<T: Configurable> Draft<T> {
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers. A path may
     /// address the position just past the end of a list.
     pub fn candidates(&self, path: &Path) -> Result<Vec<&'static PluginEntry>, ConfigError> {
-        let schema = T::schema();
-        let position = locate(&schema, &self.answers, path)?;
-        let Some((axis, _)) = slot(&position.kind) else {
+        let position = locate(&T::schema(), &self.answers, path)?;
+        let Some(slot) = Slot::of(&position.kind()) else {
             return Ok(Vec::new());
         };
-        let taken: Vec<_> = match path.segments().last() {
-            Some(Segment::Index(index)) => self
-                .answers
-                .get_at(&path.parent().expect("an index belongs to a list"))
-                .and_then(Value::as_array)
-                .iter()
-                .flat_map(|items| items.iter().enumerate())
+        let taken: Vec<_> = match &position {
+            Position::Item { list, index, .. } => list
+                .plugins()
+                .into_iter()
+                .enumerate()
                 .filter(|(other, _)| other != index)
-                .filter_map(|(_, answer)| PluginConfig::from_answer(answer))
-                .map(|plugin| plugin.plugin().to_owned())
+                .map(|(_, plugin)| plugin.entry.id())
                 .collect(),
-            _ => Vec::new(),
+            Position::Field(_) => Vec::new(),
         };
-        Ok(axis
+        Ok(slot
+            .axis()
             .entries()
-            .filter(|entry| !taken.iter().any(|id| id == entry.id()))
+            .filter(|entry| !taken.contains(&entry.id()))
             .collect())
     }
 
@@ -630,8 +621,8 @@ fn top_lists(schema: &Schema) -> Vec<(&'static str, AnyAxis)> {
     schema
         .fields()
         .iter()
-        .filter_map(|field| match slot(field.kind()) {
-            Some((axis, true)) => Some((field.name(), axis)),
+        .filter_map(|field| match Slot::of(field.kind()) {
+            Some(Slot::List(axis)) => Some((field.name(), axis)),
             _ => None,
         })
         .collect()
@@ -728,89 +719,6 @@ impl Display for Problem {
     }
 }
 
-/// The axis of the plugins a position of `kind` takes and whether it takes a list of them, or
-/// [`None`] if it takes no plugin.
-fn slot(kind: &FieldKind) -> Option<(AnyAxis, bool)> {
-    match unwrapped(kind) {
-        FieldKind::Plugin(axis) => Some((*axis, false)),
-        FieldKind::List { axis, .. } => Some((*axis, true)),
-        _ => None,
-    }
-}
-
-/// `kind` without the [`FieldKind::Optional`]s around it.
-fn unwrapped(kind: &FieldKind) -> &FieldKind {
-    match kind {
-        FieldKind::Optional(inner) => unwrapped(inner),
-        _ => kind,
-    }
-}
-
-/// What is at a path of the answers, see [`locate`].
-struct Position {
-    /// The field, unless the path addresses a position in a list.
-    field: Option<Field>,
-    kind: FieldKind,
-    answer: Option<Value>,
-}
-
-/// What is at `path` in `answers`, the answers to `schema`.
-///
-/// # Errors
-/// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers: the root, a
-/// field its config does not have, a field of a plugin that is not chosen, or a position in a
-/// list further than just past its end.
-fn locate(schema: &Schema, answers: &Config, path: &Path) -> Result<Position, ConfigError> {
-    let unknown = || ConfigError::UnknownField { path: path.clone() };
-    let mut segments = path.segments().iter();
-    let Some(Segment::Field(name)) = segments.next() else {
-        return Err(unknown());
-    };
-    let field = schema.field_named(name).ok_or_else(unknown)?;
-    let mut position = Position {
-        field: Some(field.clone()),
-        kind: field.kind().clone(),
-        answer: answers.get(name).cloned(),
-    };
-    for segment in segments {
-        position = match segment {
-            Segment::Index(index) => {
-                let (FieldKind::List { axis, .. }, Some(Value::Array(answers))) =
-                    (unwrapped(&position.kind), &position.answer)
-                else {
-                    return Err(unknown());
-                };
-                if *index > answers.len() {
-                    return Err(unknown());
-                }
-                Position {
-                    field: None,
-                    kind: FieldKind::Plugin(*axis),
-                    answer: answers.get(*index).cloned(),
-                }
-            }
-            Segment::Field(name) => {
-                let FieldKind::Plugin(axis) = unwrapped(&position.kind) else {
-                    return Err(unknown());
-                };
-                let plugin = position
-                    .answer
-                    .as_ref()
-                    .and_then(PluginConfig::from_answer)
-                    .ok_or_else(unknown)?;
-                let schema = axis.entry(plugin.plugin()).ok_or_else(unknown)?.schema();
-                let field = schema.field_named(name).ok_or_else(unknown)?;
-                Position {
-                    field: Some(field.clone()),
-                    kind: field.kind().clone(),
-                    answer: plugin.config().get(name).cloned(),
-                }
-            }
-        };
-    }
-    Ok(position)
-}
-
 /// [`Draft::set`] on `answers`, the answers to `schema`.
 fn set_in(
     schema: &Schema,
@@ -818,8 +726,9 @@ fn set_in(
     path: &Path,
     answer: &Value,
 ) -> Result<(), ConfigError> {
-    let position = locate(schema, answers, path)?;
-    let answer = position.kind.walk(answer, path, false)?;
+    let answer = locate(schema, answers, path)?
+        .kind()
+        .walk(answer, path, false)?;
     let mut edited = answers.clone();
     edit(&mut edited, path, Some(answer));
     // a plugin put into a list repeats one of the list only next to the rest of it; the other
@@ -869,17 +778,10 @@ fn edit(answers: &mut Config, path: &Path, answer: Option<Value>) {
     }
 }
 
-/// One field of the tree of answers.
-struct Question {
-    path: Path,
-    field: Field,
-    answer: Option<Value>,
-}
-
 /// The answers as a tree: every field and every plugin answering one.
-struct Tree {
+struct Tree<'a> {
     /// Every field, depth first in schema order.
-    questions: Vec<Question>,
+    questions: Vec<FieldNode<'a>>,
     /// Every plugin answering a field or a position in a list, depth first in schema order.
     plugins: Vec<Placed>,
 }
@@ -896,42 +798,34 @@ struct Placed {
     declared: Declared,
 }
 
-impl Tree {
+impl<'a> Tree<'a> {
     /// The tree of `answers`, the answers to `schema`.
-    fn of(schema: &Schema, answers: &Config) -> Self {
+    fn of(schema: &Schema, answers: &'a Config) -> Self {
         let mut tree = Self {
             questions: Vec::new(),
             plugins: Vec::new(),
         };
-        tree.add_fields(fields::fields(schema, answers, &Path::ROOT));
-        tree
-    }
-
-    fn add_fields(&mut self, fields: Vec<FieldNode>) {
-        for node in fields {
-            self.questions.push(Question {
-                path: node.path,
-                field: node.field,
-                answer: node.answer,
-            });
-            for plugin in node.plugins {
-                self.plugins.push(Placed::new(
-                    plugin.entry,
-                    &plugin.config,
-                    plugin.path.clone(),
-                ));
-                self.add_fields(plugin.fields);
+        for node in preorder(fields::fields(schema, answers)) {
+            match node {
+                Node::Field(field) => tree.questions.push(field),
+                Node::Plugin(plugin) => tree.plugins.push(Placed::new(&plugin)),
             }
         }
+        tree
     }
 
     /// The fields taking plugins among those `included` includes, each with its axis, in the order
     /// of [`Self::questions`].
-    fn slots(&self, included: impl Fn(&Question) -> bool) -> Vec<(Path, AnyAxis)> {
+    fn slots(&self, included: impl Fn(&FieldNode) -> bool) -> Vec<(Path, AnyAxis)> {
         self.questions
             .iter()
             .filter(|question| included(question))
-            .filter_map(|question| Some((question.path.clone(), slot(question.field.kind())?.0)))
+            .filter_map(|question| {
+                Some((
+                    question.path.clone(),
+                    Slot::of(question.field.kind())?.axis(),
+                ))
+            })
             .collect()
     }
 
@@ -958,17 +852,17 @@ fn all_but<T>(items: &[T], index: usize) -> impl Iterator<Item = &T> {
 }
 
 impl Placed {
-    /// The plugin `entry` configured by `config`, answering the position at `path` of the config
-    /// holding it.
-    fn new(entry: &'static PluginEntry, config: &Config, path: Path) -> Self {
-        let instance = entry.instance(config, &path);
+    /// The plugin of `plugin` as its answer configures it.
+    fn new(plugin: &PluginNode) -> Self {
+        let PluginNode { path, entry, .. } = plugin;
+        let instance = entry.instance(&plugin.config(), path);
         let mut declaration = entry.declaration();
         if let Ok(instance) = &instance {
             instance.declare(&mut declaration);
         }
         let declared = Declared::new(format!("{} ({path})", entry.label()), declaration);
         Self {
-            path,
+            path: path.clone(),
             instance,
             declared,
         }
@@ -985,7 +879,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::{Plugin, PluginType, axis, compatibility::Fact, register};
+    use crate::{Plugin, PluginType, axis, compatibility::Fact, register, schema::FieldKind};
 
     #[derive(Debug)]
     struct Points;
@@ -1364,20 +1258,21 @@ mod tests {
         let fields = draft.fields();
         assert_eq!(fields[0].field.name(), "format");
         assert_eq!(fields[0].answer, None);
-        assert!(fields[0].plugins.is_empty());
+        assert!(fields[0].plugins().is_empty());
 
-        let combined = &fields[1].plugins[0];
+        let combined = &fields[1].plugins()[0];
         assert_eq!(combined.entry.id(), Combined::ID);
-        let wins = &combined.fields[0].plugins[0];
+        let wins = &combined.fields()[0].plugins()[0];
         assert_eq!(wins.entry.id(), Wins::ID);
-        assert_eq!(wins.fields[0].path, path("metrics[0].parts[0].for_win"));
-        assert_eq!(wins.fields[0].answer, Some(json!(2)));
-        assert!(wins.fields[0].plugins.is_empty());
+        let for_win = &wins.fields()[0];
+        assert_eq!(for_win.path, path("metrics[0].parts[0].for_win"));
+        assert_eq!(for_win.answer, Some(&json!(2)));
+        assert!(for_win.plugins().is_empty());
 
-        let tie_break = &fields[2].plugins[0];
+        let tie_break = &fields[2].plugins()[0];
         assert_eq!(tie_break.entry.id(), Wins::ID);
-        assert_eq!(tie_break.fields[0].path, path("tie_break.for_win"));
-        assert_eq!(tie_break.fields[0].answer, None);
+        assert_eq!(tie_break.fields()[0].path, path("tie_break.for_win"));
+        assert_eq!(tie_break.fields()[0].answer, None);
     }
 
     #[test]
@@ -1387,22 +1282,22 @@ mod tests {
             .unwrap()
             .with("metrics", vec![plugin::<Wins>(), plugin::<Combined>()])
             .unwrap();
-        let before = draft.fields();
+        let format = draft.fields()[0].path.clone();
+        let first_metric = draft.fields()[1].plugins()[0].path.clone();
 
-        draft.unset(&before[1].plugins[0].path).unwrap();
-        draft.set(&before[0].path, plugin::<RoundRobin>()).unwrap();
+        draft.unset(&first_metric).unwrap();
+        draft.set(&format, plugin::<RoundRobin>()).unwrap();
         draft.set(&path("tie_break"), Value::Null).unwrap();
 
         let after = draft.fields();
-        assert_eq!(after[0].plugins[0].entry.id(), RoundRobin::ID);
-        assert!(after[0].plugins[0].fields.is_empty());
-        assert_eq!(after[1].plugins.len(), 1);
-        assert_eq!(after[1].plugins[0].entry.id(), Combined::ID);
-        assert_eq!(after[1].plugins[0].fields[0].path, path("metrics[0].parts"));
-        assert_eq!(after[2].answer, Some(Value::Null));
-        assert!(after[2].plugins.is_empty());
-        // the previous enumeration remains a snapshot, not another owner of the draft's answers
-        assert_eq!(before[1].plugins[0].entry.id(), Wins::ID);
+        assert_eq!(after[0].plugins()[0].entry.id(), RoundRobin::ID);
+        assert!(after[0].plugins()[0].fields().is_empty());
+        let metrics = after[1].plugins();
+        assert_eq!(metrics.len(), 1);
+        assert_eq!(metrics[0].entry.id(), Combined::ID);
+        assert_eq!(metrics[0].fields()[0].path, path("metrics[0].parts"));
+        assert_eq!(after[2].answer, Some(&Value::Null));
+        assert!(after[2].plugins().is_empty());
     }
 
     #[test]

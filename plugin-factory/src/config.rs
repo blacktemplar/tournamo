@@ -186,9 +186,14 @@ impl<'a> PluginAnswer<'a> {
         self.config?.get(field)
     }
 
+    /// The answers the plugin is configured with.
+    pub(crate) fn config(self) -> Config {
+        Config(self.config.cloned().unwrap_or_default())
+    }
+
     /// The answer as a [`PluginConfig`] of its own.
     pub(crate) fn to_config(self) -> PluginConfig {
-        PluginConfig::configured(self.id, Config(self.config.cloned().unwrap_or_default()))
+        PluginConfig::configured(self.id, self.config())
     }
 }
 
@@ -406,12 +411,6 @@ impl Path {
     #[cfg(test)]
     pub(crate) fn of(field: impl Into<String>) -> Self {
         Self::ROOT.field(field)
-    }
-
-    /// The path of what this path is within, or [`None`] for the root.
-    pub(crate) fn parent(&self) -> Option<Self> {
-        let (_, parent) = self.0.split_last()?;
-        Some(Self(parent.to_vec()))
     }
 
     /// This path followed by `segment`, i.e. one level further in.

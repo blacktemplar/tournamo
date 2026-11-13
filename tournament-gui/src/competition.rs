@@ -293,7 +293,7 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                         return;
                     }
                     // leaving play, which is asked about first
-                    if ctx.session.peek().next_undo() == Some(&Action::Start) {
+                    if ctx.session.peek().next_undo() == Some(Action::Start) {
                         undoing_start.set(true);
                     } else {
                         undo(ctx);

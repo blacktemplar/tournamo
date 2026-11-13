@@ -24,10 +24,16 @@ struct Converter {
 }
 
 /// `CONVERTERS[n]` converts format `n + 1` to format `n + 2`.
-const CONVERTERS: &[Converter] = &[Converter {
-    log_entry: v2::log_entry,
-    competition: v2::competition,
-}];
+const CONVERTERS: &[Converter] = &[
+    Converter {
+        log_entry: v2::log_entry,
+        competition: v2::competition,
+    },
+    Converter {
+        log_entry: v3::log_entry,
+        competition: |_| {},
+    },
+];
 
 const _: () = assert!(
     CONVERTERS.len() as u32 == Format::CURRENT.0 - Format::FIRST.0,
@@ -158,6 +164,37 @@ mod v2 {
     }
 }
 
+/// Format 2 to 3: a transition is written as `{<variant>: <transition>}`, where it was
+/// `{"type": <tag>, "value": <transition>}`.
+mod v3 {
+    use serde_json::{Map, Value};
+
+    pub(super) fn log_entry(entry: &mut Value) {
+        let transition = if entry.pointer("/kind/Apply").is_some() {
+            "/kind/Apply"
+        } else {
+            "/kind/Replace/with"
+        };
+        let Some(Value::Object(transition)) = entry.pointer_mut(transition) else {
+            return;
+        };
+        if transition.len() != 2 || !transition.contains_key("value") {
+            return;
+        }
+        let variant = match transition.get("type").and_then(Value::as_str) {
+            Some("tournament_engine::set_competition_seed") => "SetCompetitionSeed",
+            Some("tournament_engine::add_entrant") => "AddEntrant",
+            Some("tournament_engine::remove_entrant") => "RemoveEntrant",
+            Some("tournament_engine::add_phase") => "AddPhase",
+            Some("tournament_engine::start_competition") => "StartCompetition",
+            Some("tournament_engine::report_match_result") => "ReportMatchResult",
+            _ => return,
+        };
+        let value = transition.remove("value").unwrap_or_default();
+        *transition = Map::from_iter([(variant.to_owned(), value)]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use plugin_factory::PluginType as _;
@@ -171,11 +208,10 @@ mod tests {
     use super::*;
     use crate::{file::File, people::People, session::Session};
 
-    /// `entry`, an entry of the log of a file of the first format, as the current format holds it.
-    fn upgraded_entry(entry: Value) -> Value {
-        let mut file = json!({ "log": [entry], "people": [] });
-        upgrade(&mut file, Format::FIRST);
-        file["log"][0].take()
+    /// `entry`, an entry of the log, as `log_entry`, the converter of one format, leaves it.
+    fn converted_by(log_entry: fn(&mut Value), mut entry: Value) -> Value {
+        log_entry(&mut entry);
+        entry
     }
 
     /// `competition`, held by a file of the first format, as the current format holds it.
@@ -214,7 +250,7 @@ mod tests {
         });
 
         assert_eq!(
-            upgraded_entry(report),
+            converted_by(v2::log_entry, report),
             json!({
                 "id": "report",
                 "kind": { "Apply": {
@@ -245,7 +281,7 @@ mod tests {
         });
 
         assert_eq!(
-            upgraded_entry(replace),
+            converted_by(v2::log_entry, replace),
             json!({
                 "id": "replace",
                 "kind": { "Replace": {
@@ -276,8 +312,11 @@ mod tests {
             } },
         });
 
-        assert_eq!(upgraded_entry(undo.clone()), undo);
-        assert_eq!(upgraded_entry(add_entrant.clone()), add_entrant);
+        assert_eq!(converted_by(v2::log_entry, undo.clone()), undo);
+        assert_eq!(
+            converted_by(v2::log_entry, add_entrant.clone()),
+            add_entrant
+        );
     }
 
     #[test]
@@ -297,11 +336,14 @@ mod tests {
             json!({ "type": "tournament_engine::scored", "value": { "winning_score": 21 } });
 
         assert_eq!(
-            upgraded_entry(add_phase(json!({
-                "format": round_robin,
-                "ranking": [],
-                "metrics": [],
-            }))),
+            converted_by(
+                v2::log_entry,
+                add_phase(json!({
+                    "format": round_robin,
+                    "ranking": [],
+                    "metrics": [],
+                }))
+            ),
             add_phase(json!({
                 "format": round_robin,
                 "match_format": winner_only,
@@ -315,7 +357,10 @@ mod tests {
             "ranking": [],
             "metrics": [],
         }));
-        assert_eq!(upgraded_entry(with_match_format.clone()), with_match_format);
+        assert_eq!(
+            converted_by(v2::log_entry, with_match_format.clone()),
+            with_match_format
+        );
     }
 
     #[test]
@@ -450,9 +495,10 @@ mod tests {
         session
     }
 
-    /// `file`, as this version writes it, as a file of the first format holds it: its reports name
-    /// their result, its phases have no match format, and its matches hold their result and
-    /// annotations. Panics if `file` holds anything the first format cannot.
+    /// `file`, as this version writes it, as a file of the first format holds it: its transitions
+    /// are written as their type and value, its reports name their result, its phases have no
+    /// match format, and its matches hold their result and annotations. Panics if `file` holds
+    /// anything the first format cannot.
     fn as_of_the_first_format(file: &mut Value) {
         let winner_only = json!({ "type": "tournament_engine::winner_only", "value": null });
         file["format"] = json!(1);
@@ -461,6 +507,19 @@ mod tests {
             let Some(transition) = entry.pointer_mut("/kind/Apply") else {
                 continue;
             };
+            let tagged = transition.as_object().unwrap();
+            assert_eq!(tagged.len(), 1, "a transition is its variant and value");
+            let (variant, value) = tagged.iter().next().unwrap();
+            let tag = match variant.as_str() {
+                "SetCompetitionSeed" => "tournament_engine::set_competition_seed",
+                "AddEntrant" => "tournament_engine::add_entrant",
+                "RemoveEntrant" => "tournament_engine::remove_entrant",
+                "AddPhase" => "tournament_engine::add_phase",
+                "StartCompetition" => "tournament_engine::start_competition",
+                "ReportMatchResult" => "tournament_engine::report_match_result",
+                variant => panic!("format 2 has no transition {variant}"),
+            };
+            *transition = json!({ "type": tag, "value": value.clone() });
             match transition["type"].as_str().unwrap() {
                 "tournament_engine::report_match_result" => {
                     let report = transition["value"].as_object_mut().unwrap();
@@ -533,13 +592,12 @@ mod tests {
             json!({ "log": [3, [], { "kind": 3 }, { "kind": { "Apply": 3 } }], "people": [] }),
             json!({ "log": [{ "kind": { "Apply": { "type": 3, "value": {} } } }], "people": [] }),
             json!({ "log": [{ "kind": { "Replace": { "with": [] } } }], "people": [] }),
+            json!({ "log": [{ "kind": { "Apply": { "type": "a tag" } } }], "people": [] }),
+            json!({ "log": [{ "kind": { "Apply": { "type": "a tag", "value": null } } }], "people": [] }),
             json!({ "log": [{ "kind": { "Apply": {
-                "type": "tournament_engine::report_match_result",
-                "value": "AWins",
-            } } }], "people": [] }),
-            json!({ "log": [{ "kind": { "Apply": {
-                "type": "tournament_engine::add_phase",
-                "value": { "plugins": [] },
+                "type": "a tag",
+                "value": null,
+                "more": null,
             } } }], "people": [] }),
             json!({ "log": [], "people": [], "competition": { "phases": 3 } }),
             json!({ "log": [], "people": [], "competition": { "phases": [3, {
@@ -561,5 +619,47 @@ mod tests {
             }
             assert_eq!(upgraded, shape);
         }
+    }
+
+    /// A transition of format 1 whose value is of an unexpected shape is left for the typed read to
+    /// refuse.
+    #[test]
+    fn a_transition_of_an_unexpected_shape_stays_as_it_is_in_format_2() {
+        for transition in [
+            json!({ "type": "tournament_engine::report_match_result", "value": "AWins" }),
+            json!({ "type": "tournament_engine::add_phase", "value": { "plugins": [] } }),
+        ] {
+            let entry = json!({ "id": "entry", "kind": { "Apply": transition } });
+
+            assert_eq!(converted_by(v2::log_entry, entry.clone()), entry);
+        }
+    }
+
+    #[test]
+    fn a_transition_is_written_as_its_tag_and_value_in_format_3() {
+        let add_entrant =
+            |transition: Value| json!({ "id": "entrant", "kind": { "Apply": transition } });
+        let replace = |with: Value| {
+            json!({
+                "id": "replace",
+                "kind": { "Replace": { "target": "phase", "with": with } },
+            })
+        };
+        let entrant = json!({ "entrant": { "id": "alice", "annotations": [] } });
+        let start = json!({ "type": "tournament_engine::start_competition", "value": null });
+
+        assert_eq!(
+            converted_by(
+                v3::log_entry,
+                add_entrant(json!({ "type": "tournament_engine::add_entrant", "value": entrant }))
+            ),
+            add_entrant(json!({ "AddEntrant": entrant }))
+        );
+        assert_eq!(
+            converted_by(v3::log_entry, replace(start)),
+            replace(json!({ "StartCompetition": null }))
+        );
+        let undo = json!({ "id": "undo", "kind": { "Undo": "entrant" } });
+        assert_eq!(converted_by(v3::log_entry, undo.clone()), undo);
     }
 }

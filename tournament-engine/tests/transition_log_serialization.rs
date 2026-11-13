@@ -1,12 +1,14 @@
 //! Round trip tests for the transition log: a [`CompetitionStateMachine`] serializes as its log,
 //! so every transition this crate ships has to survive being written and read back as a
-//! `Box<dyn CompetitionTransition>`, and the restored log has to replay into exactly the
+//! [`CompetitionTransition`], and the restored log has to replay into exactly the
 //! competition it was written from.
 //!
 //! This is the second persistence path, next to the snapshot of a [`Competition`] alone covered by
 //! `competition_serialization.rs`. It is the richer of the two: a snapshot holds the current state,
 //! while a log also holds how that state came about, which is what keeps undo — and undoing an
 //! undo — available after a restore.
+//!
+//! [`CompetitionTransition`]: tournament_engine::transitions::CompetitionTransition
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -140,6 +142,13 @@ fn serialized_log(machine: &CompetitionStateMachine) -> Value {
     serde_json::to_value(machine).expect("serializing a log must not fail")
 }
 
+/// The tag of the transition `entry`, an entry of a serialized log, applies, if it applies one.
+fn tag_of(entry: &Value) -> Option<&str> {
+    let transition = entry["kind"]["Apply"].as_object()?;
+    assert_eq!(transition.len(), 1, "a transition is its tag and value");
+    transition.keys().next().map(String::as_str)
+}
+
 /// The serialized form of a competition, compared as is — see `competition_serialization.rs` for
 /// why two competitions holding the same state serialize identically however each was built.
 fn serialized(competition: &Competition) -> Value {
@@ -160,14 +169,15 @@ fn assert_current_is(machine: &CompetitionStateMachine, expected: &Competition) 
     assert_eq!(serialized(current), serialized(expected));
 }
 
-/// A tag is part of the serialized form of every log ever written, so a change to it is a breaking
-/// one and has to be deliberate. Pinning every tag here makes a rename or a move of a transition
-/// fail this test instead of silently invalidating old logs.
+/// The name of a transition's variant is its tag in the serialized form of every log written, so a
+/// change to it needs a converter of the files saved before and has to be deliberate. Pinning
+/// every tag here makes renaming a variant fail this test instead of silently invalidating old
+/// logs.
 ///
 /// Asking for the tags in order of first appearance also asserts that the log below really does
 /// exercise all six transitions.
 #[test]
-fn every_transition_is_serialized_under_its_explicitly_chosen_tag() {
+fn every_transition_is_serialized_under_its_pinned_tag() {
     let machine = played_competition();
 
     let Value::Array(entries) = serialized_log(&machine) else {
@@ -176,30 +186,24 @@ fn every_transition_is_serialized_under_its_explicitly_chosen_tag() {
 
     let tags = entries
         .iter()
-        .map(|entry| {
-            entry["kind"]["Apply"]["type"]
-                .as_str()
-                .expect("every applied transition must carry a tag")
-        })
+        .map(|entry| tag_of(entry).expect("every applied transition must carry a tag"))
         .unique()
         .collect_vec();
     assert_eq!(
         tags,
         [
-            "tournament_engine::set_competition_seed",
-            "tournament_engine::add_entrant",
-            "tournament_engine::remove_entrant",
-            "tournament_engine::add_phase",
-            "tournament_engine::start_competition",
-            "tournament_engine::report_match_result",
+            "SetCompetitionSeed",
+            "AddEntrant",
+            "RemoveEntrant",
+            "AddPhase",
+            "StartCompetition",
+            "ReportMatchResult",
         ]
     );
 }
 
-/// Adjacent tagging puts the payload of a transition beside its tag rather than inside it, which is
-/// what keeps a binary format working — see the test further down.
 #[test]
-fn a_transition_is_serialized_with_its_payload_next_to_its_tag() {
+fn a_transition_is_serialized_as_its_payload_under_its_tag() {
     let mut machine = CompetitionStateMachine::default();
     let seed_id = machine
         .apply_transition(SetCompetitionSeed::new(SEED))
@@ -212,10 +216,7 @@ fn a_transition_is_serialized_with_its_payload_next_to_its_tag() {
         json!([{
             "id": seed_id,
             "kind": {
-                "Apply": {
-                    "type": "tournament_engine::set_competition_seed",
-                    "value": { "seed": SEED },
-                },
+                "Apply": { "SetCompetitionSeed": { "seed": SEED } },
             },
         }])
     );
@@ -279,12 +280,12 @@ fn a_transition_without_data_is_serialized_as_its_tag_alone() {
 
     let starts = entries
         .iter()
-        .filter(|entry| entry["kind"]["Apply"]["type"] == "tournament_engine::start_competition")
+        .filter(|entry| tag_of(entry) == Some("StartCompetition"))
         .collect_vec();
     assert_eq!(starts.len(), 1, "the log must hold exactly one start");
     assert_eq!(
         starts[0]["kind"]["Apply"],
-        json!({ "type": "tournament_engine::start_competition", "value": null })
+        json!({ "StartCompetition": null })
     );
 }
 
@@ -309,15 +310,12 @@ fn a_log_round_trips_and_replays_into_the_same_competition() {
     assert_current_is(&restored, machine.current());
 }
 
-/// A log must survive a format whose values look nothing like those of a human readable one, which
-/// is easy to get wrong for everything below a trait object: `typetag` serializes the content of an
-/// *internally* tagged trait object through an adapter that reports itself as human readable no
-/// matter what the real format says, so a [`Uuid`] below that content — the entrant ids of an
-/// [`AddEntrant`], the match id of a [`ReportMatchResult`] — would be written as a string and read
-/// back as raw bytes. [`CompetitionTransition`] is therefore adjacently tagged, like every plugin
-/// trait, which keeps the content out of that adapter.
-///
-/// [`CompetitionTransition`]: tournament_engine::transitions::CompetitionTransition
+/// A log must survive a format that is not self-describing, whose values look nothing like those
+/// of a human readable one, which is easy to get wrong for the plugins inside an [`AddPhase`]:
+/// `typetag` serializes the content of an *internally* tagged trait object through an adapter that
+/// reports itself as human readable no matter what the real format says, so a [`Uuid`] below that
+/// content would be written as a string and read back as raw bytes. Every plugin trait is therefore
+/// adjacently tagged, which keeps the content out of that adapter.
 #[test]
 fn a_log_round_trips_through_a_binary_format() {
     let machine = played_competition();
@@ -460,8 +458,8 @@ fn every_plugin_is_serialized_under_its_id() {
         .as_array()
         .expect("a log must serialize to a sequence")
         .iter()
-        .find(|entry| entry["kind"]["Apply"]["type"] == "tournament_engine::add_phase")
-        .expect("the log must hold the phase")["kind"]["Apply"]["value"]["plugins"]
+        .find(|entry| tag_of(entry) == Some("AddPhase"))
+        .expect("the log must hold the phase")["kind"]["Apply"]["AddPhase"]["plugins"]
         .clone();
     let ids = |plugins: &Value| -> Vec<String> {
         plugins
@@ -502,7 +500,7 @@ fn every_plugin_is_serialized_under_its_id() {
 fn deserializing_a_log_with_an_unknown_transition_fails() {
     let machine = played_competition();
     let mut log = serialized_log(&machine);
-    log[0]["kind"]["Apply"]["type"] = Value::String("NotATransition".to_owned());
+    log[0]["kind"]["Apply"] = json!({ "NotATransition": null });
 
     let Err(error) = serde_json::from_value::<CompetitionStateMachine>(log) else {
         panic!("an unknown transition must not deserialize");
@@ -516,7 +514,7 @@ fn deserializing_a_log_with_an_unknown_transition_fails() {
 
 /// A log is replayed against a fresh competition, so a transition that was applicable when it was
 /// written is not trusted to be applicable again: `check_applicable` is re-run on every entry while
-/// deserializing, reaching the transition through the blanket `Transition` impl of a box.
+/// deserializing.
 #[test]
 fn deserializing_a_log_whose_transitions_do_not_apply_fails() {
     let machine = played_competition();
@@ -525,7 +523,7 @@ fn deserializing_a_log_whose_transitions_do_not_apply_fails() {
         panic!("a log must serialize to a sequence");
     };
     // drop the phase, which the start below it and every reported result after that one need
-    entries.retain(|entry| entry["kind"]["Apply"]["type"] != "tournament_engine::add_phase");
+    entries.retain(|entry| tag_of(entry) != Some("AddPhase"));
 
     let Err(error) = serde_json::from_value::<CompetitionStateMachine>(log) else {
         panic!("a log that does not replay must not deserialize");

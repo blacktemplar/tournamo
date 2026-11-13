@@ -1,8 +1,7 @@
-//! The transitions that drive a [`Competition`] forward, and the trait that makes them
-//! persistable.
+//! The transitions that drive a [`Competition`] forward, and the enum a transition log holds them
+//! as.
 
-use std::{any::Any, fmt::Debug};
-
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use undoable_state_machine::{
     LogEntry, LogEntryKind, SessionHistory, StateMachine, StateMachineError, Transition,
@@ -28,54 +27,75 @@ pub use report_match_result::{ReportMatchResult, ReportMatchResultError};
 pub use set_competition_seed::SetCompetitionSeed;
 pub use start_competition::{StartCompetition, StartCompetitionError};
 
-/// A [`Transition`] of a [`Competition`] that can be written to and read back from a transition
-/// log, which is what gives `Box<dyn CompetitionTransition>` a [`Serialize`] and a [`Deserialize`]
-/// impl.
+/// A transition of a [`Competition`], as a transition log holds it: one of the transitions of this
+/// module.
 ///
-/// The trait adds no methods of its own: implementing it is purely the statement that this
-/// transition is part of the persisted log. An implementor therefore needs
-/// [`Serialize`]/[`Deserialize`] and an explicit, namespaced `typetag` name. That name is a
-/// persistence contract: renaming or moving a transition must not change it.
-///
-/// [`Any`] is a supertrait, so a transition in a log can be downcast back to its concrete type -
-/// `&dyn Any` upcasting is how [`CompetitionStateMachineExt`] finds the entry to undo.
-///
-/// [`Serialize`]: serde::Serialize
-/// [`Deserialize`]: serde::Deserialize
+/// Serialized as `{<variant>: <transition>}`. The name of a variant is a persistence contract:
+/// renaming one needs a converter of the files saved before.
 ///
 /// # Examples
 /// ```
-/// use serde::{Deserialize, Serialize};
-/// use tournament_engine::{Competition, CompetitionTransition};
-/// use undoable_state_machine::{Transition, TransitionError};
+/// use tournament_engine::{CompetitionTransition, StartCompetition};
 ///
-/// #[derive(Debug, Serialize, Deserialize)]
-/// struct DoNothing;
-///
-/// impl Transition<Competition> for DoNothing {
-///     fn check_applicable(&self, _competition: &Competition) -> Result<(), TransitionError> {
-///         Ok(())
-///     }
-///
-///     fn apply(&self, _competition: &mut Competition) -> Result<(), TransitionError> {
-///         Ok(())
-///     }
-/// }
-///
-/// #[typetag::serde(name = "example::do_nothing")]
-/// impl CompetitionTransition for DoNothing {}
-///
-/// let transition: Box<dyn CompetitionTransition> = Box::new(DoNothing);
+/// let transition = CompetitionTransition::from(StartCompetition);
 /// let json = serde_json::to_string(&transition).unwrap();
 ///
-/// assert_eq!(json, r#"{"type":"example::do_nothing","value":null}"#);
-/// assert!(serde_json::from_str::<Box<dyn CompetitionTransition>>(&json).is_ok());
+/// assert_eq!(json, r#"{"StartCompetition":null}"#);
+/// assert!(serde_json::from_str::<CompetitionTransition>(&json).is_ok());
 /// ```
-// `Transition` is generic over its state and `typetag` rejects generic traits in `de` mode
-// ("deserialization of generic traits is not supported yet"), so it cannot be tagged upstream.
-// Pinning the state to `Competition` here is what makes the trait non-generic and taggable.
-#[typetag::serde(tag = "type", content = "value")]
-pub trait CompetitionTransition: Transition<Competition> + Debug + Any {}
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CompetitionTransition {
+    SetCompetitionSeed(SetCompetitionSeed),
+    AddEntrant(AddEntrant),
+    RemoveEntrant(RemoveEntrant),
+    AddPhase(AddPhase),
+    StartCompetition(StartCompetition),
+    ReportMatchResult(ReportMatchResult),
+}
+
+/// `$body` with `$transition` bound to the transition `$self`, a `CompetitionTransition`, holds,
+/// whatever its variant.
+macro_rules! with_transition {
+    ($self:expr, $transition:ident => $body:expr) => {
+        match $self {
+            Self::SetCompetitionSeed($transition) => $body,
+            Self::AddEntrant($transition) => $body,
+            Self::RemoveEntrant($transition) => $body,
+            Self::AddPhase($transition) => $body,
+            Self::StartCompetition($transition) => $body,
+            Self::ReportMatchResult($transition) => $body,
+        }
+    };
+}
+
+impl Transition<Competition> for CompetitionTransition {
+    fn check_applicable(&self, competition: &Competition) -> Result<(), TransitionError> {
+        with_transition!(self, transition => transition.check_applicable(competition))
+    }
+
+    fn apply(&self, competition: &mut Competition) -> Result<(), TransitionError> {
+        with_transition!(self, transition => transition.apply(competition))
+    }
+}
+
+macro_rules! from_transitions {
+    ($($transition:ident),*) => {$(
+        impl From<$transition> for CompetitionTransition {
+            fn from(transition: $transition) -> Self {
+                Self::$transition(transition)
+            }
+        }
+    )*};
+}
+
+from_transitions!(
+    SetCompetitionSeed,
+    AddEntrant,
+    RemoveEntrant,
+    AddPhase,
+    StartCompetition,
+    ReportMatchResult
+);
 
 /// The state machine of a competition, driven by transitions that can be persisted.
 ///
@@ -85,7 +105,7 @@ pub trait CompetitionTransition: Transition<Competition> + Debug + Any {}
 ///
 /// This is the persistence path that keeps the history and therefore undo and redo. The other one
 /// is a snapshot of [`StateMachine::current`] alone, which is smaller and cheaper to load.
-pub type CompetitionStateMachine = StateMachine<Competition, Box<dyn CompetitionTransition>>;
+pub type CompetitionStateMachine = StateMachine<Competition, CompetitionTransition>;
 
 /// A transition that only applies before the competition starts was applied after it started.
 #[derive(Debug, Error)]
@@ -136,7 +156,7 @@ pub enum Change<'a> {
     /// Replacing the transition of the [`LogEntryKind::Apply`] `target` by `with`.
     Replace {
         target: TransitionId,
-        with: &'a dyn CompetitionTransition,
+        with: &'a CompetitionTransition,
     },
 }
 
@@ -180,7 +200,7 @@ pub trait CompetitionStateMachineExt {
     /// state, in which case the log stays unchanged.
     fn apply_transition(
         &mut self,
-        transition: impl CompetitionTransition,
+        transition: impl Into<CompetitionTransition>,
     ) -> Result<TransitionId, StateMachineError>;
 
     /// Applies `transition` like [`Self::apply_transition`], as an action of the session of
@@ -192,7 +212,7 @@ pub trait CompetitionStateMachineExt {
     fn apply_in(
         &mut self,
         history: &mut SessionHistory,
-        transition: impl CompetitionTransition,
+        transition: impl Into<CompetitionTransition>,
     ) -> Result<TransitionId, StateMachineError>;
 
     /// Undoes the result reported for the match `match_id` of the phase `phase_id` by undoing the
@@ -202,10 +222,6 @@ pub trait CompetitionStateMachineExt {
     ///
     /// This reaches back arbitrarily far: changes made after the report stay in effect, as long as
     /// none of them depends on it.
-    ///
-    /// Only a [`ReportMatchResult`] is recognized as having reported a result. A third-party
-    /// transition that sets one cannot be found in the log and is therefore reported as
-    /// [`UndoMatchResultError::NotReported`].
     ///
     /// # Errors
     /// Returns [`UndoMatchResultError::NotReported`] if no report for that match is in effect, and
@@ -347,9 +363,8 @@ pub trait CompetitionStateMachineExt {
     /// not accept the result for, and every result that depends on one of those. Empty if the
     /// change would be accepted. The log and the competition are not changed.
     ///
-    /// Only a [`ReportMatchResult`] is taken for a reported result. Listing them replays the log,
-    /// as making the change does, so it is meant for after a change was refused, e.g. by
-    /// [`Self::undo_match_result`], to name every result in its way.
+    /// Listing them replays the log, as making the change does, so it is meant for after a change
+    /// was refused, e.g. by [`Self::undo_match_result`], to name every result in its way.
     ///
     /// # Errors
     /// Returns [`ConflictsError::NotInEffect`] if `change` targets no [`LogEntryKind::Apply`] in
@@ -418,22 +433,22 @@ pub trait CompetitionStateMachineExt {
 impl CompetitionStateMachineExt for CompetitionStateMachine {
     fn apply_transition(
         &mut self,
-        transition: impl CompetitionTransition,
+        transition: impl Into<CompetitionTransition>,
     ) -> Result<TransitionId, StateMachineError> {
         let id = TransitionId::new();
-        self.apply(LogEntry::new(id, LogEntryKind::Apply(Box::new(transition))))?;
+        self.apply(LogEntry::new(id, LogEntryKind::Apply(transition.into())))?;
         Ok(id)
     }
 
     fn apply_in(
         &mut self,
         history: &mut SessionHistory,
-        transition: impl CompetitionTransition,
+        transition: impl Into<CompetitionTransition>,
     ) -> Result<TransitionId, StateMachineError> {
         let id = TransitionId::new();
         history.apply(
             self,
-            LogEntry::new(id, LogEntryKind::Apply(Box::new(transition))),
+            LogEntry::new(id, LogEntryKind::Apply(transition.into())),
         )?;
         Ok(id)
     }
@@ -469,7 +484,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
             return Ok(None);
         }
         let id = TransitionId::new();
-        let with: Box<dyn CompetitionTransition> = Box::new(AddPhase::new(phase_id, plugins));
+        let with = AddPhase::new(phase_id, plugins).into();
         history.apply(
             self,
             LogEntry::new(id, LogEntryKind::Replace { target, with }),
@@ -480,9 +495,11 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
     fn reported_by(&self, phase_id: PhaseId, match_id: MatchId) -> Option<TransitionId> {
         self.rev_in_effect()
             .find(|entry| {
-                applied::<ReportMatchResult>(entry).is_some_and(|report| {
-                    (report.phase_id(), report.match_id()) == (phase_id, match_id)
-                })
+                matches!(
+                    entry.kind(),
+                    LogEntryKind::Apply(CompetitionTransition::ReportMatchResult(report))
+                        if (report.phase_id(), report.match_id()) == (phase_id, match_id)
+                )
             })
             .map(LogEntry::id)
     }
@@ -491,7 +508,13 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         // a replacement of an `AddPhase` made by `reconfigure_phase` adds the same phase, so the
         // entry is found by the id of the phase it adds itself
         self.rev_in_effect()
-            .find(|entry| applied::<AddPhase>(entry).is_some_and(|added| added.id() == phase_id))
+            .find(|entry| {
+                matches!(
+                    entry.kind(),
+                    LogEntryKind::Apply(CompetitionTransition::AddPhase(added))
+                        if added.id() == phase_id
+                )
+            })
             .map(LogEntry::id)
     }
 
@@ -510,14 +533,13 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
             let Some(transition) = self.effective_transition(entry.id()) else {
                 continue;
             };
-            let transition: &dyn CompetitionTransition = match change {
+            let transition = match change {
                 Change::Undo(_) if entry.id() == target => continue,
                 Change::Replace { with, .. } if entry.id() == target => with,
-                _ => &**transition,
+                _ => transition,
             };
             if let Err(error) = transition.check_applicable(&competition) {
-                let transition: &dyn Any = transition;
-                let Some(report) = transition.downcast_ref::<ReportMatchResult>() else {
+                let CompetitionTransition::ReportMatchResult(report) = transition else {
                     return Err(ConflictsError::Other(entry.id(), error));
                 };
                 conflicts.push(Conflict {
@@ -533,17 +555,6 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         }
         Ok(conflicts)
     }
-}
-
-/// The transition `entry` applies, if it applies one of type `T`.
-fn applied<T: CompetitionTransition>(
-    entry: &LogEntry<Box<dyn CompetitionTransition>>,
-) -> Option<&T> {
-    let LogEntryKind::Apply(transition) = entry.kind() else {
-        return None;
-    };
-    let transition: &dyn Any = &**transition;
-    transition.downcast_ref()
 }
 
 #[cfg(test)]
@@ -1044,7 +1055,7 @@ mod tests {
         let conflicts = machine
             .conflicts_of(Change::Replace {
                 target,
-                with: &monster_dyp,
+                with: &monster_dyp.into(),
             })
             .unwrap();
 
@@ -1069,7 +1080,7 @@ mod tests {
             Change::Undo(TransitionId::new()),
             Change::Replace {
                 target: reported,
-                with: &unchanged,
+                with: &unchanged.into(),
             },
         ] {
             assert!(

@@ -246,7 +246,7 @@ async fn a_file_that_is_no_competition_is_refused_with_its_detail_apart() {
 async fn a_newer_or_damaged_competition_is_refused_for_that() {
     run(async |gui| {
         let newer = std::env::temp_dir().join(format!("newer-{}.json", std::process::id()));
-        std::fs::write(&newer, r#"{"format": 3, "log": {}, "people": []}"#).unwrap();
+        std::fs::write(&newer, r#"{"format": 9999, "log": {}, "people": []}"#).unwrap();
         gui.import(&newer).await?;
         gui.expect_error(
             "The file is of a newer version of Tournamo, which this one cannot open; reload the \

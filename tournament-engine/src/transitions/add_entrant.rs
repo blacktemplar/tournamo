@@ -4,7 +4,7 @@ use undoable_state_machine::Transition;
 
 use crate::{
     entities::competition::{Competition, Entrant},
-    transitions::{CompetitionTransition, ensure_not_started},
+    transitions::ensure_not_started,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,6 +15,10 @@ pub struct AddEntrant {
 impl AddEntrant {
     pub fn new(entrant: Entrant) -> Self {
         Self { entrant }
+    }
+
+    pub fn entrant(&self) -> &Entrant {
+        &self.entrant
     }
 }
 
@@ -46,6 +50,3 @@ impl Transition<Competition> for AddEntrant {
         Ok(())
     }
 }
-
-#[typetag::serde(name = "tournament_engine::add_entrant")]
-impl CompetitionTransition for AddEntrant {}

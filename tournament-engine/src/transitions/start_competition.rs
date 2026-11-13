@@ -2,10 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use undoable_state_machine::Transition;
 
-use crate::{
-    entities::competition::Competition,
-    transitions::{CompetitionTransition, ensure_not_started},
-};
+use crate::{entities::competition::Competition, transitions::ensure_not_started};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartCompetition;
@@ -43,6 +40,3 @@ impl Transition<Competition> for StartCompetition {
         Ok(())
     }
 }
-
-#[typetag::serde(name = "tournament_engine::start_competition")]
-impl CompetitionTransition for StartCompetition {}

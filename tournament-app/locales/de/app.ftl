@@ -45,6 +45,8 @@ error-result-depended-on-by = { $count ->
     }
 error-nothing-to-undo = es gibt nichts rückgängig zu machen
 error-nothing-to-redo = es gibt nichts wiederherzustellen
+error-undo-changed-elsewhere = eine inzwischen anderswo gemachte Änderung verhindert, dass dies rückgängig gemacht wird, daher kann nichts mehr rückgängig gemacht werden
+error-redo-changed-elsewhere = eine inzwischen anderswo gemachte Änderung verhindert, dass dies wiederhergestellt wird, daher kann nichts mehr wiederhergestellt werden
 error-competition-not-found = dieses Turnier gibt es nicht
 error-competition-unreadable = das Turnier kann nicht gelesen werden
 error-competition-newer = das Turnier wurde von einer neueren Version von Tournamo gespeichert, die diese nicht öffnen kann; mit einem Neuladen der Seite kommt die neueste

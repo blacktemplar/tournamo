@@ -732,16 +732,27 @@ round-trips. Tags are strings, so keep them short.
 
 ### The transition log
 
-`Transition<S>` is generic, so the log needs a non-generic sub-trait:
+The log holds a `CompetitionTransition`, an enum of the engine's transitions,
+each written under the name of its variant as `{<variant>: <transition>}`
+(serde's external tagging):
+`CompetitionStateMachine = StateMachine<Competition, CompetitionTransition>`.
+The transitions are a closed set: plugins are the extension points, and a
+consumer recognizes what an entry did by an exhaustive `match` rather than by
+downcasting. Until format 3 the log held a `typetag` trait object, written
+`{"type": <tag>, "value": <transition>}` under a namespaced tag
+(`tournament_engine::add_entrant`); a converter rewrites it. A variant's name is
+its tag: no namespace, since nothing outside the enum shares the name space,
+and renaming one needs a converter, which the pinned names in
+`tests/transition_log_serialization.rs` make deliberate.
 
-```rust
-#[typetag::serde(tag = "type", content = "value")]
-pub trait CompetitionTransition: Transition<Competition> + Debug {}
-```
+Rejected: a `typetag` trait open to third-party transitions (none has been
+needed, and every consumer recognizing an entry would downcast with a
+fallback); serde's derived adjacent tagging, which kept the old layout but
+reads the tag as an identifier, which postcard does not support; serializing
+the enum by hand in the old layout (a serializer of its own, to save one
+converter).
 
-`CompetitionStateMachine = StateMachine<Competition, Box<dyn CompetitionTransition>>`.
-Implementing the trait is the statement that a transition belongs to the
-persisted log. With `undoable-state-machine`'s `serde` feature the machine
+With `undoable-state-machine`'s `serde` feature the machine
 serializes as its log, undo entries included. Deserializing replays it
 (`StateMachine::build`) rather than trusting a stored state, so the state cannot
 drift from its log, and a log that no longer replays fails to load.
@@ -775,8 +786,9 @@ replay).
 ### Tag stability
 
 A tag is a persistence contract, not a name: renaming or moving a type must not
-change it, so tags are written out and pinned in tests, for plugins, metrics,
-annotations and transitions alike. Since v0.1.0 saved competitions of real users
+change it, so tags are written out and pinned in tests, for plugins, metrics
+and annotations alike (a transition is named by its variant, see
+[The transition log](#the-transition-log)). Since v0.1.0 saved competitions of real users
 depend on them: a tag may be added, never changed or given another meaning.
 
 The namespace is the crate defining the type (`tournament_engine::points`), not
@@ -843,9 +855,8 @@ the latest entry in effect that reported it and undoes that, so an operator
 correcting an old result does not walk back through everything since. It lives
 in the engine because it knows the shape of the log.
 
-- **Found by downcasting** (`Any` is a supertrait of `CompetitionTransition`),
-  not by a method every transition self-reports; a third-party transition
-  setting results is reported as not undoable rather than mishandled.
+- **Found by its variant**: the latest `CompetitionTransition::ReportMatchResult`
+  in effect for the match.
 - **Refused, not cascaded,** when a later entry depends on it (a final reported
   after the semifinal): the state machine names the failing entry and the log
   stays unchanged.
@@ -891,14 +902,29 @@ undo entry naming its target. Operations appending an action take the history
 - **A targeted undo is an action**: after `undo-report`, `undo` brings the
   result back.
 - **Explicit targets**, so an undo means the same however logs are merged.
+- **Changes of other sessions leave the history as it is**: what this session
+  can undo and redo stays after catching up with them.
 - **Fails only because of other sessions** (a dependent change, or the action
-  undone elsewhere); then it fails rather than skipping the action.
+  undone or redone elsewhere); then it fails rather than skipping the action,
+  and that direction ends there: a failed undo leaves nothing to undo, a failed
+  redo nothing to redo, while the other direction stays. `next_undo` and
+  `next_redo` do not offer an action undone or redone elsewhere, which is
+  cheap to tell; whether a change depends on it shows only by trying, which
+  replays the log.
+- **The history holds ids, the log says what they did**: `Session` describes
+  an action (`Action`, for the announcement) from its log entry, an exhaustive
+  `match` on `CompetitionTransition`, rather than keeping descriptions next to
+  the history. What a form starts out at after an undo (the phase config, a
+  result taken back) is kept apart, since it outlives what can be redone.
 - **The seed is no action**, applied outside any history, never undone.
 
 Rejected: deriving the history from the log (`undo` after `undo-report` undid an
 unrelated change); dedicated undo/redo log entries (record navigation, not
 whose); an origin per user (a user with two sessions); persisting the history
-(not part of the competition).
+(not part of the competition); ending the history when catching up with another
+session (a result reported elsewhere would keep the operator from undoing their
+own); keeping an action to try again after it failed (it fails again until the
+other session's change is undone).
 
 ## Dependencies this implies
 

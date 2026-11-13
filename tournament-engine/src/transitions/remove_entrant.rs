@@ -4,7 +4,7 @@ use undoable_state_machine::Transition;
 
 use crate::{
     entities::competition::{Competition, EntrantId},
-    transitions::{CompetitionTransition, ensure_not_started},
+    transitions::ensure_not_started,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -15,6 +15,10 @@ pub struct RemoveEntrant {
 impl RemoveEntrant {
     pub fn new(entrant_id: EntrantId) -> Self {
         Self { entrant_id }
+    }
+
+    pub fn entrant_id(&self) -> EntrantId {
+        self.entrant_id
     }
 }
 
@@ -48,6 +52,3 @@ impl Transition<Competition> for RemoveEntrant {
         Ok(())
     }
 }
-
-#[typetag::serde(name = "tournament_engine::remove_entrant")]
-impl CompetitionTransition for RemoveEntrant {}

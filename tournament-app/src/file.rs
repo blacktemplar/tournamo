@@ -32,7 +32,7 @@ impl Format {
     /// The first format, that of a file without one.
     pub const FIRST: Self = Self(1);
     /// The format this version writes, and the newest it reads.
-    pub const CURRENT: Self = Self(2);
+    pub const CURRENT: Self = Self(3);
 }
 
 impl Default for Format {
@@ -215,11 +215,16 @@ mod tests {
 
     #[test]
     fn a_newer_format_is_refused_naming_the_ones_read() {
-        let error = serde_json::from_str::<Format>("3").unwrap_err();
+        let newer = Format(Format::CURRENT.0 + 1);
+
+        let error = serde_json::from_str::<Format>(&newer.to_string()).unwrap_err();
 
         assert_eq!(
             error.to_string(),
-            "the file is of format 3, this version reads formats 1 to 2"
+            format!(
+                "the file is of format {newer}, this version reads formats 1 to {}",
+                Format::CURRENT
+            )
         );
     }
 }

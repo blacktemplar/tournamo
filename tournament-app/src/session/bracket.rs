@@ -13,7 +13,7 @@ use tournament_engine::{
     },
 };
 
-use super::{Session, stage};
+use super::{Session, views::stage};
 use crate::view::{
     Bracket, BracketColumn, BracketEntry, BracketLine, BracketPairing, BracketPart, BracketSection,
     BracketSource, Unplayed,

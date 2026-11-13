@@ -108,6 +108,8 @@ use crate::{
 /// # }
 /// ```
 pub struct Draft<T> {
+    /// The schema of the composite, built once.
+    schema: Arc<Schema>,
     answers: Config,
     /// What is true of the composite before any plugin is chosen.
     context: Arc<Declaration>,
@@ -119,6 +121,7 @@ impl<T: Configurable> Draft<T> {
     /// before any plugin is chosen, as a plugin declares; `|_| {}` declares nothing.
     pub fn new(context: impl FnOnce(&mut Declaration)) -> Self {
         Self {
+            schema: Arc::new(T::schema()),
             answers: Config::new(),
             context: Arc::new(Declaration::of(context)),
             composite: PhantomData,
@@ -183,7 +186,7 @@ impl<T: Configurable> Draft<T> {
     /// # Errors
     /// Returns what [`Self::set`] returns, with paths seen from the root.
     pub fn with_answers(mut self, answers: &Config) -> Result<Self, ConfigError> {
-        self.answers = T::schema().walk(answers, &Path::ROOT, false)?;
+        self.answers = self.schema.walk(answers, &Path::ROOT, false)?;
         Ok(self)
     }
 
@@ -222,13 +225,13 @@ impl<T: Configurable> Draft<T> {
     /// The fields in schema order, each with its answer and the fields of its chosen plugins.
     /// Unanswered fields are included; defaults and implied plugins are not added.
     pub fn fields(&self) -> Vec<FieldNode<'_>> {
-        fields::fields(&T::schema(), &self.answers)
+        fields::fields(&self.schema, &self.answers)
     }
 
     /// The field at `path`, or [`None`] if `path` addresses no field of the answers, e.g. a
     /// position in a list.
     pub fn field_at(&self, path: &Path) -> Option<FieldNode<'_>> {
-        match locate(&T::schema(), &self.answers, path).ok()? {
+        match locate(&self.schema, &self.answers, path).ok()? {
             Position::Field(node) => Some(node),
             Position::Item { .. } => None,
         }
@@ -237,7 +240,7 @@ impl<T: Configurable> Draft<T> {
     /// The plugin answering the field or the position in a list at `path`, or [`None`] if there
     /// is none.
     pub fn plugin_at(&self, path: &Path) -> Option<PluginNode<'_>> {
-        locate(&T::schema(), &self.answers, path).ok()?.plugin()
+        locate(&self.schema, &self.answers, path).ok()?.plugin()
     }
 
     /// Answers the position at `path` with `answer`: a field, a position in a list, or the
@@ -254,7 +257,7 @@ impl<T: Configurable> Draft<T> {
     /// into a list is in that list already, with paths seen from the root. Nothing is changed
     /// then.
     pub fn set(&mut self, path: &Path, answer: impl Into<Value>) -> Result<(), ConfigError> {
-        set_in(&T::schema(), &mut self.answers, path, &answer.into())
+        set_in(&self.schema, &mut self.answers, path, &answer.into())
     }
 
     /// Takes back the answer at `path`: a field is unanswered again, and a position in a list is
@@ -264,7 +267,7 @@ impl<T: Configurable> Draft<T> {
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers. Nothing
     /// is changed then.
     pub fn unset(&mut self, path: &Path) -> Result<(), ConfigError> {
-        if let Position::Item { list, index, .. } = locate(&T::schema(), &self.answers, path)?
+        if let Position::Item { list, index, .. } = locate(&self.schema, &self.answers, path)?
             && list.answer.and_then(Value::as_array).map(Vec::len) == Some(index)
         {
             return Err(ConfigError::UnknownField { path: path.clone() });
@@ -282,35 +285,32 @@ impl<T: Configurable> Draft<T> {
     /// # Errors
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers.
     pub fn default_value(&self, path: &Path) -> Result<Option<Value>, ConfigError> {
-        Ok(match locate(&T::schema(), &self.answers, path)? {
+        Ok(match locate(&self.schema, &self.answers, path)? {
             Position::Field(node) => node.field.default_value().cloned(),
             Position::Item { .. } => None,
         })
     }
 
-    /// Whether the field at `path` matters with the answers given: not if the composite provides
-    /// the fact that makes it irrelevant, see [`Field::irrelevant_with`], its context or a plugin
-    /// answered so far; a position in a list always does. A UI may leave out a field that does
-    /// not; it is answered all the same.
+    /// The paths of the fields that do not matter with the answers given, in the order of
+    /// [`Self::fields`], depth first: those whose fact making them irrelevant, see
+    /// [`Field::irrelevant_with`], the composite provides, by its context or a plugin answered so
+    /// far. A UI may leave them out; they are answered all the same.
     ///
     /// [`Field::irrelevant_with`]: crate::schema::Field::irrelevant_with
-    ///
-    /// # Errors
-    /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers.
-    pub fn is_relevant(&self, path: &Path) -> Result<bool, ConfigError> {
-        let schema = T::schema();
-        let Position::Field(node) = locate(&schema, &self.answers, path)? else {
-            return Ok(true);
+    pub fn irrelevant(&self) -> Vec<Path> {
+        let tree = Tree::of(&self.schema, &self.answers);
+        let declarations = tree.declarations();
+        let provided = |fact| {
+            self.context.provides_type(fact)
+                || declarations
+                    .iter()
+                    .any(|declared| declared.declaration.provides_type(fact))
         };
-        let Some(fact) = node.field.irrelevant_with() else {
-            return Ok(true);
-        };
-        let provided = self.context.provides_type(fact)
-            || Tree::of(&schema, &self.answers)
-                .declarations()
-                .iter()
-                .any(|declared| declared.declaration.provides_type(fact));
-        Ok(!provided)
+        tree.questions
+            .iter()
+            .filter(|question| question.field.irrelevant_with().is_some_and(provided))
+            .map(|question| question.path.clone())
+            .collect()
     }
 
     /// The registered plugins of the axis at `path`, in id order; empty for scalar fields.
@@ -322,7 +322,7 @@ impl<T: Configurable> Draft<T> {
     /// Returns [`ConfigError::UnknownField`] if `path` addresses nothing in the answers. A path may
     /// address the position just past the end of a list.
     pub fn candidates(&self, path: &Path) -> Result<Vec<&'static PluginEntry>, ConfigError> {
-        let position = locate(&T::schema(), &self.answers, path)?;
+        let position = locate(&self.schema, &self.answers, path)?;
         let Some(slot) = Slot::of(&position.kind()) else {
             return Ok(Vec::new());
         };
@@ -351,7 +351,7 @@ impl<T: Configurable> Draft<T> {
     /// An unanswered field is no issue, but still to be answered. A plugin with an unanswered field
     /// counts with its static declaration only.
     pub fn issues(&self) -> Vec<Issue> {
-        issues_in(&self.context, &Tree::of(&T::schema(), &self.answers), false)
+        issues_in(&self.context, &Tree::of(&self.schema, &self.answers), false)
     }
 
     /// Appends to the answers every plugin they imply: for a fact a plugin requires and neither
@@ -370,7 +370,7 @@ impl<T: Configurable> Draft<T> {
     /// A plugin so appended stays an answer like any other, even if the plugin requiring its fact
     /// is taken back later; for a draft that may still change, add them to a clone of it.
     pub fn add_implied(&mut self) {
-        add_implied(&self.context, &T::schema(), &mut self.answers);
+        add_implied(&self.context, &self.schema, &mut self.answers);
     }
 
     /// The composite built from the answers as they are.
@@ -383,14 +383,14 @@ impl<T: Configurable> Draft<T> {
     /// unanswered field is a [`Problem::Invalid`] issue with [`ConfigError::Unanswered`], and a
     /// fact nothing provides is [`Problem::Unprovided`].
     pub fn build(&self) -> Result<T, Vec<Issue>> {
-        let schema = T::schema();
+        let schema = &self.schema;
         let invalid = |error: ConfigError| {
             vec![Issue {
                 path: error.path().clone(),
                 problem: Problem::Invalid(error),
             }]
         };
-        let issues = issues_in(&self.context, &Tree::of(&schema, &self.answers), true);
+        let issues = issues_in(&self.context, &Tree::of(schema, &self.answers), true);
         if !issues.is_empty() {
             return Err(issues);
         }
@@ -405,6 +405,7 @@ impl<T: Configurable> Draft<T> {
 impl<T> Clone for Draft<T> {
     fn clone(&self) -> Self {
         Self {
+            schema: Arc::clone(&self.schema),
             answers: self.answers.clone(),
             context: Arc::clone(&self.context),
             composite: PhantomData,

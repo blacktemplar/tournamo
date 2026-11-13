@@ -303,7 +303,11 @@ impl PhaseForm {
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
         let completed_nodes = completed.fields();
-        let mut fields = self.fields(&nodes, None, &completed_nodes, &completed_nodes);
+        let whole = Whole {
+            completed: &completed_nodes,
+            irrelevant: &self.draft.irrelevant(),
+        };
+        let mut fields = self.fields(&nodes, None, &completed_nodes, &whole);
         let mut unplaced = Vec::new();
         for issue in &issues {
             let text = issue_text(issue, &completed);
@@ -557,14 +561,14 @@ impl PhaseForm {
         nodes: &[FieldNode],
         plugin: Option<&'static str>,
         completed: &[FieldNode],
-        all_completed: &[FieldNode],
+        whole: &Whole,
     ) -> Vec<FormField> {
         nodes
             .iter()
             .zip(completed)
             // Rejected input stays visible even when the field becomes irrelevant.
             .filter(|(node, _)| {
-                self.draft.is_relevant(&node.path).unwrap_or(true)
+                !whole.irrelevant.contains(&node.path)
                     || self
                         .rejected
                         .iter()
@@ -573,7 +577,7 @@ impl PhaseForm {
             .map(|(node, completed)| {
                 let field = &node.field;
                 FormField {
-                    input: self.input(field.kind(), node, completed, all_completed),
+                    input: self.input(field.kind(), node, completed, whole),
                     path: node.path.clone(),
                     plugin,
                     name: field.name(),
@@ -592,7 +596,7 @@ impl PhaseForm {
         kind: &FieldKind,
         node: &FieldNode,
         completed: &FieldNode,
-        all_completed: &[FieldNode],
+        whole: &Whole,
     ) -> Input {
         let path = &node.path;
         let answer = node.answer;
@@ -616,20 +620,16 @@ impl PhaseForm {
                 entered: entered(),
                 hint: with_range(Text::new("number-range"), NumberRange::Decimal(*range)),
             },
-            FieldKind::Plugin(axis) => {
-                Input::Plugin(self.plugin(*axis, node, false, all_completed))
-            }
+            FieldKind::Plugin(axis) => Input::Plugin(self.plugin(*axis, node, false, whole)),
             FieldKind::List { axis, ordered } => {
-                Input::List(self.list(*axis, *ordered, node, completed, all_completed))
+                Input::List(self.list(*axis, *ordered, node, completed, whole))
             }
             FieldKind::Optional(inner) => match &**inner {
-                FieldKind::Plugin(axis) => {
-                    Input::Plugin(self.plugin(*axis, node, true, all_completed))
-                }
-                FieldKind::List { .. } => self.input(inner, node, completed, all_completed),
+                FieldKind::Plugin(axis) => Input::Plugin(self.plugin(*axis, node, true, whole)),
+                FieldKind::List { .. } => self.input(inner, node, completed, whole),
                 _ => Input::Optional {
                     answered: answer.is_some_and(|answer| !answer.is_null()),
-                    inner: Box::new(self.input(inner, node, completed, all_completed)),
+                    inner: Box::new(self.input(inner, node, completed, whole)),
                 },
             },
         }
@@ -641,7 +641,7 @@ impl PhaseForm {
         axis: AnyAxis,
         node: &FieldNode,
         optional: bool,
-        all_completed: &[FieldNode],
+        whole: &Whole,
     ) -> PluginInput {
         let chosen = node.plugins().into_iter().next();
         let recommended = self.recommended(axis, &node.path);
@@ -656,7 +656,7 @@ impl PhaseForm {
                         recommended.contains(&chosen.entry.id()),
                     ),
                     // implied plugins are appended only to the composite's lists
-                    fields: self.fields(&fields, Some(chosen.entry.id()), &fields, all_completed),
+                    fields: self.fields(&fields, Some(chosen.entry.id()), &fields, whole),
                 }
             }),
             options,
@@ -670,7 +670,7 @@ impl PhaseForm {
         ordered: bool,
         node: &FieldNode,
         completed: &FieldNode,
-        all_completed: &[FieldNode],
+        whole: &Whole,
     ) -> ListInput {
         let path = &node.path;
         let chosen = node.plugins();
@@ -691,7 +691,7 @@ impl PhaseForm {
                     let fields = chosen.fields();
                     Item {
                         plugin: PluginOption::of(entry, recommended.contains(&entry.id())),
-                        fields: self.fields(&fields, Some(entry.id()), &fields, all_completed),
+                        fields: self.fields(&fields, Some(entry.id()), &fields, whole),
                         path: chosen.path.clone(),
                         issues: Vec::new(),
                     }
@@ -704,7 +704,7 @@ impl PhaseForm {
                         plugin.entry,
                         recommended.contains(&plugin.entry.id()),
                     ),
-                    needed_by: needed_by(plugin.entry, axis, all_completed),
+                    needed_by: needed_by(plugin.entry, axis, whole.completed),
                 })
                 .collect(),
             options,
@@ -756,6 +756,14 @@ fn is_suggested(path: &Path) -> bool {
         return false;
     };
     PhasePlugins::SUGGESTED.contains(&name.as_str())
+}
+
+/// What the whole form shows its fields with, found once per [`PhaseForm::view`].
+struct Whole<'a> {
+    /// The fields of the phase with the implied plugins appended.
+    completed: &'a [FieldNode<'a>],
+    /// The fields that do not matter, see [`Draft::irrelevant`].
+    irrelevant: &'a [Path],
 }
 
 /// The plugins answering the fields of the phase in `completed` that need `entry` of `axis`, in

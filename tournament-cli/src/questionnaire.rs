@@ -297,7 +297,7 @@ impl From<InquireError> for Error {
 /// The fields are asked in schema order, each followed by the fields of the plugin it is answered
 /// with, if any. A question starts out at the field's answer in `draft`, so that filling a draft
 /// once more only asks for changes, or else at the answer [`Draft::default_value`] offers. A field
-/// that does not matter with the answers before it, see [`Draft::is_relevant`], e.g. the points for
+/// that does not matter with the answers before it, see [`Draft::irrelevant`], e.g. the points for
 /// a draw where no match ends in a draw, is answered so without being asked.
 ///
 /// A field offers every registered plugin of its axis, see [`Draft::candidates`].
@@ -708,7 +708,7 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
             Some(answer) => Some(answer.clone()),
             None => (self.default_value)(self.draft, &path)?,
         };
-        if !self.draft.is_relevant(&path)?
+        if self.draft.irrelevant().contains(&path)
             && let Some(default) = default
         {
             self.draft.set(&path, default)?;

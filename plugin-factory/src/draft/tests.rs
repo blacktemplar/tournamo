@@ -302,11 +302,7 @@ fn a_field_is_irrelevant_while_its_fact_is_provided() {
         ("metrics", json!([plugin::<Draws>().with("for_draw", 0.5)])),
     ]);
     let for_draw = path("metrics[0].for_draw");
-    assert!(draft.is_relevant(&for_draw).unwrap());
-    assert!(
-        draft.is_relevant(&path("metrics[0]")).unwrap(),
-        "a position"
-    );
+    assert_eq!(draft.irrelevant(), []);
 
     draft
         .set(
@@ -315,17 +311,12 @@ fn a_field_is_irrelevant_while_its_fact_is_provided() {
         )
         .unwrap();
 
-    assert!(!draft.is_relevant(&for_draw).unwrap());
-    assert!(draft.is_relevant(&path("format")).unwrap());
+    assert_eq!(draft.irrelevant(), std::slice::from_ref(&for_draw));
     assert_eq!(
         draft.answers().get_at(&for_draw),
         Some(&json!(0.5)),
         "still answered"
     );
-    assert!(matches!(
-        draft.is_relevant(&path("metrics[1].for_draw")),
-        Err(ConfigError::UnknownField { .. })
-    ));
 }
 
 /// The registered choices at `at`, by id.
@@ -341,7 +332,7 @@ fn candidates(draft: &Draft<Phase>, at: &str) -> Vec<&'static str> {
 /// The paths of the fields in the tree of the answers of `draft`, each with whether it is
 /// answered.
 fn paths<T: Configurable>(draft: &Draft<T>) -> Vec<(String, bool)> {
-    Tree::of(&T::schema(), draft.answers())
+    Tree::of(&draft.schema, draft.answers())
         .questions
         .iter()
         .map(|question| (question.path.to_string(), question.answer.is_some()))
@@ -788,7 +779,7 @@ fn a_field_offers_the_default_of_its_schema() {
 /// Answers every unanswered field of `draft` that offers an answer with it, depth first in
 /// schema order, as a UI accepting every default does.
 fn accept_defaults(draft: &mut Draft<Phase>) {
-    while let Some(at) = Tree::of(&Phase::schema(), draft.answers())
+    while let Some(at) = Tree::of(&draft.schema, draft.answers())
         .questions
         .into_iter()
         .find(|question| {

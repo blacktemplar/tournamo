@@ -552,7 +552,7 @@ impl Field {
 
     /// The type of the fact whose presence in the composite makes this field irrelevant, e.g. the
     /// points for a draw where no match ends in a draw: a UI may leave it out while the composite
-    /// provides it, see [`Draft::is_relevant`](crate::draft::Draft::is_relevant). It is answered
+    /// provides it, see [`Draft::irrelevant`](crate::draft::Draft::irrelevant). It is answered
     /// all the same.
     pub fn irrelevant_with(&self) -> Option<TypeId> {
         self.irrelevant_with.map(|type_id| type_id())

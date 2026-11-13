@@ -156,7 +156,7 @@ impl Declaration {
   calculator declares the metric its `default_metric_value()` returns.
 - **A field can be irrelevant while a fact holds**
   (`#[plugin(irrelevant_with = NoDraws)]` on the points for a draw), so that a
-  form leaves it out (`Draft::is_relevant`); it stays answered, and a plugin
+  form leaves it out (`Draft::irrelevant`); it stays answered, and a plugin
   reads it as before. The condition is negative, a fact making the field
   irrelevant rather than one it needs: a plugin of another crate forgetting to
   provide a fact shows a field too many rather than hiding one that matters.

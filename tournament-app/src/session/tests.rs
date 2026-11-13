@@ -37,7 +37,7 @@ use crate::{
     view::{
         Action, BracketColumn, BracketEntry, BracketLine, BracketPart, BracketSection,
         BracketSource, Column, Count, EntrantRow, MatchRow, Medal, NameSearch, Outcome, Plugin,
-        RoundSummary, Scale, StageName, StandingCell, Unplayed,
+        RoundSummary, RoundsView, Scale, Shown, StageName, StandingCell, Unplayed,
     },
 };
 
@@ -1618,6 +1618,117 @@ fn a_match_can_be_played_once_its_entrants_played_the_rounds_before() {
 
     assert_eq!(numbers(&session), [3, 4]);
     assert!(Given::new().added().playable().is_empty());
+}
+
+/// The numbers of the matches a list of rounds shows.
+fn listed(view: &RoundsView) -> Vec<usize> {
+    view.matches
+        .iter()
+        .map(|listed| listed.row.number)
+        .collect()
+}
+
+#[test]
+fn the_rounds_show_the_first_round_with_an_open_match_unless_another_is_chosen() {
+    let mut session = Given::new().started();
+    session
+        .report(numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+    session
+        .report(numbered(&session, 2), MatchResult::AWins)
+        .unwrap();
+
+    let view = session.rounds_view(None, "").unwrap();
+    assert_eq!(view.current, round(2));
+    assert_eq!(view.shown, Shown::Round(round(2)));
+    assert_eq!((view.previous, view.next), (Some(round(1)), Some(round(3))));
+    assert_eq!(listed(&view), [3, 4]);
+    assert!(
+        !view.with_round,
+        "a round shown names none of its matches by it"
+    );
+
+    let first = session
+        .rounds_view(Some(Shown::Round(round(1))), "")
+        .unwrap();
+    assert_eq!((first.previous, first.next), (None, Some(round(2))));
+    assert_eq!(listed(&first), [1, 2]);
+
+    let gone = session
+        .rounds_view(Some(Shown::Round(round(9))), "")
+        .unwrap();
+    assert_eq!(
+        gone.shown,
+        Shown::Round(round(2)),
+        "a round that no longer exists falls back to the current one"
+    );
+}
+
+#[test]
+fn the_rounds_show_the_playable_matches_each_by_its_round() {
+    let session = Given::new().started();
+
+    let view = session.rounds_view(Some(Shown::Playable), "").unwrap();
+
+    assert_eq!(listed(&view), [1, 2]);
+    assert_eq!(view.playable, 2);
+    assert_eq!((view.previous, view.next), (None, None));
+    assert!(view.with_round);
+}
+
+/// After a result is reported, the operator goes on to the next match without one, wrapping around
+/// to the first.
+#[test]
+fn each_open_match_listed_leads_on_to_the_next_open_one() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol", "Dave", "Erin", "Frank"])
+        .started();
+    session
+        .report(numbered(&session, 2), MatchResult::AWins)
+        .unwrap();
+
+    let view = session.rounds_view(None, "").unwrap();
+
+    let next: Vec<_> = view
+        .matches
+        .iter()
+        .map(|listed| (listed.row.number, listed.next_open))
+        .collect();
+    let id = |number| Some(numbered(&session, number));
+    assert_eq!(next, [(1, id(3)), (2, None), (3, id(1))]);
+}
+
+#[test]
+fn the_rounds_show_the_matches_a_typed_result_fits() {
+    let mut session = Given::new().started();
+
+    let view = session.rounds_view(None, " 3 1 ").unwrap();
+
+    let entry = view.entry.as_ref().unwrap();
+    assert_eq!(entry.text, "3 1");
+    assert_eq!(entry.report.as_ref().unwrap().number, 3);
+    assert_eq!(listed(&view), [3]);
+    assert!(view.with_round);
+    assert!(view.byes.is_empty());
+    let blank = session.rounds_view(None, "  ").unwrap();
+    assert!(blank.entry.is_none());
+    assert_eq!(listed(&blank), [1, 2]);
+
+    while let Some(row) = session.playable().first().cloned() {
+        session.report(row.id, MatchResult::AWins).unwrap();
+    }
+    let finished = session.rounds_view(None, "3 1").unwrap();
+    assert!(finished.finished);
+    assert!(
+        finished.entry.is_none(),
+        "nothing is left to type once every match has a result"
+    );
+    assert_eq!(finished.current, round(3), "the last round");
+}
+
+#[test]
+fn there_are_no_rounds_to_show_before_the_start() {
+    assert!(Given::new().added().rounds_view(None, "1 1").is_none());
 }
 
 /// A round robin of four plays three rounds of two matches.

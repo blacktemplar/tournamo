@@ -5,12 +5,14 @@
 //! buttons, which are gone then, the focus moves on to where the next one is reported, so that the
 //! results of a round can be entered by keyboard alone.
 
-use std::{num::NonZeroU32, rc::Rc};
+use std::rc::Rc;
 
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::{Message as _, PluginText, Text, Translator},
-    view::{MatchRow, Medal, RoundSummary, StandingCell},
+    view::{
+        ListedMatch, MatchRow, Medal, RoundSummary, RoundsView, Shown, StandingCell, TypedEntry,
+    },
 };
 use tournament_engine::{MatchId, MatchResult};
 use wasm_bindgen::JsCast as _;
@@ -26,15 +28,6 @@ use crate::{
     result_text, result_with_scores, team_name,
     toggletip::Toggletip,
 };
-
-/// The list of matches shown.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Shown {
-    /// Those that can be played now, see
-    /// [`Session::playable`](tournament_app::session::Session::playable).
-    Playable,
-    Round(NonZeroU32),
-}
 
 /// What gets the focus once the page shows a result reported or reopened by its buttons.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -90,8 +83,7 @@ pub fn move_focus<T: 'static>(mut focus: Signal<Option<T>>, target: T) {
 #[component]
 pub fn Rounds() -> Element {
     let ctx = use_context::<Ctx>();
-    // the list the operator chose, if any; a round that no longer exists, e.g. after an undo,
-    // falls back to the one shown without a choice
+    // the list the operator chose, if any
     let mut chosen = use_signal(|| None::<Shown>);
     let focus = use_signal(|| None::<Focus>);
     let on_heading_mounted = use_focus(focus, Focus::Heading);
@@ -99,76 +91,40 @@ pub fn Rounds() -> Element {
     let typing = use_signal(|| remembered(RESULT_ENTRY_OPEN));
     // what is typed into it, which while there is any shows the matches it fits instead
     let entry = use_signal(String::new);
-    let session = ctx.session.read();
-    let rounds = session.rounds();
-    let Some(current) = current(&rounds) else {
+    let typed = if typing() {
+        entry.read().clone()
+    } else {
+        String::new()
+    };
+    let Some(view) = ctx.session.read().rounds_view(chosen(), &typed) else {
         return rsx! {};
     };
-    let shown = chosen()
-        .filter(|shown| match shown {
-            Shown::Playable => true,
-            Shown::Round(round) => rounds.iter().any(|summary| summary.round == *round),
-        })
-        .unwrap_or(Shown::Round(current));
-    let playable = session.playable();
-    let draws = session.round(current).is_some_and(|round| round.draws);
-    let scores = session
-        .round(current)
-        .is_some_and(|round| round.matches.iter().any(|row| row.details));
-    // once every match has a result, there is nothing left to type in until one is reopened
-    let finished = rounds.iter().all(|summary| summary.open == 0);
-    let entered = entry.read().trim().to_owned();
-    let entered = (typing() && !finished && !entered.is_empty()).then(|| {
-        let read = session.read_entered(&entered);
-        (entered, read.found, read.report.ok().map(|row| row.id))
-    });
-    let (matches, byes) = match (&entered, shown) {
-        (Some((_, found, _)), _) => (found.clone(), Vec::new()),
-        (None, Shown::Playable) => (playable.clone(), Vec::new()),
-        (None, Shown::Round(round)) => session
-            .round(round)
-            .map(|round| (round.matches, round.byes))
-            .unwrap_or_default(),
+    let heading_round = view.shown_round().cloned();
+    let RoundsView {
+        rounds,
+        current,
+        shown,
+        previous,
+        next,
+        playable,
+        draws,
+        scores,
+        finished,
+        entry: typed,
+        matches,
+        byes,
+        with_round,
+        with_stage,
+    } = view;
+    let (entered, preview) = match typed {
+        Some(TypedEntry { text, report }) => (Some(text), Some(report.map_err(|why| why.text()))),
+        None => (None, None),
     };
-    drop(session);
     // the match whose result Enter in the entry reports
-    let to_report = entered.as_ref().and_then(|(_, _, to_report)| *to_report);
-    let with_round = shown == Shown::Playable || entered.is_some();
-    let with_stage = matches.iter().any(|row| row.stage.is_some());
-    // after the result of a match is reported by its buttons, the focus moves on to the next match
-    // shown without one, after it or else before it
-    let open: Vec<_> = matches
-        .iter()
-        .filter(|row| row.result.is_none())
-        .map(|row| row.id)
-        .collect();
-    let after_report = |id| {
-        let position = open.iter().position(|open| *open == id).unwrap_or(0);
-        open.get(position + 1..)
-            .unwrap_or_default()
-            .iter()
-            .chain(&open[..position])
-            .next()
-            .map_or(Focus::Heading, |next| Focus::Report(*next))
-    };
-    let rows: Vec<_> = matches
-        .into_iter()
-        .map(|row| (after_report(row.id), row))
-        .collect();
-    // the rounds before and after the one shown, for the buttons stepping through them
-    let (previous, next) = match shown {
-        Shown::Playable => (None, None),
-        Shown::Round(round) => {
-            let position = rounds.iter().position(|summary| summary.round == round);
-            let at = |offset: isize| {
-                position
-                    .and_then(|position| position.checked_add_signed(offset))
-                    .and_then(|position| rounds.get(position))
-                    .map(|summary| summary.round)
-            };
-            (at(-1), at(1))
-        }
-    };
+    let to_report = preview
+        .as_ref()
+        .and_then(|report| report.as_ref().ok())
+        .map(|row| row.id);
     let tr = ctx.translator.read();
     rsx! {
         section { class: "card", aria_labelledby: "matches",
@@ -180,7 +136,13 @@ pub fn Rounds() -> Element {
                 }
             }
             if typing() && !finished {
-                ResultEntry { draws, scores, entry, focus }
+                ResultEntry {
+                    draws,
+                    scores,
+                    entry,
+                    preview: preview.clone(),
+                    focus,
+                }
             }
             // out of the way while the matches shown are those the entry fits, which they would not
             // change
@@ -195,7 +157,7 @@ pub fn Rounds() -> Element {
                     button {
                         aria_pressed: shown == Shown::Playable,
                         onclick: move |_| chosen.set(Some(Shown::Playable)),
-                        {t!(tr, "playable-now-count", count = playable.len())}
+                        {t!(tr, "playable-now-count", count = playable)}
                     }
                     button {
                         aria_pressed: shown != Shown::Playable,
@@ -261,34 +223,29 @@ pub fn Rounds() -> Element {
             }
             // focused once no match shown is left without a result, so that the focus is not lost
             h3 { tabindex: "-1", onmounted: on_heading_mounted,
-                match (&entered, shown) {
-                    (Some((text, ..)), _) => t!(tr, "entry-found", text = text.as_str()),
-                    (None, Shown::Playable) => tr.get("playable-now"),
-                    (None, Shown::Round(round)) => {
-                        match rounds.iter().find(|summary| summary.round == round) {
-                            Some(summary) => round_name(&tr, summary),
-                            None => t!(tr, "round", round = round),
-                        }
-                    }
+                match (&entered, &heading_round) {
+                    (Some(text), _) => t!(tr, "entry-found", text = text.as_str()),
+                    (None, Some(summary)) => round_name(&tr, summary),
+                    (None, None) => tr.get("playable-now"),
                 }
             }
-            if rows.is_empty() && byes.is_empty() {
-                if let Some((text, ..)) = &entered {
+            if matches.is_empty() && byes.is_empty() {
+                if let Some(text) = &entered {
                     p { class: "empty", {t!(tr, "entry-nothing-found", text = text.as_str())} }
                 } else if shown == Shown::Playable {
                     p { class: "empty", {tr.get("nothing-playable")} }
                 }
             }
-            if !rows.is_empty() {
+            if !matches.is_empty() {
                 ol { id: "match-list",
-                    for (after_report, row) in rows {
+                    for ListedMatch { row, next_open } in matches {
                         MatchLine {
                             key: "{row.id:?}",
                             with_round,
                             with_stage,
                             draws,
                             focus,
-                            after_report,
+                            after_report: next_open.map_or(Focus::Heading, Focus::Report),
                             to_report: to_report == Some(row.id),
                             row,
                         }
@@ -318,16 +275,6 @@ fn round_name(tr: &Translator, summary: &RoundSummary) -> String {
         Some(stage) => capitalized(&tr.stage(stage)),
         None => t!(tr, "round", round = summary.round),
     }
-}
-
-/// The round shown when the operator chose none: the first with a match without a result, or else
-/// the last.
-fn current(rounds: &[RoundSummary]) -> Option<NonZeroU32> {
-    rounds
-        .iter()
-        .find(|summary| summary.open > 0)
-        .or(rounds.last())
-        .map(|summary| summary.round)
 }
 
 /// The button in the heading of the matches showing the entry of results typed in, or hiding it
@@ -361,6 +308,9 @@ fn ResultEntry(
     draws: bool,
     scores: bool,
     entry: Signal<String>,
+    /// The match and result reported if submitted now, or why none; nothing while nothing is
+    /// typed.
+    preview: Option<Result<MatchRow, Text>>,
     focus: Signal<Option<Focus>>,
 ) -> Element {
     let ctx = use_context::<Ctx>();
@@ -369,9 +319,6 @@ fn ResultEntry(
     let mut used = use_signal(|| remembered(RESULT_ENTRY_USED));
     // only reported by the tab that changes the competition
     let disabled = !ctx.changes();
-    // the match and result reported if submitted now, or why none; nothing while nothing is typed
-    let preview = (!entry.read().trim().is_empty())
-        .then(|| ctx.session.read().read_entered(&entry.read()).report);
     let tr = ctx.translator.read();
     let preview = preview.map(|report| match report {
         Ok(row) => (
@@ -383,7 +330,7 @@ fn ResultEntry(
                 result = result_with_scores(&tr, &row).unwrap_or_default(),
             ),
         ),
-        Err(why) => ("preview hint", tr.sentence(&why.text())),
+        Err(why) => ("preview hint", tr.sentence(&why)),
     });
     let mut hint = t!(
         tr,

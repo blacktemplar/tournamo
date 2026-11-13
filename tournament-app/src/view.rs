@@ -65,6 +65,81 @@ pub struct Glossary {
     pub metrics: Vec<Plugin>,
 }
 
+/// Which matches a list of rounds shows, see
+/// [`Session::rounds_view`](crate::session::Session::rounds_view).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Shown {
+    /// Those that can be played now, see
+    /// [`Session::playable`](crate::session::Session::playable).
+    Playable,
+    Round(NonZeroU32),
+}
+
+/// The matches of a started phase as a list of rounds shows them, see
+/// [`Session::rounds_view`](crate::session::Session::rounds_view).
+#[derive(Debug)]
+pub struct RoundsView {
+    /// Every round, in order, see [`Session::rounds`](crate::session::Session::rounds).
+    pub rounds: Vec<RoundSummary>,
+    /// The round shown when the operator chose none: the first with a match without a result, or
+    /// else the last.
+    pub current: NonZeroU32,
+    /// The list chosen if it still exists, else [`Self::current`].
+    pub shown: Shown,
+    /// The rounds before and after the one shown, if any; none while the playable matches are.
+    pub previous: Option<NonZeroU32>,
+    pub next: Option<NonZeroU32>,
+    /// How many matches can be played now.
+    pub playable: usize,
+    /// Whether a match may end in a [`MatchResult::Draw`].
+    pub draws: bool,
+    /// Whether a match of [`Self::current`] enters more than who won, e.g. a score.
+    pub scores: bool,
+    /// Whether every match has a result, so that nothing is left to enter until one is reopened.
+    pub finished: bool,
+    /// The entry of a result typed, if it holds more than spaces while [`Self::finished`] is
+    /// not; the matches shown are then those it found.
+    pub entry: Option<TypedEntry>,
+    /// The matches shown: those the entry found, else those of [`Self::shown`], in order.
+    pub matches: Vec<ListedMatch>,
+    /// The byes of the round shown; none while the entry or the playable matches are shown.
+    pub byes: Vec<ByeRow>,
+    /// Whether the matches shown are of several rounds, so that each names its own.
+    pub with_round: bool,
+    /// Whether a match shown is of a stage.
+    pub with_stage: bool,
+}
+
+impl RoundsView {
+    /// The summary of the round shown, if one is, whatever the entry found.
+    pub fn shown_round(&self) -> Option<&RoundSummary> {
+        match self.shown {
+            Shown::Playable => None,
+            Shown::Round(round) => self.rounds.iter().find(|summary| summary.round == round),
+        }
+    }
+}
+
+/// A result typed, as a list of rounds shows it.
+#[derive(Debug)]
+pub struct TypedEntry {
+    /// What was typed, without spaces around it.
+    pub text: String,
+    /// The match whose result it says, with that result, or why it reports none, see
+    /// [`Entered::report`].
+    pub report: Result<MatchRow, ReportEnteredError>,
+}
+
+/// A match in a list of matches.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ListedMatch {
+    pub row: MatchRow,
+    /// For a match without a result, the next one listed without a result, after it or else
+    /// before it, where the operator goes on once its result is reported; `None` if it has a
+    /// result or is the only one without.
+    pub next_open: Option<MatchId>,
+}
+
 /// A round of the phase as a list of rounds shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RoundSummary {

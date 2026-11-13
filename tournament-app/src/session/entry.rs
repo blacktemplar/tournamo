@@ -82,7 +82,20 @@ impl Session {
             result,
         }) = read_entry(entry)
         else {
-            return self.read_named(phase, entry);
+            let mut open: Vec<_> = phase
+                .data()
+                .matches()
+                .values()
+                .filter(|r#match| !r#match.is_finished())
+                .map(|r#match| self.match_row(phase, r#match))
+                .collect();
+            open.sort_by_key(|row| row.number);
+            let Named { found, says } = read_named(&open, entry, phase.format().allows_draws());
+            let report = says.and_then(|Says { row, scores }| {
+                let result = row.result;
+                self.with_scores(phase, row, &scores, result)
+            });
+            return Entered { found, report };
         };
         let Some(r#match) = phase
             .data()
@@ -102,88 +115,6 @@ impl Session {
             found: vec![row],
             report,
         }
-    }
-
-    /// What `entry`, part of a name and perhaps the number of a match and a draw, fits and says,
-    /// see [`Self::read_entered`].
-    fn read_named(&self, phase: &Phase, entry: &str) -> Entered {
-        let mut open: Vec<_> = phase
-            .data()
-            .matches()
-            .values()
-            .filter(|r#match| !r#match.is_finished())
-            .map(|r#match| self.match_row(phase, r#match))
-            .collect();
-        open.sort_by_key(|row| row.number);
-        let readings = NamedEntry::readings(entry);
-        // the longest name that fits
-        let Some((reading, fitting)) = readings.iter().find_map(|reading| {
-            let fitting = reading.fitting(&open);
-            (!fitting.is_empty()).then_some((reading, fitting))
-        }) else {
-            // a name followed by a number, which fits only without it
-            let error = readings
-                .iter()
-                .find_map(|reading| {
-                    let number = reading.number?;
-                    let anywhere = NamedEntry {
-                        number: None,
-                        ..reading.clone()
-                    };
-                    (!anywhere.fitting(&open).is_empty()).then(|| ReportEnteredError::NotInMatch {
-                        name: reading.name.to_owned(),
-                        number,
-                    })
-                })
-                .unwrap_or_else(|| ReportEnteredError::NoNameFound(entry.to_owned()));
-            return Entered {
-                found: Vec::new(),
-                report: Err(error),
-            };
-        };
-        let mut found: Vec<MatchRow> = Vec::new();
-        for (row, ..) in &fitting {
-            if found.last().is_none_or(|last| last.id != row.id) {
-                found.push((*row).clone());
-            }
-        }
-        let report = if reading.draw && !phase.format().allows_draws() {
-            Err(ReportError::DrawNotAllowed.into())
-        } else {
-            match (fitting.as_slice(), found.as_slice()) {
-                ([(row, result, side)], _) => match (reading.scores.as_slice(), side) {
-                    ([], _) => Ok(MatchRow {
-                        result: Some(*result),
-                        ..(*row).clone()
-                    }),
-                    // scores of a draw whose both sides have the name are no one's
-                    (_, None) => Err(ReportEnteredError::BothSides {
-                        name: reading.name.to_owned(),
-                        number: row.number,
-                    }),
-                    (scores, Some(team)) => {
-                        let scores: Vec<_> = scores
-                            .iter()
-                            .map(|score| match team {
-                                Team::A => *score,
-                                Team::B => Sides::new(score.b, score.a),
-                            })
-                            .collect();
-                        self.with_scores(phase, (*row).clone(), &scores, Some(*result))
-                    }
-                },
-                (_, [row]) => Err(ReportEnteredError::BothSides {
-                    name: reading.name.to_owned(),
-                    number: row.number,
-                }),
-                (_, rows) => Err(ReportEnteredError::SeveralMatches {
-                    name: reading.name.to_owned(),
-                    matches: rows.len(),
-                    number: rows[0].number,
-                }),
-            }
-        };
-        Entered { found, report }
     }
 
     /// `row`, an open match of `phase`, with the result `scores` (side A's first) and `result`
@@ -226,7 +157,106 @@ impl Session {
     }
 }
 
+/// What an entry of part of a name fits and says, see [`read_named`].
+#[derive(Debug)]
+struct Named {
+    /// The matches it fits, by their numbers.
+    found: Vec<MatchRow>,
+    says: Result<Says, ReportEnteredError>,
+}
+
+/// The match an entry says the result of, with that result, and the scores entered, which are yet
+/// to be entered into the match.
+#[derive(Debug)]
+struct Says {
+    row: MatchRow,
+    /// Side A's first.
+    scores: Vec<Sides<EnteredValue>>,
+}
+
+/// What `entry`, part of a name and perhaps the number of a match and a draw, fits of the open
+/// matches `open`, in the order of their numbers, and says, in a phase that takes draws if `draws`,
+/// see [`Session::read_entered`].
+fn read_named(open: &[MatchRow], entry: &str, draws: bool) -> Named {
+    let readings = NamedEntry::readings(entry);
+    // the longest name that fits
+    let Some((reading, fitting)) = readings.iter().find_map(|reading| {
+        let fitting = reading.fitting(open);
+        (!fitting.is_empty()).then_some((reading, fitting))
+    }) else {
+        // a name followed by a number, which fits only without it
+        let error = readings
+            .iter()
+            .find_map(|reading| {
+                let number = reading.number?;
+                let anywhere = NamedEntry {
+                    number: None,
+                    ..reading.clone()
+                };
+                (!anywhere.fitting(open).is_empty()).then(|| ReportEnteredError::NotInMatch {
+                    name: reading.name.to_owned(),
+                    number,
+                })
+            })
+            .unwrap_or_else(|| ReportEnteredError::NoNameFound(entry.to_owned()));
+        return Named {
+            found: Vec::new(),
+            says: Err(error),
+        };
+    };
+    let mut found: Vec<MatchRow> = Vec::new();
+    for (row, ..) in &fitting {
+        if found.last().is_none_or(|last| last.id != row.id) {
+            found.push((*row).clone());
+        }
+    }
+    let says = if reading.draw && !draws {
+        Err(ReportError::DrawNotAllowed.into())
+    } else {
+        match (fitting.as_slice(), found.as_slice()) {
+            ([(row, result, side)], _) => {
+                let row = MatchRow {
+                    result: Some(*result),
+                    ..(*row).clone()
+                };
+                match (reading.scores.as_slice(), side) {
+                    ([], _) => Ok(Says {
+                        row,
+                        scores: Vec::new(),
+                    }),
+                    // scores of a draw whose both sides have the name are no one's
+                    (_, None) => Err(ReportEnteredError::BothSides {
+                        name: reading.name.to_owned(),
+                        number: row.number,
+                    }),
+                    (scores, Some(team)) => Ok(Says {
+                        row,
+                        scores: scores
+                            .iter()
+                            .map(|score| match team {
+                                Team::A => *score,
+                                Team::B => Sides::new(score.b, score.a),
+                            })
+                            .collect(),
+                    }),
+                }
+            }
+            (_, [row]) => Err(ReportEnteredError::BothSides {
+                name: reading.name.to_owned(),
+                number: row.number,
+            }),
+            (_, rows) => Err(ReportEnteredError::SeveralMatches {
+                name: reading.name.to_owned(),
+                matches: rows.len(),
+                number: rows[0].number,
+            }),
+        }
+    };
+    Named { found, says }
+}
+
 /// What an entry of the number of a match says, see [`Session::read_entered`].
+#[derive(Debug, PartialEq)]
 struct NumberedEntry {
     number: usize,
     /// Side A's first.
@@ -380,5 +410,216 @@ impl<'a> NamedEntry<'a> {
                     .map(move |(result, side)| (row, result, side))
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU32;
+
+    use tournament_engine::{EntrantId, uuid::Uuid};
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    fn count(a: u16, b: u16) -> Sides<EnteredValue> {
+        Sides::new(EnteredValue::Count(a), EnteredValue::Count(b))
+    }
+
+    #[test]
+    fn a_number_is_followed_by_its_result_or_scores() {
+        let numbered = |number, scores, result| {
+            Some(NumberedEntry {
+                number,
+                scores,
+                result,
+            })
+        };
+        assert_eq!(
+            read_entry("3 1"),
+            numbered(3, vec![], Some(MatchResult::AWins))
+        );
+        assert_eq!(
+            read_entry("3-2"),
+            numbered(3, vec![], Some(MatchResult::BWins))
+        );
+        assert_eq!(
+            read_entry("12x"),
+            numbered(12, vec![], Some(MatchResult::Draw))
+        );
+        assert_eq!(
+            read_entry(" 12 X "),
+            numbered(12, vec![], Some(MatchResult::Draw))
+        );
+        assert_eq!(read_entry("3"), numbered(3, vec![], None));
+        // a win needs a separator
+        assert_eq!(read_entry("31"), numbered(31, vec![], None));
+        assert_eq!(
+            read_entry("3 21-17 19-21 1"),
+            numbered(
+                3,
+                vec![count(21, 17), count(19, 21)],
+                Some(MatchResult::AWins)
+            )
+        );
+        assert_eq!(
+            read_entry("3 21-17"),
+            numbered(3, vec![count(21, 17)], None)
+        );
+    }
+
+    #[test]
+    fn an_entry_not_starting_with_a_number_is_none() {
+        assert_eq!(read_entry("ali"), None);
+        assert_eq!(read_entry("3ali"), None);
+        assert_eq!(read_entry("3 ali"), None);
+    }
+
+    /// The open match numbered `number`, of Alice and Bob.
+    fn open_match(number: usize) -> MatchRow {
+        let id = serde_json::from_value(serde_json::json!(Uuid::from_u128(number as u128)))
+            .expect("a match id is a UUID");
+        MatchRow {
+            id,
+            number,
+            round: NonZeroU32::MIN,
+            stage: None,
+            a: team(&["Alice"]),
+            b: team(&["Bob"]),
+            result: None,
+            scores: Vec::new(),
+            parts_won: None,
+            details: false,
+        }
+    }
+
+    fn team(names: &[&str]) -> Vec<EntrantRow> {
+        names
+            .iter()
+            .map(|name| EntrantRow {
+                id: EntrantId::new(Uuid::new_v5(&Uuid::nil(), name.as_bytes())),
+                name: Some((*name).to_owned()),
+            })
+            .collect()
+    }
+
+    /// The match `named` says the result of, its number, and the scores entered.
+    fn says(named: Named) -> (usize, Option<MatchResult>, Vec<Sides<EnteredValue>>) {
+        let Says { row, scores } = named.says.expect("the entry says a result");
+        (row.number, row.result, scores)
+    }
+
+    fn found(named: &Named) -> Vec<usize> {
+        named.found.iter().map(|row| row.number).collect()
+    }
+
+    #[test]
+    fn a_name_says_the_win_of_its_side() {
+        let open = [
+            open_match(1),
+            MatchRow {
+                a: team(&["Carol"]),
+                b: team(&["Dave"]),
+                ..open_match(2)
+            },
+        ];
+        let named = read_named(&open, "dav", true);
+        assert_eq!(found(&named), [2]);
+        assert_eq!(says(named), (2, Some(MatchResult::BWins), vec![]));
+    }
+
+    #[test]
+    fn the_scores_of_a_name_are_its_sides_first() {
+        let named = read_named(&[open_match(1)], "bob 21-17 15-21", true);
+        assert_eq!(
+            says(named),
+            (
+                1,
+                Some(MatchResult::BWins),
+                vec![count(17, 21), count(21, 15)]
+            )
+        );
+    }
+
+    #[test]
+    fn a_number_or_x_ends_a_name_only_if_no_name_has_it() {
+        let open = [MatchRow {
+            a: team(&["Malcolm X"]),
+            ..open_match(1)
+        }];
+        assert_eq!(
+            says(read_named(&open, "Malcolm X", true)).1,
+            Some(MatchResult::AWins)
+        );
+        assert_eq!(
+            says(read_named(&open, "Malcolm X X", true)).1,
+            Some(MatchResult::Draw)
+        );
+        assert_eq!(
+            says(read_named(&open, "malcolm 1", true)).1,
+            Some(MatchResult::AWins)
+        );
+    }
+
+    #[test]
+    fn a_name_in_several_matches_needs_a_number() {
+        let open = [open_match(1), open_match(2)];
+        let named = read_named(&open, "ali", true);
+        assert_eq!(found(&named), [1, 2]);
+        assert!(matches!(
+            named.says,
+            Err(ReportEnteredError::SeveralMatches {
+                matches: 2,
+                number: 1,
+                ..
+            })
+        ));
+        assert_eq!(says(read_named(&open, "ali 2", true)).0, 2);
+        assert!(matches!(
+            read_named(&open, "ali 3", true).says,
+            Err(ReportEnteredError::NotInMatch { number: 3, .. })
+        ));
+    }
+
+    #[test]
+    fn a_name_of_both_sides_names_no_winner() {
+        let open = [MatchRow {
+            a: team(&["Ann"]),
+            b: team(&["Andy"]),
+            ..open_match(1)
+        }];
+        let both = |entry| {
+            matches!(
+                read_named(&open, entry, true).says,
+                Err(ReportEnteredError::BothSides { number: 1, .. })
+            )
+        };
+        assert!(both("an"));
+        // a draw needs no winner, but its scores need a side
+        assert_eq!(
+            says(read_named(&open, "an x", true)).1,
+            Some(MatchResult::Draw)
+        );
+        assert!(both("an x 1-1"));
+    }
+
+    #[test]
+    fn a_draw_is_refused_where_there_are_none() {
+        let named = read_named(&[open_match(1)], "ali x", false);
+        assert_eq!(found(&named), [1]);
+        assert!(matches!(
+            named.says,
+            Err(ReportEnteredError::Report(ReportError::DrawNotAllowed))
+        ));
+    }
+
+    #[test]
+    fn a_name_no_open_match_has_is_not_found() {
+        let named = read_named(&[open_match(1)], "carol", true);
+        assert!(named.found.is_empty());
+        assert!(
+            matches!(named.says, Err(ReportEnteredError::NoNameFound(name)) if name == "carol")
+        );
     }
 }

@@ -17,10 +17,18 @@ later one: a file whose `"format"` changes is migrated, not refused.
   and 2 open unchanged; earlier versions refuse format 3 as a file of a newer
   version, and cannot open the competitions this version changes in the
   browser.
+- A competition is saved in format 4: the competition stored next to the log
+  holds each phase's plugins as one `"plugins"` (`"format"`,
+  `"match_format"`, `"ranking"`, `"metrics"`), as a phase is added with them.
+  Competitions of formats 1 to 3 open unchanged; earlier versions refuse
+  format 4.
 - Library users: the engine reads only the current layout of a competition and
   its log; a file of an older format is converted when read, by
   `tournament_app::file::File::read` (`file::upgrade_competition` for the
   competition alone).
+- Library users: `Phase::plugins` replaces `Phase::metrics_calculators` and
+  `Phase::slice_rankers`, and a `HierarchicalRanker` borrows its slice
+  rankers.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time.

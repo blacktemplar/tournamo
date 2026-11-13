@@ -598,7 +598,8 @@ impl Session {
     fn ranking(&self) -> Result<String, Error> {
         let phase = self.phase()?;
         let columns: Vec<_> = phase
-            .metrics_calculators()
+            .plugins()
+            .metrics()
             .iter()
             .filter_map(|calculator| calculator.column())
             .collect();

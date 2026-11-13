@@ -33,6 +33,10 @@ const CONVERTERS: &[Converter] = &[
         log_entry: v3::log_entry,
         competition: |_| {},
     },
+    Converter {
+        log_entry: |_| {},
+        competition: v4::competition,
+    },
 ];
 
 const _: () = assert!(
@@ -192,6 +196,40 @@ mod v3 {
         };
         let value = transition.remove("value").unwrap_or_default();
         *transition = Map::from_iter([(variant.to_owned(), value)]);
+    }
+}
+
+/// Format 3 to 4: a phase holds its plugins as one `"plugins"`, as a phase is added with them,
+/// where it held its `"phase_format"`, `"match_format"`, `"ranker"` and `"metrics_calculators"`.
+mod v4 {
+    use serde_json::{Map, Value};
+
+    pub(super) fn competition(competition: &mut Value) {
+        let Some(Value::Array(phases)) = competition.get_mut("phases") else {
+            return;
+        };
+        for phase in phases.iter_mut().filter_map(Value::as_object_mut) {
+            plugins(phase);
+        }
+    }
+
+    /// A phase holding its plugins one by one holds them as its `"plugins"`.
+    fn plugins(phase: &mut Map<String, Value>) {
+        const RENAMED: [(&str, &str); 4] = [
+            ("phase_format", "format"),
+            ("match_format", "match_format"),
+            ("ranker", "ranking"),
+            ("metrics_calculators", "metrics"),
+        ];
+        if phase.contains_key("plugins") || !RENAMED.iter().all(|(old, _)| phase.contains_key(*old))
+        {
+            return;
+        }
+        let plugins = RENAMED
+            .into_iter()
+            .filter_map(|(old, new)| Some((new.to_owned(), phase.remove(old)?)))
+            .collect();
+        phase.insert("plugins".to_owned(), Value::Object(plugins));
     }
 }
 
@@ -439,10 +477,10 @@ mod tests {
         let kept = upgraded_competition(competition_of(json!({ "match_format": scored })));
 
         assert_eq!(
-            upgraded["phases"][0]["match_format"],
+            upgraded["phases"][0]["plugins"]["match_format"],
             json!({ "type": "tournament_engine::winner_only", "value": null })
         );
-        assert_eq!(kept["phases"][0]["match_format"], scored);
+        assert_eq!(kept["phases"][0]["plugins"]["match_format"], scored);
     }
 
     #[test]
@@ -464,7 +502,7 @@ mod tests {
         upgrade(&mut file, Format::FIRST);
 
         assert_eq!(
-            file["competition"]["phases"][0]["match_format"],
+            file["competition"]["phases"][0]["plugins"]["match_format"],
             json!({ "type": "tournament_engine::winner_only", "value": null })
         );
     }
@@ -495,6 +533,29 @@ mod tests {
         session
     }
 
+    /// `competition`, as this version writes it, as a file of format 3 holds it: its phases hold
+    /// their plugins one by one.
+    fn as_of_format_3(competition: &mut Value) {
+        for phase in competition["phases"].as_array_mut().unwrap() {
+            let phase = phase.as_object_mut().unwrap();
+            let Some(Value::Object(mut plugins)) = phase.remove("plugins") else {
+                panic!("a phase holds its plugins");
+            };
+            for (old, new) in [
+                ("phase_format", "format"),
+                ("match_format", "match_format"),
+                ("ranker", "ranking"),
+                ("metrics_calculators", "metrics"),
+            ] {
+                phase.insert(old.to_owned(), plugins.remove(new).unwrap());
+            }
+            assert!(
+                plugins.is_empty(),
+                "a phase of format 3 has no other plugins"
+            );
+        }
+    }
+
     /// `file`, as this version writes it, as a file of the first format holds it: its transitions
     /// are written as their type and value, its reports name their result, its phases have no
     /// match format, and its matches hold their result and annotations. Panics if `file` holds
@@ -502,6 +563,7 @@ mod tests {
     fn as_of_the_first_format(file: &mut Value) {
         let winner_only = json!({ "type": "tournament_engine::winner_only", "value": null });
         file["format"] = json!(1);
+        as_of_format_3(&mut file["competition"]);
         let mut reports = 0;
         for entry in file["log"].as_array_mut().unwrap() {
             let Some(transition) = entry.pointer_mut("/kind/Apply") else {
@@ -581,6 +643,20 @@ mod tests {
             competition
         );
         assert_eq!(serde_json::to_value(held).unwrap(), competition);
+    }
+
+    /// A competition of format 3 is read into the competition it was, each phase holding its
+    /// plugins as one.
+    #[test]
+    fn a_competition_of_format_3_is_read_with_the_plugins_of_its_phases() {
+        let session = knockout_before_its_final();
+        let competition = serde_json::to_value(session.competition()).unwrap();
+        let mut held = competition.clone();
+        as_of_format_3(&mut held);
+
+        upgrade_competition(&mut held, Format(3));
+
+        assert_eq!(held, competition);
     }
 
     /// What a converter does not recognise is left for the typed read to refuse.

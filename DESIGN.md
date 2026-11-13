@@ -76,12 +76,13 @@ progress: it ranks whenever the standings are read (see
 `&self`.
 
 - **`PhaseData` is everything in a `Phase` but its plugins** (rankings, matches,
-  byes, seed). A call borrows a plugin field mutably and `data` immutably, two
-  disjoint fields, so no plugin is moved out. A plugin therefore does not see
-  the other plugins; what it needs of them reaches it through `PhaseData`
-  (metrics, annotations). The format gets a `PhaseView`: the data, and the
-  standings on request, ranked by the ranker, a third field borrowed
-  immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
+  byes, seed). A phase holds its `PhasePlugins` whole, as it was added with
+  them, next to its `data`: a call borrows a plugin mutably and `data`
+  immutably, disjoint fields, so no plugin is moved out. A plugin therefore
+  does not see the other plugins; what it needs of them reaches it through
+  `PhaseData` (metrics, annotations). The format gets a `PhaseView`: the data,
+  and the standings on request, ranked by the slice rankers, a field of the
+  plugins beside the format, borrowed immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
   cannot read.
 - **State is a field left out of the schema**: `#[plugin(skip)]` plus
   `#[serde(default)]`. A plugin built from a configuration starts at the

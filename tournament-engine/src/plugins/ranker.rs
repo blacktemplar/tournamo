@@ -3,7 +3,6 @@ use std::{any::type_name, cmp::Ordering, fmt::Debug, num::NonZeroU32};
 use dyn_clone::DynClone;
 use itertools::Itertools;
 use plugin_factory::{Plugin, axis, compatibility::Declaration};
-use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::{PhaseData, Ranking},
@@ -13,18 +12,13 @@ use crate::{
 
 /// Ranks the rankings of a phase by its slice rankers in order, each one breaking the ties of the
 /// ones before it.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct HierarchicalRanker(Vec<Box<dyn SliceRanker>>);
+#[derive(Debug, Clone, Copy)]
+pub struct HierarchicalRanker<'a>(&'a [Box<dyn SliceRanker>]);
 
-impl HierarchicalRanker {
+impl<'a> HierarchicalRanker<'a> {
     /// A ranker applying `slice_rankers` in order. Without any slice ranker, all rankings are tied.
-    pub fn new(slice_rankers: Vec<Box<dyn SliceRanker>>) -> Self {
+    pub fn new(slice_rankers: &'a [Box<dyn SliceRanker>]) -> Self {
         Self(slice_rankers)
-    }
-
-    /// The slice rankers, in the order they are applied in.
-    pub fn slice_rankers(&self) -> &[Box<dyn SliceRanker>] {
-        &self.0
     }
 
     /// Every ranking of `phase_data` with its rank, ordered by rank.
@@ -32,7 +26,7 @@ impl HierarchicalRanker {
     /// The ranks satisfy the following invariant: ordered by rank, the first ranking has rank 1 and
     /// every following one has either the rank of its predecessor or rank `index + 1`. Equal ranks
     /// are therefore ties, and the rank after a tie skips the tied ranks.
-    pub(crate) fn rank<'a>(&self, phase_data: &'a PhaseData) -> Vec<(&'a Ranking, NonZeroU32)> {
+    pub(crate) fn rank<'d>(&self, phase_data: &'d PhaseData) -> Vec<(&'d Ranking, NonZeroU32)> {
         let mut ranked: Vec<(&Ranking, NonZeroU32)> = phase_data
             .rankings()
             .values()
@@ -40,7 +34,7 @@ impl HierarchicalRanker {
             .collect();
 
         let mut slices = vec![ranked.as_mut_slice()];
-        for slice_ranker in &self.0 {
+        for slice_ranker in self.0 {
             slices = slices
                 .drain(..)
                 .flat_map(|slice| {

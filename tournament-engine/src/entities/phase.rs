@@ -25,7 +25,7 @@ use crate::{
         match_format::MatchFormat,
         metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
-        ranker::{HierarchicalRanker, SliceRanker},
+        ranker::HierarchicalRanker,
     },
     type_map::TypeMap,
 };
@@ -33,10 +33,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Phase {
     id: PhaseId,
-    phase_format: Box<dyn PhaseFormat>,
-    ranker: HierarchicalRanker,
-    metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
-    match_format: Box<dyn MatchFormat>,
+    plugins: PhasePlugins,
     data: PhaseData,
 }
 
@@ -174,10 +171,14 @@ impl PhaseData {
 #[derive(Debug, Clone, Copy)]
 pub struct PhaseView<'a> {
     data: &'a PhaseData,
-    ranker: &'a HierarchicalRanker,
+    ranker: HierarchicalRanker<'a>,
 }
 
 impl<'a> PhaseView<'a> {
+    pub(crate) fn new(data: &'a PhaseData, ranker: HierarchicalRanker<'a>) -> Self {
+        Self { data, ranker }
+    }
+
     pub fn data(&self) -> &'a PhaseData {
         self.data
     }
@@ -191,7 +192,6 @@ impl<'a> PhaseView<'a> {
 impl Phase {
     /// A phase without rankings, matches and byes yet.
     pub(super) fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
-        let (phase_format, match_format, ranker, metrics_calculators) = plugins.into_parts();
         Self {
             id,
             data: PhaseData {
@@ -200,10 +200,7 @@ impl Phase {
                 byes: IdMap::new(),
                 seed,
             },
-            phase_format,
-            ranker,
-            metrics_calculators,
-            match_format,
+            plugins,
         }
     }
 
@@ -219,31 +216,22 @@ impl Phase {
     /// The standings of this phase, sorted on every call: a caller reading them more than once
     /// keeps them.
     pub fn standings(&self) -> Standings<'_> {
-        PhaseView {
-            data: &self.data,
-            ranker: &self.ranker,
-        }
-        .standings()
+        PhaseView::new(&self.data, self.plugins.ranker()).standings()
     }
 
-    /// The calculators of this phase's metrics, in the order they run in.
-    pub fn metrics_calculators(&self) -> &[Box<dyn MetricsCalculator>] {
-        &self.metrics_calculators
-    }
-
-    /// The criteria this phase is ranked by, each breaking the ties of those before it.
-    pub fn slice_rankers(&self) -> &[Box<dyn SliceRanker>] {
-        self.ranker.slice_rankers()
+    /// The plugins this phase is played with: its format, match format, ranking and metrics.
+    pub fn plugins(&self) -> &PhasePlugins {
+        &self.plugins
     }
 
     /// The format the matches of this phase are scheduled by.
     pub fn format(&self) -> &dyn PhaseFormat {
-        &*self.phase_format
+        self.plugins.format()
     }
 
     /// The match format of this phase: what is entered for its matches.
     pub fn match_format(&self) -> &dyn MatchFormat {
-        &*self.match_format
+        self.plugins.match_format()
     }
 
     /// The answers to a [`Competition::phase_draft`] the plugins of this phase are built from,
@@ -252,14 +240,7 @@ impl Phase {
     /// reconfigured with, see
     /// [`reconfigure_phase`](crate::CompetitionStateMachineExt::reconfigure_phase).
     pub fn config(&self) -> Config {
-        PhasePlugins::from_parts(
-            self.phase_format.clone(),
-            self.match_format.clone(),
-            self.ranker.slice_rankers().to_vec(),
-            self.metrics_calculators.clone(),
-        )
-        .expect("the calculators of a phase are in running order")
-        .config()
+        self.plugins.config()
     }
 
     pub(crate) fn start(&mut self, ranking_entrants: Vec<Vec1<EntrantId>>) {
@@ -285,7 +266,8 @@ impl Phase {
     fn initialize_metrics(&mut self) {
         let ranking_ids: Vec<_> = self.data.rankings.keys().copied().collect();
         let metrics: Vec<_> = self
-            .metrics_calculators
+            .plugins
+            .metrics()
             .iter()
             .flat_map(|metrics_calculator| {
                 ranking_ids
@@ -306,11 +288,7 @@ impl Phase {
     /// Adds the matches and byes the phase format schedules next, and updates the metrics for every
     /// new bye its ranking reaches.
     pub(crate) fn create_new_matches(&mut self) {
-        let view = PhaseView {
-            data: &self.data,
-            ranker: &self.ranker,
-        };
-        let Schedule { matches, byes } = self.phase_format.create_new_matches(&view);
+        let Schedule { matches, byes } = self.plugins.schedule(&self.data);
         let matches = self.data.number(matches);
         self.data.debug_check(&matches, &byes);
         let new_bye_ids: Vec<_> = byes.iter().map(Bye::id).collect();
@@ -363,7 +341,8 @@ impl Phase {
         assert!(!r#match.is_finished());
         r#match.contest.enter(entered);
         let tallies = self
-            .match_format
+            .plugins
+            .match_format()
             .tally(&self.data, &self.data.matches[&match_id]);
         self.data.matches.get_mut(&match_id).unwrap().tallies = tallies;
         for ranking_id in self.data.matches[&match_id].rankings() {
@@ -401,8 +380,8 @@ impl Phase {
         ) -> Vec<(RankingId, Metric)>,
     ) {
         let mut old_metrics = OldMetrics::default();
-        for metrics_calculator in &mut self.metrics_calculators {
-            let updates = updates_of(&mut **metrics_calculator, &self.data, &old_metrics);
+        for metrics_calculator in self.plugins.metrics_mut() {
+            let updates = updates_of(metrics_calculator, &self.data, &old_metrics);
             // check requirements of the update methods of MetricsCalculator
             debug_assert!(updates.iter().all(|(ranking_id, metric)| {
                 let metric: &dyn Any = &**metric;
@@ -435,10 +414,7 @@ impl Serialize for Phase {
         #[serde(rename = "Phase")]
         struct Saved<'a> {
             id: PhaseId,
-            phase_format: &'a dyn PhaseFormat,
-            ranker: &'a HierarchicalRanker,
-            metrics_calculators: &'a [Box<dyn MetricsCalculator>],
-            match_format: &'a dyn MatchFormat,
+            plugins: &'a PhasePlugins,
             data: SavedData<'a>,
         }
         #[derive(Serialize)]
@@ -486,10 +462,7 @@ impl Serialize for Phase {
             .collect();
         Saved {
             id: self.id,
-            phase_format: &*self.phase_format,
-            ranker: &self.ranker,
-            metrics_calculators: &self.metrics_calculators,
-            match_format: &*self.match_format,
+            plugins: &self.plugins,
             data: SavedData {
                 rankings,
                 ranking_ids_ordered_by_unique_rank: standings
@@ -511,10 +484,7 @@ impl<'de> Deserialize<'de> for Phase {
         #[serde(rename = "Phase")]
         struct Saved {
             id: PhaseId,
-            phase_format: Box<dyn PhaseFormat>,
-            ranker: HierarchicalRanker,
-            metrics_calculators: Vec<Box<dyn MetricsCalculator>>,
-            match_format: Box<dyn MatchFormat>,
+            plugins: PhasePlugins,
             data: SavedData,
         }
         #[derive(Deserialize)]
@@ -556,10 +526,7 @@ impl<'de> Deserialize<'de> for Phase {
             .collect();
         Ok(Phase {
             id: saved.id,
-            phase_format: saved.phase_format,
-            ranker: saved.ranker,
-            metrics_calculators: saved.metrics_calculators,
-            match_format: saved.match_format,
+            plugins: saved.plugins,
             data: PhaseData {
                 rankings,
                 matches: saved.data.matches,

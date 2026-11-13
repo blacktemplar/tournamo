@@ -1,13 +1,12 @@
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::Plugin;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::competition::{Bye, Match, PhaseData, RankingId, ResultOfTeam},
     plugins::{
         Phrase,
-        facts::CalculatesMetric,
         metrics_calculator::{
-            Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell,
+            Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric,
             updated_for_each_team,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
@@ -147,28 +146,19 @@ crate::register_criterion!(FewerMatchesPlayed);
     id = "tournament_engine::wins_draws_losses",
     label = "win-draw-loss record",
     description = "how many matches were won, drawn and lost",
-    declare_static = Self::declare_static
+    declare_static = provides_metric::<Self>
 )]
 pub struct WinsDrawsLossesCalculator;
 
-impl WinsDrawsLossesCalculator {
-    fn declare_static(declaration: &mut Declaration) {
-        declaration.provide(CalculatesMetric::<WinsDrawsLosses>::new());
-    }
-}
+impl Calculator for WinsDrawsLossesCalculator {
+    type Metric = WinsDrawsLosses;
 
-#[register]
-impl MetricsCalculator for WinsDrawsLossesCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(WinsDrawsLosses::default())
-    }
-
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, WinsDrawsLosses)> {
         let result = r#match.result().expect("a reported match is finished");
         updated_for_each_team(
             phase_data,
@@ -181,23 +171,25 @@ impl MetricsCalculator for WinsDrawsLossesCalculator {
         )
     }
 
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         bye: &Bye,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, WinsDrawsLosses)> {
         let mut metric = *phase_data.rankings()[&bye.ranking()]
             .metric::<WinsDrawsLosses>()
             .unwrap();
         metric.byes += 1;
-        vec![(bye.ranking(), Box::new(metric) as Metric)]
+        vec![(bye.ranking(), metric)]
     }
 
     fn column(&self) -> Option<MetricColumn> {
         Some(MetricColumn::new::<WinsDrawsLosses>("W-D-L"))
     }
 }
+
+crate::register_calculator!(WinsDrawsLossesCalculator);
 
 #[cfg(test)]
 mod tests {

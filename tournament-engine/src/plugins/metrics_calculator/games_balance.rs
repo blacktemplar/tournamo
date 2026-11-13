@@ -1,6 +1,6 @@
 //! The games a ranking won and lost, as the match format tallied them, and their difference.
 
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
         facts::{CalculatesMetric, MatchTally},
         match_format::GamesWon,
         metrics_calculator::{
-            Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell, derived,
+            Calculator, Cell, MetricColumn, OldMetrics, ToCell, derived, provides_metric,
             updated_for_each_team,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
@@ -115,24 +115,20 @@ pub struct GamesBalanceCalculator;
 
 impl GamesBalanceCalculator {
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<GamesBalance>::new())
-            .require::<MatchTally<GamesWon>>("the games won");
+        provides_metric::<Self>(declaration);
+        declaration.require::<MatchTally<GamesWon>>("the games won");
     }
 }
 
-#[register]
-impl MetricsCalculator for GamesBalanceCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(GamesBalance::default())
-    }
+impl Calculator for GamesBalanceCalculator {
+    type Metric = GamesBalance;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, GamesBalance)> {
         let GamesWon(games) = *r#match
             .tally::<GamesWon>()
             .expect("the match format tallies the games won");
@@ -142,12 +138,12 @@ impl MetricsCalculator for GamesBalanceCalculator {
     }
 
     /// A bye has no games.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         _: &PhaseData,
         _: &Bye,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, GamesBalance)> {
         Vec::new()
     }
 
@@ -155,6 +151,8 @@ impl MetricsCalculator for GamesBalanceCalculator {
         Some(MetricColumn::new::<GamesBalance>("games"))
     }
 }
+
+crate::register_calculator!(GamesBalanceCalculator);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
 #[plugin(
@@ -167,33 +165,29 @@ pub struct GamesDifferenceCalculator;
 
 impl GamesDifferenceCalculator {
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<GamesDifference>::new())
-            .require::<CalculatesMetric<GamesBalance>>("the games won and lost");
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<GamesBalance>>("the games won and lost");
     }
 }
 
-#[register]
-impl MetricsCalculator for GamesDifferenceCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(GamesDifference::default())
-    }
+impl Calculator for GamesDifferenceCalculator {
+    type Metric = GamesDifference;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         _: &Match,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, GamesDifference)> {
         derived(phase_data, old_metrics, GamesBalance::difference)
     }
 
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         _: &Bye,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, GamesDifference)> {
         derived(phase_data, old_metrics, GamesBalance::difference)
     }
 
@@ -201,6 +195,8 @@ impl MetricsCalculator for GamesDifferenceCalculator {
         Some(MetricColumn::new::<GamesDifference>("games ±"))
     }
 }
+
+crate::register_calculator!(GamesDifferenceCalculator);
 
 #[cfg(test)]
 mod tests {
@@ -215,7 +211,10 @@ mod tests {
         },
         plugins::{
             match_format::BestOf,
-            metrics_calculator::test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
+            metrics_calculator::{
+                MetricsCalculator,
+                test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
+            },
         },
         type_map::TypeMap,
     };

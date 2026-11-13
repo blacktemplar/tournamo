@@ -1,13 +1,13 @@
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
-use super::{Cell, Metric, MetricColumn, OldMetrics, ToCell};
+use super::{Cell, MetricColumn, OldMetrics, ToCell};
 use crate::{
     entities::competition::{Bye, Match, MatchResult, PhaseData, RankingId, ResultOfTeam, Team},
     map::Map,
     plugins::{
         facts::{CalculatesMetric, NoDraws},
-        metrics_calculator::{MetricsCalculator, points::Points},
+        metrics_calculator::{Calculator, points::Points, provides_metric},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
@@ -69,24 +69,20 @@ pub struct BuchholzCalculator;
 
 impl BuchholzCalculator {
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<Buchholz>::new())
-            .require::<CalculatesMetric<Points>>("the points");
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<Points>>("the points");
     }
 }
 
-#[register]
-impl MetricsCalculator for BuchholzCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(Buchholz::default())
-    }
+impl Calculator for BuchholzCalculator {
+    type Metric = Buchholz;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, Buchholz)> {
         weighted_opponent_sum_changes::<Points, Buchholz>(
             phase_data,
             Some(r#match),
@@ -97,12 +93,12 @@ impl MetricsCalculator for BuchholzCalculator {
 
     /// A bye has no opponent to count, but the points it is worth count for the opponents of its
     /// ranking.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         _: &Bye,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, Buchholz)> {
         weighted_opponent_sum_changes::<Points, Buchholz>(phase_data, None, old_metrics, |_| {
             Score::ONE
         })
@@ -112,6 +108,8 @@ impl MetricsCalculator for BuchholzCalculator {
         Some(MetricColumn::new::<Buchholz>("Buchholz"))
     }
 }
+
+crate::register_calculator!(BuchholzCalculator);
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct BuchholzOfBuchholz(pub Score);
@@ -168,24 +166,20 @@ pub struct BuchholzOfBuchholzCalculator;
 
 impl BuchholzOfBuchholzCalculator {
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<BuchholzOfBuchholz>::new())
-            .require::<CalculatesMetric<Buchholz>>("the Buchholz");
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<Buchholz>>("the Buchholz");
     }
 }
 
-#[register]
-impl MetricsCalculator for BuchholzOfBuchholzCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(BuchholzOfBuchholz::default())
-    }
+impl Calculator for BuchholzOfBuchholzCalculator {
+    type Metric = BuchholzOfBuchholz;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, BuchholzOfBuchholz)> {
         weighted_opponent_sum_changes::<Buchholz, BuchholzOfBuchholz>(
             phase_data,
             Some(r#match),
@@ -196,12 +190,12 @@ impl MetricsCalculator for BuchholzOfBuchholzCalculator {
 
     /// A bye has no opponent to count, but a change of the buchholz of its ranking counts for the
     /// opponents of that ranking.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         _: &Bye,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, BuchholzOfBuchholz)> {
         weighted_opponent_sum_changes::<Buchholz, BuchholzOfBuchholz>(
             phase_data,
             None,
@@ -216,6 +210,8 @@ impl MetricsCalculator for BuchholzOfBuchholzCalculator {
         ))
     }
 }
+
+crate::register_calculator!(BuchholzOfBuchholzCalculator);
 
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct SonnebornBerger(pub Score);
@@ -303,9 +299,8 @@ impl SonnebornBergerCalculator {
     }
 
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<SonnebornBerger>::new())
-            .require::<CalculatesMetric<Points>>("the points");
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<Points>>("the points");
     }
 
     fn weight(&self, result: ResultOfTeam) -> Score {
@@ -317,18 +312,15 @@ impl SonnebornBergerCalculator {
     }
 }
 
-#[register]
-impl MetricsCalculator for SonnebornBergerCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(SonnebornBerger::default())
-    }
+impl Calculator for SonnebornBergerCalculator {
+    type Metric = SonnebornBerger;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, SonnebornBerger)> {
         weighted_opponent_sum_changes::<Points, SonnebornBerger>(
             phase_data,
             Some(r#match),
@@ -339,12 +331,12 @@ impl MetricsCalculator for SonnebornBergerCalculator {
 
     /// A bye has no opponent to count, but the points it is worth count for the opponents that beat
     /// its ranking or played it to a draw.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         _: &Bye,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, SonnebornBerger)> {
         weighted_opponent_sum_changes::<Points, SonnebornBerger>(
             phase_data,
             None,
@@ -357,6 +349,8 @@ impl MetricsCalculator for SonnebornBergerCalculator {
         Some(MetricColumn::new::<SonnebornBerger>("Sonneborn-Berger"))
     }
 }
+
+crate::register_calculator!(SonnebornBergerCalculator);
 
 /// The result of `match`, a match a ranking played.
 fn played(r#match: &Match) -> MatchResult {
@@ -371,7 +365,7 @@ fn weighted_opponent_sum_changes<M, B>(
     r#match: Option<&Match>,
     old_metrics: &OldMetrics,
     weight: impl Fn(ResultOfTeam) -> Score,
-) -> Vec<(RankingId, Metric)>
+) -> Vec<(RankingId, B)>
 where
     M: TypeMapValue + AsRef<Score>,
     B: TypeMapValue + AsRef<Score> + From<Score>,
@@ -425,7 +419,7 @@ where
         .into_iter()
         .map(|(r_id, change)| {
             let old_b = *phase_data.rankings()[&r_id].metric::<B>().unwrap().as_ref();
-            (r_id, Box::new(B::from(old_b + change)) as Metric)
+            (r_id, B::from(old_b + change))
         })
         .collect()
 }

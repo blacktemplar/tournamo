@@ -2,9 +2,8 @@
 
 use plugin_factory::draft::Draft;
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt as _, Entrant,
-    EntrantId, Match, MatchResult, PhaseId, PhasePlugins, ReportMatchResult, Seed,
-    SetCompetitionSeed, StartCompetition, uuid::Uuid,
+    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, Match, MatchResult, PhaseId,
+    PhasePlugins, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, uuid::Uuid,
 };
 
 use super::{MOST_MATCHES, Session, phase::completed};
@@ -36,18 +35,18 @@ impl Session {
         let mut machine = CompetitionStateMachine::default();
         // any seed, since what a format draws does not change how long it takes
         let seed = SetCompetitionSeed::new(Seed::new([0; 12]));
-        machine.apply_transition(seed).ok()?;
+        machine.apply_new(seed.into()).ok()?;
         for index in 0..self.competition().entrants().len() {
             let id = EntrantId::new(Uuid::from_u128(index as u128 + 1));
             machine
-                .apply_transition(AddEntrant::new(Entrant::new(id)))
+                .apply_new(AddEntrant::new(Entrant::new(id)).into())
                 .ok()?;
         }
         let phase = PhaseId::new(Uuid::nil());
         machine
-            .apply_transition(AddPhase::new(phase, plugins))
+            .apply_new(AddPhase::new(phase, plugins).into())
             .ok()?;
-        machine.apply_transition(StartCompetition).ok()?;
+        machine.apply_new(StartCompetition.into()).ok()?;
         for _ in 0..=MOST_MATCHES {
             let data = machine.current().phases().get(&phase)?.data();
             let open = data
@@ -60,7 +59,7 @@ impl Session {
                 return Some((rounds, data.matches().len()));
             };
             let report = ReportMatchResult::new(phase, open.id(), result);
-            machine.apply_transition(report).ok()?;
+            machine.apply_new(report.into()).ok()?;
         }
         None
     }

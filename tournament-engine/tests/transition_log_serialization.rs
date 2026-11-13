@@ -75,15 +75,15 @@ fn played_competition() -> CompetitionStateMachine {
     let mut machine = CompetitionStateMachine::default();
 
     machine
-        .apply_transition(SetCompetitionSeed::new(SEED))
+        .apply_new(SetCompetitionSeed::new(SEED).into())
         .unwrap();
     for entrant in 0..5 {
         let entrant = Entrant::new(entrant_id(entrant))
             .with_annotation(Nickname(format!("entrant {entrant}")));
-        machine.apply_transition(AddEntrant::new(entrant)).unwrap();
+        machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
     }
     machine
-        .apply_transition(RemoveEntrant::new(entrant_id(4)))
+        .apply_new(RemoveEntrant::new(entrant_id(4)).into())
         .unwrap();
     let plugins = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
@@ -96,16 +96,12 @@ fn played_competition() -> CompetitionStateMachine {
         .build()
         .unwrap();
     machine
-        .apply_transition(AddPhase::new(phase_id(), plugins))
+        .apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
-    machine.apply_transition(StartCompetition).unwrap();
+    machine.apply_new(StartCompetition.into()).unwrap();
     for match_id in matches_of_round(&machine.current().phases()[&phase_id()], 1) {
         machine
-            .apply_transition(ReportMatchResult::new(
-                phase_id(),
-                match_id,
-                MatchResult::AWins,
-            ))
+            .apply_new(ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into())
             .unwrap();
     }
 
@@ -206,7 +202,7 @@ fn every_transition_is_serialized_under_its_pinned_tag() {
 fn a_transition_is_serialized_as_its_payload_under_its_tag() {
     let mut machine = CompetitionStateMachine::default();
     let seed_id = machine
-        .apply_transition(SetCompetitionSeed::new(SEED))
+        .apply_new(SetCompetitionSeed::new(SEED).into())
         .unwrap();
 
     let log = serialized_log(&machine);
@@ -228,7 +224,7 @@ fn a_reported_contest_survives_a_round_trip() {
     let (mut machine, open) = games::competition_entering_games();
     let points = FieldKey::new("points");
     machine
-        .apply_transition(
+        .apply_new(
             ReportMatchResult::new(
                 games::phase_id(),
                 open,
@@ -243,7 +239,8 @@ fn a_reported_contest_survives_a_round_trip() {
                     .with_decision(MatchResult::AWins)
                     .with_value(points.clone(), games::count(21, 17)),
             )
-            .with_part(Part::new().with_value(points, games::count(3, 1))),
+            .with_part(Part::new().with_value(points, games::count(3, 1)))
+            .into(),
         )
         .unwrap();
     let contest = machine.current().phases()[&games::phase_id()]
@@ -438,11 +435,7 @@ fn a_round_tripped_log_can_continue_the_tournament() {
     let final_match = matches_of_round(&machine.current().phases()[&phase_id()], 2)[0];
 
     machine
-        .apply_transition(ReportMatchResult::new(
-            phase_id(),
-            final_match,
-            MatchResult::BWins,
-        ))
+        .apply_new(ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins).into())
         .unwrap();
 
     let phase = machine.current().phases()[&phase_id()].data();

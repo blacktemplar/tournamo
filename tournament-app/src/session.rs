@@ -73,7 +73,7 @@ impl Session {
         getrandom::fill(&mut seed).expect("the platform must provide randomness");
         let mut machine = CompetitionStateMachine::default();
         machine
-            .apply_transition(SetCompetitionSeed::new(Seed::new(seed)))
+            .apply_new(SetCompetitionSeed::new(Seed::new(seed)).into())
             .expect("a new competition must accept a seed");
         Self::open(
             CompetitionKey::new(Uuid::new_v4()),
@@ -182,8 +182,8 @@ impl Session {
         if let Some(needed @ StartError::TooFewForFormat(_)) = self.start_refusal() {
             return Err(needed);
         }
-        self.machine
-            .apply_in(&mut self.history, StartCompetition)
+        self.history
+            .apply_new(&mut self.machine, StartCompetition.into())
             .map_err(|error| {
                 let error = rejection(error);
                 if error.is::<CompetitionAlreadyStarted>() {

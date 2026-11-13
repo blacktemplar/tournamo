@@ -93,10 +93,10 @@ impl Session {
     /// a phase already, or it has started.
     pub fn add_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<(), AddPhaseError> {
         let plugins = completed(draft).map_err(AddPhaseError::Invalid)?;
-        self.machine
-            .apply_in(
-                &mut self.history,
-                AddPhase::new(PhaseId::new(Uuid::new_v4()), plugins),
+        self.history
+            .apply_new(
+                &mut self.machine,
+                AddPhase::new(PhaseId::new(Uuid::new_v4()), plugins).into(),
             )
             .map_err(|error| {
                 let error = rejection(error);

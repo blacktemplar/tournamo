@@ -100,8 +100,8 @@ impl Session {
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
         let report = ReportMatchResult::of(phase_id, id, contest).ok_or(ReportError::Undecided)?;
-        self.machine
-            .apply_in(&mut self.history, report)
+        self.history
+            .apply_new(&mut self.machine, report.into())
             .map_err(|error| {
                 let error = rejection(error);
                 match error.downcast_ref() {

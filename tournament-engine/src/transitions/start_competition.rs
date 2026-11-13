@@ -32,11 +32,7 @@ impl Transition<Competition> for StartCompetition {
         Ok(())
     }
 
-    fn apply(
-        &self,
-        competition: &mut Competition,
-    ) -> Result<(), undoable_state_machine::TransitionError> {
+    fn apply(&self, competition: &mut Competition) {
         competition.start();
-        Ok(())
     }
 }

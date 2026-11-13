@@ -9,9 +9,9 @@ use std::sync::LazyLock;
 use itertools::Itertools;
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant, EntrantId,
-    MatchId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult, Score, Seed,
-    SetCompetitionSeed, StartCompetition,
+    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, MatchId, MatchResult,
+    PhaseId, PhasePluginsBuilder, ReportMatchResult, Score, Seed, SetCompetitionSeed,
+    StartCompetition,
     plugins::{metrics_calculator::*, phase_format::RandomRounds},
     uuid::Uuid,
 };
@@ -75,10 +75,10 @@ fn reporting_schedule(sm: &CompetitionStateMachine) -> Vec<(MatchId, MatchResult
 /// Buchholz of Buchholz, starts the competition and finally reports the result of every match.
 pub fn run_tournament(entrants: usize) -> CompetitionStateMachine {
     let mut sm = CompetitionStateMachine::default();
-    sm.apply_transition(SetCompetitionSeed::new(SEED)).unwrap();
+    sm.apply_new(SetCompetitionSeed::new(SEED).into()).unwrap();
     for _ in 0..entrants {
         let id = EntrantId::new(Uuid::new_v4());
-        sm.apply_transition(AddEntrant::new(Entrant::new(id)))
+        sm.apply_new(AddEntrant::new(Entrant::new(id)).into())
             .unwrap();
     }
     let plugins = PhasePluginsBuilder::new()
@@ -95,13 +95,13 @@ pub fn run_tournament(entrants: usize) -> CompetitionStateMachine {
         .add_metric(BuchholzOfBuchholzCalculator)
         .build()
         .unwrap();
-    sm.apply_transition(AddPhase::new(phase_id(), plugins))
+    sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
     // this creates the rankings, initializes all metrics and schedules the matches of all rounds
-    sm.apply_transition(StartCompetition).unwrap();
+    sm.apply_new(StartCompetition.into()).unwrap();
     // every single result updates all metrics
     for (match_id, result) in reporting_schedule(&sm) {
-        sm.apply_transition(ReportMatchResult::new(phase_id(), match_id, result))
+        sm.apply_new(ReportMatchResult::new(phase_id(), match_id, result).into())
             .unwrap();
     }
     sm

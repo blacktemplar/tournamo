@@ -66,8 +66,7 @@ impl Transition<Competition> for AddPhase {
         Ok(())
     }
 
-    fn apply(&self, state: &mut Competition) -> Result<(), TransitionError> {
+    fn apply(&self, state: &mut Competition) {
         state.add_phase(self.id, self.plugins.clone());
-        Ok(())
     }
 }

@@ -42,11 +42,7 @@ impl Transition<Competition> for AddEntrant {
         Ok(())
     }
 
-    fn apply(
-        &self,
-        competition: &mut Competition,
-    ) -> Result<(), undoable_state_machine::TransitionError> {
+    fn apply(&self, competition: &mut Competition) {
         competition.add_entrant(self.entrant.clone());
-        Ok(())
     }
 }

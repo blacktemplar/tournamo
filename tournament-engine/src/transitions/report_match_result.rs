@@ -166,12 +166,11 @@ impl Transition<Competition> for ReportMatchResult {
         Ok(())
     }
 
-    fn apply(
-        &self,
-        competition: &mut Competition,
-    ) -> Result<(), undoable_state_machine::TransitionError> {
-        let phase = competition.phases_mut().get_mut(&self.phase_id).unwrap();
+    fn apply(&self, competition: &mut Competition) {
+        let phase = competition
+            .phases_mut()
+            .get_mut(&self.phase_id)
+            .expect("check_applicable found the phase");
         phase.report_match(self.match_id, self.contest.clone());
-        Ok(())
     }
 }

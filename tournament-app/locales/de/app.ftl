@@ -57,6 +57,8 @@ error-file-newer = die Datei stammt von einer neueren Version von Tournamo, die 
 error-file-damaged = die Datei ist ein Turnier von Tournamo, aber beschädigt
 error-rejected = abgelehnt: { $reason }
 
+cell-round = Runde { $round }
+
 ## The form of a phase
 
 number-range = { $whole ->

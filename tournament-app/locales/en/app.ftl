@@ -68,6 +68,9 @@ error-file-damaged = the file is a competition of Tournamo, but damaged
 # $reason: in English, why the engine refused an action
 error-rejected = { $reason }
 
+# a round of the phase in a column of the standings, e.g. the one an entrant was knocked out in
+cell-round = round { $round }
+
 ## The form of a phase
 
 # the numbers a field takes; $whole: yes or no, $bounds: both, min, max or none, $multiple: 0 for

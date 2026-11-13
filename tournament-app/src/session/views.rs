@@ -421,18 +421,10 @@ pub(super) fn number(r#match: &Match) -> usize {
     usize::try_from(r#match.number().get()).expect("a number of a match fits a usize")
 }
 
-/// `cell` of `ranking` as the standings show it: a round, a phrase with the number `round`, by the
-/// stage of the ranking's match or bye in it, where the format names one.
+/// `cell` of `ranking` as the standings show it: a [`Cell::Round`] by the stage of the ranking's
+/// match or bye in it, where the format names one.
 fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
-    let round = match &cell {
-        Cell::Text(phrase) => phrase
-            .numbers()
-            .iter()
-            .find(|(name, _)| *name == "round")
-            .map(|(_, round)| *round),
-        Cell::Number(_) | Cell::Signed(_) => None,
-    };
-    let Some(round) = round else {
+    let Cell::Round(round) = cell else {
         return StandingCell::Metric(cell);
     };
     let data = phase.data();
@@ -440,12 +432,12 @@ fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
         .played_matches()
         .iter()
         .filter_map(|id| data.matches().get(id))
-        .filter(|r#match| r#match.round().get() == round)
+        .filter(|r#match| r#match.round() == round)
         .map(Match::annotations);
     let byes = data
         .byes()
         .values()
-        .filter(|bye| bye.ranking() == ranking.id() && bye.round().get() == round)
+        .filter(|bye| bye.ranking() == ranking.id() && bye.round() == round)
         .map(Bye::annotations);
     match matches
         .chain(byes)

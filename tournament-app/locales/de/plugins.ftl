@@ -131,13 +131,11 @@ plugin-tournament_engine-round_of_first_loss =
     .label = Runde der ersten Niederlage
     .description = die Runde, in der ein Teilnehmer zum ersten Mal verloren hat
     .column = verloren in
-    .cell-round = Runde { $round }
     .cell-unbeaten = -
 plugin-tournament_engine-round_of_elimination =
     .label = Runde des Ausscheidens
     .description = die Runde, in der ein Teilnehmer ausgeschieden ist
     .column = raus in
-    .cell-round = Runde { $round }
     .cell-still-in = -
 
 ## Ranking criteria

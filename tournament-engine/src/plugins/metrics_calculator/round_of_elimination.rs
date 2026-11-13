@@ -34,16 +34,14 @@ impl TypeMapValue for Eliminates {}
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct RoundOfElimination(pub Option<NonZeroU32>);
 
-/// Shows the round as the phrase `round`, e.g. `round 3`, and `still-in`, `-`, while the ranking
-/// is still in.
+/// Shows the round as a [`Cell::Round`], and the phrase `still-in`, `-`, while the ranking is still
+/// in.
 impl ToCell for RoundOfElimination {
     fn to_cell(&self) -> Cell {
-        Cell::Text(match self.0 {
-            Some(round) => {
-                Phrase::new("round", format!("round {round}")).with("round", round.get())
-            }
-            None => Phrase::new("still-in", "-"),
-        })
+        match self.0 {
+            Some(round) => Cell::Round(round),
+            None => Cell::Text(Phrase::new("still-in", "-")),
+        }
     }
 }
 

@@ -76,12 +76,6 @@ impl SingleElimination {
         self
     }
 
-    /// The bracket of the knockout, with the stage of each pairing as a [`KnockoutRound`]
-    /// annotation; `None` before the phase starts.
-    pub fn bracket(&self) -> Option<&Bracket> {
-        self.bracket.as_ref()
-    }
-
     fn declare_static(declaration: &mut Declaration) {
         // every match has to produce a winner who moves on to the next round
         declaration
@@ -141,13 +135,7 @@ impl KnockoutRound {
 /// sixteenth-finals, of 32 entrants), or `Third place`.
 impl Display for KnockoutRound {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self.fraction_of_final() {
-            None => f.write_str("Third place"),
-            Some(1) => f.write_str("Final"),
-            Some(2) => f.write_str("Semifinals"),
-            Some(4) => f.write_str("Quarterfinals"),
-            Some(fraction) => write!(f, "Round of {}", 2 * fraction),
-        }
+        Display::fmt(&Stage::from(*self), f)
     }
 }
 
@@ -156,13 +144,13 @@ impl Display for KnockoutRound {
 /// eighth-finals.
 impl From<KnockoutRound> for Stage {
     fn from(round: KnockoutRound) -> Self {
-        let english = round.to_string();
         match round.fraction_of_final() {
-            None => Self::new("third-place", english),
-            Some(1) => Self::new("final", english),
-            Some(2) => Self::new("semifinals", english),
-            Some(4) => Self::new("quarterfinals", english),
-            Some(fraction) => Self::new("fraction-finals", english).with("fraction", fraction),
+            None => Self::new("third-place", "Third place"),
+            Some(1) => Self::new("final", "Final"),
+            Some(2) => Self::new("semifinals", "Semifinals"),
+            Some(4) => Self::new("quarterfinals", "Quarterfinals"),
+            Some(fraction) => Self::new("fraction-finals", format!("Round of {}", 2 * fraction))
+                .with("fraction", fraction),
         }
     }
 }
@@ -194,6 +182,11 @@ impl PhaseFormat for SingleElimination {
 
     fn stage(&self, annotations: &TypeMap) -> Option<Stage> {
         annotations.get::<KnockoutRound>().copied().map(Stage::from)
+    }
+
+    /// The bracket, with the stage of each pairing as a [`KnockoutRound`] annotation.
+    fn bracket(&self) -> Option<&Bracket> {
+        self.bracket.as_ref()
     }
 }
 

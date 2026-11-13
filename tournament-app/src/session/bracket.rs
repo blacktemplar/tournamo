@@ -1,15 +1,12 @@
-//! The bracket of a knockout phase, which only the knockout formats of the engine have.
+//! The bracket of a phase whose format plays one, e.g. a knockout.
 
-use std::{
-    any::Any,
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use tournament_engine::{
-    Phase, TypeMap,
+    Phase, Sides, Team, TypeMap,
     plugins::phase_format::{
-        Advance, BracketPairing as Pairing, BracketSide, DoubleElimination, DoubleEliminationRound,
-        KnockoutRound, PairingId, Seat, SingleElimination,
+        Advance, BracketPairing as Pairing, BracketSide, DoubleEliminationRound, KnockoutRound,
+        PairingId, Seat,
     },
 };
 
@@ -36,18 +33,11 @@ struct Place {
 }
 
 impl Session {
-    /// The bracket of the phase, if its format plays one, i.e. a single or a double elimination;
+    /// The bracket of the phase, if its format plays one, e.g. a single or a double elimination;
     /// `None` before the start.
     pub fn bracket(&self) -> Option<Bracket> {
         let phase = self.started_phase()?;
-        let format: &dyn Any = phase.format();
-        let (bracket, part): (_, fn(&TypeMap) -> Section) =
-            if let Some(format) = format.downcast_ref::<SingleElimination>() {
-                (format.bracket()?, single_elimination_part)
-            } else {
-                let format = format.downcast_ref::<DoubleElimination>()?;
-                (format.bracket()?, double_elimination_part)
-            };
+        let bracket = phase.format().bracket()?;
         let pairings = bracket.pairings();
         let by_id: HashMap<PairingId, &Pairing> = pairings
             .iter()
@@ -59,7 +49,7 @@ impl Session {
         let mut layout: Vec<(Section, Vec<(_, Vec<PairingId>)>)> = Vec::new();
         let mut places = HashMap::new();
         for pairing in &pairings {
-            let part = part(pairing.annotations);
+            let part = section(pairing.annotations);
             let section = layout
                 .iter()
                 .position(|(other, _)| *other == part)
@@ -90,27 +80,31 @@ impl Session {
 
         let data = phase.data();
         // the sides only a bye can take
-        let byes: HashMap<PairingId, [bool; 2]> = pairings
+        let byes: HashMap<PairingId, Sides<bool>> = pairings
             .iter()
             .map(|pairing| (pairing.id, pairing.sides.map(|side| side.bye)))
             .collect();
+        let only_byes = |id: &PairingId| byes[id].into_iter().all(|bye| bye);
+        let a_bye = |id: &PairingId| byes[id].into_iter().any(|bye| bye);
         let unplayed: HashMap<PairingId, Unplayed> = pairings
             .iter()
             .filter_map(|pairing| {
-                if byes[&pairing.id] == [true; 2] {
+                if only_byes(&pairing.id) {
                     return Some((pairing.id, Unplayed::Byes));
                 }
                 // waiting for a pairing whose result moved nobody on
-                let decided_without_it = pairing.sides.iter().any(|side| {
-                    let Some(Advance::WinnerOf(from) | Advance::LoserOf(from)) = side.from else {
-                        return false;
-                    };
-                    let from = by_id[&from];
-                    from.advances_only_if_won_by.is_some()
-                        && from
-                            .r#match
-                            .is_some_and(|id| data.matches()[&id].result().is_some())
-                }) && pairing.sides.iter().all(|side| side.seat.is_none());
+                let decided_without_it =
+                    pairing.sides.into_iter().any(|side| {
+                        let Some(Advance::WinnerOf(from) | Advance::LoserOf(from)) = side.from
+                        else {
+                            return false;
+                        };
+                        let from = by_id[&from];
+                        from.advances_only_if_won_by.is_some()
+                            && from
+                                .r#match
+                                .is_some_and(|id| data.matches()[&id].result().is_some())
+                    }) && pairing.sides.into_iter().all(|side| side.seat.is_none());
                 decided_without_it.then_some((pairing.id, Unplayed::NotNeeded))
             })
             .collect();
@@ -137,7 +131,7 @@ impl Session {
         // Folding a column leaves out its pairings decided by a bye, so it can be folded where its
         // other pairings all lead to the next column, in whose rows they are drawn. Nothing may
         // lead into it, whose lines would expect its pairings in rows of their own.
-        let by_bye = |id: &PairingId| by_id[id].r#match.is_none() && byes[id].contains(&true);
+        let by_bye = |id: &PairingId| by_id[id].r#match.is_none() && a_bye(id);
         let mut folded = HashSet::new();
         for (section, (_, columns)) in layout.iter().enumerate() {
             for (column, (_, ids)) in columns.iter().enumerate() {
@@ -192,16 +186,14 @@ impl Session {
                 }
                 (Some(Seat::Bye), _) => BracketEntry::Bye,
                 (None, Some(Advance::WinnerOf(from) | Advance::LoserOf(from)))
-                    if byes[&from] == [true; 2] =>
+                    if only_byes(&from) =>
                 {
                     BracketEntry::Bye
                 }
-                (None, Some(Advance::LoserOf(from))) if byes[&from].contains(&true) => {
-                    BracketEntry::Bye
-                }
-                (None, Some(Advance::WinnerOf(from))) if byes[&from].contains(&true) => {
-                    let playing = usize::from(byes[&from][0]);
-                    side = by_id[&from].sides[playing];
+                (None, Some(Advance::LoserOf(from))) if a_bye(&from) => BracketEntry::Bye,
+                (None, Some(Advance::WinnerOf(from))) if a_bye(&from) => {
+                    let playing = if byes[&from].a { Team::B } else { Team::A };
+                    side = *by_id[&from].sides.of(playing);
                     continue;
                 }
                 (None, Some(Advance::WinnerOf(from))) => BracketEntry::WinnerOf(source(from)),
@@ -212,12 +204,12 @@ impl Session {
         let row = |pairing: &Pairing| {
             let sides = pairing.sides.map(entry);
             let place = places[&pairing.id];
-            let after_bye = [0, 1].map(|side| {
+            let after_bye = Sides::from_fn(|side| {
                 let from_left_out = matches!(
-                    pairing.sides[side].from,
+                    pairing.sides.of(side).from,
                     Some(Advance::WinnerOf(from)) if left_out(&from)
                 );
-                from_left_out && sides[side] != BracketEntry::Bye
+                from_left_out && *sides.of(side) != BracketEntry::Bye
             });
             let line_out = next.get(&pairing.id).map(|to| {
                 // the places of the pairings whose winners meet in `to`, this one's included
@@ -234,7 +226,7 @@ impl Session {
                     BracketLine::Up
                 }
             });
-            let from = || pairing.sides.iter().filter_map(|side| side.from);
+            let from = || pairing.sides.into_iter().filter_map(|side| side.from);
             let unplayed = unplayed.get(&pairing.id).copied();
             BracketPairing {
                 number: number(pairing),
@@ -250,8 +242,8 @@ impl Session {
                 } else {
                     place.index
                 },
-                sides,
-                after_bye,
+                sides: sides.into(),
+                after_bye: after_bye.into(),
                 line_out,
                 line_in: next.values().any(|to| *to == place),
                 // until it is scheduled or known not to be played
@@ -304,26 +296,26 @@ impl Session {
     }
 }
 
-/// Whether the format of `phase` plays a bracket, see [`Session::bracket`].
+/// Whether the format of `phase`, which has started, plays a bracket, see [`Session::bracket`].
 pub(super) fn plays_bracket(phase: &Phase) -> bool {
-    let format: &dyn Any = phase.format();
-    format.is::<SingleElimination>() || format.is::<DoubleElimination>()
+    phase.format().bracket().is_some()
 }
 
-/// The match for third place is drawn below the final.
-fn single_elimination_part(annotations: &TypeMap) -> Section {
+/// The section a pairing annotated with `annotations` is drawn in, by the stages of the knockouts
+/// of the engine: the match for third place below the final, a double elimination by the bracket
+/// of its stage. Any other is a knockout.
+fn section(annotations: &TypeMap) -> Section {
+    if let Some(round) = annotations.get::<DoubleEliminationRound>() {
+        return Section::Part(match round {
+            DoubleEliminationRound::Winners { .. } => BracketPart::Winners,
+            DoubleEliminationRound::Losers { .. } => BracketPart::Losers,
+            DoubleEliminationRound::GrandFinal | DoubleEliminationRound::GrandFinalReset => {
+                BracketPart::GrandFinal
+            }
+        });
+    }
     match annotations.get::<KnockoutRound>() {
         Some(KnockoutRound::ThirdPlace) => Section::Below,
-        _ => Section::Part(BracketPart::Knockout),
+        Some(KnockoutRound::RoundOf(_)) | None => Section::Part(BracketPart::Knockout),
     }
-}
-
-fn double_elimination_part(annotations: &TypeMap) -> Section {
-    Section::Part(match annotations.get::<DoubleEliminationRound>() {
-        Some(DoubleEliminationRound::Losers { .. }) => BracketPart::Losers,
-        Some(DoubleEliminationRound::GrandFinal | DoubleEliminationRound::GrandFinalReset) => {
-            BracketPart::GrandFinal
-        }
-        _ => BracketPart::Winners,
-    })
 }

@@ -367,13 +367,14 @@ impl Translator {
     }
 
     /// What `cell` of the column of the calculator `calculator` shows in the language: a number as
-    /// the language writes it, see [`Self::number`], a signed one after its sign, and a phrase as
-    /// the [`PluginText::Cell`] of the calculator with its numbers set, or else in English, as the
-    /// calculator's code says it.
+    /// the language writes it, see [`Self::number`], a signed one after its sign, a round as the
+    /// message `cell-round`, and a phrase as the [`PluginText::Cell`] of the calculator with its
+    /// numbers set, or else in English, as the calculator's code says it.
     pub fn cell(&self, calculator: &str, cell: &Cell) -> String {
         match cell {
             Cell::Number(number) => self.number(number.get()),
             Cell::Signed(number) => format!("{}{}", sign(*number), self.number(number.get().abs())),
+            Cell::Round(round) => self.text(&Text::new("cell-round").with("round", round.get())),
             Cell::Text(phrase) => {
                 self.plugin_phrase(calculator, PluginText::Cell(phrase.key()), phrase)
             }

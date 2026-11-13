@@ -2,6 +2,7 @@ use std::{
     any::{Any, TypeId},
     cmp::Ordering,
     fmt::{self, Debug, Display, Formatter},
+    num::NonZeroU32,
 };
 
 use dyn_clone::DynClone;
@@ -398,6 +399,9 @@ pub enum Cell {
     /// A number with its sign, such as a difference: `+5`, `−3` (with a minus sign) or `0`.
     /// A frontend writes the number without its sign as its language writes numbers.
     Signed(Score),
+    /// A round of the phase, e.g. the one a ranking was knocked out in. A frontend may name it by
+    /// the stage of the ranking's match or bye in that round, where the format names one.
+    Round(NonZeroU32),
     /// A phrase of the calculator's, which a translation finds by the calculator's id.
     Text(Phrase),
 }
@@ -407,6 +411,7 @@ impl Display for Cell {
         match self {
             Self::Number(number) => Display::fmt(number, f),
             Self::Signed(number) => write!(f, "{}{}", sign(*number), number.get().abs()),
+            Self::Round(round) => write!(f, "round {round}"),
             Self::Text(phrase) => Display::fmt(phrase, f),
         }
     }

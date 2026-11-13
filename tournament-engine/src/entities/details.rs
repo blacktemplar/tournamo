@@ -240,12 +240,47 @@ impl<T> Sides<T> {
         Self { a, b }
     }
 
+    /// The one of each team, as `f` makes it for the team.
+    pub fn from_fn(mut f: impl FnMut(Team) -> T) -> Self {
+        Self::new(f(Team::A), f(Team::B))
+    }
+
     /// The one of `team`.
     pub fn of(&self, team: Team) -> &T {
         match team {
             Team::A => &self.a,
             Team::B => &self.b,
         }
+    }
+
+    /// The one of `team`, to change.
+    pub fn of_mut(&mut self, team: Team) -> &mut T {
+        match team {
+            Team::A => &mut self.a,
+            Team::B => &mut self.b,
+        }
+    }
+
+    /// Each side's one as `f` makes it from this side's.
+    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Sides<U> {
+        Sides::new(f(self.a), f(self.b))
+    }
+}
+
+/// Side A's, then side B's.
+impl<T> From<Sides<T>> for [T; 2] {
+    fn from(sides: Sides<T>) -> Self {
+        [sides.a, sides.b]
+    }
+}
+
+/// Side A's, then side B's.
+impl<T> IntoIterator for Sides<T> {
+    type Item = T;
+    type IntoIter = std::array::IntoIter<T, 2>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        [self.a, self.b].into_iter()
     }
 }
 

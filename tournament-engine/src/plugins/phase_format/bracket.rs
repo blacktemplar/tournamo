@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::{Annotated, Bye, MatchId, NewMatch, PhaseData, RankingId, Team},
+    entities::{Annotated, Bye, MatchId, NewMatch, PhaseData, RankingId, Team, details::Sides},
     plugins::phase_format::Schedule,
     type_map::TypeMap,
 };
@@ -34,8 +34,7 @@ pub struct BracketPairing<'a> {
     pub id: PairingId,
     /// The round of the phase its match or bye is played in.
     pub round: NonZeroU32,
-    /// Sides A and B.
-    pub sides: [BracketSide; 2],
+    pub sides: Sides<BracketSide>,
     /// What its match or bye is annotated with, e.g. its stage.
     pub annotations: &'a TypeMap,
     /// Its match, once scheduled. A pairing decided by a bye has none.
@@ -101,7 +100,8 @@ struct Pairing {
     /// Copied onto the match or the bye once it is scheduled.
     annotations: TypeMap,
     /// `None` while the source of the seat is not decided yet.
-    seats: [Option<Seat>; 2],
+    #[serde(with = "pair")]
+    seats: Sides<Option<Seat>>,
     r#match: Option<MatchId>,
     winner_to: Option<Slot>,
     loser_to: Option<Slot>,
@@ -137,10 +137,10 @@ impl Bracket {
             .map(|(id, pairing)| BracketPairing {
                 id: PairingId(id),
                 round: pairing.round,
-                sides: [0, 1].map(|side| BracketSide {
-                    from: from[id][side],
-                    seat: pairing.seats[side],
-                    bye: byes[id][side],
+                sides: Sides::from_fn(|side| BracketSide {
+                    from: *from[id].of(side),
+                    seat: *pairing.seats.of(side),
+                    bye: *byes[id].of(side),
                 }),
                 annotations: &pairing.annotations,
                 r#match: pairing.r#match,
@@ -152,8 +152,8 @@ impl Bracket {
 
     /// Where each side of each pairing comes from, by the position of the pairing: the pairing
     /// whose winner or loser takes it, if any.
-    fn sources(&self) -> Vec<[Option<Advance>; 2]> {
-        let mut from = vec![[None; 2]; self.pairings.len()];
+    fn sources(&self) -> Vec<Sides<Option<Advance>>> {
+        let mut from = vec![Sides::default(); self.pairings.len()];
         for (id, pairing) in self.pairings.iter().enumerate() {
             let advances = [
                 (pairing.winner_to, Advance::WinnerOf(PairingId(id))),
@@ -161,7 +161,7 @@ impl Bracket {
             ];
             for (to, advance) in advances {
                 if let Some(Slot { pairing, side }) = to {
-                    from[pairing.0][index(side)] = Some(advance);
+                    *from[pairing.0].of_mut(side) = Some(advance);
                 }
             }
         }
@@ -171,13 +171,15 @@ impl Bracket {
     /// Whether only a bye can take each side of each pairing, see [`BracketSide::bye`]. Byes are
     /// only seated when the bracket is built, so this follows from the tree; a pairing takes only
     /// the winners and losers of pairings added before it.
-    fn byes(&self, from: &[[Option<Advance>; 2]]) -> Vec<[bool; 2]> {
-        let mut byes: Vec<[bool; 2]> = Vec::with_capacity(self.pairings.len());
+    fn byes(&self, from: &[Sides<Option<Advance>>]) -> Vec<Sides<bool>> {
+        let mut byes: Vec<Sides<bool>> = Vec::with_capacity(self.pairings.len());
         for (pairing, from) in self.pairings.iter().zip(from) {
-            let sides = [0, 1].map(|side| match (pairing.seats[side], from[side]) {
+            let sides = Sides::from_fn(|side| match (*pairing.seats.of(side), *from.of(side)) {
                 (Some(seat), _) => seat == Seat::Bye,
-                (None, Some(Advance::LoserOf(before))) => byes[before.0].contains(&true),
-                (None, Some(Advance::WinnerOf(before))) => byes[before.0] == [true; 2],
+                (None, Some(Advance::LoserOf(before))) => byes[before.0].into_iter().any(|bye| bye),
+                (None, Some(Advance::WinnerOf(before))) => {
+                    byes[before.0].into_iter().all(|bye| bye)
+                }
                 (None, None) => false,
             });
             byes.push(sides);
@@ -194,7 +196,11 @@ impl Bracket {
         let mut to_check = mem::take(&mut self.in_play);
         while let Some(id) = to_check.pop() {
             let pairing = &mut self.pairings[id.0];
-            let [Some(a), Some(b)] = pairing.seats else {
+            let Sides {
+                a: Some(a),
+                b: Some(b),
+            } = pairing.seats
+            else {
                 unreachable!("only pairings with both seats taken are in play")
             };
             let winner = match (a, b) {
@@ -260,16 +266,16 @@ impl Bracket {
             .seats
             .map(|seat| seat.expect("a decided pairing has both seats"));
         let moves = [
-            (pairing.winner_to, seats[index(winner)]),
-            (pairing.loser_to, seats[index(winner.opponent())]),
+            (pairing.winner_to, *seats.of(winner)),
+            (pairing.loser_to, *seats.of(winner.opponent())),
         ];
         for (to, seat) in moves {
             let Some(Slot { pairing, side }) = to else {
                 continue;
             };
             let next = &mut self.pairings[pairing.0];
-            next.seats[index(side)] = Some(seat);
-            if next.seats.iter().all(Option::is_some) {
+            *next.seats.of_mut(side) = Some(seat);
+            if next.seats.into_iter().all(|seat| seat.is_some()) {
                 to_check.push(pairing);
             }
         }
@@ -289,12 +295,14 @@ impl BracketBuilder {
         annotations: TypeMap,
     ) -> PairingId {
         let id = PairingId(self.0.pairings.len());
-        let mut seats = [None; 2];
+        let mut seats = Sides::default();
         for (side, source) in [Team::A, Team::B].into_iter().zip(sources) {
             let slot = Some(Slot { pairing: id, side });
             match source {
-                Source::Ranking(ranking_id) => seats[index(side)] = Some(Seat::Ranking(ranking_id)),
-                Source::Bye => seats[index(side)] = Some(Seat::Bye),
+                Source::Ranking(ranking_id) => {
+                    *seats.of_mut(side) = Some(Seat::Ranking(ranking_id))
+                }
+                Source::Bye => *seats.of_mut(side) = Some(Seat::Bye),
                 Source::WinnerOf(from) => {
                     let winner_to = &mut self.0.pairings[from.0].winner_to;
                     debug_assert!(winner_to.is_none(), "a winner can only move on once");
@@ -307,7 +315,7 @@ impl BracketBuilder {
                 }
             }
         }
-        if seats.iter().all(Option::is_some) {
+        if seats.into_iter().all(|seat| seat.is_some()) {
             self.0.in_play.push(id);
         }
         self.0.pairings.push(Pairing {
@@ -379,7 +387,7 @@ impl BracketBuilder {
         let mut bracket = self.0;
         let byes = bracket.byes(&bracket.sources());
         let mut matches: Vec<usize> = (0..bracket.pairings.len())
-            .filter(|&id| byes[id] == [false; 2])
+            .filter(|&id| !byes[id].into_iter().any(|bye| bye))
             .collect();
         // stable, so that the pairings of a round keep the order they were added in
         matches.sort_by_key(|&id| bracket.pairings[id].round);
@@ -398,10 +406,25 @@ pub(super) fn phase_round(round: u32) -> NonZeroU32 {
     NonZeroU32::new(round).expect("rounds are counted from 1")
 }
 
-fn index(side: Team) -> usize {
-    match side {
-        Team::A => 0,
-        Team::B => 1,
+// The seats were saved as the array `[a, b]` before they were `Sides`, as saved brackets still
+// hold them.
+mod pair {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::entities::details::Sides;
+
+    pub(super) fn serialize<T: Serialize, S: Serializer>(
+        sides: &Sides<T>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        [&sides.a, &sides.b].serialize(serializer)
+    }
+
+    pub(super) fn deserialize<'de, T: Deserialize<'de>, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Sides<T>, D::Error> {
+        let [a, b] = <[T; 2]>::deserialize(deserializer)?;
+        Ok(Sides::new(a, b))
     }
 }
 

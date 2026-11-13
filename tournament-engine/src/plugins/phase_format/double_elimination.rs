@@ -94,12 +94,6 @@ impl DoubleElimination {
         self
     }
 
-    /// The bracket of the double elimination, with the stage of each pairing as a
-    /// [`DoubleEliminationRound`] annotation; `None` before the phase starts.
-    pub fn bracket(&self) -> Option<&Bracket> {
-        self.bracket.as_ref()
-    }
-
     fn declare_static(declaration: &mut Declaration) {
         // every match has to produce a winner who moves on
         declaration
@@ -147,17 +141,7 @@ impl TypeMapValue for DoubleEliminationRound {}
 /// Shows the round by its bracket, e.g. `Winners round 2`, `Losers final` or `Grand final`.
 impl Display for DoubleEliminationRound {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let (bracket, round, rounds) = match *self {
-            Self::Winners { round, rounds } => ("Winners", round, rounds),
-            Self::Losers { round, rounds } => ("Losers", round, rounds),
-            Self::GrandFinal => return f.write_str("Grand final"),
-            Self::GrandFinalReset => return f.write_str("Grand final reset"),
-        };
-        if round == rounds {
-            write!(f, "{bracket} final")
-        } else {
-            write!(f, "{bracket} round {round}")
-        }
+        Display::fmt(&Stage::from(*self), f)
     }
 }
 
@@ -166,22 +150,23 @@ impl Display for DoubleEliminationRound {
 /// `grand-final-reset`.
 impl From<DoubleEliminationRound> for Stage {
     fn from(round: DoubleEliminationRound) -> Self {
-        let english = round.to_string();
         match round {
             DoubleEliminationRound::Winners { round, rounds } if round == rounds => {
-                Self::new("winners-final", english)
+                Self::new("winners-final", "Winners final")
             }
             DoubleEliminationRound::Winners { round, .. } => {
-                Self::new("winners-round", english).with("round", round)
+                Self::new("winners-round", format!("Winners round {round}")).with("round", round)
             }
             DoubleEliminationRound::Losers { round, rounds } if round == rounds => {
-                Self::new("losers-final", english)
+                Self::new("losers-final", "Losers final")
             }
             DoubleEliminationRound::Losers { round, .. } => {
-                Self::new("losers-round", english).with("round", round)
+                Self::new("losers-round", format!("Losers round {round}")).with("round", round)
             }
-            DoubleEliminationRound::GrandFinal => Self::new("grand-final", english),
-            DoubleEliminationRound::GrandFinalReset => Self::new("grand-final-reset", english),
+            DoubleEliminationRound::GrandFinal => Self::new("grand-final", "Grand final"),
+            DoubleEliminationRound::GrandFinalReset => {
+                Self::new("grand-final-reset", "Grand final reset")
+            }
         }
     }
 }
@@ -214,6 +199,11 @@ impl PhaseFormat for DoubleElimination {
             .get::<DoubleEliminationRound>()
             .copied()
             .map(Stage::from)
+    }
+
+    /// The bracket, with the stage of each pairing as a [`DoubleEliminationRound`] annotation.
+    fn bracket(&self) -> Option<&Bracket> {
+        self.bracket.as_ref()
     }
 }
 

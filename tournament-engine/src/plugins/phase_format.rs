@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use dyn_clone::DynClone;
 use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
@@ -15,11 +13,8 @@ use crate::{
 /// left out of its schema with `#[plugin(skip)]`. That state is serialized together with the
 /// phase, and it must only depend on what the [`PhaseView`]s showed the format and the calls it has
 /// seen, so that replaying the transition log recomputes it.
-///
-/// [`Any`] is a supertrait, so that a consumer can downcast a format it knows to its type, e.g. to
-/// read the [`Bracket`] of a [`SingleElimination`].
 #[axis]
-pub trait PhaseFormat: Plugin + DynClone + Any {
+pub trait PhaseFormat: Plugin + DynClone {
     /// Suggested ranking and scoring settings for this configuration. Consumers apply these
     /// when starting a phase or explicitly restoring suggestions; they are not compatibility rules.
     fn suggestions(&self) -> PhaseSuggestions {
@@ -70,6 +65,12 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
     /// [`Annotated::annotations`]: crate::entities::Annotated::annotations
     fn stage(&self, annotations: &TypeMap) -> Option<Stage> {
         let _ = annotations;
+        None
+    }
+
+    /// The bracket the phase is played in, if this format plays one, e.g. a knockout; `None` before
+    /// the phase starts. Each pairing is annotated as its match or bye will be, so with its stage.
+    fn bracket(&self) -> Option<&Bracket> {
         None
     }
 }

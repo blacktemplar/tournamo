@@ -1269,12 +1269,14 @@ winners (old listings would not read).
 
 - **What the GUI cannot know is in the engine.** Matches exist only once both
   sides are known, so the pairings to come are in the knockout formats' state,
-  their `Bracket`, handed out read-only (`SingleElimination::bracket`,
-  `DoubleElimination::bracket`): pairings with round, annotations (so stage),
-  match once scheduled, and each side's source (`BracketSide`).
-- **The app knows the two formats, not the trait**: `Session::bracket` downcasts
-  the format (`PhaseFormat: Any`), splits pairings into sections (`BracketPart`)
-  and columns by stage (third place `below` the final), and works out the lines
+  their `Bracket`, handed out read-only by `PhaseFormat::bracket` (so a
+  third-party knockout shows its bracket too): pairings with round,
+  annotations (so stage), match once scheduled, and each side's source
+  (`BracketSide`).
+- **The app knows the engine's stages, not its formats**: `Session::bracket`
+  splits pairings into sections (`BracketPart`) by the stage annotations of the
+  two knockouts (`KnockoutRound`, `DoubleEliminationRound`; any other is one
+  knockout section), and columns by stage (third place `below` the final), and works out the lines
   and how an undecided side is named (by match number, else stage and place).
 - **What can only be a bye is worked out from the tree**: a pairing of two byes
   not left out (below) keeps its slot, empty (`Unplayed::Byes`), so the

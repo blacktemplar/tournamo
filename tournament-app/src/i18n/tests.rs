@@ -454,7 +454,7 @@ fn phrases_in_cells(id: &str) -> Vec<Phrase> {
         .into_iter()
         .filter_map(|cell| match cell {
             Cell::Text(phrase) => Some(phrase),
-            Cell::Number(_) | Cell::Signed(_) => None,
+            Cell::Number(_) | Cell::Signed(_) | Cell::Round(_) => None,
         })
         .collect()
 }

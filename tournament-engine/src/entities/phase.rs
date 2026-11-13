@@ -263,6 +263,13 @@ impl Phase {
     }
 
     pub(crate) fn start(&mut self, ranking_entrants: Vec<Vec1<EntrantId>>) {
+        self.set_rankings(ranking_entrants);
+        self.create_new_matches();
+    }
+
+    /// Gives this phase a ranking of each of `ranking_entrants`, ranked initially in this order,
+    /// with the default value of every metric calculated for this phase.
+    fn set_rankings(&mut self, ranking_entrants: Vec<Vec1<EntrantId>>) {
         self.data.rankings = ranking_entrants
             .into_iter()
             .enumerate()
@@ -271,7 +278,6 @@ impl Phase {
             })
             .collect();
         self.initialize_metrics();
-        self.create_new_matches();
     }
 
     /// Gives every ranking of this phase the default value of every metric calculated for this

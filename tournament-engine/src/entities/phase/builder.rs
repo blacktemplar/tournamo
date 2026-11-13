@@ -1,12 +1,10 @@
-use std::num::NonZeroU32;
-
 use uuid::Uuid;
 use vec1::vec1;
 
 #[cfg(doc)]
 use crate::Competition;
 use crate::{
-    EntrantId, Phase, PhaseId, Ranking, Seed,
+    EntrantId, Phase, PhaseId, Seed,
     plugins::{
         PhasePluginsBuilder, match_format::MatchFormat, metrics_calculator::MetricsCalculator,
         phase_format::PhaseFormat, ranker::SliceRanker,
@@ -92,14 +90,11 @@ impl PhaseBuilder {
             .build()
             .expect("the plugins of the phase can be ordered");
         let mut phase = Phase::new(PhaseId::new(Uuid::nil()), plugins, Seed::default());
-        phase.data.rankings = (0..self.players)
-            .map(|index| {
-                let entrant_id = EntrantId::new(Uuid::from_u128(index.into()));
-                let initial_unique_rank = NonZeroU32::new(index + 1).unwrap();
-                Ranking::new(vec1![entrant_id], initial_unique_rank)
-            })
-            .collect();
-        phase.initialize_metrics();
+        phase.set_rankings(
+            (0..self.players)
+                .map(|index| vec1![EntrantId::new(Uuid::from_u128(index.into()))])
+                .collect(),
+        );
         phase
     }
 }

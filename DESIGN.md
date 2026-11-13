@@ -464,9 +464,12 @@ UUIDs are no good for human input, so a match also has a number:
 - **Numbered in scheduling order unless the format asks**
   (`NewMatch::with_number`, unique within the phase, checked in debug builds).
 - **A bracket numbers its pairings from the start** (`BracketPairing::number`,
-  by round, skipping pairings that can only be byes, worked out from the tree on
-  every call rather than stored), so a semifinal keeps its number whichever
-  quarterfinal ends first, and a side not scheduled yet reads "Winner of 9".
+  by round, skipping pairings that can only be byes), so a semifinal keeps its
+  number whichever quarterfinal ends first, and a side not scheduled yet reads
+  "Winner of 9". The numbers follow from the tree, fixed once it is built, so
+  `BracketBuilder::build` works them out and every pairing stores its own,
+  rather than every reported result walking the tree again; a bracket saved
+  before format 4 gets them from the converter.
 - **Not part of the identity**: `MatchId` excludes it, so old logs replay and
   get their numbers on replay. Numbers are per phase.
 

@@ -34,7 +34,7 @@ const CONVERTERS: &[Converter] = &[
         competition: |_| {},
     },
     Converter {
-        log_entry: |_| {},
+        log_entry: v4::log_entry,
         competition: v4::competition,
     },
 ];
@@ -200,9 +200,29 @@ mod v3 {
 }
 
 /// Format 3 to 4: a phase holds its plugins as one `"plugins"`, as a phase is added with them,
-/// where it held its `"phase_format"`, `"match_format"`, `"ranker"` and `"metrics_calculators"`.
+/// where it held its `"phase_format"`, `"match_format"`, `"ranker"` and `"metrics_calculators"`;
+/// every pairing of a knockout's bracket holds the number of its match.
 mod v4 {
     use serde_json::{Map, Value};
+
+    /// The tags of the formats holding a bracket.
+    const KNOCKOUTS: [&str; 2] = [
+        "tournament_engine::single_elimination",
+        "tournament_engine::double_elimination",
+    ];
+
+    /// An `AddPhase`: the bracket of its format, if any, is numbered. A phase is added before it
+    /// is played, so it has none in practice.
+    pub(super) fn log_entry(entry: &mut Value) {
+        let transition = if entry.pointer("/kind/Apply").is_some() {
+            "/kind/Apply/AddPhase/plugins/format"
+        } else {
+            "/kind/Replace/with/AddPhase/plugins/format"
+        };
+        if let Some(format) = entry.pointer_mut(transition) {
+            number_bracket(format);
+        }
+    }
 
     pub(super) fn competition(competition: &mut Value) {
         let Some(Value::Array(phases)) = competition.get_mut("phases") else {
@@ -210,6 +230,9 @@ mod v4 {
         };
         for phase in phases.iter_mut().filter_map(Value::as_object_mut) {
             plugins(phase);
+            if let Some(format) = phase.get_mut("plugins").and_then(|p| p.get_mut("format")) {
+                number_bracket(format);
+            }
         }
     }
 
@@ -231,6 +254,101 @@ mod v4 {
             .collect();
         phase.insert("plugins".to_owned(), Value::Object(plugins));
     }
+
+    /// The bracket of `format`, the JSON of a knockout format, gets the number of each pairing's
+    /// match: the pairings that can be matches, i.e. whose sides a bye cannot take, are numbered
+    /// by round, and within a round in the order they were added.
+    fn number_bracket(format: &mut Value) {
+        if !format
+            .get("type")
+            .and_then(Value::as_str)
+            .is_some_and(|tag| KNOCKOUTS.contains(&tag))
+        {
+            return;
+        }
+        let Some(Value::Array(pairings)) = format.pointer_mut("/value/bracket/pairings") else {
+            return;
+        };
+        if let Some(numbers) = numbers(pairings) {
+            for (pairing, number) in pairings.iter_mut().zip(numbers) {
+                if let Value::Object(pairing) = pairing {
+                    pairing.insert("number".to_owned(), number.into());
+                }
+            }
+        }
+    }
+
+    /// Who takes a side of a pairing that has no seat yet.
+    #[derive(Clone, Copy)]
+    enum Advance {
+        WinnerOf(usize),
+        LoserOf(usize),
+    }
+
+    /// The number of each of `pairings`, `None` for a pairing that is never a match; `None` if a
+    /// pairing is not as expected or already numbered.
+    fn numbers(pairings: &[Value]) -> Option<Vec<Option<u64>>> {
+        let mut from: Vec<[Option<Advance>; 2]> = vec![[None; 2]; pairings.len()];
+        let mut rounds = Vec::with_capacity(pairings.len());
+        for (id, pairing) in pairings.iter().enumerate() {
+            let pairing = pairing.as_object()?;
+            if pairing.contains_key("number") {
+                return None;
+            }
+            rounds.push(pairing.get("round")?.as_u64()?);
+            for (to, advance) in [
+                ("winner_to", Advance::WinnerOf(id)),
+                ("loser_to", Advance::LoserOf(id)),
+            ] {
+                match pairing.get(to)? {
+                    Value::Null => {}
+                    slot => {
+                        let to = usize::try_from(slot.get("pairing")?.as_u64()?).ok()?;
+                        let side = match slot.get("side")?.as_str()? {
+                            "A" => 0,
+                            "B" => 1,
+                            _ => return None,
+                        };
+                        // a pairing takes only the winners and losers of pairings before it
+                        if to <= id {
+                            return None;
+                        }
+                        *from.get_mut(to)?.get_mut(side)? = Some(advance);
+                    }
+                }
+            }
+        }
+        // whether only a bye can take each side of each pairing
+        let mut byes: Vec<[bool; 2]> = Vec::with_capacity(pairings.len());
+        for (pairing, from) in pairings.iter().zip(&from) {
+            let Value::Array(seats) = pairing.get("seats")? else {
+                return None;
+            };
+            let [a, b] = &seats[..] else {
+                return None;
+            };
+            let mut sides = [false; 2];
+            for (side, seat) in [a, b].into_iter().enumerate() {
+                sides[side] = match (seat, from[side]) {
+                    (Value::Null, Some(Advance::LoserOf(before))) => byes[before].contains(&true),
+                    (Value::Null, Some(Advance::WinnerOf(before))) => byes[before] == [true; 2],
+                    (Value::Null, None) => false,
+                    (seat, _) => seat == "Bye",
+                };
+            }
+            byes.push(sides);
+        }
+        let mut matches: Vec<usize> = (0..pairings.len())
+            .filter(|&id| byes[id] == [false; 2])
+            .collect();
+        // stable, so that the pairings of a round keep the order they were added in
+        matches.sort_by_key(|&id| rounds[id]);
+        let mut numbers = vec![None; pairings.len()];
+        for (id, number) in matches.into_iter().zip(1..) {
+            numbers[id] = Some(number);
+        }
+        Some(numbers)
+    }
 }
 
 #[cfg(test)]
@@ -238,7 +356,8 @@ mod tests {
     use plugin_factory::PluginType as _;
     use serde_json::json;
     use tournament_engine::{
-        Competition, CompetitionStateMachine, MatchResult, plugins::phase_format::SingleElimination,
+        Competition, CompetitionStateMachine, MatchResult,
+        plugins::phase_format::{DoubleElimination, SingleElimination},
     };
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -533,14 +652,38 @@ mod tests {
         session
     }
 
+    /// A double elimination of five entrants, so with byes in both brackets, with the first three
+    /// matches reported.
+    fn double_elimination_under_way() -> Session {
+        let mut session = Session::new("cup");
+        for name in ["Alice", "Bob", "Carol", "Dave", "Eve"] {
+            session.add_entrant(name).unwrap();
+        }
+        let draft = session.phase_draft(DoubleElimination::ID).unwrap();
+        session.add_phase(&draft).unwrap();
+        session.start().unwrap();
+        for _ in 0..3 {
+            let next = session.playable()[0].id;
+            session.report(next, MatchResult::BWins).unwrap();
+        }
+        session
+    }
+
     /// `competition`, as this version writes it, as a file of format 3 holds it: its phases hold
-    /// their plugins one by one.
-    fn as_of_format_3(competition: &mut Value) {
+    /// their plugins one by one, and the pairings of a bracket hold no number. Returns how many
+    /// pairings had one.
+    fn as_of_format_3(competition: &mut Value) -> usize {
+        let mut numbered = 0;
         for phase in competition["phases"].as_array_mut().unwrap() {
             let phase = phase.as_object_mut().unwrap();
             let Some(Value::Object(mut plugins)) = phase.remove("plugins") else {
                 panic!("a phase holds its plugins");
             };
+            let pairings = plugins["format"].pointer_mut("/value/bracket/pairings");
+            for pairing in pairings.and_then(Value::as_array_mut).into_iter().flatten() {
+                let number = pairing.as_object_mut().unwrap().remove("number");
+                numbered += usize::from(number.unwrap().is_number());
+            }
             for (old, new) in [
                 ("phase_format", "format"),
                 ("match_format", "match_format"),
@@ -554,6 +697,7 @@ mod tests {
                 "a phase of format 3 has no other plugins"
             );
         }
+        numbered
     }
 
     /// `file`, as this version writes it, as a file of the first format holds it: its transitions
@@ -645,18 +789,72 @@ mod tests {
         assert_eq!(serde_json::to_value(held).unwrap(), competition);
     }
 
-    /// A competition of format 3 is read into the competition it was, each phase holding its
-    /// plugins as one.
+    /// A competition of format 3 holding a bracket with byes in both of its brackets is read into
+    /// the competition it was, its pairings numbered as the bracket numbers them.
     #[test]
-    fn a_competition_of_format_3_is_read_with_the_plugins_of_its_phases() {
-        let session = knockout_before_its_final();
+    fn a_competition_of_format_3_is_read_with_its_plugins_and_its_bracket_numbered() {
+        let session = double_elimination_under_way();
         let competition = serde_json::to_value(session.competition()).unwrap();
         let mut held = competition.clone();
-        as_of_format_3(&mut held);
+        let numbered = as_of_format_3(&mut held);
 
         upgrade_competition(&mut held, Format(3));
 
+        assert!(numbered > 0, "the bracket numbers its pairings");
         assert_eq!(held, competition);
+        let read: Competition = serde_json::from_value(held).unwrap();
+        assert_eq!(serde_json::to_value(read).unwrap(), competition);
+    }
+
+    /// A bracket of an unexpected shape, or already numbered, stays as it is.
+    #[test]
+    fn a_bracket_of_an_unexpected_shape_stays_as_it_is_in_format_4() {
+        let knockout = |bracket: Value| {
+            json!({ "phases": [{ "plugins": { "format": {
+                "type": "tournament_engine::single_elimination",
+                "value": { "third_place_match": false, "bracket": bracket },
+            } } }] })
+        };
+        let pairing = |seats: Value, winner_to: Value| {
+            json!({
+                "round": 1,
+                "annotations": [],
+                "seats": seats,
+                "match": null,
+                "winner_to": winner_to,
+                "loser_to": null,
+                "advances_only_if_won_by": null,
+            })
+        };
+        let seated = json!([{ "Ranking": "a" }, { "Ranking": "b" }]);
+        let mut numbered = pairing(seated.clone(), Value::Null);
+        numbered["number"] = json!(1);
+        let shapes = [
+            knockout(Value::Null),
+            knockout(json!({ "pairings": 3, "in_play": [] })),
+            knockout(json!({ "pairings": [3], "in_play": [] })),
+            knockout(json!({ "pairings": [numbered], "in_play": [] })),
+            knockout(json!({ "pairings": [pairing(json!([null]), Value::Null)], "in_play": [] })),
+            knockout(json!({ "pairings": [pairing(
+                seated.clone(),
+                json!({ "pairing": 0, "side": "A" }),
+            )], "in_play": [] })),
+            knockout(json!({ "pairings": [pairing(
+                seated,
+                json!({ "pairing": 7, "side": "A" }),
+            )], "in_play": [] })),
+            json!({ "phases": [{ "plugins": { "format": {
+                "type": "a format of another crate",
+                "value": { "bracket": { "pairings": [pairing(json!([]), Value::Null)] } },
+            } } }] }),
+        ];
+
+        for shape in shapes {
+            let mut upgraded = shape.clone();
+            upgrade_competition(&mut upgraded, Format(3));
+
+            assert_eq!(upgraded, shape);
+        }
     }
 
     /// What a converter does not recognise is left for the typed read to refuse.

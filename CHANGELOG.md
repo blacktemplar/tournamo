@@ -19,7 +19,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   browser.
 - A competition is saved in format 4: the competition stored next to the log
   holds each phase's plugins as one `"plugins"` (`"format"`,
-  `"match_format"`, `"ranking"`, `"metrics"`), as a phase is added with them.
+  `"match_format"`, `"ranking"`, `"metrics"`), as a phase is added with them,
+  and every pairing of a knockout's bracket holds the number of its match.
   Competitions of formats 1 to 3 open unchanged; earlier versions refuse
   format 4.
 - Library users: the engine reads only the current layout of a competition and

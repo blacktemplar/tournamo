@@ -1,7 +1,7 @@
 //! The points, or goals, a ranking scored and conceded, as the match format tallied them, and their
 //! difference.
 
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
         facts::{CalculatesMetric, MatchTally},
         match_format::PointsScored,
         metrics_calculator::{
-            Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell, derived,
+            Calculator, Cell, MetricColumn, OldMetrics, ToCell, derived, provides_metric,
             updated_for_each_team,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
@@ -117,24 +117,20 @@ pub struct PointsBalanceCalculator;
 
 impl PointsBalanceCalculator {
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<PointsBalance>::new())
-            .require::<MatchTally<PointsScored>>("the points scored");
+        provides_metric::<Self>(declaration);
+        declaration.require::<MatchTally<PointsScored>>("the points scored");
     }
 }
 
-#[register]
-impl MetricsCalculator for PointsBalanceCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(PointsBalance::default())
-    }
+impl Calculator for PointsBalanceCalculator {
+    type Metric = PointsBalance;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, PointsBalance)> {
         let PointsScored(points) = *r#match
             .tally::<PointsScored>()
             .expect("the match format tallies the points scored");
@@ -144,12 +140,12 @@ impl MetricsCalculator for PointsBalanceCalculator {
     }
 
     /// A bye has no score.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         _: &PhaseData,
         _: &Bye,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, PointsBalance)> {
         Vec::new()
     }
 
@@ -157,6 +153,8 @@ impl MetricsCalculator for PointsBalanceCalculator {
         Some(MetricColumn::new::<PointsBalance>("+:−"))
     }
 }
+
+crate::register_calculator!(PointsBalanceCalculator);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
 #[plugin(
@@ -169,33 +167,29 @@ pub struct PointsDifferenceCalculator;
 
 impl PointsDifferenceCalculator {
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<PointsDifference>::new())
-            .require::<CalculatesMetric<PointsBalance>>("the points scored and conceded");
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<PointsBalance>>("the points scored and conceded");
     }
 }
 
-#[register]
-impl MetricsCalculator for PointsDifferenceCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(PointsDifference::default())
-    }
+impl Calculator for PointsDifferenceCalculator {
+    type Metric = PointsDifference;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         _: &Match,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, PointsDifference)> {
         derived(phase_data, old_metrics, PointsBalance::difference)
     }
 
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         _: &Bye,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, PointsDifference)> {
         derived(phase_data, old_metrics, PointsBalance::difference)
     }
 
@@ -203,6 +197,8 @@ impl MetricsCalculator for PointsDifferenceCalculator {
         Some(MetricColumn::new::<PointsDifference>("±"))
     }
 }
+
+crate::register_calculator!(PointsDifferenceCalculator);
 
 #[cfg(test)]
 mod tests {
@@ -217,7 +213,10 @@ mod tests {
         },
         plugins::{
             match_format::Scored,
-            metrics_calculator::test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
+            metrics_calculator::{
+                MetricsCalculator,
+                test_utils::{MatchSpec, match_id, metric_of, phase_with_byes},
+            },
         },
         type_map::TypeMap,
     };

@@ -266,7 +266,6 @@ mod tests {
         compatibility::{self, Declaration, Incompatibility, provides_fact},
         config::PluginConfig,
         draft::{Draft, Issue, Problem},
-        register,
         schema::{DependencyOrderedSetError, Field},
     };
     #[cfg(target_arch = "wasm32")]
@@ -279,14 +278,15 @@ mod tests {
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
             match_format::{BestOf, Scored, WinnerOnly},
             metrics_calculator::{
-                GamesBalance, GamesBalanceCalculator, GamesDifference, HigherGamesDifference,
-                HigherPointsDifference, Metric, OldMetrics, PointsBalance, PointsBalanceCalculator,
-                PointsDifference,
+                Calculator, GamesBalance, GamesBalanceCalculator, GamesDifference,
+                HigherGamesDifference, HigherPointsDifference, OldMetrics, PointsBalance,
+                PointsBalanceCalculator, PointsDifference,
                 buchholz::{
                     Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
                     MoreSonnebornBerger, SonnebornBerger, SonnebornBergerCalculator,
                 },
                 points::{MorePoints, Points, PointsCalculator},
+                provides_metric,
                 round_of_elimination::{
                     Eliminates, LaterElimination, RoundOfEliminationCalculator,
                 },
@@ -850,9 +850,8 @@ mod tests {
 
     impl CircularCalculator {
         fn declare_static(declaration: &mut Declaration) {
-            declaration
-                .provide(CalculatesMetric::<Circular>::new())
-                .require::<CalculatesMetric<Cycled>>("the cycled metric");
+            provides_metric::<Self>(declaration);
+            declaration.require::<CalculatesMetric<Cycled>>("the cycled metric");
         }
     }
 
@@ -867,40 +866,38 @@ mod tests {
 
     impl Cycling {
         fn declare_static(declaration: &mut Declaration) {
-            declaration
-                .provide(CalculatesMetric::<Cycled>::new())
-                .require::<CalculatesMetric<Circular>>("the circular metric");
+            provides_metric::<Self>(declaration);
+            declaration.require::<CalculatesMetric<Circular>>("the circular metric");
         }
     }
 
     /// Calculates nothing, for the calculators of this module that only exist for what they
     /// declare.
     macro_rules! calculates_nothing {
-        ($calculator:ty, $metric:expr) => {
-            #[register]
-            impl MetricsCalculator for $calculator {
-                fn default_metric_value(&self) -> Metric {
-                    Box::new($metric)
-                }
+        ($calculator:ty, $metric:ty) => {
+            impl Calculator for $calculator {
+                type Metric = $metric;
 
-                fn update_after_match_result(
+                fn after_match(
                     &mut self,
                     _: &PhaseData,
                     _: &Match,
                     _: &OldMetrics,
-                ) -> Vec<(RankingId, Metric)> {
+                ) -> Vec<(RankingId, $metric)> {
                     Vec::new()
                 }
 
-                fn update_after_bye(
+                fn after_bye(
                     &mut self,
                     _: &PhaseData,
                     _: &Bye,
                     _: &OldMetrics,
-                ) -> Vec<(RankingId, Metric)> {
+                ) -> Vec<(RankingId, $metric)> {
                     Vec::new()
                 }
             }
+
+            crate::register_calculator!($calculator);
         };
     }
 

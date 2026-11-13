@@ -1,14 +1,13 @@
 use std::num::NonZeroU32;
 
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::Plugin;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::competition::{Bye, Match, PhaseData, RankingId},
     plugins::{
         Phrase,
-        facts::CalculatesMetric,
-        metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
+        metrics_calculator::{Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     type_map::TypeMapValue,
@@ -58,28 +57,19 @@ crate::register_criterion!(LaterFirstLoss);
     id = "tournament_engine::round_of_first_loss",
     label = "round of the first loss",
     description = "the round in which an entrant lost for the first time",
-    declare_static = Self::declare_static
+    declare_static = provides_metric::<Self>
 )]
 pub struct RoundOfFirstLossCalculator;
 
-impl RoundOfFirstLossCalculator {
-    fn declare_static(declaration: &mut Declaration) {
-        declaration.provide(CalculatesMetric::<RoundOfFirstLoss>::new());
-    }
-}
+impl Calculator for RoundOfFirstLossCalculator {
+    type Metric = RoundOfFirstLoss;
 
-#[register]
-impl MetricsCalculator for RoundOfFirstLossCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(RoundOfFirstLoss::default())
-    }
-
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, RoundOfFirstLoss)> {
         let result = r#match.result().expect("a reported match is finished");
         let Some(loser) = result.loser() else {
             return vec![]; // nothing to update
@@ -95,18 +85,18 @@ impl MetricsCalculator for RoundOfFirstLossCalculator {
                     None => r#match.round(),
                     Some(x) => x.min(r#match.round()),
                 }));
-                (*r_id, Box::new(new_value) as Metric)
+                (*r_id, new_value)
             })
             .collect()
     }
 
     /// A bye is never lost.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         _: &PhaseData,
         _: &Bye,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, RoundOfFirstLoss)> {
         vec![]
     }
 
@@ -114,6 +104,8 @@ impl MetricsCalculator for RoundOfFirstLossCalculator {
         Some(MetricColumn::new::<RoundOfFirstLoss>("lost in"))
     }
 }
+
+crate::register_calculator!(RoundOfFirstLossCalculator);
 
 #[cfg(test)]
 mod tests {

@@ -1,12 +1,12 @@
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
-use super::{Cell, Metric, MetricColumn, OldMetrics, ToCell};
+use super::{Cell, MetricColumn, OldMetrics, ToCell};
 use crate::{
     entities::competition::{Bye, Match, PhaseData, RankingId},
     plugins::{
         facts::{CalculatesMetric, NoDraws},
-        metrics_calculator::{MetricsCalculator, wins_draws_losses::WinsDrawsLosses},
+        metrics_calculator::{Calculator, provides_metric, wins_draws_losses::WinsDrawsLosses},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
@@ -105,50 +105,46 @@ impl PointsCalculator {
         self
     }
 
-    fn points_of(&self, ranking_id: &RankingId, phase_data: &PhaseData) -> Metric {
+    fn points_of(&self, ranking_id: &RankingId, phase_data: &PhaseData) -> Points {
         let WinsDrawsLosses {
             wins, draws, byes, ..
         } = *phase_data.rankings()[ranking_id]
             .metric::<WinsDrawsLosses>()
             .unwrap();
-        Box::new(Points(
+        Points(
             self.points_for_win * wins.into()
                 + self.points_for_draw * draws.into()
                 + self.points_for_bye * byes.into(),
-        ))
+        )
     }
 
     fn declare_static(declaration: &mut Declaration) {
-        declaration
-            .provide(CalculatesMetric::<Points>::new())
-            .require::<CalculatesMetric<WinsDrawsLosses>>("the wins, draws and losses");
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<WinsDrawsLosses>>("the wins, draws and losses");
     }
 }
 
-#[register]
-impl MetricsCalculator for PointsCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(Points::default())
-    }
+impl Calculator for PointsCalculator {
+    type Metric = Points;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, Points)> {
         r#match
             .non_losing_rankings()
             .map(|r_id| (*r_id, self.points_of(r_id, phase_data)))
             .collect()
     }
 
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         phase_data: &PhaseData,
         bye: &Bye,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, Points)> {
         if self.points_for_bye.is_zero() {
             return vec![];
         }
@@ -159,6 +155,8 @@ impl MetricsCalculator for PointsCalculator {
         Some(MetricColumn::new::<Points>("points"))
     }
 }
+
+crate::register_calculator!(PointsCalculator);
 
 #[cfg(test)]
 mod tests {

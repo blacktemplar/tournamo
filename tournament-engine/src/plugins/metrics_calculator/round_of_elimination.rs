@@ -1,14 +1,14 @@
 use std::num::NonZeroU32;
 
-use plugin_factory::{Plugin, compatibility::Declaration, register};
+use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::competition::{Annotated, Bye, Match, MatchResult, PhaseData, RankingId, Team},
     plugins::{
         Phrase,
-        facts::{CalculatesMetric, MatchAnnotation},
-        metrics_calculator::{Cell, Metric, MetricColumn, MetricsCalculator, OldMetrics, ToCell},
+        facts::MatchAnnotation,
+        metrics_calculator::{Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     type_map::TypeMapValue,
@@ -82,24 +82,21 @@ pub struct RoundOfEliminationCalculator;
 
 impl RoundOfEliminationCalculator {
     fn declare_static(declaration: &mut Declaration) {
+        provides_metric::<Self>(declaration);
         declaration
-            .provide(CalculatesMetric::<RoundOfElimination>::new())
             .require::<MatchAnnotation<Eliminates>>("an elimination annotation on the matches");
     }
 }
 
-#[register]
-impl MetricsCalculator for RoundOfEliminationCalculator {
-    fn default_metric_value(&self) -> Metric {
-        Box::new(RoundOfElimination::default())
-    }
+impl Calculator for RoundOfEliminationCalculator {
+    type Metric = RoundOfElimination;
 
-    fn update_after_match_result(
+    fn after_match(
         &mut self,
         phase_data: &PhaseData,
         r#match: &Match,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, RoundOfElimination)> {
         let Some(eliminates) = r#match.annotation::<Eliminates>() else {
             return vec![];
         };
@@ -119,18 +116,18 @@ impl MetricsCalculator for RoundOfEliminationCalculator {
             })
             .map(|r_id| {
                 let eliminated = RoundOfElimination(Some(r#match.round()));
-                (*r_id, Box::new(eliminated) as Metric)
+                (*r_id, eliminated)
             })
             .collect()
     }
 
     /// A bye knocks out nobody.
-    fn update_after_bye(
+    fn after_bye(
         &mut self,
         _: &PhaseData,
         _: &Bye,
         _: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)> {
+    ) -> Vec<(RankingId, RoundOfElimination)> {
         vec![]
     }
 
@@ -138,6 +135,8 @@ impl MetricsCalculator for RoundOfEliminationCalculator {
         Some(MetricColumn::new::<RoundOfElimination>("out in"))
     }
 }
+
+crate::register_calculator!(RoundOfEliminationCalculator);
 
 #[cfg(test)]
 mod tests {

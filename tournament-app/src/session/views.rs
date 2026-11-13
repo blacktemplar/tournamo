@@ -19,8 +19,9 @@ use super::Session;
 use crate::{
     storage::Progress,
     view::{
-        self, ByeRow, Column, EntrantRow, MatchRow, Medal, Round, RoundSummary, StageName,
-        StandingCell, StandingRow, Standings,
+        self, ByeRow, Column, Entered, EntrantRow, ListedMatch, MatchRow, Medal, Round,
+        RoundSummary, RoundsView, Shown, StageName, StandingCell, StandingRow, Standings,
+        TypedEntry,
     },
 };
 
@@ -162,6 +163,108 @@ impl Session {
             matches,
             byes,
             draws: phase.format().allows_draws(),
+        })
+    }
+
+    /// The list of rounds showing what the operator `chose`, or the current round, or else the
+    /// matches a result typed in `entry` fits, see [`Self::read_entered`]: nothing typed, or only
+    /// spaces, shows the list chosen. `None` before the start.
+    pub fn rounds_view(&self, chosen: Option<Shown>, entry: &str) -> Option<RoundsView> {
+        let rounds = self.rounds();
+        let current = rounds
+            .iter()
+            .find(|summary| summary.open > 0)
+            .or(rounds.last())?
+            .round;
+        let position = |round| rounds.iter().position(|summary| summary.round == round);
+        // a round that no longer exists, e.g. after an undo, falls back to the current one
+        let shown = chosen
+            .filter(|shown| match shown {
+                Shown::Playable => true,
+                Shown::Round(round) => position(*round).is_some(),
+            })
+            .unwrap_or(Shown::Round(current));
+        let (previous, next) = match shown {
+            Shown::Playable => (None, None),
+            Shown::Round(round) => {
+                let at = |offset| {
+                    position(round)
+                        .and_then(|position| position.checked_add_signed(offset))
+                        .and_then(|position| rounds.get(position))
+                        .map(|summary| summary.round)
+                };
+                (at(-1), at(1))
+            }
+        };
+        let finished = rounds.iter().all(|summary| summary.open == 0);
+        let entry = entry.trim();
+        let entered = (!finished && !entry.is_empty()).then(|| self.read_entered(entry));
+        let playable = self.playable();
+        let playable_count = playable.len();
+        let current_round = self.round(current);
+        let draws = current_round.as_ref().is_some_and(|round| round.draws);
+        let scores = current_round
+            .as_ref()
+            .is_some_and(|round| round.matches.iter().any(|row| row.details));
+        let (rows, byes, entry) = match (entered, shown) {
+            (Some(Entered { found, report }), _) => (
+                found,
+                Vec::new(),
+                Some(TypedEntry {
+                    text: entry.to_owned(),
+                    report,
+                }),
+            ),
+            (None, Shown::Playable) => (playable, Vec::new(), None),
+            (None, Shown::Round(round)) => {
+                let round = if round == current {
+                    current_round
+                } else {
+                    self.round(round)
+                };
+                let (matches, byes) = round
+                    .map(|round| (round.matches, round.byes))
+                    .unwrap_or_default();
+                (matches, byes, None)
+            }
+        };
+        let open: Vec<_> = rows
+            .iter()
+            .filter(|row| row.result.is_none())
+            .map(|row| row.id)
+            .collect();
+        let next_open = |row: &MatchRow| {
+            let position = open.iter().position(|open| *open == row.id)?;
+            open[position + 1..]
+                .iter()
+                .chain(&open[..position])
+                .next()
+                .copied()
+        };
+        let with_round = shown == Shown::Playable || entry.is_some();
+        let with_stage = rows.iter().any(|row| row.stage.is_some());
+        let matches = rows
+            .into_iter()
+            .map(|row| ListedMatch {
+                next_open: next_open(&row),
+                row,
+            })
+            .collect();
+        Some(RoundsView {
+            rounds,
+            current,
+            shown,
+            previous,
+            next,
+            playable: playable_count,
+            draws,
+            scores,
+            finished,
+            entry,
+            matches,
+            byes,
+            with_round,
+            with_stage,
         })
     }
 

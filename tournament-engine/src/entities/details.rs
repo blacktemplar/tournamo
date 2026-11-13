@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Annotated, MatchResult, Team},
+    entities::{Annotated, MatchResult, Team},
     score::Score,
     type_map::TypeMap,
 };

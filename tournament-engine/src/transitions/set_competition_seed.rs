@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
-    entities::competition::{Competition, Seed},
+    entities::{Competition, Seed},
     transitions::ensure_not_started,
 };
 

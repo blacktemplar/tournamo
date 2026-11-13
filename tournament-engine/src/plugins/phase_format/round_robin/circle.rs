@@ -4,7 +4,7 @@ use itertools::Itertools;
 use vec1::vec1;
 
 use crate::{
-    entities::competition::{Bye, NewMatch, PhaseData, RankingId},
+    entities::{Bye, NewMatch, PhaseData, RankingId},
     plugins::phase_format::Schedule,
 };
 

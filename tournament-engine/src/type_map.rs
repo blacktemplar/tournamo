@@ -55,8 +55,8 @@ unsafe fn downcast_unchecked_mut<T: 'static>(value: &mut dyn Any) -> &mut T {
 /// A map of values keyed by their own Rust type, holding at most one value per type.
 ///
 /// A key is a [`TypeId`] rather than a name, so a lookup always gets back a value of the type it
-/// asked for. This carries the metrics of a [`Ranking`](crate::entities::competition::Ranking) and
-/// the consumer annotations of an [`Entrant`](crate::entities::competition::Entrant).
+/// asked for. This carries the metrics of a [`Ranking`](crate::entities::Ranking) and
+/// the consumer annotations of an [`Entrant`](crate::entities::Entrant).
 ///
 /// Serializes as a plain sequence of its values, in insertion order.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

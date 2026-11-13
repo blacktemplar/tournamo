@@ -4,7 +4,7 @@ use plugin_factory::Plugin;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, Match, PhaseData, RankingId},
     plugins::{
         Phrase,
         metrics_calculator::{Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric},
@@ -114,7 +114,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{MatchResult, Phase, PhaseBuilder},
+        entities::{MatchResult, Phase, PhaseBuilder},
         plugins::metrics_calculator::test_utils::{self, MatchSpec, match_id},
     };
 

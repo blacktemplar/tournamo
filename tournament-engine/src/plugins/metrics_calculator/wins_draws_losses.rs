@@ -2,7 +2,7 @@ use plugin_factory::Plugin;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId, ResultOfTeam},
+    entities::{Bye, Match, PhaseData, RankingId, ResultOfTeam},
     plugins::{
         Phrase,
         metrics_calculator::{
@@ -198,7 +198,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{MatchResult, Phase, PhaseBuilder},
+        entities::{MatchResult, Phase, PhaseBuilder},
         plugins::metrics_calculator::test_utils::{self, MatchSpec, match_id},
     };
 

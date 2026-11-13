@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::competition::{Bye, NewMatch, PhaseView},
+    entities::{Bye, NewMatch, PhaseView},
     plugins::{
         facts::EntrantsPerRanking,
         metrics_calculator::{
@@ -135,7 +135,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{Match, MatchResult, Phase, PhaseBuilder, PhaseData, RankingId},
+        entities::{Match, MatchResult, Phase, PhaseBuilder, PhaseData, RankingId},
         map::Map,
         plugins::metrics_calculator::wins_draws_losses::{
             WinsDrawsLosses, WinsDrawsLossesCalculator,

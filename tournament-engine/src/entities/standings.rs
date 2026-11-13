@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 
 use itertools::Itertools;
 
-use crate::entities::competition::Ranking;
+use crate::entities::Ranking;
 
 /// The standings of a phase: its rankings best first, each with its ranks. They borrow the phase,
 /// so it cannot change while they are read: standings are never stale.

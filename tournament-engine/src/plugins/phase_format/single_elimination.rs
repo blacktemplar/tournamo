@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, compatibility::Declaration, config::PluginConfig, r
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{PhaseData, PhaseView},
+    entities::{PhaseData, PhaseView},
     plugins::{
         facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
@@ -226,7 +226,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{Annotated, Match, MatchResult, Phase, PhaseBuilder, RankingId},
+        entities::{Annotated, Match, MatchResult, Phase, PhaseBuilder, RankingId},
         plugins::phase_format::{Advance, Seat},
     };
 

@@ -4,7 +4,7 @@ use dyn_clone::DynClone;
 use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
 use crate::{
-    entities::competition::{Bye, NewMatch, PhaseView},
+    entities::{Bye, NewMatch, PhaseView},
     plugins::{Phrase, facts::NoDraws},
     type_map::TypeMap,
 };
@@ -53,7 +53,7 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
     ///
     /// [`CalculatesMetric`]: crate::plugins::facts::CalculatesMetric
     /// [`RoundOfFirstLoss`]: super::metrics_calculator::round_of_first_loss::RoundOfFirstLoss
-    /// [`Annotated::with_annotation`]: crate::entities::competition::Annotated::with_annotation
+    /// [`Annotated::with_annotation`]: crate::entities::Annotated::with_annotation
     fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule;
 
     /// The fewest entrants this format schedules matches for, 2 unless it says otherwise; with
@@ -67,7 +67,7 @@ pub trait PhaseFormat: Plugin + DynClone + Any {
     /// or `None` if this format names no stages. Read from the annotations the format wrote on the
     /// match or the bye, see [`Annotated::annotations`].
     ///
-    /// [`Annotated::annotations`]: crate::entities::competition::Annotated::annotations
+    /// [`Annotated::annotations`]: crate::entities::Annotated::annotations
     fn stage(&self, annotations: &TypeMap) -> Option<Stage> {
         let _ = annotations;
         None
@@ -83,7 +83,7 @@ impl dyn PhaseFormat {
     /// A draw reported for a format that allows none is rejected, so
     /// [`PhaseFormat::create_new_matches`] never sees one.
     ///
-    /// [`MatchResult::Draw`]: crate::entities::competition::MatchResult::Draw
+    /// [`MatchResult::Draw`]: crate::entities::MatchResult::Draw
     pub fn allows_draws(&self) -> bool {
         !compatibility::provides_fact::<NoDraws>(self)
     }

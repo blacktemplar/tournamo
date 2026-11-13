@@ -273,7 +273,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{Bye, Competition, Match, PhaseData, RankingId},
+        entities::{Bye, Competition, Match, PhaseData, RankingId},
         plugins::{
             facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
             match_format::{BestOf, Scored, WinnerOnly},

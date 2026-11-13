@@ -3,7 +3,7 @@ use thiserror::Error;
 use undoable_state_machine::Transition;
 
 use crate::{
-    entities::competition::{Competition, EntrantId},
+    entities::{Competition, EntrantId},
     transitions::ensure_not_started,
 };
 

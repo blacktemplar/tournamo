@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Annotated, Bye, Match, MatchResult, PhaseData, RankingId, Team},
+    entities::{Annotated, Bye, Match, MatchResult, PhaseData, RankingId, Team},
     plugins::{
         Phrase,
         facts::MatchAnnotation,
@@ -145,7 +145,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{Phase, PhaseBuilder},
+        entities::{Phase, PhaseBuilder},
         plugins::metrics_calculator::test_utils::{self, AnnotatedMatchSpec, MatchSpec, match_id},
         type_map::TypeMap,
     };

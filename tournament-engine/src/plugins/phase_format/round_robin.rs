@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, config::PluginConfig, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::PhaseView,
+    entities::PhaseView,
     plugins::{
         metrics_calculator::{
             buchholz::{MoreSonnebornBerger, SonnebornBergerCalculator},
@@ -73,7 +73,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::entities::competition::{Bye, Match, PhaseBuilder, PhaseData};
+    use crate::entities::{Bye, Match, PhaseBuilder, PhaseData};
 
     /// A format asking for no numbers gets its matches numbered in the order it scheduled them.
     #[test]

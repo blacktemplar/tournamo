@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Cell, MetricColumn, OldMetrics, ToCell};
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, Match, PhaseData, RankingId},
     plugins::{
         facts::{CalculatesMetric, NoDraws},
         metrics_calculator::{Calculator, provides_metric, wins_draws_losses::WinsDrawsLosses},
@@ -165,7 +165,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::{MatchResult, Phase, PhaseBuilder},
+        entities::{MatchResult, Phase, PhaseBuilder},
         plugins::metrics_calculator::{
             test_utils::{self, MatchSpec, match_id},
             wins_draws_losses::WinsDrawsLossesCalculator,

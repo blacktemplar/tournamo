@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use vec1::Vec1;
 
 use crate::{
-    entities::competition::{
+    entities::{
         Annotated, Bye, Match, MatchId, MatchResult, NewMatch, Phase, PhaseBuilder, PhaseData,
         PhaseView, RankingId,
     },

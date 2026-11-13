@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::PhaseView,
+    entities::PhaseView,
     plugins::{
         metrics_calculator::{
             buchholz::{
@@ -102,7 +102,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::entities::competition::{Bye, Match, PhaseBuilder, PhaseData};
+    use crate::entities::{Bye, Match, PhaseBuilder, PhaseData};
 
     fn assert_every_pair_played_at_most_once(phase: &PhaseData) {
         assert!(phase.matches().values().all(|m| m.team_a().len() == 1));

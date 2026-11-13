@@ -6,7 +6,7 @@ use plugin_factory::{Plugin, axis, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{PhaseData, Ranking},
+    entities::{PhaseData, Ranking},
     plugins::facts::CalculatesMetric,
     type_map::TypeMapValue,
 };
@@ -235,7 +235,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::competition::EntrantId,
+        entities::EntrantId,
         plugins::metrics_calculator::points::{MorePoints, Points},
     };
 

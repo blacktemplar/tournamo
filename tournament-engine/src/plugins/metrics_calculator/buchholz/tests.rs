@@ -1,0 +1,852 @@
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
+use super::*;
+use crate::{
+    entities::{Phase, PhaseBuilder},
+    plugins::metrics_calculator::{
+        points::PointsCalculator,
+        test_utils::{self, MatchSpec, SCENARIO, match_id, play_scenario, scenario_matches},
+        wins_draws_losses::WinsDrawsLossesCalculator,
+    },
+};
+
+/// The scoring system of most association football leagues, used by every test here but
+/// [`the_neustadtl_scores_of_a_published_cross_table_are_reproduced`].
+const THREE_ONE: PointsCalculator = PointsCalculator::new(Score::new(3.0), Score::ONE);
+/// The scoring system of chess: a win is worth a point, a draw half of one.
+const ONE_HALF: PointsCalculator = PointsCalculator::new(Score::ONE, Score::new(0.5));
+/// The classic Sonneborn-Berger weights: a beaten opponent counts fully, an opponent played to
+/// a draw counts half.
+const FULL_HALF: SonnebornBergerCalculator =
+    SonnebornBergerCalculator::new(Score::ONE, Score::new(0.5));
+
+fn score(text: &str) -> Score {
+    text.parse().unwrap()
+}
+
+/// Builds a phase with `num_players` rankings and all matches of `matches` already scheduled,
+/// scoring finished matches with [`THREE_ONE`].
+///
+/// [`BuchholzCalculator`] derives its metric from [`Points`], so the phase has to update them
+/// first, and [`Points`] in turn derives from
+/// [`WinsDrawsLosses`](super::wins_draws_losses::WinsDrawsLosses). Those are the only metrics
+/// it declares, so the phase calculates nothing else.
+fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
+    test_utils::phase_with(
+        PhaseBuilder::new()
+            .add_players(num_players)
+            .add_metric(WinsDrawsLossesCalculator)
+            .add_metric(THREE_ONE)
+            .add_metric(BuchholzCalculator),
+        matches,
+    )
+}
+
+/// Like [`phase_with`], with the buchholz of buchholz calculated as well, which reads the
+/// [`Buchholz`] and therefore runs last.
+fn phase_with_buchholz_of_buchholz(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
+    test_utils::phase_with(
+        PhaseBuilder::new()
+            .add_players(num_players)
+            .add_metric(WinsDrawsLossesCalculator)
+            .add_metric(THREE_ONE)
+            .add_metric(BuchholzCalculator)
+            .add_metric(BuchholzOfBuchholzCalculator),
+        matches,
+    )
+}
+
+/// Like [`phase_with_points`], scoring finished matches with [`THREE_ONE`].
+fn phase_with_sonneborn_berger(
+    num_players: u32,
+    matches: Vec<MatchSpec>,
+    calculator: SonnebornBergerCalculator,
+) -> Phase {
+    phase_with_points(num_players, matches, THREE_ONE, calculator)
+}
+
+/// Builds a phase with `num_players` rankings and all matches of `matches` already scheduled,
+/// scoring finished matches with `points` and weighting them with `calculator`.
+///
+/// [`SonnebornBergerCalculator`] derives its metric from [`Points`], so the phase has to update
+/// them first, and [`Points`] in turn derives from
+/// [`WinsDrawsLosses`](super::wins_draws_losses::WinsDrawsLosses).
+fn phase_with_points(
+    num_players: u32,
+    matches: Vec<MatchSpec>,
+    points: PointsCalculator,
+    calculator: SonnebornBergerCalculator,
+) -> Phase {
+    test_utils::phase_with(
+        PhaseBuilder::new()
+            .add_players(num_players)
+            .add_metric(WinsDrawsLossesCalculator)
+            .add_metric(points)
+            .add_metric(calculator),
+        matches,
+    )
+}
+
+fn buchholz_of(phase: &Phase, ranking_index: usize) -> Buchholz {
+    test_utils::metric_of(phase, ranking_index)
+}
+
+fn buchholz_of_buchholz_of(phase: &Phase, ranking_index: usize) -> BuchholzOfBuchholz {
+    test_utils::metric_of(phase, ranking_index)
+}
+
+fn sonneborn_berger_of(phase: &Phase, ranking_index: usize) -> SonnebornBerger {
+    test_utils::metric_of(phase, ranking_index)
+}
+
+/// Plays [`SCENARIO`] in a phase calculating the buchholz, see [`play_scenario`]. Scored with
+/// [`THREE_ONE`], it leaves the players with the following points: `0`: 3, `1`: 3, `2`: 7,
+/// `3`: 1.
+fn scenario(report_order: impl Iterator<Item = usize>) -> Phase {
+    play_scenario(phase_with(4, scenario_matches()), report_order)
+}
+
+/// Plays [`SCENARIO`] in a phase calculating the buchholz of buchholz as well, see
+/// [`play_scenario`].
+fn scenario_with_buchholz_of_buchholz(report_order: impl Iterator<Item = usize>) -> Phase {
+    play_scenario(
+        phase_with_buchholz_of_buchholz(4, scenario_matches()),
+        report_order,
+    )
+}
+
+/// Plays [`SCENARIO`] in a phase calculating the Sonneborn-Berger with `calculator`, see
+/// [`play_scenario`].
+fn scenario_with_sonneborn_berger(
+    calculator: SonnebornBergerCalculator,
+    report_order: impl Iterator<Item = usize>,
+) -> Phase {
+    play_scenario(
+        phase_with_sonneborn_berger(4, scenario_matches(), calculator),
+        report_order,
+    )
+}
+
+#[test]
+fn initialize_metrics_starts_every_ranking_at_zero() {
+    let phase = phase_with(4, vec![]);
+
+    for ranking_index in 0..4 {
+        assert_eq!(buchholz_of(&phase, ranking_index), Buchholz(score("0")));
+    }
+}
+
+#[test]
+fn the_buchholz_of_a_ranking_is_the_sum_of_the_points_of_its_opponents() {
+    let phase = scenario(0..SCENARIO.len());
+
+    // opponents of `0` are `1` (3 points) and `2` (7 points)
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("10")));
+    // opponents of `1` are `0` (3), `3` (1) and `2` (7)
+    assert_eq!(buchholz_of(&phase, 1), Buchholz(score("11")));
+    // opponents of `2` are `3` (1), `0` (3) and `1` (3)
+    assert_eq!(buchholz_of(&phase, 2), Buchholz(score("7")));
+    // opponents of `3` are `2` (7) and `1` (3)
+    assert_eq!(buchholz_of(&phase, 3), Buchholz(score("10")));
+}
+
+#[test]
+fn the_order_in_which_results_are_reported_does_not_change_the_buchholz() {
+    let phase = scenario((0..SCENARIO.len()).rev());
+
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("10")));
+    assert_eq!(buchholz_of(&phase, 1), Buchholz(score("11")));
+    assert_eq!(buchholz_of(&phase, 2), Buchholz(score("7")));
+    assert_eq!(buchholz_of(&phase, 3), Buchholz(score("10")));
+}
+
+#[test]
+fn points_an_opponent_wins_later_are_added_retroactively() {
+    let mut phase = phase_with(3, vec![(1, vec![0], vec![1]), (2, vec![1], vec![2])]);
+
+    let first_match = match_id(&phase, 1, &[0], &[1]);
+    phase.report_match_result(first_match, MatchResult::AWins);
+    // `1` has no points yet, so beating it is worth nothing so far
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("0")));
+
+    let second_match = match_id(&phase, 2, &[1], &[2]);
+    phase.report_match_result(second_match, MatchResult::AWins);
+
+    // the three points `1` won in its second match count for `0` as well
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("3")));
+    assert_eq!(buchholz_of(&phase, 1), Buchholz(score("3")));
+    assert_eq!(buchholz_of(&phase, 2), Buchholz(score("3")));
+}
+
+#[test]
+fn only_opponents_of_reported_matches_count() {
+    let matches = vec![
+        (1, vec![0], vec![1]),
+        (1, vec![2], vec![3]),
+        (2, vec![0], vec![2]),
+    ];
+    let mut phase = phase_with(4, matches);
+
+    for (round, team_a, team_b) in [(1, [0], [1]), (1, [2], [3])] {
+        let match_id = match_id(&phase, round, &team_a, &team_b);
+        phase.report_match_result(match_id, MatchResult::AWins);
+    }
+
+    // the scheduled but unreported match of `0` against `2` contributes nothing, even though
+    // `2` won its first match
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("0")));
+    assert_eq!(buchholz_of(&phase, 1), Buchholz(score("3")));
+    assert_eq!(buchholz_of(&phase, 2), Buchholz(score("0")));
+    assert_eq!(buchholz_of(&phase, 3), Buchholz(score("3")));
+}
+
+#[test]
+fn every_ranking_of_a_team_counts_the_points_of_every_opponent_ranking() {
+    let matches = vec![(1, vec![0, 1], vec![2, 3]), (2, vec![0, 1], vec![2, 3])];
+    let mut phase = phase_with(4, matches);
+
+    for (round, result) in [(1, MatchResult::AWins), (2, MatchResult::Draw)] {
+        let match_id = match_id(&phase, round, &[0, 1], &[2, 3]);
+        phase.report_match_result(match_id, result);
+    }
+
+    // `2` and `3` end up with one point each, counted once for each of the two matches
+    for ranking_index in [0, 1] {
+        assert_eq!(buchholz_of(&phase, ranking_index), Buchholz(score("4")));
+    }
+    // `0` and `1` end up with four points each, again counted for both matches
+    for ranking_index in [2, 3] {
+        assert_eq!(buchholz_of(&phase, ranking_index), Buchholz(score("16")));
+    }
+}
+
+/// `2` has a bye in round 1 and `1` one in round 2, each worth as much as a win, so that the
+/// bye of `1` is scheduled only after `0` faced it.
+#[test]
+fn the_points_of_a_bye_count_for_the_opponents_of_its_ranking() {
+    let mut phase = test_utils::phase_with_byes(
+        PhaseBuilder::new()
+            .add_players(3)
+            .add_metric(WinsDrawsLossesCalculator)
+            .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
+            .add_metric(BuchholzCalculator),
+        vec![(1, vec![0], vec![1]), (2, vec![0], vec![2])],
+        vec![(1, 2), (2, 1)],
+    );
+
+    let first_match = match_id(&phase, 1, &[0], &[1]);
+    phase.report_match_result(first_match, MatchResult::AWins);
+    // the bye `1` got after its loss gave it three points, which count for `0` already
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("3")));
+    // a bye has no opponent whose points could count
+    assert_eq!(buchholz_of(&phase, 1), Buchholz(score("3")));
+
+    let second_match = match_id(&phase, 2, &[0], &[2]);
+    phase.report_match_result(second_match, MatchResult::Draw);
+
+    // `0` has 4 points, `1` 3 and `2` 4
+    assert_eq!(buchholz_of(&phase, 0), Buchholz(score("7")));
+    assert_eq!(buchholz_of(&phase, 1), Buchholz(score("4")));
+    assert_eq!(buchholz_of(&phase, 2), Buchholz(score("4")));
+}
+
+#[test]
+#[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+fn calculating_the_buchholz_without_the_points_metric_panics() {
+    let mut phase = test_utils::phase_with(
+        PhaseBuilder::new()
+            .add_players(2)
+            .add_metric(BuchholzCalculator),
+        vec![(1, vec![0], vec![1])],
+    );
+    let match_id = match_id(&phase, 1, &[0], &[1]);
+
+    phase.report_match_result(match_id, MatchResult::AWins);
+}
+
+#[test]
+fn a_higher_buchholz_is_better() {
+    let compare =
+        |first, second| MoreBuchholz.compare(&Buchholz(score(first)), &Buchholz(score(second)));
+    assert_eq!(compare("7", "3"), Comparison::Better);
+    assert_eq!(compare("3", "7"), Comparison::Worse);
+    assert_eq!(compare("0.5", "0"), Comparison::Better);
+    assert_eq!(compare("3", "3"), Comparison::Equal);
+}
+
+#[test]
+fn initialize_metrics_starts_every_buchholz_of_buchholz_at_zero() {
+    let phase = phase_with_buchholz_of_buchholz(4, vec![]);
+
+    for ranking_index in 0..4 {
+        assert_eq!(
+            buchholz_of_buchholz_of(&phase, ranking_index),
+            BuchholzOfBuchholz::default()
+        );
+    }
+}
+
+#[test]
+fn the_buchholz_of_buchholz_of_a_ranking_is_the_sum_of_the_buchholz_of_its_opponents() {
+    let phase = scenario_with_buchholz_of_buchholz(0..SCENARIO.len());
+
+    // the buchholz of the scenario are `0`: 10, `1`: 11, `2`: 7, `3`: 10
+
+    // opponents of `0` are `1` (11) and `2` (7)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 0),
+        BuchholzOfBuchholz(score("18"))
+    );
+    // opponents of `1` are `0` (10), `3` (10) and `2` (7)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 1),
+        BuchholzOfBuchholz(score("27"))
+    );
+    // opponents of `2` are `3` (10), `0` (10) and `1` (11)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 2),
+        BuchholzOfBuchholz(score("31"))
+    );
+    // opponents of `3` are `2` (7) and `1` (11)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 3),
+        BuchholzOfBuchholz(score("18"))
+    );
+}
+
+#[test]
+fn the_order_in_which_results_are_reported_does_not_change_the_buchholz_of_buchholz() {
+    let phase = scenario_with_buchholz_of_buchholz((0..SCENARIO.len()).rev());
+
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 0),
+        BuchholzOfBuchholz(score("18"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 1),
+        BuchholzOfBuchholz(score("27"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 2),
+        BuchholzOfBuchholz(score("31"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 3),
+        BuchholzOfBuchholz(score("18"))
+    );
+}
+
+#[test]
+fn buchholz_an_opponent_gains_later_is_added_retroactively() {
+    let mut phase =
+        phase_with_buchholz_of_buchholz(3, vec![(1, vec![0], vec![1]), (2, vec![1], vec![2])]);
+
+    let first_match = match_id(&phase, 1, &[0], &[1]);
+    phase.report_match_result(first_match, MatchResult::AWins);
+    // `1` lost against `0`, so its buchholz is already 3 and counts for `0`, whereas the
+    // buchholz of `0` itself is still 0, as `1` has no points
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 0),
+        BuchholzOfBuchholz(score("3"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 1),
+        BuchholzOfBuchholz(score("0"))
+    );
+
+    let second_match = match_id(&phase, 2, &[1], &[2]);
+    phase.report_match_result(second_match, MatchResult::AWins);
+
+    // every ranking now faced exactly one opponent with a buchholz of 3, except `1`, which
+    // faced two of them
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 0),
+        BuchholzOfBuchholz(score("3"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 1),
+        BuchholzOfBuchholz(score("6"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 2),
+        BuchholzOfBuchholz(score("3"))
+    );
+}
+
+#[test]
+fn a_match_changes_the_buchholz_of_buchholz_of_rankings_two_matches_away() {
+    let matches = vec![
+        (1, vec![0], vec![1]),
+        (2, vec![1], vec![2]),
+        (3, vec![2], vec![3]),
+    ];
+    let mut phase = phase_with_buchholz_of_buchholz(4, matches);
+
+    for (round, team_a, team_b) in [(1, [0], [1]), (2, [1], [2]), (3, [2], [3])] {
+        let match_id = match_id(&phase, round, &team_a, &team_b);
+        phase.report_match_result(match_id, MatchResult::AWins);
+    }
+
+    // the last match gave `2` its three points, which raised the buchholz of `1` from 3 to 6
+    // and with it the buchholz of buchholz of `0`, even though `0` never faced `2`
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 0),
+        BuchholzOfBuchholz(score("6"))
+    );
+    // opponents of `1` are `0` (buchholz 3) and `2` (buchholz 3)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 1),
+        BuchholzOfBuchholz(score("6"))
+    );
+    // opponents of `2` are `1` (buchholz 6) and `3` (buchholz 3)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 2),
+        BuchholzOfBuchholz(score("9"))
+    );
+    // the only opponent of `3` is `2` (buchholz 3)
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 3),
+        BuchholzOfBuchholz(score("3"))
+    );
+}
+
+#[test]
+fn only_opponents_of_reported_matches_count_for_the_buchholz_of_buchholz() {
+    let matches = vec![
+        (1, vec![0], vec![1]),
+        (1, vec![2], vec![3]),
+        (2, vec![0], vec![2]),
+    ];
+    let mut phase = phase_with_buchholz_of_buchholz(4, matches);
+
+    for (round, team_a, team_b) in [(1, [0], [1]), (1, [2], [3])] {
+        let match_id = match_id(&phase, round, &team_a, &team_b);
+        phase.report_match_result(match_id, MatchResult::AWins);
+    }
+
+    // the scheduled but unreported match of `0` against `2` contributes nothing, even though
+    // `2` has a buchholz of 3 by now
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 0),
+        BuchholzOfBuchholz(score("3"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 1),
+        BuchholzOfBuchholz(score("0"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 2),
+        BuchholzOfBuchholz(score("3"))
+    );
+    assert_eq!(
+        buchholz_of_buchholz_of(&phase, 3),
+        BuchholzOfBuchholz(score("0"))
+    );
+}
+
+#[test]
+fn every_ranking_of_a_team_counts_the_buchholz_of_every_opponent_ranking() {
+    let matches = vec![(1, vec![0, 1], vec![2, 3]), (2, vec![0, 1], vec![2, 3])];
+    let mut phase = phase_with_buchholz_of_buchholz(4, matches);
+
+    for (round, result) in [(1, MatchResult::AWins), (2, MatchResult::Draw)] {
+        let match_id = match_id(&phase, round, &[0, 1], &[2, 3]);
+        phase.report_match_result(match_id, result);
+    }
+
+    // `2` and `3` end up with a buchholz of 16 each, counted once for each of the two matches
+    for ranking_index in [0, 1] {
+        assert_eq!(
+            buchholz_of_buchholz_of(&phase, ranking_index),
+            BuchholzOfBuchholz(score("64"))
+        );
+    }
+    // `0` and `1` end up with a buchholz of 4 each, again counted for both matches
+    for ranking_index in [2, 3] {
+        assert_eq!(
+            buchholz_of_buchholz_of(&phase, ranking_index),
+            BuchholzOfBuchholz(score("16"))
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+fn calculating_the_buchholz_of_buchholz_without_the_buchholz_metric_panics() {
+    let mut phase = test_utils::phase_with(
+        PhaseBuilder::new()
+            .add_players(2)
+            .add_metric(BuchholzOfBuchholzCalculator),
+        vec![(1, vec![0], vec![1])],
+    );
+    let match_id = match_id(&phase, 1, &[0], &[1]);
+
+    phase.report_match_result(match_id, MatchResult::AWins);
+}
+
+#[test]
+fn a_higher_buchholz_of_buchholz_is_better() {
+    let compare = |first, second| {
+        MoreBuchholzOfBuchholz.compare(
+            &BuchholzOfBuchholz(score(first)),
+            &BuchholzOfBuchholz(score(second)),
+        )
+    };
+    assert_eq!(compare("7", "3"), Comparison::Better);
+    assert_eq!(compare("3", "7"), Comparison::Worse);
+    assert_eq!(compare("0.5", "0"), Comparison::Better);
+    assert_eq!(compare("3", "3"), Comparison::Equal);
+}
+
+#[test]
+fn initialize_metrics_starts_every_sonneborn_berger_at_zero() {
+    let phase = phase_with_sonneborn_berger(4, vec![], FULL_HALF);
+
+    for ranking_index in 0..4 {
+        assert_eq!(
+            sonneborn_berger_of(&phase, ranking_index),
+            SonnebornBerger(score("0"))
+        );
+    }
+}
+
+#[test]
+fn beaten_opponents_count_fully_and_opponents_of_a_draw_count_half() {
+    let phase = scenario_with_sonneborn_berger(FULL_HALF, 0..SCENARIO.len());
+
+    // `0` beat `1` (3 points) and lost against `2`
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("3")));
+    // `1` beat `3` (1 point) and lost against `0` and `2`
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("1")));
+    // `2` beat `0` (3) and `1` (3) and drew against `3` (1)
+    assert_eq!(
+        sonneborn_berger_of(&phase, 2),
+        SonnebornBerger(score("6.5"))
+    );
+    // `3` drew against `2` (7) and lost against `1`
+    assert_eq!(
+        sonneborn_berger_of(&phase, 3),
+        SonnebornBerger(score("3.5"))
+    );
+}
+
+#[test]
+fn the_order_in_which_results_are_reported_does_not_change_the_sonneborn_berger() {
+    let phase = scenario_with_sonneborn_berger(FULL_HALF, (0..SCENARIO.len()).rev());
+
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("3")));
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("1")));
+    assert_eq!(
+        sonneborn_berger_of(&phase, 2),
+        SonnebornBerger(score("6.5"))
+    );
+    assert_eq!(
+        sonneborn_berger_of(&phase, 3),
+        SonnebornBerger(score("3.5"))
+    );
+}
+
+#[test]
+fn points_a_beaten_opponent_wins_later_are_added_retroactively() {
+    let mut phase = phase_with_sonneborn_berger(
+        3,
+        vec![(1, vec![0], vec![1]), (2, vec![1], vec![2])],
+        FULL_HALF,
+    );
+
+    let first_match = match_id(&phase, 1, &[0], &[1]);
+    phase.report_match_result(first_match, MatchResult::AWins);
+    // `1` has no points yet, so beating it is worth nothing so far
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("0")));
+
+    let second_match = match_id(&phase, 2, &[1], &[2]);
+    phase.report_match_result(second_match, MatchResult::AWins);
+
+    // the three points `1` won in its second match count for `0` as well
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("3")));
+    // `1` beat `2`, which is still without points
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("0")));
+    assert_eq!(sonneborn_berger_of(&phase, 2), SonnebornBerger(score("0")));
+}
+
+#[test]
+fn points_an_opponent_of_a_draw_wins_later_are_added_retroactively_by_half() {
+    let mut phase = phase_with_sonneborn_berger(
+        3,
+        vec![(1, vec![0], vec![1]), (2, vec![1], vec![2])],
+        FULL_HALF,
+    );
+
+    let first_match = match_id(&phase, 1, &[0], &[1]);
+    phase.report_match_result(first_match, MatchResult::Draw);
+    // the draw gave `1` a single point, half of which counts for `0`
+    assert_eq!(
+        sonneborn_berger_of(&phase, 0),
+        SonnebornBerger(score("0.5"))
+    );
+
+    let second_match = match_id(&phase, 2, &[1], &[2]);
+    phase.report_match_result(second_match, MatchResult::AWins);
+
+    // `1` is now at four points, still counted half by `0`
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("2")));
+    // `1` drew against `0` (1 point) and beat `2` (no points)
+    assert_eq!(
+        sonneborn_berger_of(&phase, 1),
+        SonnebornBerger(score("0.5"))
+    );
+    assert_eq!(sonneborn_berger_of(&phase, 2), SonnebornBerger(score("0")));
+}
+
+#[test]
+fn the_points_of_an_opponent_that_won_are_never_counted() {
+    let matches = vec![
+        (1, vec![0], vec![1]),
+        (2, vec![0], vec![1]),
+        (3, vec![0], vec![1]),
+    ];
+    let mut phase = phase_with_sonneborn_berger(2, matches, FULL_HALF);
+
+    for (round, result) in [
+        (1, MatchResult::AWins),
+        (2, MatchResult::AWins),
+        (3, MatchResult::BWins),
+    ] {
+        let match_id = match_id(&phase, round, &[0], &[1]);
+        phase.report_match_result(match_id, result);
+    }
+
+    // `0` won twice against `1` (3 points), its loss adds nothing
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("6")));
+    // `1` won once against `0` (6 points), its two losses add nothing
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("6")));
+}
+
+#[test]
+fn the_weights_scale_the_points_of_the_opponents() {
+    let phase = scenario_with_sonneborn_berger(
+        SonnebornBergerCalculator::new(Score::new(2.0), Score::ONE),
+        0..SCENARIO.len(),
+    );
+
+    // `0` beat `1` (3 points)
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("6")));
+    // `1` beat `3` (1)
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("2")));
+    // `2` beat `0` (3) and `1` (3) and drew against `3` (1)
+    assert_eq!(sonneborn_berger_of(&phase, 2), SonnebornBerger(score("13")));
+    // `3` drew against `2` (7)
+    assert_eq!(sonneborn_berger_of(&phase, 3), SonnebornBerger(score("7")));
+}
+
+#[test]
+fn a_draw_weight_of_zero_counts_beaten_opponents_only() {
+    let phase = scenario_with_sonneborn_berger(
+        SonnebornBergerCalculator::new(Score::ONE, Score::ZERO),
+        0..SCENARIO.len(),
+    );
+
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("3")));
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("1")));
+    // the draw of `2` against `3` no longer contributes
+    assert_eq!(sonneborn_berger_of(&phase, 2), SonnebornBerger(score("6")));
+    // `3` only ever drew, so it stays at zero
+    assert_eq!(sonneborn_berger_of(&phase, 3), SonnebornBerger(score("0")));
+}
+
+#[test]
+fn only_opponents_of_reported_matches_count_for_the_sonneborn_berger() {
+    let matches = vec![
+        (1, vec![0], vec![1]),
+        (1, vec![2], vec![3]),
+        (2, vec![0], vec![2]),
+        (2, vec![1], vec![3]),
+    ];
+    let mut phase = phase_with_sonneborn_berger(4, matches, FULL_HALF);
+
+    for (round, team_a, team_b) in [(1, [0], [1]), (1, [2], [3]), (2, [1], [3])] {
+        let match_id = match_id(&phase, round, &team_a, &team_b);
+        phase.report_match_result(match_id, MatchResult::AWins);
+    }
+
+    // `0` beat `1`, which is at three points by now
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("3")));
+    // `1` beat `3`, which is without points
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("0")));
+    // the scheduled but unreported match of `0` against `2` contributes nothing, even though
+    // `2` won its first match and `0` has three points
+    assert_eq!(sonneborn_berger_of(&phase, 2), SonnebornBerger(score("0")));
+    assert_eq!(sonneborn_berger_of(&phase, 3), SonnebornBerger(score("0")));
+}
+
+#[test]
+fn every_ranking_of_a_team_counts_the_weighted_points_of_every_opponent_ranking() {
+    let matches = vec![(1, vec![0, 1], vec![2, 3]), (2, vec![0, 1], vec![2, 3])];
+    let mut phase = phase_with_sonneborn_berger(4, matches, FULL_HALF);
+
+    for (round, result) in [(1, MatchResult::AWins), (2, MatchResult::Draw)] {
+        let match_id = match_id(&phase, round, &[0, 1], &[2, 3]);
+        phase.report_match_result(match_id, result);
+    }
+
+    // `2` and `3` end up with one point each, counted fully for the won match and half for the
+    // drawn one
+    for ranking_index in [0, 1] {
+        assert_eq!(
+            sonneborn_berger_of(&phase, ranking_index),
+            SonnebornBerger(score("3"))
+        );
+    }
+    // `0` and `1` end up with four points each, of which only the drawn match counts, by half
+    for ranking_index in [2, 3] {
+        assert_eq!(
+            sonneborn_berger_of(&phase, ranking_index),
+            SonnebornBerger(score("4"))
+        );
+    }
+}
+
+/// The cross table of the 8th World Correspondence Chess Championship that the Wikipedia
+/// article on the Neustadtl score uses as its example, where row `i` lists the results of
+/// player `i` against every other player: `1` a win, `=` a draw, `0` a loss and `-` the
+/// player itself.
+const CROSS_TABLE: [&str; 15] = [
+    "-==1==11=1=1111", //  1 Sloth
+    "=-0=1=111=11111", //  2 Zagorovsky
+    "=1-=====11=1111", //  3 Kosenkov
+    "0==-=1=011=1=1=", //  4 Khasin
+    "=0==-====011=11", //  5 Kletsel
+    "===0=-==01==011", //  6 De Carbonnel
+    "00====-=10==11=", //  7 Arnlind
+    "00=1===-0=101=1", //  8 Dunhaupt
+    "=000=101-1====1", //  9 Maedler
+    "0=00101=0-11101", // 10 Estrin
+    "=0==0==0=0-01=1", // 11 Walther
+    "00000==1=01-==1", // 12 Boey
+    "000==100=00=-=1", // 13 Abramov
+    "0000000==1===-1", // 14 Siklos
+    "000=00=0000000-", // 15 Nun
+];
+
+/// The points and the Neustadtl scores that the article lists for [`CROSS_TABLE`], in the
+/// order of its rows.
+const PUBLISHED_SCORES: [(&str, &str); 15] = [
+    ("11", "69.5"),
+    ("11", "66.75"),
+    ("10.5", "67.5"),
+    ("8.5", "54.75"),
+    ("8", "47.75"),
+    ("7", "45.25"),
+    ("7", "42.5"),
+    ("7", "41.5"),
+    ("7", "41.5"),
+    ("7", "40.5"),
+    ("5.5", "33.25"),
+    ("5.5", "28.5"),
+    ("4.5", "24.75"),
+    ("4.5", "22.75"),
+    ("1", "7.75"),
+];
+
+/// The Neustadtl score of chess is the Sonneborn-Berger of [`FULL_HALF`] over the points of
+/// [`ONE_HALF`], so a full round robin has to reproduce the published scores exactly.
+#[test]
+fn the_neustadtl_scores_of_a_published_cross_table_are_reproduced() {
+    let players = CROSS_TABLE.len();
+    // the circle method for an odd number of players: player `a` meets player `b` in round
+    // `a + b` modulo the number of players, which pairs every two players exactly once and
+    // gives the player with `2 * a == a + b` a bye in that round
+    let round = |a: usize, b: usize| ((a + b) % players) as u32 + 1;
+    let matches = (0..players)
+        .flat_map(|a| (a + 1..players).map(move |b| (round(a, b), vec![a], vec![b])))
+        .collect();
+    let mut phase = phase_with_points(players as u32, matches, ONE_HALF, FULL_HALF);
+
+    for (a, row) in CROSS_TABLE.iter().enumerate() {
+        for (b, result) in row.chars().enumerate().skip(a + 1) {
+            let mirrored = CROSS_TABLE[b].as_bytes()[a] as char;
+            let (result, expected_mirrored) = match result {
+                '1' => (MatchResult::AWins, '0'),
+                '=' => (MatchResult::Draw, '='),
+                '0' => (MatchResult::BWins, '1'),
+                other => panic!("unexpected result {other} of player {a} against player {b}"),
+            };
+            assert_eq!(
+                mirrored, expected_mirrored,
+                "the two halves of the cross table disagree about player {a} against player {b}"
+            );
+            let match_id = match_id(&phase, round(a, b), &[a], &[b]);
+            phase.report_match_result(match_id, result);
+        }
+    }
+
+    for (index, (points, neustadtl)) in PUBLISHED_SCORES.into_iter().enumerate() {
+        assert_eq!(
+            test_utils::metric_of::<Points>(&phase, index),
+            Points(score(points)),
+            "player {index} ended up with the wrong number of points"
+        );
+        assert_eq!(
+            sonneborn_berger_of(&phase, index),
+            SonnebornBerger(score(neustadtl)),
+            "player {index} ended up with the wrong Neustadtl score"
+        );
+    }
+}
+
+/// `2` has a bye in round 1 and `1` one in round 2, each worth as much as a win, so that the
+/// bye of `1` is scheduled only after `0` beat it.
+#[test]
+fn the_points_of_a_bye_count_for_the_opponents_that_beat_its_ranking() {
+    let mut phase = test_utils::phase_with_byes(
+        PhaseBuilder::new()
+            .add_players(3)
+            .add_metric(WinsDrawsLossesCalculator)
+            .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
+            .add_metric(FULL_HALF),
+        vec![(1, vec![0], vec![1]), (2, vec![0], vec![2])],
+        vec![(1, 2), (2, 1)],
+    );
+
+    let first_match = match_id(&phase, 1, &[0], &[1]);
+    phase.report_match_result(first_match, MatchResult::AWins);
+    // the bye `1` got after its loss gave it three points, which count for `0` already
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("3")));
+
+    let second_match = match_id(&phase, 2, &[0], &[2]);
+    phase.report_match_result(second_match, MatchResult::Draw);
+
+    // `0` beat `1` (3 points) and drew against `2` (4 points)
+    assert_eq!(sonneborn_berger_of(&phase, 0), SonnebornBerger(score("5")));
+    // `1` lost its only match, and a bye has no opponent whose points could count
+    assert_eq!(sonneborn_berger_of(&phase, 1), SonnebornBerger(score("0")));
+    // `2` drew against `0` (4 points)
+    assert_eq!(sonneborn_berger_of(&phase, 2), SonnebornBerger(score("2")));
+}
+
+#[test]
+#[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
+fn calculating_the_sonneborn_berger_without_the_points_metric_panics() {
+    let mut phase = test_utils::phase_with(
+        PhaseBuilder::new().add_players(2).add_metric(FULL_HALF),
+        vec![(1, vec![0], vec![1])],
+    );
+    let match_id = match_id(&phase, 1, &[0], &[1]);
+
+    phase.report_match_result(match_id, MatchResult::AWins);
+}
+
+#[test]
+fn a_higher_sonneborn_berger_is_better() {
+    let compare = |first, second| {
+        MoreSonnebornBerger.compare(
+            &SonnebornBerger(score(first)),
+            &SonnebornBerger(score(second)),
+        )
+    };
+    assert_eq!(compare("7", "3"), Comparison::Better);
+    assert_eq!(compare("3", "7"), Comparison::Worse);
+    assert_eq!(compare("0.5", "0"), Comparison::Better);
+    assert_eq!(compare("3", "3"), Comparison::Equal);
+}

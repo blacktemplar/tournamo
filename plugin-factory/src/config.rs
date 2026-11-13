@@ -13,7 +13,10 @@ use std::{
     str::FromStr,
 };
 
-use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
+    de::{DeserializeOwned, Error as _},
+};
 use serde_json::Map;
 pub use serde_json::Value;
 use thiserror::Error;
@@ -28,12 +31,23 @@ use crate::{
 ///
 /// As a [`Value`] it is the object `{"type": id, "value": config}`, which is how `typetag`
 /// writes a plugin tagged adjacently with `tag = "type", content = "value"`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PluginConfig {
-    #[serde(rename = "type")]
     plugin: String,
-    #[serde(rename = "value")]
     config: Config,
+}
+
+impl Serialize for PluginConfig {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Value::from(self.clone()).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PluginConfig {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::from_answer(&Value::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("expected a plugin answer"))
+    }
 }
 
 impl PluginConfig {
@@ -110,24 +124,72 @@ impl PluginConfig {
     /// assert_eq!(PluginConfig::from_answer(&Value::from(3)), None);
     /// ```
     pub fn from_answer(answer: &Value) -> Option<Self> {
-        Self::deserialize(answer).ok()
+        PluginAnswer::read(answer).map(PluginAnswer::to_config)
     }
 }
 
 impl From<PluginConfig> for Value {
     fn from(answer: PluginConfig) -> Self {
         let PluginConfig { plugin, config } = answer;
-        plugin_answer(plugin, config.into())
+        PluginAnswer::write(plugin, config.into())
     }
 }
 
-/// The answer naming the plugin with the id `plugin` and holding `config`, as [`PluginConfig`]
-/// writes it.
-pub(crate) fn plugin_answer(plugin: String, config: Value) -> Value {
-    Value::Object(Map::from_iter([
-        ("type".to_owned(), Value::String(plugin)),
-        ("value".to_owned(), config),
-    ]))
+/// A plugin as an answer, read where it is: the object `{"type": id, "value": config}`, with a
+/// config of `null` or left out answering nothing. The one place that knows this layout, which
+/// is `typetag`'s for an axis, see [`axis`](crate::axis).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PluginAnswer<'a> {
+    id: &'a str,
+    config: Option<&'a Map<String, Value>>,
+}
+
+impl<'a> PluginAnswer<'a> {
+    /// The key of the plugin's id.
+    pub(crate) const TAG: &'static str = "type";
+    /// The key of the plugin's config.
+    pub(crate) const CONTENT: &'static str = "value";
+
+    /// `answer` as a plugin answer, or [`None`] if it is none.
+    pub(crate) fn read(answer: &'a Value) -> Option<Self> {
+        let config = match answer.get(Self::CONTENT) {
+            None | Some(Value::Null) => None,
+            Some(Value::Object(config)) => Some(config),
+            Some(_) => return None,
+        };
+        Some(Self {
+            id: answer.get(Self::TAG)?.as_str()?,
+            config,
+        })
+    }
+
+    /// The answer naming the plugin with the id `plugin` and holding `config`.
+    pub(crate) fn write(plugin: String, config: Value) -> Value {
+        Value::Object(Map::from_iter([
+            (Self::TAG.to_owned(), Value::String(plugin)),
+            (Self::CONTENT.to_owned(), config),
+        ]))
+    }
+
+    /// The config of the plugin answer `answer`, or [`None`] if it is none.
+    pub(crate) fn config_mut(answer: &mut Value) -> Option<&mut Value> {
+        answer.get_mut(Self::CONTENT)
+    }
+
+    /// The id of the plugin, see [`PluginType::ID`].
+    pub(crate) fn id(self) -> &'a str {
+        self.id
+    }
+
+    /// The answer to the plugin's field `field`, or [`None`] if it is unanswered.
+    pub(crate) fn answer(self, field: &str) -> Option<&'a Value> {
+        self.config?.get(field)
+    }
+
+    /// The answer as a [`PluginConfig`] of its own.
+    pub(crate) fn to_config(self) -> PluginConfig {
+        PluginConfig::configured(self.id, Config(self.config.cloned().unwrap_or_default()))
+    }
 }
 
 /// The answers one plugin is configured with, by the name of the field each answers.
@@ -219,8 +281,7 @@ impl Config {
         };
         rest.iter()
             .try_fold(self.0.get(name)?, |answer, segment| match segment {
-                // the config of a plugin is its answer's "value"
-                Segment::Field(name) => answer.get("value")?.get(name),
+                Segment::Field(name) => PluginAnswer::read(answer)?.answer(name),
                 Segment::Index(index) => answer.get(index),
             })
     }
@@ -232,7 +293,7 @@ impl Config {
         };
         rest.iter()
             .try_fold(self.0.get_mut(name)?, |answer, segment| match segment {
-                Segment::Field(name) => answer.get_mut("value")?.get_mut(name),
+                Segment::Field(name) => PluginAnswer::config_mut(answer)?.get_mut(name),
                 Segment::Index(index) => answer.get_mut(index),
             })
     }
@@ -365,7 +426,7 @@ impl Path {
         use serde_path_to_error::Segment as Deserialized;
 
         // a config holds answers, a list holds answers, and a plugin answer holds its config under
-        // "value"; its "type" is left out like anything not addressable as a field
+        // its content key; its tag is left out like anything not addressable as a field
         let mut path = self;
         let mut in_config = is_config;
         for segment in deserialized.iter() {
@@ -374,7 +435,7 @@ impl Path {
                     path = path.field(key.as_str());
                     in_config = false;
                 }
-                Deserialized::Map { key } if key == "value" => in_config = true,
+                Deserialized::Map { key } if key == PluginAnswer::CONTENT => in_config = true,
                 Deserialized::Seq { index } if !in_config => path = path.index(*index),
                 _ => break,
             }

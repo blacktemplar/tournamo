@@ -34,7 +34,7 @@ use crate::{
     Plugin,
     catalog::{AnyAxis, PluginEntry},
     compatibility::{self, Declaration, Declared, Incompatibility, OpenFacts, RequiredFact},
-    config::{self, Config, ConfigError, Path, PluginConfig, Segment, Value},
+    config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Segment, Value},
     schema::{Configurable, Field, FieldKind, Schema},
 };
 
@@ -838,14 +838,13 @@ fn edit(answers: &mut Config, path: &Path, answer: Option<Value>) {
         .expect("a located path is not the root");
     match last {
         Segment::Field(name) => {
-            // the answers of a plugin are its answer's "value", which checking an answer writes
-            // as an object
+            // checking an answer writes the config of a plugin as an object
             let config = if parent.is_empty() {
                 &mut answers.0
             } else {
                 answers
                     .get_at_mut(parent)
-                    .and_then(|plugin| plugin.get_mut("value"))
+                    .and_then(PluginAnswer::config_mut)
                     .and_then(Value::as_object_mut)
                     .expect("a located field is in the config of a plugin")
             };

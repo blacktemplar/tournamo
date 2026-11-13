@@ -28,7 +28,8 @@ pub fn expand(arguments: TokenStream, input: ItemTrait) -> Result<TokenStream> {
     }
     let axis = &input.ident;
     // the registry is a type of the crate declaring the axis, since inventory only collects those;
-    // it is named only through `Register`, so it is declared where nothing else can see it
+    // it is named only through `Register`, so it is declared where nothing else can see it. The tag
+    // and content keys are those of `plugin_factory::config::PluginAnswer`, which a test checks
     Ok(quote! {
         #[::typetag::serde(tag = "type", content = "value")]
         #input

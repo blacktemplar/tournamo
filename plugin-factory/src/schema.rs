@@ -25,7 +25,7 @@ use crate::{
     Plugin,
     catalog::{AnyAxis, Axis},
     compatibility::{self, Fact, Incompatibility},
-    config::{self, Config, ConfigError, Path, PluginConfig, Value, names},
+    config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Value, names},
 };
 
 /// Something configured by answering the fields of its [`Schema`]: a plugin, or the composite a
@@ -819,9 +819,10 @@ impl FieldKind {
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 // a plugin is the same plugin whatever it is configured with
-                if let Some(position) =
-                    first_repeated(&walked, |a, b| a.get("type") == b.get("type"))
-                {
+                if let Some(position) = first_repeated(&walked, |a, b| {
+                    PluginAnswer::read(a).map(PluginAnswer::id)
+                        == PluginAnswer::read(b).map(PluginAnswer::id)
+                }) {
                     return Err(ConfigError::Duplicate {
                         path: at.clone().index(position),
                     });

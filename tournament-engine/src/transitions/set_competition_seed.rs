@@ -23,8 +23,7 @@ impl Transition<Competition> for SetCompetitionSeed {
         Ok(())
     }
 
-    fn apply(&self, state: &mut Competition) -> Result<(), TransitionError> {
+    fn apply(&self, state: &mut Competition) {
         state.set_seed(self.seed);
-        Ok(())
     }
 }

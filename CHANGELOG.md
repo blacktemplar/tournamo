@@ -27,6 +27,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   its log; a file of an older format is converted when read, by
   `tournament_app::file::File::read` (`file::upgrade_competition` for the
   competition alone).
+- Library users: undoable-state-machine 0.3. `StateMachine::apply_new` and
+  `SessionHistory::apply_new` replace
+  `CompetitionStateMachineExt::apply_transition` and `apply_in`; they take a
+  `CompetitionTransition`, so a transition goes in with `.into()`.
+  `Transition::apply` returns nothing.
 - Library users: `Phase::plugins` replaces `Phase::metrics_calculators` and
   `Phase::slice_rankers`, and a `HierarchicalRanker` borrows its slice
   rankers.

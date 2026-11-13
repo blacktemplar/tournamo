@@ -44,11 +44,7 @@ impl Transition<Competition> for RemoveEntrant {
         }
     }
 
-    fn apply(
-        &self,
-        competition: &mut Competition,
-    ) -> Result<(), undoable_state_machine::TransitionError> {
+    fn apply(&self, competition: &mut Competition) {
         competition.remove_entrant(&self.entrant_id);
-        Ok(())
     }
 }

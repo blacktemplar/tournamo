@@ -3,10 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, EnteredValue,
-    Entrant, EntrantId, FieldKey, Match, MatchId, MatchResult, Part, PhaseData, PhaseId,
-    PhasePluginsBuilder, ResultReason, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap,
-    TypeMapValue,
+    AddEntrant, AddPhase, CompetitionStateMachine, EnteredValue, Entrant, EntrantId, FieldKey,
+    Match, MatchId, MatchResult, Part, PhaseData, PhaseId, PhasePluginsBuilder, ResultReason, Seed,
+    SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue,
     plugin_factory::{Plugin, compatibility::Declaration, register},
     plugins::{
         Phrase,
@@ -101,13 +100,13 @@ pub fn phase_id() -> PhaseId {
 pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
     let mut machine = CompetitionStateMachine::default();
     machine
-        .apply_transition(SetCompetitionSeed::new(SEED))
+        .apply_new(SetCompetitionSeed::new(SEED).into())
         .unwrap();
     for entrant in 0..2 {
         machine
-            .apply_transition(AddEntrant::new(Entrant::new(EntrantId::new(
-                Uuid::from_u128(entrant),
-            ))))
+            .apply_new(
+                AddEntrant::new(Entrant::new(EntrantId::new(Uuid::from_u128(entrant)))).into(),
+            )
             .unwrap();
     }
     let plugins = PhasePluginsBuilder::new()
@@ -115,9 +114,9 @@ pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
         .build()
         .unwrap();
     machine
-        .apply_transition(AddPhase::new(phase_id(), plugins))
+        .apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
-    machine.apply_transition(StartCompetition).unwrap();
+    machine.apply_new(StartCompetition.into()).unwrap();
     let open = machine.current().phases()[&phase_id()]
         .data()
         .matches()

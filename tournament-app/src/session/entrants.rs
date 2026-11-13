@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use tournament_engine::{
-    AddEntrant, CompetitionStateMachineExt as _, Entrant, EntrantId, RemoveEntrant,
+    AddEntrant, Entrant, EntrantId, RemoveEntrant,
     transitions::{self as engine, CompetitionAlreadyStarted},
     uuid::Uuid,
 };
@@ -104,8 +104,8 @@ impl Session {
     // exactly when it accepts adding every subsequent one, so a refusal adds none of them.
     fn add_named_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
         let id = EntrantId::new(Uuid::new_v4());
-        self.machine
-            .apply_in(&mut self.history, AddEntrant::new(Entrant::new(id)))
+        self.history
+            .apply_new(&mut self.machine, AddEntrant::new(Entrant::new(id)).into())
             .map_err(|error| {
                 let error = rejection(error);
                 if error.is::<CompetitionAlreadyStarted>() {
@@ -160,8 +160,8 @@ impl Session {
     /// # Errors
     /// Returns an error if there is no such entrant, or the competition has started.
     pub fn remove_entrant(&mut self, id: EntrantId) -> Result<(), RemoveEntrantError> {
-        self.machine
-            .apply_in(&mut self.history, RemoveEntrant::new(id))
+        self.history
+            .apply_new(&mut self.machine, RemoveEntrant::new(id).into())
             .map_err(|error| {
                 let error = rejection(error);
                 if error.is::<CompetitionAlreadyStarted>() {

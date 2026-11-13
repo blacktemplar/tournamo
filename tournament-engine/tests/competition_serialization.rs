@@ -6,10 +6,9 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tournament_engine::{
-    AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt, Entrant, EntrantId, Match, MatchId, MatchResult, PhaseData,
-    PhaseId, PhasePluginsBuilder, Ranking, ReportMatchResult, Score, Seed, SetCompetitionSeed,
-    StartCompetition, TypeMapValue,
+    AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine, Entrant, EntrantId,
+    Match, MatchId, MatchResult, PhaseData, PhaseId, PhasePluginsBuilder, Ranking,
+    ReportMatchResult, Score, Seed, SetCompetitionSeed, StartCompetition, TypeMapValue,
     plugins::{
         metrics_calculator::{
             Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
@@ -57,20 +56,18 @@ fn apply_directly(competition: &mut Competition, transition: &impl Transition<Co
     transition
         .check_applicable(competition)
         .expect("transition must be applicable");
-    transition
-        .apply(competition)
-        .expect("applying the transition must not fail");
+    transition.apply(competition);
 }
 
 /// A competition with four entrants and a single elimination phase that calculates every metric
 /// this crate offers, not started yet.
 fn competition_with_a_phase() -> CompetitionStateMachine {
     let mut sm = CompetitionStateMachine::default();
-    sm.apply_transition(SetCompetitionSeed::new(SEED)).unwrap();
+    sm.apply_new(SetCompetitionSeed::new(SEED).into()).unwrap();
     for entrant in 0..4 {
         let id = EntrantId::new(Uuid::from_u128(entrant));
         let entrant = Entrant::new(id).with_annotation(Nickname(format!("entrant {entrant}")));
-        sm.apply_transition(AddEntrant::new(entrant)).unwrap();
+        sm.apply_new(AddEntrant::new(entrant).into()).unwrap();
     }
     let plugins = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
@@ -87,7 +84,7 @@ fn competition_with_a_phase() -> CompetitionStateMachine {
         .add_metric(BuchholzOfBuchholzCalculator)
         .build()
         .unwrap();
-    sm.apply_transition(AddPhase::new(phase_id(), plugins))
+    sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
     sm
 }
@@ -96,7 +93,7 @@ fn competition_with_a_phase() -> CompetitionStateMachine {
 /// first round exist.
 fn started_competition() -> CompetitionStateMachine {
     let mut sm = competition_with_a_phase();
-    sm.apply_transition(StartCompetition).unwrap();
+    sm.apply_new(StartCompetition.into()).unwrap();
     sm
 }
 
@@ -105,12 +102,8 @@ fn started_competition() -> CompetitionStateMachine {
 fn competition_in_the_final() -> CompetitionStateMachine {
     let mut sm = started_competition();
     for match_id in matches_of_round(sm.current().phases()[&phase_id()].data(), 1) {
-        sm.apply_transition(ReportMatchResult::new(
-            phase_id(),
-            match_id,
-            MatchResult::AWins,
-        ))
-        .unwrap();
+        sm.apply_new(ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into())
+            .unwrap();
     }
     sm
 }
@@ -352,19 +345,19 @@ fn a_played_competition_round_trips_through_a_binary_format() {
 #[test]
 fn a_competition_with_a_bye_round_trips() {
     let mut sm = CompetitionStateMachine::default();
-    sm.apply_transition(SetCompetitionSeed::new(SEED)).unwrap();
+    sm.apply_new(SetCompetitionSeed::new(SEED).into()).unwrap();
     for entrant in 0..3 {
         let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-        sm.apply_transition(AddEntrant::new(entrant)).unwrap();
+        sm.apply_new(AddEntrant::new(entrant).into()).unwrap();
     }
     let plugins = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
         .add_metric(WinsDrawsLossesCalculator)
         .build()
         .unwrap();
-    sm.apply_transition(AddPhase::new(phase_id(), plugins))
+    sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
-    sm.apply_transition(StartCompetition).unwrap();
+    sm.apply_new(StartCompetition.into()).unwrap();
     let bye = sm.current().phases()[&phase_id()]
         .data()
         .byes()
@@ -388,7 +381,7 @@ fn a_round_tripped_competition_can_be_started() {
 
     // the phase format, the ranker and all metrics calculators are only used from here on, so
     // this is what shows that they survived the round trip as their concrete types
-    sm.apply_transition(StartCompetition).unwrap();
+    sm.apply_new(StartCompetition.into()).unwrap();
     apply_directly(&mut competition, &StartCompetition);
 
     assert_eq!(competition.phases()[&phase_id()].data().matches().len(), 2);
@@ -402,12 +395,8 @@ fn a_round_tripped_competition_can_continue_the_tournament() {
     let final_match = matches_of_round(competition.phases()[&phase_id()].data(), 2)[0];
     let report = ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins);
 
-    sm.apply_transition(ReportMatchResult::new(
-        phase_id(),
-        final_match,
-        MatchResult::BWins,
-    ))
-    .unwrap();
+    sm.apply_new(ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins).into())
+        .unwrap();
     apply_directly(&mut competition, &report);
 
     let phase = competition.phases()[&phase_id()].data();

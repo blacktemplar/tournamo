@@ -19,7 +19,7 @@ use crate::{
     __private::Index,
     Plugin, PluginType,
     compatibility::{Declaration, OpenFacts, ProvidedFact, RequiredFact},
-    config::{self, Config, ConfigError, Path, PluginConfig, Value},
+    config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Value},
     schema::Schema,
 };
 
@@ -312,7 +312,7 @@ impl AnyAxis {
         let entry = self
             .entry(plugin.plugin())
             .ok_or_else(|| ConfigError::UnknownPlugin { path: at.clone() })?;
-        Ok(config::plugin_answer(
+        Ok(PluginAnswer::write(
             plugin.plugin().to_owned(),
             entry.walk(plugin.config(), at, complete)?,
         ))
@@ -739,6 +739,21 @@ mod tests {
             serde_json::to_value(built.unwrap()).unwrap(),
             serde_json::json!({"type": "handwritten", "value": null})
         );
+    }
+
+    // `axis` writes the layout into the `typetag` attribute as literals of its own
+    #[test]
+    fn a_plugin_is_saved_as_a_plugin_answer() {
+        let built = PluginConfig::of::<Handwritten>()
+            .build::<dyn Tested>()
+            .unwrap();
+        let saved = serde_json::to_value(built).unwrap();
+
+        assert_eq!(
+            PluginAnswer::read(&saved).map(PluginAnswer::id),
+            Some(Handwritten::ID)
+        );
+        assert!(saved.get(PluginAnswer::CONTENT).is_some());
     }
 
     #[test]

@@ -74,6 +74,16 @@ impl Competition {
         self.phases.get(phase_id)
     }
 
+    /// The phase of this competition, once it is added: a competition has a single phase, see
+    /// [`AddPhase`](crate::AddPhase).
+    pub fn only_phase(&self) -> Option<&Phase> {
+        self.phases.values().next()
+    }
+
+    fn only_phase_mut(&mut self) -> Option<&mut Phase> {
+        self.phases.values_mut().next()
+    }
+
     pub(crate) fn start(&mut self) {
         let mut ranking_entrants: Vec<_> = self.entrants().keys().map(|e| vec1![*e]).collect();
         // Note that keys() is not guaranteed to give a stable ordering. To make sure ordering is
@@ -81,11 +91,8 @@ impl Competition {
         ranking_entrants.sort_by_key(|e| e[0].uuid());
         ranking_entrants.shuffle(&mut self.seed.rng(Entropy::CompetitionStart));
         self.started = true;
-        let phase = self
-            .phases
-            .values_mut()
-            .next()
-            .expect("a started competition has its single phase");
-        phase.start(ranking_entrants);
+        self.only_phase_mut()
+            .expect("a started competition has its single phase")
+            .start(ranking_entrants);
     }
 }

@@ -223,7 +223,7 @@ impl Session {
 
     /// The phase of the competition, whether started or not.
     fn phase(&self) -> Option<&Phase> {
-        self.competition().phases().values().next()
+        self.competition().only_phase()
     }
 
     fn started_phase(&self) -> Option<&Phase> {

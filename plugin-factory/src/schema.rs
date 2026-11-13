@@ -296,27 +296,6 @@ impl<A: Axis + ?Sized> DependencyOrderedSet<A> {
         Ok(Self::arranged(plugins, order))
     }
 
-    /// Adds `plugin`, putting the set into dependency order again.
-    ///
-    /// # Errors
-    /// Returns what [`Self::new`] returns for the plugins of the set followed by `plugin`, and
-    /// leaves the set unchanged then.
-    pub fn insert(&mut self, plugin: Box<A>) -> Result<(), DependencyOrderedSetError> {
-        let mut plugins = std::mem::take(&mut self.0);
-        plugins.push(plugin);
-        match Self::order(&plugins) {
-            Ok(order) => {
-                *self = Self::arranged(plugins, order);
-                Ok(())
-            }
-            Err(error) => {
-                plugins.pop();
-                self.0 = plugins;
-                Err(error)
-            }
-        }
-    }
-
     /// The order `plugins` run in, as indices into it, see [`Self::new`].
     fn order(plugins: &[Box<A>]) -> Result<Vec<usize>, DependencyOrderedSetError> {
         if let Some(position) = first_repeated(plugins, |a, b| a.id() == b.id()) {

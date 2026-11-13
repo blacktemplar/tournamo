@@ -71,6 +71,18 @@ impl BestOf {
         }
     }
 
+    /// The level of the match, played in games.
+    fn match_level(&self) -> Level {
+        Level {
+            parts: Parts::Same {
+                level: Box::new(self.game()),
+                min: self.needed(),
+                max: self.games,
+            },
+            ..Level::new(Phrase::new("match", "match"))
+        }
+    }
+
     /// The games a side needs to win the match: more than half of them.
     const fn needed(&self) -> u32 {
         self.games / 2 + 1
@@ -94,14 +106,7 @@ impl BestOf {
 impl MatchFormat for BestOf {
     fn template(&self, _: &PhaseData, _: &Match) -> Template {
         Template {
-            root: Level {
-                parts: Parts::Same {
-                    level: Box::new(self.game()),
-                    min: self.needed(),
-                    max: self.games,
-                },
-                ..Level::new(Phrase::new("match", "match"))
-            },
+            root: self.match_level(),
         }
     }
 
@@ -119,10 +124,10 @@ impl MatchFormat for BestOf {
         tallies
     }
 
-    /// A game by its score; the match for the side that won most games, once one has won more
-    /// than the other side can still win or every game is decided.
+    /// A game, the level without parts, by its score; the match for the side that won most
+    /// games, once one has won more than the other side can still win or every game is decided.
     fn suggest(&self, level: &Level, part: &Part) -> Option<MatchResult> {
-        if level.name.key() == "game" {
+        if matches!(level.parts, Parts::None) {
             return suggest_by_score(part);
         }
         let won = Self::won(part.parts());

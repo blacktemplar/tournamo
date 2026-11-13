@@ -450,10 +450,9 @@ fn every_bracket_size_plays_out_to_one_champion() {
 #[test]
 fn the_bracket_tells_where_the_losers_drop_and_when_the_reset_is_played() {
     let phase = bracket(DoubleElimination::new().with_grand_final_reset(), 4);
-    let format: &dyn std::any::Any = phase.format();
-    let pairings = format
-        .downcast_ref::<DoubleElimination>()
-        .and_then(DoubleElimination::bracket)
+    let pairings = phase
+        .format()
+        .bracket()
         .expect("a started double elimination has a bracket")
         .pairings();
     let stages = pairings

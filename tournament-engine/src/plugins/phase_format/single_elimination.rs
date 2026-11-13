@@ -76,12 +76,6 @@ impl SingleElimination {
         self
     }
 
-    /// The bracket of the knockout, with the stage of each pairing as a [`KnockoutRound`]
-    /// annotation; `None` before the phase starts.
-    pub fn bracket(&self) -> Option<&Bracket> {
-        self.bracket.as_ref()
-    }
-
     fn declare_static(declaration: &mut Declaration) {
         // every match has to produce a winner who moves on to the next round
         declaration
@@ -188,6 +182,11 @@ impl PhaseFormat for SingleElimination {
 
     fn stage(&self, annotations: &TypeMap) -> Option<Stage> {
         annotations.get::<KnockoutRound>().copied().map(Stage::from)
+    }
+
+    /// The bracket, with the stage of each pairing as a [`KnockoutRound`] annotation.
+    fn bracket(&self) -> Option<&Bracket> {
+        self.bracket.as_ref()
     }
 }
 

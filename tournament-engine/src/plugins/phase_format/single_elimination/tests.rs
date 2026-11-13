@@ -269,12 +269,11 @@ fn two_byes_meeting_next_play_right_away() {
     assert_eq!(pairings(&phase, 2), [(2, 3)]);
 }
 
-/// The bracket of `phase`, read the way a consumer does, by downcasting its format.
+/// The bracket of `phase`.
 fn bracket_of(phase: &Phase) -> &Bracket {
-    let format: &dyn std::any::Any = phase.format();
-    format
-        .downcast_ref::<SingleElimination>()
-        .and_then(SingleElimination::bracket)
+    phase
+        .format()
+        .bracket()
         .expect("a started knockout has a bracket")
 }
 

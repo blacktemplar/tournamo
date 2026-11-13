@@ -94,12 +94,6 @@ impl DoubleElimination {
         self
     }
 
-    /// The bracket of the double elimination, with the stage of each pairing as a
-    /// [`DoubleEliminationRound`] annotation; `None` before the phase starts.
-    pub fn bracket(&self) -> Option<&Bracket> {
-        self.bracket.as_ref()
-    }
-
     fn declare_static(declaration: &mut Declaration) {
         // every match has to produce a winner who moves on
         declaration
@@ -205,6 +199,11 @@ impl PhaseFormat for DoubleElimination {
             .get::<DoubleEliminationRound>()
             .copied()
             .map(Stage::from)
+    }
+
+    /// The bracket, with the stage of each pairing as a [`DoubleEliminationRound`] annotation.
+    fn bracket(&self) -> Option<&Bracket> {
+        self.bracket.as_ref()
     }
 }
 

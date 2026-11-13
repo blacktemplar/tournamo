@@ -1,15 +1,12 @@
-//! The bracket of a knockout phase, which only the knockout formats of the engine have.
+//! The bracket of a phase whose format plays one, e.g. a knockout.
 
-use std::{
-    any::Any,
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use tournament_engine::{
     Phase, TypeMap,
     plugins::phase_format::{
-        Advance, BracketPairing as Pairing, BracketSide, DoubleElimination, DoubleEliminationRound,
-        KnockoutRound, PairingId, Seat, SingleElimination,
+        Advance, BracketPairing as Pairing, BracketSide, DoubleEliminationRound, KnockoutRound,
+        PairingId, Seat,
     },
 };
 
@@ -36,18 +33,11 @@ struct Place {
 }
 
 impl Session {
-    /// The bracket of the phase, if its format plays one, i.e. a single or a double elimination;
+    /// The bracket of the phase, if its format plays one, e.g. a single or a double elimination;
     /// `None` before the start.
     pub fn bracket(&self) -> Option<Bracket> {
         let phase = self.started_phase()?;
-        let format: &dyn Any = phase.format();
-        let (bracket, part): (_, fn(&TypeMap) -> Section) =
-            if let Some(format) = format.downcast_ref::<SingleElimination>() {
-                (format.bracket()?, single_elimination_part)
-            } else {
-                let format = format.downcast_ref::<DoubleElimination>()?;
-                (format.bracket()?, double_elimination_part)
-            };
+        let bracket = phase.format().bracket()?;
         let pairings = bracket.pairings();
         let by_id: HashMap<PairingId, &Pairing> = pairings
             .iter()
@@ -59,7 +49,7 @@ impl Session {
         let mut layout: Vec<(Section, Vec<(_, Vec<PairingId>)>)> = Vec::new();
         let mut places = HashMap::new();
         for pairing in &pairings {
-            let part = part(pairing.annotations);
+            let part = section(pairing.annotations);
             let section = layout
                 .iter()
                 .position(|(other, _)| *other == part)
@@ -304,26 +294,26 @@ impl Session {
     }
 }
 
-/// Whether the format of `phase` plays a bracket, see [`Session::bracket`].
+/// Whether the format of `phase`, which has started, plays a bracket, see [`Session::bracket`].
 pub(super) fn plays_bracket(phase: &Phase) -> bool {
-    let format: &dyn Any = phase.format();
-    format.is::<SingleElimination>() || format.is::<DoubleElimination>()
+    phase.format().bracket().is_some()
 }
 
-/// The match for third place is drawn below the final.
-fn single_elimination_part(annotations: &TypeMap) -> Section {
+/// The section a pairing annotated with `annotations` is drawn in, by the stages of the knockouts
+/// of the engine: the match for third place below the final, a double elimination by the bracket
+/// of its stage. Any other is a knockout.
+fn section(annotations: &TypeMap) -> Section {
+    if let Some(round) = annotations.get::<DoubleEliminationRound>() {
+        return Section::Part(match round {
+            DoubleEliminationRound::Winners { .. } => BracketPart::Winners,
+            DoubleEliminationRound::Losers { .. } => BracketPart::Losers,
+            DoubleEliminationRound::GrandFinal | DoubleEliminationRound::GrandFinalReset => {
+                BracketPart::GrandFinal
+            }
+        });
+    }
     match annotations.get::<KnockoutRound>() {
         Some(KnockoutRound::ThirdPlace) => Section::Below,
-        _ => Section::Part(BracketPart::Knockout),
+        Some(KnockoutRound::RoundOf(_)) | None => Section::Part(BracketPart::Knockout),
     }
-}
-
-fn double_elimination_part(annotations: &TypeMap) -> Section {
-    Section::Part(match annotations.get::<DoubleEliminationRound>() {
-        Some(DoubleEliminationRound::Losers { .. }) => BracketPart::Losers,
-        Some(DoubleEliminationRound::GrandFinal | DoubleEliminationRound::GrandFinalReset) => {
-            BracketPart::GrandFinal
-        }
-        _ => BracketPart::Winners,
-    })
 }

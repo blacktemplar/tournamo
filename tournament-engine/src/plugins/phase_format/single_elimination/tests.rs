@@ -4,7 +4,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Annotated, Match, MatchResult, Phase, PhaseBuilder, RankingId},
+    entities::{Annotated, Match, MatchResult, Phase, PhaseBuilder, RankingId, details::Sides},
     plugins::phase_format::{Advance, Seat},
 };
 
@@ -291,18 +291,21 @@ fn the_bracket_tells_who_meets_whom_before_it_is_scheduled() {
     assert_eq!(the_final.r#match, None);
     assert_eq!(
         the_final.sides.map(|side| side.from),
-        [
+        Sides::new(
             Some(Advance::WinnerOf(semifinal_a.id)),
             Some(Advance::WinnerOf(semifinal_b.id))
-        ]
+        )
     );
-    assert_eq!(the_final.sides.map(|side| side.seat), [None, None]);
+    assert_eq!(
+        the_final.sides.map(|side| side.seat),
+        Sides::new(None, None)
+    );
     assert_eq!(
         third_place.sides.map(|side| side.from),
-        [
+        Sides::new(
             Some(Advance::LoserOf(semifinal_b.id)),
             Some(Advance::LoserOf(semifinal_a.id))
-        ]
+        )
     );
     assert_eq!(
         the_final.annotations.get::<KnockoutRound>(),
@@ -312,7 +315,7 @@ fn the_bracket_tells_who_meets_whom_before_it_is_scheduled() {
     let winner = phase.data().matches()[&semifinal_a.r#match.unwrap()].team_a()[0];
     play_round(&mut phase, 1);
     let the_final = bracket_of(&phase).pairings()[2];
-    assert_eq!(the_final.sides[0].seat, Some(Seat::Ranking(winner)));
+    assert_eq!(the_final.sides.a.seat, Some(Seat::Ranking(winner)));
     assert!(the_final.r#match.is_some());
     assert_eq!(
         the_final.annotations.get::<KnockoutRound>(),

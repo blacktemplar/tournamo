@@ -5,7 +5,9 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Annotated, Match, MatchId, MatchResult, Phase, PhaseBuilder, RankingId},
+    entities::{
+        Annotated, Match, MatchId, MatchResult, Phase, PhaseBuilder, RankingId, details::Sides,
+    },
     plugins::{
         metrics_calculator::{
             round_of_elimination::{
@@ -477,22 +479,22 @@ fn the_bracket_tells_where_the_losers_drop_and_when_the_reset_is_played() {
     let id = |index: usize| pairings[index].id;
     assert_eq!(
         from(3),
-        [Some(Advance::LoserOf(id(0))), Some(Advance::LoserOf(id(1)))]
+        Sides::new(Some(Advance::LoserOf(id(0))), Some(Advance::LoserOf(id(1))))
     );
     assert_eq!(
         from(4),
-        [
+        Sides::new(
             Some(Advance::WinnerOf(id(3))),
             Some(Advance::LoserOf(id(2)))
-        ]
+        )
     );
     assert_eq!(pairings[5].advances_only_if_won_by, Some(Team::B));
     assert_eq!(
         from(6),
-        [
+        Sides::new(
             Some(Advance::LoserOf(id(5))),
             Some(Advance::WinnerOf(id(5)))
-        ]
+        )
     );
 }
 

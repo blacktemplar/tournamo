@@ -211,7 +211,7 @@ mod tests {
     use crate::{
         entities::{
             competition::{MatchResult, Phase, PhaseBuilder},
-            details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
+            details::{EnteredValue, FieldKey, Part, Sides},
         },
         plugins::{
             match_format::BestOf,
@@ -255,8 +255,9 @@ mod tests {
         } else {
             MatchResult::BWins
         };
-        let games = games.iter().map(|&a_wins| game(a_wins)).collect();
-        phase.report_match(id, Decision::new(result), Values::new(), games);
+        let contest = (games.iter().map(|&a_wins| game(a_wins)))
+            .fold(Part::new().with_decision(result), Part::with_part);
+        phase.report_match(id, contest);
     }
 
     fn balance(won: u32, lost: u32) -> GamesBalance {

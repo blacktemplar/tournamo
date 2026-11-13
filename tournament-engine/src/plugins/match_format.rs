@@ -17,7 +17,7 @@ pub use tallies::{GamesWon, PointsScored};
 use crate::{
     entities::{
         competition::{Match, MatchResult, PhaseData},
-        details::{Decision, EnteredValue, FieldKey, Part, ResultReason, Values},
+        details::{Decision, EnteredValue, FieldKey, Part, ResultReason},
     },
     plugins::Phrase,
     type_map::TypeMap,
@@ -84,24 +84,19 @@ impl Level {
         self.fields.iter().find(|field| field.key == *key)
     }
 
-    /// Checks that what was entered for a part at this level fits it: its values are of fields of
-    /// this level and of their kinds, its reason is one of this level, and each of its parts fits
-    /// the level of its place.
+    /// Checks that what was entered for `part`, a part at this level, fits it: its values are of
+    /// fields of this level and of their kinds, its reason is one of this level, and each of its
+    /// parts fits the level of its place.
     ///
     /// # Errors
     /// Returns what does not fit first.
-    pub fn check(
-        &self,
-        decision: Option<&Decision>,
-        values: &Values,
-        parts: &[Part],
-    ) -> Result<(), Misfit> {
-        if let Some(reason) = decision.and_then(Decision::reason)
+    pub fn check(&self, part: &Part) -> Result<(), Misfit> {
+        if let Some(reason) = part.decision().and_then(Decision::reason)
             && !self.reasons.iter().any(|spec| spec.reason == *reason)
         {
             return Err(Misfit::UnknownReason(reason.clone()));
         }
-        for (key, sides) in values {
+        for (key, sides) in part.values().iter() {
             let field = self
                 .field(key)
                 .ok_or_else(|| Misfit::UnknownField(key.clone()))?;
@@ -113,10 +108,10 @@ impl Level {
                 return Err(Misfit::WrongKind(key.clone()));
             }
         }
-        for (index, part) in parts.iter().enumerate() {
+        for (index, part) in part.parts().iter().enumerate() {
             self.level_of_part(index)
                 .ok_or(Misfit::TooManyParts)?
-                .check(part.decision(), part.values(), part.parts())?;
+                .check(part)?;
         }
         Ok(())
     }

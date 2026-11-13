@@ -213,7 +213,7 @@ mod tests {
     use crate::{
         entities::{
             competition::{MatchResult, Phase, PhaseBuilder},
-            details::{Decision, EnteredValue, FieldKey, Sides},
+            details::{EnteredValue, FieldKey, Part, Sides},
         },
         plugins::{
             match_format::Scored,
@@ -236,19 +236,19 @@ mod tests {
 
     fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], score: (u16, u16)) {
         let id = match_id(phase, round, a, b);
-        let values = vec![(
-            FieldKey::new("score"),
-            Sides::new(
-                Some(EnteredValue::Count(score.0)),
-                Some(EnteredValue::Count(score.1)),
-            ),
-        )];
+        let values = Sides::new(
+            Some(EnteredValue::Count(score.0)),
+            Some(EnteredValue::Count(score.1)),
+        );
         let result = if score.0 > score.1 {
             MatchResult::AWins
         } else {
             MatchResult::BWins
         };
-        phase.report_match(id, Decision::new(result), values, Vec::new());
+        let contest = Part::new()
+            .with_decision(result)
+            .with_value(FieldKey::new("score"), values);
+        phase.report_match(id, contest);
     }
 
     fn balance(scored: u32, conceded: u32) -> PointsBalance {

@@ -4,20 +4,21 @@ use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
     entities::{
-        competition::{Competition, MatchId, MatchResult, PhaseId},
+        competition::{Annotated, Competition, MatchId, MatchResult, PhaseId},
         details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
     },
     plugins::match_format::Misfit,
+    type_map::TypeMap,
 };
 
 /// Reports how a match was decided, which finishes it, with the values and parts entered for it.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
+#[serde(from = "Saved")]
 pub struct ReportMatchResult {
     phase_id: PhaseId,
     match_id: MatchId,
-    decision: Decision,
-    values: Values,
-    parts: Vec<Part>,
+    /// What was entered for the match; always decided.
+    contest: Part,
 }
 
 impl ReportMatchResult {
@@ -26,26 +27,33 @@ impl ReportMatchResult {
         Self {
             phase_id,
             match_id,
-            decision: decision.into(),
-            values: Values::new(),
-            parts: Vec::new(),
+            contest: Part::new().with_decision(decision),
         }
+    }
+
+    /// Reports what was entered for the match `match_id` of the phase `phase_id` as its
+    /// `contest`: its decision, values and parts (its annotations are not reported). `None` if
+    /// it has no decision.
+    pub fn of(phase_id: PhaseId, match_id: MatchId, contest: Part) -> Option<Self> {
+        contest.decision()?;
+        Some(Self {
+            phase_id,
+            match_id,
+            contest: contest.with_annotations(TypeMap::new()),
+        })
     }
 
     /// This report with `values` for `field` of the match, replacing any it had.
     #[must_use]
     pub fn with_value(mut self, field: FieldKey, values: Sides<Option<EnteredValue>>) -> Self {
-        match self.values.iter_mut().find(|(key, _)| *key == field) {
-            Some((_, old)) => *old = values,
-            None => self.values.push((field, values)),
-        }
+        self.contest = self.contest.with_value(field, values);
         self
     }
 
     /// This report with `part` as the last part of the match.
     #[must_use]
     pub fn with_part(mut self, part: Part) -> Self {
-        self.parts.push(part);
+        self.contest = self.contest.with_part(part);
         self
     }
 
@@ -58,19 +66,63 @@ impl ReportMatchResult {
     }
 
     pub fn match_result(&self) -> MatchResult {
-        self.decision.result()
+        self.decision().result()
     }
 
     pub fn decision(&self) -> &Decision {
-        &self.decision
+        self.contest.decision().expect("a report is decided")
     }
 
-    pub fn values(&self) -> &Values {
-        &self.values
+    /// What is reported for the match: its decision, values and parts.
+    pub fn contest(&self) -> &Part {
+        &self.contest
     }
+}
 
-    pub fn parts(&self) -> &[Part] {
-        &self.parts
+// The saved form keeps the fields a report had before it held its contest as a `Part`.
+impl Serialize for ReportMatchResult {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        #[serde(rename = "ReportMatchResult")]
+        struct Saving<'a> {
+            phase_id: PhaseId,
+            match_id: MatchId,
+            decision: &'a Decision,
+            values: &'a Values,
+            parts: &'a [Part],
+        }
+        Saving {
+            phase_id: self.phase_id,
+            match_id: self.match_id,
+            decision: self.decision(),
+            values: self.contest.values(),
+            parts: self.contest.parts(),
+        }
+        .serialize(serializer)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "ReportMatchResult")]
+struct Saved {
+    phase_id: PhaseId,
+    match_id: MatchId,
+    decision: Decision,
+    values: Values,
+    parts: Vec<Part>,
+}
+
+impl From<Saved> for ReportMatchResult {
+    fn from(saved: Saved) -> Self {
+        let mut contest = Part::new().with_decision(saved.decision);
+        for (field, values) in saved.values.iter() {
+            contest = contest.with_value(field.clone(), *values);
+        }
+        Self {
+            phase_id: saved.phase_id,
+            match_id: saved.match_id,
+            contest: saved.parts.into_iter().fold(contest, Part::with_part),
+        }
     }
 }
 
@@ -102,14 +154,14 @@ impl Transition<Competition> for ReportMatchResult {
         if r#match.is_finished() {
             return Err(Box::new(ReportMatchResultError::MatchAlreadyFinished));
         }
-        if self.decision.result() == MatchResult::Draw && !phase.format().allows_draws() {
+        if self.match_result() == MatchResult::Draw && !phase.format().allows_draws() {
             return Err(Box::new(ReportMatchResultError::DrawNotAllowed));
         }
         phase
             .match_format()
             .template(phase.data(), r#match)
             .root
-            .check(Some(&self.decision), &self.values, &self.parts)
+            .check(&self.contest)
             .map_err(ReportMatchResultError::from)?;
         Ok(())
     }
@@ -119,12 +171,7 @@ impl Transition<Competition> for ReportMatchResult {
         competition: &mut Competition,
     ) -> Result<(), undoable_state_machine::TransitionError> {
         let phase = competition.phases_mut().get_mut(&self.phase_id).unwrap();
-        phase.report_match(
-            self.match_id,
-            self.decision.clone(),
-            self.values.clone(),
-            self.parts.clone(),
-        );
+        phase.report_match(self.match_id, self.contest.clone());
         Ok(())
     }
 }

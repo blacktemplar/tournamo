@@ -72,7 +72,7 @@ fn a_score_suggests_its_winner_and_is_reported_with_it() {
     let contest = the_match(session.competition()).contest();
     assert_eq!(contest.decision(), Some(&Decision::new(MatchResult::BWins)));
     assert_eq!(
-        contest.value("score"),
+        contest.value(&SCORE),
         Some(&Sides::new(count(17), count(21)))
     );
 }
@@ -315,7 +315,7 @@ fn a_value_cleared_on_both_sides_is_no_longer_entered() {
     form.set_value(&[], &SCORE, Team::A, None);
     form.set_value(&[], &SCORE, Team::B, None);
 
-    assert_eq!(form.report().1, Values::new());
+    assert!(form.report().values().is_empty());
 }
 
 #[test]
@@ -822,7 +822,11 @@ fn scores_entered_replace_everything_entered() {
     ]));
 
     assert!(!form.is_chosen());
-    assert_eq!(form.report().2.len(), 2, "the games of the scores alone");
+    assert_eq!(
+        form.report().parts().len(),
+        2,
+        "the games of the scores alone"
+    );
 }
 
 /// Scores typed in are the whole result, also of a match whose form starts out at the result it

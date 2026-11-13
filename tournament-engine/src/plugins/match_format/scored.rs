@@ -57,7 +57,7 @@ impl Scored {
 /// The score of each side of `part`, a side without one entered scoring none, or `None` if there is
 /// no score of either side.
 pub(crate) fn score(part: &Part) -> Option<Sides<u32>> {
-    let sides = part.value(SCORE.key())?;
+    let sides = part.value(&SCORE)?;
     let count = |value: Option<EnteredValue>| match value {
         Some(EnteredValue::Count(count)) => u32::from(count),
         _ => 0,
@@ -76,7 +76,7 @@ pub(crate) fn result_of<T: Ord>(score: Sides<T>) -> MatchResult {
 
 /// The result the score of `part` suggests, once each side has one.
 pub(crate) fn suggest_by_score(part: &Part) -> Option<MatchResult> {
-    match *part.value(SCORE.key())? {
+    match *part.value(&SCORE)? {
         Sides {
             a: Some(EnteredValue::Count(a)),
             b: Some(EnteredValue::Count(b)),
@@ -126,7 +126,7 @@ mod tests {
     use crate::{
         entities::{
             competition::{Phase, PhaseBuilder},
-            details::{Decision, Values},
+            details::Decision,
         },
         plugins::metrics_calculator::test_utils::{match_id, phase_with},
     };
@@ -147,17 +147,17 @@ mod tests {
         )
     }
 
-    fn reported(values: Values) -> PointsScored {
+    fn reported(part: Part) -> PointsScored {
         let mut phase = phase(Scored::default());
         let id = match_id(&phase, 1, &[0], &[1]);
-        phase.report_match(id, Decision::new(MatchResult::BWins), values, Vec::new());
+        phase.report_match(id, part.with_decision(Decision::new(MatchResult::BWins)));
         *phase.data().matches()[&id].tally::<PointsScored>().unwrap()
     }
 
     #[test]
     fn a_match_tallies_its_score() {
         assert_eq!(
-            reported(vec![(SCORE, count(17, 21))]),
+            reported(scored(count(17, 21))),
             PointsScored(Sides::new(17, 21))
         );
     }
@@ -165,13 +165,10 @@ mod tests {
     #[test]
     fn a_side_without_a_score_scored_none() {
         assert_eq!(
-            reported(vec![(
-                SCORE,
-                Sides::new(None, Some(EnteredValue::Count(3)))
-            )]),
+            reported(scored(Sides::new(None, Some(EnteredValue::Count(3))))),
             PointsScored(Sides::new(0, 3))
         );
-        assert_eq!(reported(Vec::new()), PointsScored(Sides::new(0, 0)));
+        assert_eq!(reported(Part::new()), PointsScored(Sides::new(0, 0)));
     }
 
     #[test]

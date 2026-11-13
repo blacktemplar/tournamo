@@ -137,14 +137,6 @@ pub struct PhasePlugins {
 }
 
 impl PhasePlugins {
-    /// The name of the field taking the format.
-    pub const FORMAT: &str = "format";
-    /// The name of the field taking the match format.
-    pub const MATCH_FORMAT: &str = "match_format";
-    /// The name of the field taking the ranking criteria.
-    pub const RANKING: &str = "ranking";
-    /// The name of the field taking the metrics calculators.
-    pub const METRICS: &str = "metrics";
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
     pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];

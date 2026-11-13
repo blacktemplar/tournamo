@@ -74,7 +74,10 @@ pub fn derive_plugin(input: TokenStream) -> TokenStream {
 }
 
 /// Implements `Configurable` for a composite, a struct that is not a plugin: its schema and the
-/// plugins it holds from its fields, as `Plugin` derives them for a plugin.
+/// plugins it holds from its fields, as `Plugin` derives them for a plugin. Also gives it, with
+/// its visibility, a constant per field of the schema, named after the field in upper case and
+/// holding the name the field is answered by, e.g. `Phase::FORMAT` for a field `format`, which
+/// fails to compile if the composite has an item of that name already.
 ///
 /// # Attributes
 ///

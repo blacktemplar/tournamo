@@ -593,6 +593,15 @@ fn a_composite_reads_its_schema_from_its_fields_as_a_plugin_does() {
     assert_eq!(field("limit").default_value(), None);
 }
 
+/// Each constant is named after the field and holds the name the field is answered by.
+#[test]
+fn a_composite_names_its_fields_by_constants() {
+    assert_eq!(
+        [Composite::MAIN, Composite::OTHERS, Composite::CAP],
+        ["main", "others", "limit"]
+    );
+}
+
 #[test]
 fn an_option_without_a_default_is_not_read_missing_as_nothing() {
     let composite = |limit: Option<Value>| {

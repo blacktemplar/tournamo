@@ -12,7 +12,7 @@ use vec1::{Vec1, vec1};
 use crate::plugins::PhasePluginsBuilder;
 use crate::{
     entities::{
-        details::{Decision, Part, Values},
+        details::{Decision, Part},
         standings::{Standing, Standings},
     },
     map::{IdAble, IdMap, Map},
@@ -537,20 +537,19 @@ impl Phase {
     /// Reports `decision` alone for the match `match_id`, see [`Phase::report_match`].
     #[cfg(test)]
     pub(crate) fn report_match_result(&mut self, match_id: MatchId, decision: impl Into<Decision>) {
-        self.report_match(match_id, decision.into(), Values::new(), Vec::new());
+        self.report_match(match_id, Part::new().with_decision(decision));
     }
 
-    /// Decides the match `match_id` by `decision`, with the `values` and `parts` entered for it.
-    pub(crate) fn report_match(
-        &mut self,
-        match_id: MatchId,
-        decision: Decision,
-        values: Values,
-        parts: Vec<Part>,
-    ) {
+    /// Finishes the match `match_id` with what was `entered` for it: its decision, values and
+    /// parts, as its [contest](Match::contest).
+    ///
+    /// # Panics
+    /// Panics if the match is finished, or `entered` has no decision.
+    pub(crate) fn report_match(&mut self, match_id: MatchId, entered: Part) {
+        assert!(entered.decision().is_some(), "a report decides its match");
         let r#match = self.data.matches.get_mut(&match_id).unwrap();
         assert!(!r#match.is_finished());
-        r#match.contest.decide(decision, values, parts);
+        r#match.contest.enter(entered);
         let tallies = self
             .match_format
             .tally(&self.data, &self.data.matches[&match_id]);

@@ -150,7 +150,7 @@ mod tests {
     use crate::{
         entities::{
             competition::{Phase, PhaseBuilder},
-            details::{Decision, EnteredValue, Values},
+            details::EnteredValue,
         },
         plugins::{
             match_format::scored::SCORE,
@@ -166,6 +166,13 @@ mod tests {
             .with_value(SCORE, score)
     }
 
+    /// A match decided by `result`, with `games` entered.
+    fn decided(result: MatchResult, games: Vec<Part>) -> Part {
+        games
+            .into_iter()
+            .fold(Part::new().with_decision(result), Part::with_part)
+    }
+
     fn phase(format: BestOf) -> Phase {
         phase_with(
             PhaseBuilder::new().match_format(format).add_players(2),
@@ -179,7 +186,7 @@ mod tests {
         let id = match_id(&phase, 1, &[0], &[1]);
         let games = vec![game(21, 17), game(19, 21), game(21, 15)];
 
-        phase.report_match(id, Decision::new(MatchResult::AWins), Values::new(), games);
+        phase.report_match(id, decided(MatchResult::AWins, games));
 
         let r#match = &phase.data().matches()[&id];
         assert_eq!(
@@ -198,9 +205,10 @@ mod tests {
         let id = match_id(&phase, 1, &[0], &[1]);
         phase.report_match(
             id,
-            Decision::new(MatchResult::AWins),
-            Values::new(),
-            vec![game(u16::MAX, 1), game(u16::MAX, 2)],
+            decided(
+                MatchResult::AWins,
+                vec![game(u16::MAX, 1), game(u16::MAX, 2)],
+            ),
         );
         assert_eq!(
             phase.data().matches()[&id].tally::<PointsScored>(),
@@ -217,9 +225,7 @@ mod tests {
         let id = match_id(&phase, 1, &[0], &[1]);
         phase.report_match(
             id,
-            Decision::new(MatchResult::AWins),
-            Values::new(),
-            vec![game(u16::MAX, 1); games as usize],
+            decided(MatchResult::AWins, vec![game(u16::MAX, 1); games as usize]),
         );
         assert_eq!(
             phase.data().matches()[&id].tally::<PointsScored>(),

@@ -255,7 +255,7 @@ fn a_reported_contest_survives_a_round_trip() {
         Some(&ResultReason::new("retired"))
     );
     assert_eq!(
-        contest.value("games"),
+        contest.value(&FieldKey::new("games")),
         Some(&Sides::new(Some(EnteredValue::Count(1)), None))
     );
     assert_eq!(contest.parts().len(), 2);

@@ -91,10 +91,7 @@ impl Part {
     /// This part with `values` for `field`, replacing any it had.
     #[must_use]
     pub fn with_value(mut self, field: FieldKey, values: Sides<Option<EnteredValue>>) -> Self {
-        match self.values.iter_mut().find(|(key, _)| *key == field) {
-            Some((_, old)) => *old = values,
-            None => self.values.push((field, values)),
-        }
+        self.values.set(field, values);
         self
     }
 
@@ -116,11 +113,8 @@ impl Part {
     }
 
     /// The values entered for `field`, if any.
-    pub fn value(&self, field: &str) -> Option<&Sides<Option<EnteredValue>>> {
-        self.values
-            .iter()
-            .find(|(key, _)| key.key() == field)
-            .map(|(_, values)| values)
+    pub fn value(&self, field: &FieldKey) -> Option<&Sides<Option<EnteredValue>>> {
+        self.values.get(field)
     }
 
     /// The parts of this part, in playing order.
@@ -128,10 +122,13 @@ impl Part {
         &self.parts
     }
 
-    pub(crate) fn decide(&mut self, decision: Decision, values: Values, parts: Vec<Part>) {
-        self.decision = Some(decision);
-        self.values = values;
-        self.parts = parts;
+    /// Takes the decision, values and parts of `entered`, keeping the annotations of this part.
+    pub(crate) fn enter(&mut self, entered: Part) {
+        let annotations = std::mem::take(&mut self.annotations);
+        *self = Self {
+            annotations,
+            ..entered
+        };
     }
 }
 
@@ -145,9 +142,67 @@ impl Annotated for Part {
     }
 }
 
-/// The values of a part, by field: for each side, `None` if it has none (an innings is one
-/// side's).
-pub type Values = Vec<(FieldKey, Sides<Option<EnteredValue>>)>;
+/// The values of a part, by field, at most one entry each, in the order the fields were first
+/// entered: for each side, `None` if it has none (an innings is one side's).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct Values(Vec<(FieldKey, Sides<Option<EnteredValue>>)>);
+
+impl Values {
+    /// No values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The values of `field`, if any.
+    pub fn get(&self, field: &FieldKey) -> Option<&Sides<Option<EnteredValue>>> {
+        self.0
+            .iter()
+            .find(|(key, _)| key == field)
+            .map(|(_, values)| values)
+    }
+
+    /// Sets the values of `field` to `values`, in the place of any it had, else after the others.
+    pub fn set(&mut self, field: FieldKey, values: Sides<Option<EnteredValue>>) {
+        match self.0.iter_mut().find(|(key, _)| *key == field) {
+            Some((_, old)) => *old = values,
+            None => self.0.push((field, values)),
+        }
+    }
+
+    /// Removes the values of `field`, if it has any.
+    pub fn remove(&mut self, field: &FieldKey) {
+        self.0.retain(|(key, _)| key != field);
+    }
+
+    /// Each field with its values, in order.
+    pub fn iter(&self) -> impl Iterator<Item = (&FieldKey, &Sides<Option<EnteredValue>>)> {
+        self.0.iter().map(|(key, values)| (key, values))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl FromIterator<(FieldKey, Sides<Option<EnteredValue>>)> for Values {
+    /// The values of each field, the last ones of a field given more than once.
+    fn from_iter<I: IntoIterator<Item = (FieldKey, Sides<Option<EnteredValue>>)>>(iter: I) -> Self {
+        let mut values = Self::new();
+        for (field, sides) in iter {
+            values.set(field, sides);
+        }
+        values
+    }
+}
+
+impl<'de> Deserialize<'de> for Values {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Vec::deserialize(deserializer)
+            .map(Vec::into_iter)
+            .map(Self::from_iter)
+    }
+}
 
 /// The key of a field of a part, e.g. `points` or `yellow-cards`: declared by the match format.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -210,5 +265,30 @@ mod tests {
         for invalid in [r#"{"Count":65536}"#, r#"{"Count":4294967295}"#] {
             assert!(serde_json::from_str::<EnteredValue>(invalid).is_err());
         }
+    }
+
+    #[test]
+    fn values_keep_one_entry_per_field_in_place() {
+        let count = |n| Sides::new(Some(EnteredValue::Count(n)), None);
+        let (goals, cards) = (FieldKey::new("goals"), FieldKey::new("cards"));
+        let mut values = Values::new();
+        values.set(goals.clone(), count(1));
+        values.set(cards.clone(), count(2));
+        values.set(goals.clone(), count(3));
+
+        let fields = |values: &Values| {
+            values
+                .iter()
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(fields(&values), [goals.clone(), cards]);
+        assert_eq!(values.get(&goals), Some(&count(3)));
+
+        let saved =
+            r#"[["goals",{"a":{"Count":1},"b":null}],["goals",{"a":{"Count":3},"b":null}]]"#;
+        let loaded: Values = serde_json::from_str(saved).unwrap();
+        assert_eq!(loaded.get(&goals), Some(&count(3)));
+        assert_eq!(fields(&loaded), [goals]);
     }
 }

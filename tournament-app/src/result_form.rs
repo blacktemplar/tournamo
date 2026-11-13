@@ -302,20 +302,15 @@ impl ResultForm {
         entry
             .rejected
             .retain(|rejected| rejected.field != *field || rejected.team != team);
-        let index = match entry.values.iter().position(|(key, _)| key == field) {
-            Some(index) => index,
-            None => {
-                entry.values.push((field.clone(), Sides::new(None, None)));
-                entry.values.len() - 1
-            }
-        };
-        let sides = &mut entry.values[index].1;
+        let mut sides = entry.values.get(field).copied().unwrap_or_default();
         match team {
             Team::A => sides.a = value,
             Team::B => sides.b = value,
         }
         if sides.a.is_none() && sides.b.is_none() {
-            entry.values.remove(index);
+            entry.values.remove(field);
+        } else {
+            entry.values.set(field.clone(), sides);
         }
     }
 
@@ -373,11 +368,7 @@ impl ResultForm {
         let Some(entry) = self.root.get(path) else {
             return false;
         };
-        let values = entry
-            .values
-            .iter()
-            .find(|(key, _)| key == field)
-            .map_or(Sides::new(None, None), |(_, values)| *values);
+        let values = entry.values.get(field).copied().unwrap_or_default();
         let (entered, other) = (*values.of(team), *values.of(team.opponent()));
         let other_typed = entry
             .rejected
@@ -568,12 +559,11 @@ impl ResultForm {
         }
     }
 
-    /// The decision of the match and the values and parts entered for it, the parts after the
+    /// The match as entered, with its decision, if it says or suggests one, the parts after the
     /// last one with anything entered left out: what is reported.
-    pub(crate) fn report(&self) -> (Option<Decision>, Values, Vec<Part>) {
-        let (_, part) = self.part_view(&self.template.root, &self.root, Vec::new());
-        let decision = part.decision().cloned();
-        (decision, part.values().clone(), part.parts().to_vec())
+    pub(crate) fn report(&self) -> Part {
+        self.part_view(&self.template.root, &self.root, Vec::new())
+            .1
     }
 
     /// The view of the part `entry` makes up at `level`, at `path`, with that part.
@@ -602,7 +592,7 @@ impl ResultForm {
         let (mut views, mut children): (Vec<_>, Vec<_>) = (0..shown).map(&child_at).unzip();
         children.truncate(entered);
         let mut part = Part::new();
-        for (key, values) in &entry.values {
+        for (key, values) in entry.values.iter() {
             part = part.with_value(key.clone(), *values);
         }
         let mut warnings = Vec::new();
@@ -753,10 +743,7 @@ fn said_once<'a>(texts: impl IntoIterator<Item = &'a Text>) -> Vec<Text> {
 /// The view of `field`, with its values among `values` and what was typed for it and not taken
 /// among `rejected`, warning of a score unlike one the winner of the part usually has.
 fn field_view(field: &FieldSpec, values: &Values, rejected: &[Rejected]) -> FieldView {
-    let values = values
-        .iter()
-        .find(|(key, _)| *key == field.key)
-        .map_or(Sides::new(None, None), |(_, values)| *values);
+    let values = values.get(&field.key).copied().unwrap_or_default();
     let rejected_of = |team: Team| {
         rejected
             .iter()

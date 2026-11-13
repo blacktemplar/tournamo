@@ -566,5 +566,5 @@ fn score(level: &Level, part: &Part) -> Option<Sides<Option<EnteredValue>>> {
     level
         .fields
         .iter()
-        .find_map(|field| part.value(field.key.key()).copied())
+        .find_map(|field| part.value(&field.key).copied())
 }

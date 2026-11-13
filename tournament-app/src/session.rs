@@ -18,10 +18,10 @@ use plugin_factory::{
 };
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated as _, Bye, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt as _, CompetitionTransition, Decision, EnteredValue, Entrant,
-    EntrantId, Match, MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking,
-    RankingId, RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition,
-    Team, TypeMap, Values,
+    CompetitionStateMachineExt as _, CompetitionTransition, EnteredValue, Entrant, EntrantId,
+    Match, MatchId, MatchResult, Part, Phase, PhaseData, PhaseId, PhasePlugins, Ranking, RankingId,
+    RemoveEntrant, ReportMatchResult, Seed, SetCompetitionSeed, Sides, StartCompetition, Team,
+    TypeMap,
     plugins::{
         match_format::{Parts, Template},
         metrics_calculator::{Cell, MetricsCalculator},
@@ -1186,7 +1186,7 @@ impl Session {
     /// Returns an error if the competition has not started, has no such match, the match has a
     /// result already, or its format does not take the result.
     pub fn report(&mut self, id: MatchId, result: MatchResult) -> Result<Reported, ReportError> {
-        self.report_decision(id, Decision::new(result), Values::new(), Vec::new())
+        self.report_contest(id, Part::new().with_decision(result))
     }
 
     /// A form to enter the result of the match `id` into, see [`ResultForm`]. If this session took
@@ -1203,12 +1203,10 @@ impl Session {
         let format = phase.match_format();
         let template = format.template(phase.data(), r#match);
         // the match format may have changed since, e.g. with the phase edited
-        let reopened = self.reopened.get(&id).filter(|contest| {
-            template
-                .root
-                .check(contest.decision(), contest.values(), contest.parts())
-                .is_ok()
-        });
+        let reopened = self
+            .reopened
+            .get(&id)
+            .filter(|contest| template.root.check(contest).is_ok());
         let format = dyn_clone::clone_box(format);
         Ok(match reopened {
             Some(contest) => ResultForm::reported(id, format, template, contest),
@@ -1255,29 +1253,18 @@ impl Session {
         if form.has_rejected() {
             return Err(ReportError::NotTaken);
         }
-        let (decision, values, parts) = form.report();
-        let decision = decision.ok_or(ReportError::Undecided)?;
-        self.report_decision(form.match_id(), decision, values, parts)
+        self.report_contest(form.match_id(), form.report())
     }
 
-    fn report_decision(
-        &mut self,
-        id: MatchId,
-        decision: Decision,
-        values: Values,
-        parts: Vec<Part>,
-    ) -> Result<Reported, ReportError> {
+    /// Reports `contest` as what was entered for the match `id`, see [`Self::report_form`].
+    fn report_contest(&mut self, id: MatchId, contest: Part) -> Result<Reported, ReportError> {
         let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
         if !phase.data().matches().contains_key(&id) {
             return Err(ReportError::UnknownMatch);
         }
         let phase_id = phase.id();
         let matches_before = phase.data().matches().len();
-        let report = values.into_iter().fold(
-            ReportMatchResult::new(phase_id, id, decision),
-            |report, (key, sides)| report.with_value(key, sides),
-        );
-        let report = parts.into_iter().fold(report, ReportMatchResult::with_part);
+        let report = ReportMatchResult::of(phase_id, id, contest).ok_or(ReportError::Undecided)?;
         self.machine
             .apply_in(&mut self.history, report)
             .map_err(|error| {

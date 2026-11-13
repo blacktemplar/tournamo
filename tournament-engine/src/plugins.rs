@@ -50,11 +50,14 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "test-util")]
 pub use crate::plugins::builder::PhasePluginsBuilder;
 pub use crate::plugins::phrase::Phrase;
-use crate::plugins::{
-    match_format::MatchFormat,
-    metrics_calculator::MetricsCalculator,
-    phase_format::PhaseFormat,
-    ranker::{HierarchicalRanker, SliceRanker},
+use crate::{
+    entities::{PhaseData, PhaseView},
+    plugins::{
+        match_format::MatchFormat,
+        metrics_calculator::MetricsCalculator,
+        phase_format::{PhaseFormat, Schedule},
+        ranker::{HierarchicalRanker, SliceRanker},
+    },
 };
 
 #[cfg(feature = "test-util")]
@@ -232,26 +235,23 @@ impl PhasePlugins {
         Config::of(self).expect("every plugin serializes as it is configured")
     }
 
-    /// The format, the match format, the ranker and the metrics calculators a phase is run with.
-    pub(crate) fn into_parts(
-        self,
-    ) -> (
-        Box<dyn PhaseFormat>,
-        Box<dyn MatchFormat>,
-        HierarchicalRanker,
-        Metrics,
-    ) {
-        (
-            self.format,
-            self.match_format,
-            HierarchicalRanker::new(self.ranking),
-            self.metrics.into_iter().collect(),
-        )
+    /// The ranker of a phase with these plugins: its slice rankers in order.
+    pub(crate) fn ranker(&self) -> HierarchicalRanker<'_> {
+        HierarchicalRanker::new(&self.ranking)
+    }
+
+    /// The matches and byes the format schedules next in the phase of `data` played with these
+    /// plugins, see [`PhaseFormat::create_new_matches`].
+    pub(crate) fn schedule(&mut self, data: &PhaseData) -> Schedule {
+        let view = PhaseView::new(data, HierarchicalRanker::new(&self.ranking));
+        self.format.create_new_matches(&view)
+    }
+
+    /// The metrics calculators, mutably and in the order they run in, to update metrics.
+    pub(crate) fn metrics_mut(&mut self) -> impl Iterator<Item = &mut dyn MetricsCalculator> {
+        self.metrics.iter_mut()
     }
 }
-
-/// The metrics calculators of a phase, in the order they run in.
-pub(crate) type Metrics = Vec<Box<dyn MetricsCalculator>>;
 
 /// What the plugins of this crate declare, i.e. the facts they provide to and require of their
 /// phase, which plugins they imply and how a phase orders them. The mechanism itself is tested in

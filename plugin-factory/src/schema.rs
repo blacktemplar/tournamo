@@ -346,6 +346,12 @@ impl<A: Axis + ?Sized> DependencyOrderedSet<A> {
         self.0.iter()
     }
 
+    /// The plugins, mutably and in dependency order. Only a plugin's state can change through it,
+    /// not which plugins the set holds.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut A> {
+        self.0.iter_mut().map(|plugin| &mut **plugin)
+    }
+
     /// How many plugins it holds.
     pub fn len(&self) -> usize {
         self.0.len()

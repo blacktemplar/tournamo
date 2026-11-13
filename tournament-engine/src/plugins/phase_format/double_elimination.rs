@@ -16,7 +16,7 @@ use crate::{
         },
         phase_format::{
             PhaseFormat, PhaseSuggestions, Schedule, Stage,
-            bracket::{Bracket, Source, phase_round},
+            bracket::{Bracket, BracketBuilder, Source, phase_round},
         },
     },
     type_map::{TypeMap, TypeMapValue},
@@ -219,12 +219,12 @@ impl PhaseFormat for DoubleElimination {
 
 /// The whole double elimination between the rankings of `phase_data`, see [`DoubleElimination`].
 fn bracket(phase_data: &PhaseData, grand_final_reset: bool) -> Bracket {
-    let mut bracket = Bracket::default();
+    let mut bracket = BracketBuilder::default();
     let winners = bracket.add_knockout(phase_data, winner_bracket_slot, |round, rounds| {
         TypeMap::new().with(DoubleEliminationRound::Winners { round, rounds })
     });
     let Some(winner_bracket_final) = winners.last() else {
-        return bracket;
+        return bracket.build();
     };
     let winner_rounds = winners.len() as u32;
     let loser_rounds = 2 * winner_rounds - 2;
@@ -287,7 +287,7 @@ fn bracket(phase_data: &PhaseData, grand_final_reset: bool) -> Bracket {
         );
         bracket.advance_only_if_won_by(grand_final, Team::B);
     }
-    bracket
+    bracket.build()
 }
 
 /// The phase round that round `round` of the winner bracket is played in, see the table of

@@ -15,7 +15,7 @@ use crate::{
 /// A pairing is scheduled as a match as soon as both of its sides are taken, without waiting for
 /// the rest of its round. A pairing with a bye on one side is decided without a match, for the
 /// other side, which is scheduled a [`Bye`] if it is a ranking.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bracket {
     pairings: Vec<Pairing>,
     /// The pairings whose seats are both taken but which are not decided yet, i.e. those that
@@ -107,6 +107,22 @@ struct Pairing {
     loser_to: Option<Slot>,
     /// If set, the winner and the loser only move on if this side wins.
     advances_only_if_won_by: Option<Team>,
+    /// The number of its match, see [`BracketPairing::number`].
+    number: Option<NonZeroU32>,
+}
+
+/// A [`Bracket`] being built: its pairings are added, then [`BracketBuilder::build`] numbers them.
+#[derive(Debug)]
+pub(super) struct BracketBuilder(Bracket);
+
+/// A bracket without pairings.
+impl Default for BracketBuilder {
+    fn default() -> Self {
+        Self(Bracket {
+            pairings: Vec::new(),
+            in_play: Vec::new(),
+        })
+    }
 }
 
 impl Bracket {
@@ -115,7 +131,6 @@ impl Bracket {
     pub fn pairings(&self) -> Vec<BracketPairing<'_>> {
         let from = self.sources();
         let byes = self.byes(&from);
-        let numbers = numbers(&self.pairings, &byes);
         self.pairings
             .iter()
             .enumerate()
@@ -130,7 +145,7 @@ impl Bracket {
                 annotations: &pairing.annotations,
                 r#match: pairing.r#match,
                 advances_only_if_won_by: pairing.advances_only_if_won_by,
-                number: numbers[id],
+                number: pairing.number,
             })
             .collect()
     }
@@ -170,110 +185,12 @@ impl Bracket {
         byes
     }
 
-    /// Adds a pairing to be played in phase round `round` between the two `sources`, as sides A
-    /// and B. The match or the bye it schedules is annotated with `annotations`.
-    ///
-    /// A pairing can only take the winner and the loser of a pairing added before it, each at most
-    /// once, and all pairings have to be added before the first [`Bracket::create_new_matches`].
-    pub(super) fn add_pairing(
-        &mut self,
-        round: NonZeroU32,
-        sources: [Source; 2],
-        annotations: TypeMap,
-    ) -> PairingId {
-        let id = PairingId(self.pairings.len());
-        let mut seats = [None; 2];
-        for (side, source) in [Team::A, Team::B].into_iter().zip(sources) {
-            let slot = Some(Slot { pairing: id, side });
-            match source {
-                Source::Ranking(ranking_id) => seats[index(side)] = Some(Seat::Ranking(ranking_id)),
-                Source::Bye => seats[index(side)] = Some(Seat::Bye),
-                Source::WinnerOf(from) => {
-                    let winner_to = &mut self.pairings[from.0].winner_to;
-                    debug_assert!(winner_to.is_none(), "a winner can only move on once");
-                    *winner_to = slot;
-                }
-                Source::LoserOf(from) => {
-                    let loser_to = &mut self.pairings[from.0].loser_to;
-                    debug_assert!(loser_to.is_none(), "a loser can only move on once");
-                    *loser_to = slot;
-                }
-            }
-        }
-        if seats.iter().all(Option::is_some) {
-            self.in_play.push(id);
-        }
-        self.pairings.push(Pairing {
-            round,
-            annotations,
-            seats,
-            r#match: None,
-            winner_to: None,
-            loser_to: None,
-            advances_only_if_won_by: None,
-        });
-        id
-    }
-
-    /// Lets the winner and the loser of `pairing` only move on if `side` wins it.
-    pub(super) fn advance_only_if_won_by(&mut self, pairing: PairingId, side: Team) {
-        self.pairings[pairing.0].advances_only_if_won_by = Some(side);
-    }
-
-    /// Adds a knockout between the rankings of `phase_data`, as many rounds as it takes to leave
-    /// one of them, round `r` played in phase round `phase_round(r)` and its matches annotated with
-    /// `annotations(r, rounds)`.
-    ///
-    /// Returns the pairings of every round, each in bracket order, i.e. the winners of the pairings
-    /// `2i` and `2i + 1` of a round meet in pairing `i` of the next. The first round pairs the best
-    /// seed with the worst, the best two seeds can meet in the final at the earliest, and where the
-    /// field is not a power of two the best seeds get the byes.
-    pub(super) fn add_knockout(
-        &mut self,
-        phase_data: &PhaseData,
-        phase_round: impl Fn(u32) -> NonZeroU32,
-        annotations: impl Fn(u32, u32) -> TypeMap,
-    ) -> Vec<Vec<PairingId>> {
-        let rounds = phase_data
-            .rankings()
-            .len()
-            .next_power_of_two()
-            .trailing_zeros();
-        let mut seeds: Vec<_> = phase_data
-            .rankings()
-            .keys()
-            .copied()
-            .map(Source::Ranking)
-            .collect();
-        seeds.resize(1 << rounds, Source::Bye);
-        let mut sources: Vec<_> = seeding_order(rounds)
-            .into_iter()
-            .map(|seed| seeds[seed])
-            .collect();
-        (1..=rounds)
-            .map(|round| {
-                let pairings: Vec<_> = sources
-                    .as_chunks()
-                    .0
-                    .iter()
-                    .map(|&sides| {
-                        self.add_pairing(phase_round(round), sides, annotations(round, rounds))
-                    })
-                    .collect();
-                sources = pairings.iter().copied().map(Source::WinnerOf).collect();
-                pairings
-            })
-            .collect()
-    }
-
     /// Decides every pairing in play whose match got a result, moves its winner and its loser on,
     /// and returns the matches and the byes of the pairings that got both of their seats taken by
     /// that, each ordered by round and then by the order their pairings were added in.
     pub(super) fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
         let mut new_matches = Vec::new();
         let mut new_byes = Vec::new();
-        // a few pairings per entrant, worked out again rather than kept in the state
-        let numbers = numbers(&self.pairings, &self.byes(&self.sources()));
         let mut to_check = mem::take(&mut self.in_play);
         while let Some(id) = to_check.pop() {
             let pairing = &mut self.pairings[id.0];
@@ -283,8 +200,9 @@ impl Bracket {
             let winner = match (a, b) {
                 (Seat::Ranking(a), Seat::Ranking(b)) => {
                     let Some(match_id) = pairing.r#match else {
-                        let number =
-                            numbers[id.0].expect("a pairing of two rankings can be a match");
+                        let number = pairing
+                            .number
+                            .expect("a pairing of two rankings can be a match");
                         let r#match = NewMatch::new(vec1![a], vec1![b], pairing.round)
                             .with_number(number)
                             .with_annotations(pairing.annotations.clone());
@@ -358,19 +276,118 @@ impl Bracket {
     }
 }
 
-/// The number of the match of each pairing of `pairings`, see [`BracketPairing::number`]; `byes`
-/// tells which sides only a bye can take.
-fn numbers(pairings: &[Pairing], byes: &[[bool; 2]]) -> Vec<Option<NonZeroU32>> {
-    let mut matches: Vec<usize> = (0..pairings.len())
-        .filter(|&id| byes[id] == [false; 2])
-        .collect();
-    // stable, so that the pairings of a round keep the order they were added in
-    matches.sort_by_key(|&id| pairings[id].round);
-    let mut numbers = vec![None; pairings.len()];
-    for (id, number) in matches.into_iter().zip(NonZeroU32::MIN..) {
-        numbers[id] = Some(number);
+impl BracketBuilder {
+    /// Adds a pairing to be played in phase round `round` between the two `sources`, as sides A
+    /// and B. The match or the bye it schedules is annotated with `annotations`.
+    ///
+    /// A pairing can only take the winner and the loser of a pairing added before it, each at most
+    /// once.
+    pub(super) fn add_pairing(
+        &mut self,
+        round: NonZeroU32,
+        sources: [Source; 2],
+        annotations: TypeMap,
+    ) -> PairingId {
+        let id = PairingId(self.0.pairings.len());
+        let mut seats = [None; 2];
+        for (side, source) in [Team::A, Team::B].into_iter().zip(sources) {
+            let slot = Some(Slot { pairing: id, side });
+            match source {
+                Source::Ranking(ranking_id) => seats[index(side)] = Some(Seat::Ranking(ranking_id)),
+                Source::Bye => seats[index(side)] = Some(Seat::Bye),
+                Source::WinnerOf(from) => {
+                    let winner_to = &mut self.0.pairings[from.0].winner_to;
+                    debug_assert!(winner_to.is_none(), "a winner can only move on once");
+                    *winner_to = slot;
+                }
+                Source::LoserOf(from) => {
+                    let loser_to = &mut self.0.pairings[from.0].loser_to;
+                    debug_assert!(loser_to.is_none(), "a loser can only move on once");
+                    *loser_to = slot;
+                }
+            }
+        }
+        if seats.iter().all(Option::is_some) {
+            self.0.in_play.push(id);
+        }
+        self.0.pairings.push(Pairing {
+            round,
+            annotations,
+            seats,
+            r#match: None,
+            winner_to: None,
+            loser_to: None,
+            advances_only_if_won_by: None,
+            number: None,
+        });
+        id
     }
-    numbers
+
+    /// Lets the winner and the loser of `pairing` only move on if `side` wins it.
+    pub(super) fn advance_only_if_won_by(&mut self, pairing: PairingId, side: Team) {
+        self.0.pairings[pairing.0].advances_only_if_won_by = Some(side);
+    }
+
+    /// Adds a knockout between the rankings of `phase_data`, as many rounds as it takes to leave
+    /// one of them, round `r` played in phase round `phase_round(r)` and its matches annotated with
+    /// `annotations(r, rounds)`.
+    ///
+    /// Returns the pairings of every round, each in bracket order, i.e. the winners of the pairings
+    /// `2i` and `2i + 1` of a round meet in pairing `i` of the next. The first round pairs the best
+    /// seed with the worst, the best two seeds can meet in the final at the earliest, and where the
+    /// field is not a power of two the best seeds get the byes.
+    pub(super) fn add_knockout(
+        &mut self,
+        phase_data: &PhaseData,
+        phase_round: impl Fn(u32) -> NonZeroU32,
+        annotations: impl Fn(u32, u32) -> TypeMap,
+    ) -> Vec<Vec<PairingId>> {
+        let rounds = phase_data
+            .rankings()
+            .len()
+            .next_power_of_two()
+            .trailing_zeros();
+        let mut seeds: Vec<_> = phase_data
+            .rankings()
+            .keys()
+            .copied()
+            .map(Source::Ranking)
+            .collect();
+        seeds.resize(1 << rounds, Source::Bye);
+        let mut sources: Vec<_> = seeding_order(rounds)
+            .into_iter()
+            .map(|seed| seeds[seed])
+            .collect();
+        (1..=rounds)
+            .map(|round| {
+                let pairings: Vec<_> = sources
+                    .as_chunks()
+                    .0
+                    .iter()
+                    .map(|&sides| {
+                        self.add_pairing(phase_round(round), sides, annotations(round, rounds))
+                    })
+                    .collect();
+                sources = pairings.iter().copied().map(Source::WinnerOf).collect();
+                pairings
+            })
+            .collect()
+    }
+
+    /// The bracket of the pairings added, each numbered, see [`BracketPairing::number`].
+    pub(super) fn build(self) -> Bracket {
+        let mut bracket = self.0;
+        let byes = bracket.byes(&bracket.sources());
+        let mut matches: Vec<usize> = (0..bracket.pairings.len())
+            .filter(|&id| byes[id] == [false; 2])
+            .collect();
+        // stable, so that the pairings of a round keep the order they were added in
+        matches.sort_by_key(|&id| bracket.pairings[id].round);
+        for (id, number) in matches.into_iter().zip(NonZeroU32::MIN..) {
+            bracket.pairings[id].number = Some(number);
+        }
+        bracket
+    }
 }
 
 /// Phase round number `round`, counted from 1.

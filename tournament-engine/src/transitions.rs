@@ -825,7 +825,7 @@ mod tests {
 
         assert_eq!(config(&machine), with_record.config());
         let phase = &machine.current().phases()[&phase_id()];
-        assert_eq!(phase.metrics_calculators().len(), 1);
+        assert_eq!(phase.plugins().metrics().len(), 1);
         assert_eq!(result_of(&machine, first), Some(MatchResult::AWins));
         let winner = phase.data().matches()[&first].team_a()[0];
         let record = phase.data().rankings()[&winner].metric::<WinsDrawsLosses>();

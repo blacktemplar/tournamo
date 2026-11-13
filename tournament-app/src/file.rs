@@ -32,7 +32,7 @@ impl Format {
     /// The first format, that of a file without one.
     pub const FIRST: Self = Self(1);
     /// The format this version writes, and the newest it reads.
-    pub const CURRENT: Self = Self(3);
+    pub const CURRENT: Self = Self(4);
 }
 
 impl Default for Format {

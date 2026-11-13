@@ -13,7 +13,7 @@ use crate::{
         },
         phase_format::{
             PhaseFormat, PhaseSuggestions, Schedule, Stage,
-            bracket::{Bracket, Source, phase_round},
+            bracket::{Bracket, BracketBuilder, Source, phase_round},
         },
     },
     type_map::{TypeMap, TypeMapValue},
@@ -199,7 +199,7 @@ impl PhaseFormat for SingleElimination {
 
 /// The whole knockout between the rankings of `phase_data`, see [`SingleElimination`].
 fn bracket(phase_data: &PhaseData, third_place_match: bool) -> Bracket {
-    let mut bracket = Bracket::default();
+    let mut bracket = BracketBuilder::default();
     let knockout = bracket.add_knockout(phase_data, phase_round, |round, rounds| {
         TypeMap::new().with(KnockoutRound::RoundOf(1 << (rounds - round + 1)))
     });
@@ -215,7 +215,7 @@ fn bracket(phase_data: &PhaseData, third_place_match: bool) -> Bracket {
             TypeMap::new().with(KnockoutRound::ThirdPlace),
         );
     }
-    bracket
+    bracket.build()
 }
 
 #[cfg(test)]

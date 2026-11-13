@@ -76,12 +76,13 @@ progress: it ranks whenever the standings are read (see
 `&self`.
 
 - **`PhaseData` is everything in a `Phase` but its plugins** (rankings, matches,
-  byes, seed). A call borrows a plugin field mutably and `data` immutably, two
-  disjoint fields, so no plugin is moved out. A plugin therefore does not see
-  the other plugins; what it needs of them reaches it through `PhaseData`
-  (metrics, annotations). The format gets a `PhaseView`: the data, and the
-  standings on request, ranked by the ranker, a third field borrowed
-  immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
+  byes, seed). A phase holds its `PhasePlugins` whole, as it was added with
+  them, next to its `data`: a call borrows a plugin mutably and `data`
+  immutably, disjoint fields, so no plugin is moved out. A plugin therefore
+  does not see the other plugins; what it needs of them reaches it through
+  `PhaseData` (metrics, annotations). The format gets a `PhaseView`: the data,
+  and the standings on request, ranked by the slice rankers, a field of the
+  plugins beside the format, borrowed immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
   cannot read.
 - **State is a field left out of the schema**: `#[plugin(skip)]` plus
   `#[serde(default)]`. A plugin built from a configuration starts at the
@@ -463,9 +464,12 @@ UUIDs are no good for human input, so a match also has a number:
 - **Numbered in scheduling order unless the format asks**
   (`NewMatch::with_number`, unique within the phase, checked in debug builds).
 - **A bracket numbers its pairings from the start** (`BracketPairing::number`,
-  by round, skipping pairings that can only be byes, worked out from the tree on
-  every call rather than stored), so a semifinal keeps its number whichever
-  quarterfinal ends first, and a side not scheduled yet reads "Winner of 9".
+  by round, skipping pairings that can only be byes), so a semifinal keeps its
+  number whichever quarterfinal ends first, and a side not scheduled yet reads
+  "Winner of 9". The numbers follow from the tree, fixed once it is built, so
+  `BracketBuilder::build` works them out and every pairing stores its own,
+  rather than every reported result walking the tree again; a bracket saved
+  before format 4 gets them from the converter.
 - **Not part of the identity**: `MatchId` excludes it, so old logs replay and
   get their numbers on replay. Numbers are per phase.
 

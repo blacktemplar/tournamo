@@ -315,7 +315,8 @@ impl Session {
         let calculators = AnyAxis::of::<dyn MetricsCalculator>();
         // the calculators each criterion ranks by, in the order of the criteria
         let ranked_by: Vec<&str> = phase
-            .slice_rankers()
+            .plugins()
+            .ranking()
             .iter()
             .filter_map(|criterion| {
                 AnyAxis::of::<dyn SliceRanker>().entry(plugin_factory::id_of(&**criterion))
@@ -324,7 +325,8 @@ impl Session {
             .map(PluginEntry::id)
             .collect();
         let mut columns: Vec<_> = phase
-            .metrics_calculators()
+            .plugins()
+            .metrics()
             .iter()
             .filter_map(|calculator| {
                 Some((plugin_factory::id_of(&**calculator), calculator.column()?))

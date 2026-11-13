@@ -438,7 +438,7 @@ fn deserializing_a_competition_with_an_unknown_phase_format_fails() {
     let sm = started_competition();
     let mut value = serde_json::to_value(sm.current()).unwrap();
     for phase in value["phases"].as_array_mut().unwrap() {
-        phase["phase_format"]["type"] = Value::String("NotAPhaseFormat".to_owned());
+        phase["plugins"]["format"]["type"] = Value::String("NotAPhaseFormat".to_owned());
     }
 
     let Err(error) = serde_json::from_value::<Competition>(value) else {

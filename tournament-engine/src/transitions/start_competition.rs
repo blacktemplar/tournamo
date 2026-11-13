@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use undoable_state_machine::Transition;
 
-use crate::{entities::competition::Competition, transitions::ensure_not_started};
+use crate::{entities::Competition, transitions::ensure_not_started};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StartCompetition;

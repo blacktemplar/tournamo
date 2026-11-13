@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::{
-        competition::{Match, MatchResult, PhaseData},
+        Match, MatchResult, PhaseData,
         details::{EnteredValue, FieldKey, Part, Sides},
     },
     plugins::{
@@ -124,10 +124,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::{
-            competition::{Phase, PhaseBuilder},
-            details::Decision,
-        },
+        entities::{Phase, PhaseBuilder, details::Decision},
         plugins::metrics_calculator::test_utils::{match_id, phase_with},
     };
 

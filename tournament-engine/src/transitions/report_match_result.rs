@@ -4,7 +4,7 @@ use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
     entities::{
-        competition::{Annotated, Competition, MatchId, MatchResult, PhaseId},
+        Annotated, Competition, MatchId, MatchResult, PhaseId,
         details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
     },
     plugins::match_format::Misfit,

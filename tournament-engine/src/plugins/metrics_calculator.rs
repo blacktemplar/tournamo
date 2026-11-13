@@ -9,7 +9,7 @@ use plugin_factory::{Plugin, axis, compatibility::Declaration};
 
 use crate::{
     Score,
-    entities::competition::{Bye, Match, PhaseData, Ranking, RankingId, Team},
+    entities::{Bye, Match, PhaseData, Ranking, RankingId, Team},
     map::Map,
     plugins::{Phrase, facts::CalculatesMetric},
     type_map::{TypeMapValue, downcast_unchecked_ref},

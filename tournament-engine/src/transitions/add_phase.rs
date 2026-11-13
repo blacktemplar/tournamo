@@ -4,7 +4,7 @@ use thiserror::Error;
 use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
-    entities::competition::{Competition, PhaseId},
+    entities::{Competition, PhaseId},
     plugins::PhasePlugins,
     transitions::ensure_not_started,
 };

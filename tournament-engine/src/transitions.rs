@@ -9,7 +9,7 @@ use undoable_state_machine::{
 };
 
 use crate::{
-    entities::competition::{Competition, MatchId, PhaseId},
+    entities::{Competition, MatchId, PhaseId},
     plugins::PhasePlugins,
 };
 

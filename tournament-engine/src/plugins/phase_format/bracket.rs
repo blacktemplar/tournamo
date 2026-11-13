@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::competition::{Annotated, Bye, MatchId, NewMatch, PhaseData, RankingId, Team},
+    entities::{Annotated, Bye, MatchId, NewMatch, PhaseData, RankingId, Team},
     plugins::phase_format::Schedule,
     type_map::TypeMap,
 };
@@ -44,7 +44,7 @@ pub struct BracketPairing<'a> {
     /// reset.
     pub advances_only_if_won_by: Option<Team>,
     /// The number its match has once scheduled (see
-    /// [`Match::number`](crate::entities::competition::Match::number)), from the start; `None` if
+    /// [`Match::number`](crate::entities::Match::number)), from the start; `None` if
     /// it is never a match, since a side of it can only be a bye. The pairings that can be matches
     /// are numbered by round, and within a round in the order they were added.
     pub number: Option<NonZeroU32>,

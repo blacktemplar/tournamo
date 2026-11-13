@@ -5,7 +5,7 @@ use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::competition::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, Match, PhaseData, RankingId},
     plugins::{
         Phrase,
         facts::{CalculatesMetric, MatchTally},
@@ -208,7 +208,7 @@ mod tests {
     use super::*;
     use crate::{
         entities::{
-            competition::{MatchResult, Phase, PhaseBuilder},
+            MatchResult, Phase, PhaseBuilder,
             details::{EnteredValue, FieldKey, Part, Sides},
         },
         plugins::{

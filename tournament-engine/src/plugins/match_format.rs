@@ -16,7 +16,7 @@ pub use tallies::{GamesWon, PointsScored};
 
 use crate::{
     entities::{
-        competition::{Match, MatchResult, PhaseData},
+        Match, MatchResult, PhaseData,
         details::{Decision, EnteredValue, FieldKey, Part, ResultReason},
     },
     plugins::Phrase,

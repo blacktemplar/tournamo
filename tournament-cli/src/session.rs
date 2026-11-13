@@ -350,11 +350,7 @@ impl Session {
 
     /// The phase of the competition, whether started or not.
     fn added_phase(&self) -> Result<&Phase, Error> {
-        self.competition()
-            .phases()
-            .values()
-            .next()
-            .ok_or(Error::NoPhase)
+        self.competition().only_phase().ok_or(Error::NoPhase)
     }
 
     /// Adds the phase played in the format named `format`, with its fields answered by `answers`,
@@ -406,9 +402,7 @@ impl Session {
             return Err(Error::NotStarted);
         }
         Ok(competition
-            .phases()
-            .values()
-            .next()
+            .only_phase()
             .expect("a started competition must have a phase"))
     }
 

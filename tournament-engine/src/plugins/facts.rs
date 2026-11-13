@@ -17,7 +17,7 @@ use crate::type_map::TypeMapValue;
 ///
 /// Provided by the phase's context, which the [`Competition`] declares.
 ///
-/// [`Competition`]: crate::entities::competition::Competition
+/// [`Competition`]: crate::entities::Competition
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntrantsPerRanking(pub NonZeroU32);
 

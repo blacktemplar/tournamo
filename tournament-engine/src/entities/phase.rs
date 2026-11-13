@@ -90,6 +90,86 @@ impl PhaseData {
     }
 }
 
+impl PhaseData {
+    /// `matches` numbered as they ask, or else each with the number after the highest one so far.
+    fn number(&self, matches: Vec<NewMatch>) -> Vec<Match> {
+        // looked for only if a match asks for no number, since a bracket schedules after every
+        // result, each match with a number
+        let mut highest = matches
+            .iter()
+            .any(|r#match| r#match.number().is_none())
+            .then(|| {
+                self.matches
+                    .values()
+                    .map(Match::number)
+                    .chain(matches.iter().filter_map(NewMatch::number))
+                    .max()
+            })
+            .flatten();
+        matches
+            .into_iter()
+            .map(|r#match| {
+                let number = r#match.number().unwrap_or_else(|| {
+                    let next = highest.map_or(NonZeroU32::MIN, |highest| {
+                        highest.checked_add(1).expect("fewer matches than u32::MAX")
+                    });
+                    highest = Some(next);
+                    next
+                });
+                r#match.numbered(number)
+            })
+            .collect()
+    }
+
+    /// Checks, with debug assertions, that the `matches` and `byes` a format scheduled can be
+    /// added: they are of rankings of this phase, their ids and the numbers of the matches are new
+    /// and unique, and no ranking has two of them, or one and one already scheduled, in a round.
+    fn debug_check(&self, matches: &[Match], byes: &[Bye]) {
+        debug_assert!(
+            matches
+                .iter()
+                .flat_map(Match::rankings)
+                .copied()
+                .chain(byes.iter().map(Bye::ranking))
+                .all(|r| self.rankings.contains_key(&r))
+        );
+        debug_assert!(
+            self.matches
+                .keys()
+                .copied()
+                .chain(matches.iter().map(Match::id))
+                .all_unique()
+        );
+        debug_assert!(
+            self.byes
+                .keys()
+                .copied()
+                .chain(byes.iter().map(Bye::id))
+                .all_unique()
+        );
+        debug_assert!(
+            self.matches
+                .values()
+                .chain(matches)
+                .map(Match::number)
+                .all_unique()
+        );
+        debug_assert!(
+            self.matches
+                .values()
+                .chain(matches)
+                .flat_map(|m| m.rankings().map(|r| (m.round(), *r)))
+                .chain(
+                    self.byes
+                        .values()
+                        .chain(byes)
+                        .map(|b| (b.round(), b.ranking()))
+                )
+                .all_unique()
+        );
+    }
+}
+
 /// A phase as its format sees it when scheduling: its data, and its standings when asked for.
 #[derive(Debug, Clone, Copy)]
 pub struct PhaseView<'a> {
@@ -225,67 +305,11 @@ impl Phase {
             ranker: &self.ranker,
         };
         let Schedule { matches, byes } = self.phase_format.create_new_matches(&view);
-        // check requirements of create_new_matches
-        debug_assert!(
-            matches
-                .iter()
-                .flat_map(NewMatch::rankings)
-                .copied()
-                .chain(byes.iter().map(Bye::ranking))
-                .all(|r| self.data.rankings.contains_key(&r))
-        );
-        let num_matches_before = self.data.matches.len();
-        let num_new_matches = matches.len();
-        // looked for only if a match asks for no number, since a bracket schedules after every
-        // result, each match with a number
-        let mut highest = matches
-            .iter()
-            .any(|r#match| r#match.number().is_none())
-            .then(|| {
-                self.data
-                    .matches
-                    .values()
-                    .map(Match::number)
-                    .chain(matches.iter().filter_map(NewMatch::number))
-                    .max()
-            })
-            .flatten();
-        let matches: Vec<_> = matches
-            .into_iter()
-            .map(|r#match| {
-                let number = r#match.number().unwrap_or_else(|| {
-                    let next = highest.map_or(NonZeroU32::MIN, |highest| {
-                        highest.checked_add(1).expect("fewer matches than u32::MAX")
-                    });
-                    highest = Some(next);
-                    next
-                });
-                r#match.numbered(number)
-            })
-            .collect();
-        self.data.matches.extend(matches);
-        // the numbers of the matches are unique
-        debug_assert!(self.data.matches.values().map(Match::number).all_unique());
+        let matches = self.data.number(matches);
+        self.data.debug_check(&matches, &byes);
         let new_bye_ids: Vec<_> = byes.iter().map(Bye::id).collect();
-        let num_byes_before = self.data.byes.len();
+        self.data.matches.extend(matches);
         self.data.byes.extend(byes);
-        // This guarantees that all new match and bye ids were unique (at least relative to the
-        // existing ids in this phase).
-        debug_assert_eq!(
-            self.data.matches.len(),
-            num_matches_before + num_new_matches
-        );
-        debug_assert_eq!(self.data.byes.len(), num_byes_before + new_bye_ids.len());
-        // check that ranking ids are unique within a round
-        debug_assert!(
-            self.data
-                .matches
-                .values()
-                .flat_map(|m| m.rankings().map(|r| (m.round(), *r)))
-                .chain(self.data.byes.values().map(|b| (b.round(), b.ranking())))
-                .all_unique()
-        );
-
         // The format is not asked again afterwards, even though a bye reached may have changed the
         // standings: only a reported result makes it schedule.
         self.reach_byes(new_bye_ids);

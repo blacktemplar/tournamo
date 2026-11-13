@@ -7,7 +7,7 @@ use syn::{
 
 /// The `Plugin`, `Configurable` and `PluginType` impls of the struct `input`.
 pub fn expand_plugin(input: &DeriveInput) -> Result<TokenStream> {
-    let configurable = configurable(input, "plugin")?;
+    let (configurable, _) = configurable(input, "plugin")?;
     let plugin = &input.ident;
     let Container {
         id,
@@ -62,12 +62,34 @@ pub fn expand_configurable(input: &DeriveInput) -> Result<TokenStream> {
             "a composite takes no `#[plugin(..)]` on the struct; derive `Plugin` for a plugin",
         ));
     }
-    configurable(input, "composite")
+    let (configurable, fields) = configurable(input, "composite")?;
+    let composite = &input.ident;
+    let visibility = &input.vis;
+    let names = fields.iter().map(|field| {
+        let constant = Ident::new(
+            &field.ident.unraw().to_string().to_uppercase(),
+            field.ident.span(),
+        );
+        let name = &field.name;
+        let doc = format!("The name of the field `{}`.", name.value());
+        quote! {
+            #[doc = #doc]
+            #[allow(dead_code)]
+            #visibility const #constant: &'static str = #name;
+        }
+    });
+    Ok(quote! {
+        #configurable
+
+        impl #composite {
+            #(#names)*
+        }
+    })
 }
 
 /// The `Configurable` impl of the struct `input`, a `what` (a plugin or a composite), as its fields
-/// and their `serde` attributes describe it.
-fn configurable(input: &DeriveInput, what: &str) -> Result<TokenStream> {
+/// and their `serde` attributes describe it, and the fields of its schema.
+fn configurable(input: &DeriveInput, what: &str) -> Result<(TokenStream, Vec<Field>)> {
     if !input.generics.params.is_empty() {
         return Err(Error::new_spanned(
             &input.generics,
@@ -126,7 +148,7 @@ fn configurable(input: &DeriveInput, what: &str) -> Result<TokenStream> {
         }
     });
 
-    Ok(quote! {
+    let configurable = quote! {
         impl ::plugin_factory::schema::Configurable for #configurable {
             #is_unit
 
@@ -138,7 +160,8 @@ fn configurable(input: &DeriveInput, what: &str) -> Result<TokenStream> {
 
             #plugins
         }
-    })
+    };
+    Ok((configurable, fields))
 }
 
 /// Whether the struct `input`, a `what`, has a `#[serde(default)]`.
@@ -836,6 +859,7 @@ mod tests {
         .to_string();
 
         assert!(expanded.contains("Configurable for Phase"));
+        assert!(expanded.contains("const METRICS : & 'static str = \"metrics\""));
         assert!(!expanded.contains("PluginType"));
         assert!(!expanded.contains(":: Plugin for"));
     }

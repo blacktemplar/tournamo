@@ -89,7 +89,7 @@ fn a_points_tally_saturates_at_the_aggregate_limit() {
 #[test]
 fn a_match_is_suggested_won_by_the_side_winning_most_games() {
     let format = BestOf::new(3);
-    let level = Level::new(Phrase::new("match", "match"));
+    let level = format.match_level();
     let suggest = |games: Vec<Part>| {
         let part = games.into_iter().fold(Part::new(), Part::with_part);
         format.suggest(&level, &part)
@@ -113,27 +113,21 @@ fn a_match_is_suggested_won_by_the_side_winning_most_games() {
 
 #[test]
 fn draws_count_as_decided_games() {
-    let level = Level::new(Phrase::new("match", "match"));
+    let suggest = |format: BestOf, part: &Part| format.suggest(&format.match_level(), part);
     let drawn = Part::new().with_part(game(3, 3));
-    assert_eq!(
-        BestOf::new(1).suggest(&level, &drawn),
-        Some(MatchResult::Draw)
-    );
+    assert_eq!(suggest(BestOf::new(1), &drawn), Some(MatchResult::Draw));
 
     let split = Part::new()
         .with_part(game(21, 3))
         .with_part(game(3, 21))
         .with_part(game(3, 3));
-    assert_eq!(
-        BestOf::new(3).suggest(&level, &split),
-        Some(MatchResult::Draw)
-    );
+    assert_eq!(suggest(BestOf::new(3), &split), Some(MatchResult::Draw));
 }
 
 #[test]
 fn a_lead_must_exceed_the_remaining_games_to_finish_early() {
     let format = BestOf::new(5);
-    let level = Level::new(Phrase::new("match", "match"));
+    let level = format.match_level();
     for (win, loss, outcome) in [
         (game(21, 3), game(3, 21), MatchResult::AWins),
         (game(3, 21), game(21, 3), MatchResult::BWins),
@@ -168,7 +162,7 @@ fn a_lead_must_exceed_the_remaining_games_to_finish_early() {
 #[test]
 fn an_even_number_of_games_can_end_in_a_draw() {
     let format = BestOf::new(2);
-    let level = Level::new(Phrase::new("match", "match"));
+    let level = format.match_level();
     let part = Part::new().with_part(game(21, 3)).with_part(game(3, 21));
 
     assert_eq!(format.suggest(&level, &part), Some(MatchResult::Draw));

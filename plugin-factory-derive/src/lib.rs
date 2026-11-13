@@ -46,7 +46,7 @@ pub fn axis(arguments: TokenStream, input: TokenStream) -> TokenStream {
 ///   default out of the range makes building the schema panic;
 /// - `irrelevant_with = Fact`, optional: a type implementing `Fact` whose presence in the
 ///   composite makes the field irrelevant, so that a UI may leave it out (`Field::irrelevant_with`,
-///   `Draft::is_relevant`); it is answered all the same;
+///   `Draft::irrelevant`); it is answered all the same;
 /// - or `skip` alone, which leaves the field out of the schema, e.g. for state a plugin builds up
 ///   once it is configured. Such a field needs a `#[serde(default)]`, on the field or the struct,
 ///   which is what a plugin built from a config holds in it; a config answering it is not
@@ -74,7 +74,10 @@ pub fn derive_plugin(input: TokenStream) -> TokenStream {
 }
 
 /// Implements `Configurable` for a composite, a struct that is not a plugin: its schema and the
-/// plugins it holds from its fields, as `Plugin` derives them for a plugin.
+/// plugins it holds from its fields, as `Plugin` derives them for a plugin. Also gives it, with
+/// its visibility, a constant per field of the schema, named after the field in upper case and
+/// holding the name the field is answered by, e.g. `Phase::FORMAT` for a field `format`, which
+/// fails to compile if the composite has an item of that name already.
 ///
 /// # Attributes
 ///

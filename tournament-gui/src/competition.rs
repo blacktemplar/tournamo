@@ -17,7 +17,7 @@ use tournament_app::{
     i18n::{Message, Text, Translator},
     session::Session,
     storage::{CompetitionKey, Storage as _},
-    view::{Action, Actions, EntrantRow},
+    view::{Action, Actions, Chart, EntrantRow},
 };
 use tournament_browser::{
     channel::Broadcast,
@@ -417,15 +417,6 @@ impl View {
     }
 }
 
-/// What a phase shows of all its matches at once, if anything.
-#[derive(Clone, Copy, PartialEq)]
-enum Chart {
-    /// That of a knockout.
-    Bracket,
-    /// That of teams that stay the same, e.g. in a round robin.
-    CrossTable,
-}
-
 /// The screen after the start: the matches and next to them the standings, or in their place the
 /// chart of the phase (its bracket or its cross table) or how the phase is played, on the full
 /// width. Buttons on top choose what is shown: the matches, the standings, the chart or the phase
@@ -440,13 +431,7 @@ fn Play() -> Element {
         crate::Screen::Competition(key, view) => (key, view),
         _ => return rsx! {},
     };
-    let chart = if ctx.session.read().bracket().is_some() {
-        Some(Chart::Bracket)
-    } else if ctx.session.read().cross_table().is_some() {
-        Some(Chart::CrossTable)
-    } else {
-        None
-    };
+    let chart = ctx.session.read().chart();
     // a phase without a chart shows the matches, e.g. after the phase changed to one without
     let current = match shown {
         View::Chart if chart.is_none() => View::Matches,

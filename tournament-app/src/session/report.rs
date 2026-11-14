@@ -4,12 +4,12 @@ use tournament_engine::{
     CompetitionStateMachineExt as _, Match, MatchId, MatchResult, Part, Phase, PhaseId,
     ReportMatchResult,
     plugins::match_format::Template,
-    transitions::{self as engine, Change, UndoMatchResultError},
+    transitions::{Change, UndoMatchResultError},
 };
 
-use super::{Session, rejection};
+use super::{Session, refused};
 use crate::{
-    error::{ReportError, UndoReportError},
+    error::{Refusal, ReportError, UndoReportError},
     result_form::{ResultForm, ResultView},
     view::{Reopened, Reported},
 };
@@ -103,24 +103,15 @@ impl Session {
         self.history
             .apply_new(&mut self.machine, report.into())
             .map_err(|error| {
-                let error = rejection(error);
-                match error.downcast_ref() {
-                    Some(engine::ReportMatchResultError::MatchAlreadyFinished) => {
-                        ReportError::AlreadyFinished
-                    }
-                    Some(engine::ReportMatchResultError::DrawNotAllowed) => {
-                        ReportError::DrawNotAllowed
-                    }
-                    _ => ReportError::Rejected(error),
-                }
+                refused(error, ReportError::Rejected, |refusal| match refusal {
+                    Refusal::MatchFinished => Some(ReportError::AlreadyFinished),
+                    Refusal::DrawNotAllowed => Some(ReportError::DrawNotAllowed),
+                    _ => None,
+                })
             })?;
-        let matches = self
-            .started_phase()
-            .expect("still started")
-            .data()
-            .matches();
         let phase = self.started_phase().expect("still started");
-        let row = self.match_row(phase, &phase.data().matches()[&id]);
+        let matches = phase.data().matches();
+        let row = self.match_row(phase, &matches[&id]);
         Ok(Reported {
             row,
             new_matches: matches.len() - matches_before,

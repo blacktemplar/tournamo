@@ -15,13 +15,13 @@ use plugin_factory::config::Config;
 use tournament_engine::{
     Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, MatchId, Part, Phase,
     Seed, SetCompetitionSeed, StartCompetition,
-    transitions::{self as engine, Change, CompetitionAlreadyStarted, ConflictsError},
+    transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
     uuid::Uuid,
 };
 
 use crate::{
-    error::{NoPhase, StartError},
+    error::{NoPhase, Refusal, StartError},
     people::People,
     storage::CompetitionKey,
     view::Actions,
@@ -185,17 +185,12 @@ impl Session {
         self.history
             .apply_new(&mut self.machine, StartCompetition.into())
             .map_err(|error| {
-                let error = rejection(error);
-                if error.is::<CompetitionAlreadyStarted>() {
-                    return StartError::Started;
-                }
-                match error.downcast_ref() {
-                    Some(engine::StartCompetitionError::NoPhases) => NoPhase.into(),
-                    Some(engine::StartCompetitionError::TooFewEntrants) => {
-                        StartError::TooFewEntrants
-                    }
-                    None => StartError::Rejected(error),
-                }
+                refused(error, StartError::Rejected, |refusal| match refusal {
+                    Refusal::Started => Some(StartError::Started),
+                    Refusal::NoPhase => Some(NoPhase.into()),
+                    Refusal::TooFewEntrants => Some(StartError::TooFewEntrants),
+                    _ => None,
+                })
             })?;
         Ok(())
     }
@@ -238,6 +233,20 @@ fn rejection(error: StateMachineError) -> TransitionError {
         // the session only appends new entries, each with a new id and targeting one in effect
         error => unreachable!("an action of the session is rejected by a transition: {error}"),
     }
+}
+
+/// The error of an action of the session the engine refused with `error`: what `known` makes of
+/// the refusal, if the app knows it and the action can be refused for it, or else what `rejected`
+/// makes of the engine's error.
+fn refused<E>(
+    error: StateMachineError,
+    rejected: impl FnOnce(TransitionError) -> E,
+    known: impl FnOnce(Refusal) -> Option<E>,
+) -> E {
+    let error = rejection(error);
+    Refusal::of(&error)
+        .and_then(known)
+        .unwrap_or_else(|| rejected(error))
 }
 
 mod bracket;

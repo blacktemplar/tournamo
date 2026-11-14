@@ -570,13 +570,13 @@ pub enum Action {
     Reopen(MatchRow),
 }
 
-/// The parts of `r#match` each side won, as [`MatchRow::parts_won`] shows them.
-pub fn parts_won(phase: &Phase, r#match: &Match) -> Option<Sides<u32>> {
+/// The parts of `r#match`, of the template `root`, each side won, as [`MatchRow::parts_won`]
+/// shows them.
+pub fn parts_won(root: &Level, r#match: &Match) -> Option<Sides<u32>> {
     if !r#match.is_finished() {
         return None;
     }
-    let template = phase.match_format().template(phase.data(), r#match);
-    parts_won_of(&template.root, r#match.contest())
+    parts_won_of(root, r#match.contest())
 }
 
 /// The parts of `part` each side won, if it is played in parts at the same `level`, e.g. the games
@@ -602,20 +602,19 @@ pub(crate) fn parts_won_of(level: &Level, part: &Part) -> Option<Sides<u32>> {
     decided.then_some(won)
 }
 
-/// The scores of `r#match`, as [`MatchRow::scores`] shows them.
-pub fn scores(phase: &Phase, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>> {
+/// The scores of `r#match`, of the template `root`, as [`MatchRow::scores`] shows them.
+pub fn scores(root: &Level, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>> {
     if !r#match.is_finished() {
         return Vec::new();
     }
-    let template = phase.match_format().template(phase.data(), r#match);
     let contest = r#match.contest();
-    match score(&template.root, contest) {
+    match score(root, contest) {
         Some(score) => vec![score],
         None => contest
             .parts()
             .iter()
             .enumerate()
-            .filter_map(|(index, part)| score(template.root.level_of_part(index)?, part))
+            .filter_map(|(index, part)| score(root.level_of_part(index)?, part))
             .collect(),
     }
 }

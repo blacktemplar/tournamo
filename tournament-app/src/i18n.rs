@@ -285,6 +285,18 @@ impl Translator {
         }
     }
 
+    /// The messages of this crate in English, with no marks around the values of variables: what
+    /// [`english`] says.
+    fn plain_english() -> Self {
+        let mut bundle = bundle(Language::English, &[]);
+        bundle.set_use_isolating(false);
+        Self {
+            language: Language::English,
+            bundle,
+            english: None,
+        }
+    }
+
     /// The language it speaks.
     pub fn language(&self) -> Language {
         self.language
@@ -473,6 +485,15 @@ impl Translator {
             .chain(&self.english)
             .find_map(|bundle| format(bundle, key, attribute, args))
     }
+}
+
+/// What `message` says in English, as [`Translator::message`] says it but with no marks around the
+/// values of variables, e.g. for its `Display`.
+pub(crate) fn english(message: &(impl Message + ?Sized)) -> String {
+    thread_local! {
+        static ENGLISH: Translator = Translator::plain_english();
+    }
+    ENGLISH.with(|english| english.message(message))
 }
 
 /// Checks the messages of a consumer for a test: each language's have to parse, give no key twice,

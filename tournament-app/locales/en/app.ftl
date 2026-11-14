@@ -1,5 +1,5 @@
-# What tournament-app says in English: why an action was refused. Each message says what the
-# Display of its error says.
+# What tournament-app says in English: why an action was refused. The Display of each error says
+# its message, without the marks around its variables.
 
 error-empty-name = an entrant name must not be empty
 error-duplicate-name = there already is an entrant named “{ $name }”

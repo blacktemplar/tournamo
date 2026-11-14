@@ -6,16 +6,14 @@ use tournament_engine::{
     plugins::{
         metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
     },
-    transitions::{
-        self as engine, Change, CompetitionAlreadyStarted, ConflictsError, ReconfigurePhaseError,
-    },
+    transitions::{Change, ConflictsError, ReconfigurePhaseError},
     undoable_state_machine::StateMachineError,
     uuid::Uuid,
 };
 
-use super::{Session, rejection};
+use super::{Session, refused, rejection};
 use crate::{
-    error::{AddPhaseError, EditPhaseError, NoPhase, PhaseDraftError},
+    error::{AddPhaseError, EditPhaseError, NoPhase, PhaseDraftError, Refusal},
     form::PhaseForm,
     view::{Glossary, Plugin},
 };
@@ -99,14 +97,11 @@ impl Session {
                 AddPhase::new(PhaseId::new(Uuid::new_v4()), plugins).into(),
             )
             .map_err(|error| {
-                let error = rejection(error);
-                if error.is::<CompetitionAlreadyStarted>() {
-                    AddPhaseError::Started
-                } else if error.is::<engine::AddPhaseError>() {
-                    AddPhaseError::PhaseAlreadyAdded
-                } else {
-                    AddPhaseError::Rejected(error)
-                }
+                refused(error, AddPhaseError::Rejected, |refusal| match refusal {
+                    Refusal::Started => Some(AddPhaseError::Started),
+                    Refusal::PhaseAlreadyAdded => Some(AddPhaseError::PhaseAlreadyAdded),
+                    _ => None,
+                })
             })?;
         Ok(())
     }

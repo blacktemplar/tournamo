@@ -1440,7 +1440,9 @@ is in `tournament-app` (`i18n`), tested natively and in wasm.
   `match` over languages, so a new language does not compile until every
   consumer has its messages. `i18n::check` tests a consumer's resources.
 - **Errors say a `Text`** (key and variables) through `Message`, not a string,
-  so a shown error follows a language change. English says what `Display` says.
+  so a shown error follows a language change. An error's `Display` is its
+  English message (`i18n::english`, without the marks isolating variables), so
+  the English is written once, in `app.ftl`.
 - **One message per plugin** (`plugin-<id>`, `::` as `-`), its texts as
   attributes (`.label`, `.description`, `.column`, `.field-<name>`,
   `.field-<name>-description`): kept together, no collisions. English is the

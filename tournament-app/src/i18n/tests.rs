@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fmt::Display, io};
+use std::collections::BTreeSet;
 
 use plugin_factory::{
     PluginType as _,
@@ -29,11 +29,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    error::{
-        AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
-        PhaseDraftError, RedoError, ReportEnteredError, ReportError, StartError, UndoError,
-        UndoReportError,
-    },
+    error::{AddEntrantError, EditPhaseError, NoPhase, ReportError, UndoReportError},
     result_form::PartView,
     session::Session,
 };
@@ -146,59 +142,21 @@ fn several_matches_are_named_in_the_plural() {
     );
 }
 
+/// An error's `Display` is its message in English, without the marks isolating its values.
 #[test]
-fn an_error_says_in_english_what_its_display_says() {
-    /// What `error` says through its message in English, without the marks isolating its values,
-    /// and through its `Display`.
-    fn both(error: impl Message + Display) -> (String, String) {
-        (
-            Translator::new(Language::English, &[])
-                .message(&error)
-                .replace(['\u{2068}', '\u{2069}'], ""),
-            error.to_string(),
-        )
-    }
-
-    for (message, display) in [
-        both(AddEntrantError::EmptyName),
-        both(AddEntrantError::DuplicateName("Alice".to_owned())),
-        both(NoPhase),
-        both(AddPhaseError::Invalid(Vec::new())),
-        both(StartError::TooFewEntrants),
-        both(StartError::TooFewForFormat(4)),
-        both(ReportError::NotStarted),
-        both(ReportError::NotTaken),
-        both(ReportEnteredError::Unreadable),
-        both(ReportEnteredError::NoMatch(3)),
-        both(ReportEnteredError::AlreadyFinished(3)),
-        both(PhaseDraftError::UnknownFormat("Swiss".to_owned())),
-        both(LoadError::<io::Error>::NotFound),
-        both(LoadError::Storage(io::Error::other("closed"))),
-        both(LoadError::<io::Error>::Newer(
-            serde_json::from_str("1").unwrap(),
-        )),
-        both(LoadError::<io::Error>::Damaged(
-            serde_json::from_str::<u32>("x").unwrap_err(),
-        )),
-        both(ImportError::NoCompetition(
-            serde_json::from_str::<u32>("x").unwrap_err(),
-        )),
-        both(ImportError::Newer(serde_json::from_str("1").unwrap())),
-        both(ImportError::Damaged(
-            serde_json::from_str::<u32>("x").unwrap_err(),
-        )),
-        both(EditPhaseError::ResultDoesNotFit(vec![1])),
-        both(EditPhaseError::ResultDoesNotFit(vec![1, 2])),
-        both(UndoReportError::DependedOn),
-        both(UndoReportError::DependedOnBy(vec![3])),
-        both(UndoReportError::DependedOnBy(vec![3, 4, 10])),
-        both(UndoError::NothingToUndo),
-        both(UndoError::ChangedElsewhere),
-        both(RedoError::NothingToRedo),
-        both(RedoError::ChangedElsewhere),
-    ] {
-        assert_eq!(message, display);
-    }
+fn an_error_displays_its_english_message() {
+    assert_eq!(
+        AddEntrantError::DuplicateName("Alice".to_owned()).to_string(),
+        "there already is an entrant named “Alice”"
+    );
+    assert_eq!(
+        UndoReportError::DependedOnBy(vec![3, 4, 10]).to_string(),
+        "the results of matches 3, 4, 10 depend on this one; reopen those matches first"
+    );
+    assert_eq!(
+        EditPhaseError::NoPhase(NoPhase).to_string(),
+        "the competition has no phase yet"
+    );
 }
 
 #[test]

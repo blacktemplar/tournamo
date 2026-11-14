@@ -21,7 +21,10 @@ use plugin_factory::{
 };
 use tournament_engine::PhasePlugins;
 
-use crate::i18n::{Arg, Text};
+use crate::{
+    i18n::{Arg, Text},
+    rejected::Rejections,
+};
 
 /// The plugins of a phase being configured, see the [module](self).
 #[derive(Clone)]
@@ -30,14 +33,7 @@ pub struct PhaseForm {
     following_suggestions: bool,
     /// What was entered into a number field and not taken, with why, by the path of the field.
     /// Dropped when its section is replaced or edited structurally, which may move the fields.
-    rejected: Vec<Rejected>,
-}
-
-#[derive(Debug, Clone)]
-struct Rejected {
-    path: Path,
-    entered: String,
-    problem: Text,
+    rejected: Rejections<Path>,
 }
 
 /// What a [`PhaseForm`] shows: plain data for a screen to lay out.
@@ -273,7 +269,7 @@ impl PhaseForm {
         Self {
             draft,
             following_suggestions: false,
-            rejected: Vec::new(),
+            rejected: Rejections::default(),
         }
     }
 
@@ -291,8 +287,7 @@ impl PhaseForm {
     pub fn apply_suggestions(&mut self) -> Result<(), ConfigError> {
         self.draft = suggested(self.draft.clone())?;
         self.following_suggestions = true;
-        self.rejected
-            .retain(|rejected| !is_suggested(&rejected.path));
+        self.rejected.retain(|path| !is_suggested(path));
         Ok(())
     }
 
@@ -315,8 +310,8 @@ impl PhaseForm {
                 unplaced.push(text);
             }
         }
-        for rejected in &self.rejected {
-            place(&mut fields, &rejected.path, &rejected.problem);
+        for (path, rejected) in self.rejected.iter() {
+            place(&mut fields, path, &rejected.problem);
         }
         // a phase ranked by nothing is played all the same, with every entrant tied
         if let Some(ranking) = fields
@@ -360,7 +355,7 @@ impl PhaseForm {
                 found: "a number",
             });
         };
-        self.rejected.retain(|rejected| rejected.path != *path);
+        self.rejected.forget(path);
         let out_of_range = |range| with_range(Text::new("issue-out-of-range"), range);
         let problem = match number(entered, range) {
             Ok(number) => {
@@ -379,11 +374,7 @@ impl PhaseForm {
                 Text::new("issue-not-a-number").with("entered", entered.trim())
             }
         };
-        self.rejected.push(Rejected {
-            path: path.clone(),
-            entered: entered.to_owned(),
-            problem,
-        });
+        self.rejected.reject(path.clone(), entered, problem);
         if is_suggested(path) {
             self.following_suggestions = false;
         }
@@ -400,9 +391,8 @@ impl PhaseForm {
         form.enter(path, entered)?;
         Ok(form
             .rejected
-            .into_iter()
-            .find(|rejected| rejected.path == *path)
-            .map(|rejected| rejected.problem))
+            .get(path)
+            .map(|rejected| rejected.problem.clone()))
     }
 
     /// Answers the field at `path`, which may be left without an answer, if `answered`, or else
@@ -548,8 +538,7 @@ impl PhaseForm {
             self.rejected.clear();
         } else {
             // Basic settings do not move customized ranking or metric fields.
-            self.rejected
-                .retain(|rejected| is_suggested(&rejected.path));
+            self.rejected.retain(is_suggested);
         }
         Ok(())
     }
@@ -568,11 +557,7 @@ impl PhaseForm {
             .zip(completed)
             // Rejected input stays visible even when the field becomes irrelevant.
             .filter(|(node, _)| {
-                !whole.irrelevant.contains(&node.path)
-                    || self
-                        .rejected
-                        .iter()
-                        .any(|rejected| rejected.path == node.path)
+                !whole.irrelevant.contains(&node.path) || self.rejected.contains(&node.path)
             })
             .map(|(node, completed)| {
                 let field = &node.field;
@@ -602,8 +587,7 @@ impl PhaseForm {
         let answer = node.answer;
         let entered = || {
             self.rejected
-                .iter()
-                .find(|rejected| rejected.path == *path)
+                .get(path)
                 .map(|rejected| rejected.entered.clone())
         };
         match kind {

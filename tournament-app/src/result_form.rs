@@ -44,6 +44,7 @@ use tournament_engine::{
 use crate::{
     form::{NotTaken, typed_number, with_range},
     i18n::Text,
+    rejected::Rejections,
     view,
 };
 
@@ -63,21 +64,12 @@ struct Entry {
     chosen: Option<MatchResult>,
     reason: Option<ResultReason>,
     values: Values,
-    /// What was typed for a side of a field and not taken, which leaves the side without a value.
-    rejected: Vec<Rejected>,
+    /// What was typed for a side of a field and not taken, by the field and side, which leaves the
+    /// side without a value.
+    rejected: Rejections<(FieldKey, Team)>,
     /// What was entered for its parts, from the first on: nothing for a part after them. Made as
     /// they are entered, since a level may take many parts.
     parts: Vec<Entry>,
-}
-
-/// What was typed for `team` into the field `field` of a part and not taken, with why, see
-/// [`ResultForm::enter`].
-#[derive(Debug, Clone)]
-struct Rejected {
-    field: FieldKey,
-    team: Team,
-    entered: String,
-    problem: Text,
 }
 
 impl Entry {
@@ -360,9 +352,7 @@ impl ResultForm {
         value: Option<EnteredValue>,
     ) {
         let entry = self.root.at(&self.template.root, path);
-        entry
-            .rejected
-            .retain(|rejected| rejected.field != *field || rejected.team != team);
+        entry.rejected.forget(&(field.clone(), team));
         let mut sides = entry.values.get(field).copied().unwrap_or_default();
         match team {
             Team::A => sides.a = value,
@@ -396,15 +386,11 @@ impl ResultForm {
             Ok(value) => self.set_value(path, field, team, value),
             Err(problem) => {
                 self.set_value(path, field, team, None);
-                self.root
-                    .at(&self.template.root, path)
-                    .rejected
-                    .push(Rejected {
-                        field: field.clone(),
-                        team,
-                        entered: entered.to_owned(),
-                        problem,
-                    });
+                self.root.at(&self.template.root, path).rejected.reject(
+                    (field.clone(), team),
+                    entered,
+                    problem,
+                );
             }
         }
     }
@@ -431,10 +417,7 @@ impl ResultForm {
         };
         let values = entry.values.get(field).copied().unwrap_or_default();
         let (entered, other) = (*values.of(team), *values.of(team.opponent()));
-        let other_typed = entry
-            .rejected
-            .iter()
-            .any(|rejected| rejected.field == *field && rejected.team == team.opponent());
+        let other_typed = entry.rejected.contains(&(field.clone(), team.opponent()));
         // from one below the winning score on, the other side may win by more or lose
         let completes = match entered {
             Some(EnteredValue::Count(count)) => {
@@ -803,13 +786,13 @@ fn said_once<'a>(texts: impl IntoIterator<Item = &'a Text>) -> Vec<Text> {
 
 /// The view of `field`, with its values among `values` and what was typed for it and not taken
 /// among `rejected`, warning of a score unlike one the winner of the part usually has.
-fn field_view(field: &FieldSpec, values: &Values, rejected: &[Rejected]) -> FieldView {
+fn field_view(
+    field: &FieldSpec,
+    values: &Values,
+    rejected: &Rejections<(FieldKey, Team)>,
+) -> FieldView {
     let values = values.get(&field.key).copied().unwrap_or_default();
-    let rejected_of = |team: Team| {
-        rejected
-            .iter()
-            .find(|rejected| rejected.field == field.key && rejected.team == team)
-    };
+    let rejected_of = |team: Team| rejected.get(&(field.key.clone(), team));
     let typed = Sides::new(rejected_of(Team::A), rejected_of(Team::B));
     let entered = Sides::new(
         typed.a.map(|rejected| rejected.entered.clone()),

@@ -723,10 +723,67 @@ name `MatchRules` (the plugin describes the shape of a match, as a
 
 A competition is played in phases (issue #6). A phase is one configuration of
 plugins, played by one or more divisions: the groups of a group phase, the
-knockouts A, B and C of a phase of knockouts. *Planned*: several phases, each
-taking its entrants from the registration or from the standings of earlier
-ones, and a draw dealing them to its divisions. So far every phase has one
-division.
+knockouts A, B and C of a phase of knockouts. Each phase takes its entrants
+from its **sources**: ranges of places of the registration or of the overall
+standings of earlier phases. *Planned*: a draw dealing the field to several
+divisions. So far every phase has one division.
+
+- **Sources are typed data of `AddPhase`**, next to an optional name, not
+  fields of the schema: the schema has no kind for a reference to a phase, and
+  a list field refuses the same plugin twice. A `Source` is a `SourceOf`
+  (`Registration` or `Phase(PhaseId)`) and the places `from..=to`, to the last
+  place where `to` is `None`. Should sources become a plugin axis, they move
+  into the schema then.
+- **Ranges of places do not overlap.** `AddPhase` refuses a source that names
+  a phase not added before it, ends before it starts, or takes a place another
+  source of any phase takes. Every row of a phase then goes on to at most one
+  phase, which the ranking of the competition relies on. Places nobody takes
+  are fine. After the start, a phase taking entrants from the registration
+  alone is refused, since nothing would ever start it.
+- **Starting.** A phase is started by the operator, never automatically.
+  `StartCompetition` closes the registration: it draws the **lots** and starts
+  every phase fed by the registration alone; `StartPhase` starts any other
+  once every phase it takes entrants from is finished. Its **field** is its
+  sources in order, each the rows of its range best first, as many as there
+  are (`Competition::field_of`, each `Qualifier` with its `Origin`). There is
+  no qualification object between phases and no log entry of its own: the
+  qualification is the entry of the receiving phase.
+- **Lots, and the order of the registration.** At the start every entrant
+  gets a lot: their place in the entrants sorted by uuid and shuffled with
+  `Entropy::CompetitionStart`, exactly the order the start drew before, so an
+  old log replays into the same competition. The registration is ordered by
+  lot (`Competition::lots`). A ranking's lot is the best of its entrants', and
+  the unique rank of a standing breaks a tie by it, not by the initial rank,
+  which may come from an earlier phase. No rating is ever in the log.
+- **A tie at a cut is decided by lot, and the operator is told.** A source
+  takes places by unique rank, so the engine always has an answer and never
+  refuses a start; where rows sharing a rank end up on both sides of a cut, the
+  app names them and whom the lot favours (`StartPhaseError::CutThroughTie`),
+  and the operator starts anyway or adds a criterion first.
+- **Match numbers are unique in the competition.** The competition keeps the
+  highest number given so far, handed down to a division when it schedules. A
+  match that asks for no number gets the next one. A format that numbers its
+  matches from the start, a bracket, asks relative to its division: the
+  division gets the highest number so far as its base when it starts, and
+  after each scheduling the numbers up to `base +
+  PhaseFormat::highest_number()` are kept for it, so that a division started
+  next to it numbers on after its bracket.
+- **The competition ranking is derived, never stored**
+  (`Competition::ranking`): an entrant is placed by the latest started phase
+  they are in, at the place the phase starts at plus their rank there, less
+  one. A phase starts at the smallest place its sources start at, a source of
+  the registration at its first place, one of a phase at that phase's start
+  plus its first place, less one. Where a cut goes through rows sharing a
+  rank, each side of the cut shares the place of its first row, so that the
+  rows the lot left behind are placed after those it took on (the plain sum
+  would place them with the rows that went on). Ranges leaving gaps leave
+  gaps between the places.
+- **Undo across phases needs no mechanism of its own.** Undoing a result of a
+  finished phase leaves it unfinished, so a `StartPhase` after it no longer
+  applies and the undo is refused; the app names the phase started. Editing
+  a phase replays the starts after it with the field they have then. A phase
+  is removed by a targeted undo of its `AddPhase`, refused while it has
+  started or another phase takes entrants from it.
 
 - **A phase keeps its configuration, each division a copy of it.** `Phase`
   holds its `PhasePlugins` as configured, never changed after it was added,
@@ -746,9 +803,15 @@ division.
 - **Seeds.** Division 0 has the seed of its phase, so an old log replays into
   the same competition. (*Planned*: a later division derives its seed from the
   phase's and its index.)
-- **Saved layout.** A phase is saved as `{"id", "plugins", "seed", "started",
-  "divisions": [{"plugins", "data"}]}` (format 5), a division's data in the
-  layout a phase's had, ranks written, read and dropped. The converter from
+- **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",
+  "seed", "started", "divisions": [{"plugins", "data", "number_base"}]}`
+  (format 5), a division's data in the layout a phase's had, each ranking with
+  its `lot`, ranks written, read and dropped; the competition holds its `lots`
+  and the `highest_number` of a match. The converter from format 4 gives an
+  `AddPhase` and a phase no name and the whole registration, the rankings
+  their initial unique rank as their lot, the competition the order its phase
+  started in as its lots and the highest number of a match or of a pairing of
+  a bracket, a division the base 0. The converter from
   format 4 moves a started phase's `plugins` and `data` into its only division
   and leaves the phase its plugins whole: knowing no plugin, it cannot tell
   their state from their configuration. The typed read of a phase drops the
@@ -757,6 +820,13 @@ division.
   missing but keeps one that is there.
 
 Rejected:
+- A qualification object between phases, or a log entry of its own: the
+  receiving phase's sources say everything, and edit with the phase.
+- Starting a phase automatically once its sources are finished: the operator
+  decides when, e.g. after a tie at the cut.
+- Breaking ties of the standings by the initial rank: it may come from a
+  given order or an earlier phase, so a lot that is the same for every phase
+  is fairer, and in an old log both are the same.
 - Empty divisions from the moment a phase is added, with the plugins split
   into a configuration and a state type: saves the copy, but needs divisions
   before the draw has dealt the entrants.

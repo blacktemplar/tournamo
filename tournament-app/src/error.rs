@@ -1,62 +1,58 @@
 //! Why a [`Session`](crate::session::Session) refused to do something. An action that fails leaves
 //! the session unchanged.
 //!
-//! Each variant is something the operator is told: its `Display` in English, and as a
-//! [`Message`] in the operator's language.
+//! Each variant is something the operator is told, as a [`Message`] in the operator's language;
+//! its `Display` says that message in English.
 
 use std::fmt::Display;
 
 use plugin_factory::{config::ConfigError, draft::Issue};
 use thiserror::Error;
-use tournament_engine::undoable_state_machine::{StateMachineError, TransitionError};
+use tournament_engine::{
+    transitions::{self as engine, CompetitionAlreadyStarted},
+    undoable_state_machine::{StateMachineError, TransitionError},
+};
 
 use crate::{
     file::Format,
-    i18n::{Message, Text},
+    i18n::{Message, Text, english},
 };
 
 /// Why an entrant was not added.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum AddEntrantError {
-    #[error("an entrant name must not be empty")]
     EmptyName,
-    #[error("there already is an entrant named “{0}”")]
     DuplicateName(String),
-    #[error("the competition has started, so no entrant can be added anymore")]
     Started,
     /// The engine refused the entrant for a reason this crate does not know.
-    #[error("{0}")]
     Rejected(TransitionError),
 }
 
 /// Why an entrant was not removed.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum RemoveEntrantError {
-    #[error("there is no such entrant")]
     UnknownEntrant,
-    #[error("the competition has started, so no entrant can be removed anymore")]
     Started,
     /// The engine refused the removal for a reason this crate does not know.
-    #[error("{0}")]
     Rejected(TransitionError),
 }
 
 /// Why an entrant was not renamed.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum RenameEntrantError {
-    #[error("there is no such entrant")]
     UnknownEntrant,
-    #[error("an entrant name must not be empty")]
     EmptyName,
-    #[error("there already is an entrant named “{0}”")]
     DuplicateName(String),
 }
 
 /// Why there is no draft of a phase played in a format.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum PhaseDraftError {
     /// No registered phase format has this id.
-    #[error("there is no format “{0}”")]
     UnknownFormat(String),
     /// The format offers an answer its own schema does not take.
     #[error(transparent)]
@@ -65,127 +61,106 @@ pub enum PhaseDraftError {
 
 /// Why a phase was not added.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum AddPhaseError {
     /// No phase can be built from the draft: its plugins do not fit together, or miss something no
     /// implied plugin provides. What is wrong is what the [`FormView`](crate::form::FormView) of
     /// the draft shows at its fields, in the operator's language.
-    #[error("the phase cannot be played this way; the form shows what to change")]
     Invalid(Vec<Issue>),
-    #[error("the competition already has a phase, and only one is supported")]
     PhaseAlreadyAdded,
-    #[error("the competition has started, so no phase can be added anymore")]
     Started,
     /// The engine refused the phase for a reason this crate does not know.
-    #[error("{0}")]
     Rejected(TransitionError),
 }
 
 /// The competition has no phase yet.
 #[derive(Debug, Error)]
-#[error("the competition has no phase yet")]
+#[error("{}", english(self))]
 pub struct NoPhase;
 
 /// Why the phase was not changed.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum EditPhaseError {
     #[error(transparent)]
     NoPhase(#[from] NoPhase),
     /// No phase can be built from the draft, see [`AddPhaseError::Invalid`].
-    #[error("the phase cannot be played this way; the form shows what to change")]
     Invalid(Vec<Issue>),
     /// The edited phase does not play the matches of these numbers (see
     /// [`MatchRow::number`](crate::view::MatchRow::number)), ascending and at least one, as they
     /// were reported, e.g. since its format does not schedule them; reopening them allows the
     /// edit.
-    #[error("{}", result_does_not_fit(.0))]
     ResultDoesNotFit(Vec<usize>),
     /// The edited phase does not fit another change made after the phase was added.
-    #[error("the phase cannot be changed this way, since a later change no longer fits it: {0}")]
     DoesNotFit(TransitionError),
 }
 
 /// Why the competition did not start.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum StartError {
-    #[error("the competition has started already")]
     Started,
     #[error(transparent)]
     NoPhase(#[from] NoPhase),
-    #[error("a competition needs at least two entrants")]
     TooFewEntrants,
     /// The format of the phase needs at least this many entrants, as its `min_entrants` says.
-    #[error("the format needs at least {0} entrants")]
     TooFewForFormat(usize),
     /// The engine refused the start for a reason this crate does not know.
-    #[error("{0}")]
     Rejected(TransitionError),
 }
 
 /// Why a result was not reported.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum ReportError {
-    #[error("the competition has not started yet")]
     NotStarted,
-    #[error("there is no such match")]
     UnknownMatch,
-    #[error("the match has a result already")]
     AlreadyFinished,
-    #[error("a match of this format cannot end in a draw")]
     DrawNotAllowed,
     /// A result entered that neither says nor suggests who won.
-    #[error("the result does not say who won")]
     Undecided,
     /// Something typed into the [`ResultForm`](crate::result_form::ResultForm) was not taken.
-    #[error("a value entered is not taken; correct the one marked")]
     NotTaken,
     /// The engine refused the result for a reason this crate does not know.
-    #[error("{0}")]
     Rejected(TransitionError),
 }
 
 /// Why a result entered as text was not reported, see
 /// [`Session::report_entered`](crate::session::Session::report_entered).
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum ReportEnteredError {
-    #[error(
-        "enter the number of a match and its result, 1, X or 2, e.g. “3 1”, or part of the \
-         winner's name"
-    )]
     Unreadable,
     /// The number of a match was entered alone.
-    #[error("enter the result of match {0} as well: 1, X or 2")]
     MissingResult(usize),
-    #[error("there is no match {0}")]
     NoMatch(usize),
-    #[error("match {0} has a result already")]
     AlreadyFinished(usize),
     /// No open match has an entrant whose name contains what was entered, which it holds as
     /// entered, without the spaces around it.
-    #[error("no open match has an entrant whose name contains “{0}”")]
     NoNameFound(String),
     /// Open matches have an entrant whose name contains `name`, but not the match `number`.
-    #[error("no open match {number} has an entrant whose name contains “{name}”")]
-    NotInMatch { name: String, number: usize },
+    NotInMatch {
+        name: String,
+        number: usize,
+    },
     /// The name entered is found in `matches` open matches, e.g. in the match numbered `number`.
-    #[error("“{name}” fits {matches} open matches; add the number of one, e.g. “{name} {number}”")]
     SeveralMatches {
         name: String,
         matches: usize,
         number: usize,
     },
     /// The name entered is found on both sides of the match `number`, so it names no winner.
-    #[error("“{name}” fits both sides of match {number}; enter more of the name")]
-    BothSides { name: String, number: usize },
+    BothSides {
+        name: String,
+        number: usize,
+    },
     /// The match of this number does not take the scores entered: they are more than its parts,
     /// one is of a part without a score, or a decimal is of a score of whole numbers, see
     /// [`ResultForm::enter_scores`](crate::result_form::ResultForm::enter_scores).
-    #[error("match {0} does not take the scores entered")]
     ScoresNotTaken(usize),
     /// The scores entered for the match of this number say no result, and none was entered.
-    #[error("the scores entered do not say who won match {0}; add the result: 1, X or 2")]
     Undecided(usize),
     /// The result entered for the match of this number is not the one its scores entered say.
-    #[error("the result entered for match {0} is not the one its scores say")]
     AgainstScores(usize),
     #[error(transparent)]
     Report(#[from] ReportError),
@@ -193,51 +168,19 @@ pub enum ReportEnteredError {
 
 /// Why a result was not undone.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum UndoReportError {
-    #[error("the competition has not started yet")]
     NotStarted,
-    #[error("there is no such match")]
     UnknownMatch,
-    #[error("the match has no result that could be undone")]
     NotReported,
     /// A later result depends on this one, e.g. that of the final the undone semifinal decided the
     /// participants of; it has to be undone first.
-    #[error("a later result depends on this one; undo that one first")]
     DependedOn,
     /// The results of the matches of these numbers (see
     /// [`MatchRow::number`](crate::view::MatchRow::number)), ascending and at least one, depend on
     /// this one, e.g. that of the final the undone semifinal decided the participants of; they
     /// have to be undone first.
-    #[error("{}", depended_on_by(.0))]
     DependedOnBy(Vec<usize>),
-}
-
-/// What [`EditPhaseError::ResultDoesNotFit`] says in English of the matches `numbers`.
-fn result_does_not_fit(numbers: &[usize]) -> String {
-    match numbers {
-        [number] => format!(
-            "the phase changed this way does not play match {number}, which has a result; reopen \
-             that match first to change the phase this way"
-        ),
-        numbers => format!(
-            "the phase changed this way does not play matches {}, which have results; reopen \
-             those matches first to change the phase this way",
-            listed(numbers)
-        ),
-    }
-}
-
-/// What [`UndoReportError::DependedOnBy`] says in English of the matches `numbers`.
-fn depended_on_by(numbers: &[usize]) -> String {
-    match numbers {
-        [number] => {
-            format!("the result of match {number} depends on this one; reopen that match first")
-        }
-        numbers => format!(
-            "the results of matches {} depend on this one; reopen those matches first",
-            listed(numbers)
-        ),
-    }
 }
 
 /// The numbers of matches as a message lists them: `5, 7, 9`.
@@ -251,56 +194,43 @@ fn listed(numbers: &[usize]) -> String {
 
 /// Why [`Session::undo`](crate::session::Session::undo) undid nothing.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum UndoError {
     /// The session has done nothing it has not undone.
-    #[error("there is nothing to undo")]
     NothingToUndo,
     /// A change of another session undid the action, or does not apply without it, so nothing more
     /// can be undone.
-    #[error(
-        "a change made elsewhere since keeps this from being undone, so nothing more can be undone"
-    )]
     ChangedElsewhere,
 }
 
 /// Why [`Session::redo`](crate::session::Session::redo) redid nothing.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum RedoError {
     /// The session has undone nothing since its latest action.
-    #[error("there is nothing to redo")]
     NothingToRedo,
     /// A change of another session redid the action, or does not apply with it, so nothing more can
     /// be redone.
-    #[error(
-        "a change made elsewhere since keeps this from being redone, so nothing more can be redone"
-    )]
     ChangedElsewhere,
 }
 
 /// Why a stored competition was not loaded, with its source saying why that is. `E` is the error
 /// of the storage.
 #[derive(Debug, Error)]
-pub enum LoadError<E> {
-    #[error("there is no such competition")]
+#[error("{}", english(self))]
+pub enum LoadError<E: Display> {
     NotFound,
-    #[error("the competition cannot be read")]
     Storage(#[source] E),
     /// It was saved in this format, newer than [`Format::CURRENT`](crate::file::Format::CURRENT).
-    #[error(
-        "the competition was saved by a newer version of Tournamo, which this one cannot open; \
-         reload the page for the newest"
-    )]
     Newer(Format),
     /// What is stored does not read, e.g. an entry of the log of a plugin this version does not
     /// have; the source says where.
-    #[error("the competition is stored damaged")]
     Damaged(#[source] serde_json::Error),
     /// The log does not replay into a competition.
-    #[error("the log does not replay")]
     Replay(#[source] StateMachineError),
 }
 
-impl<E> From<ImportError> for LoadError<E> {
+impl<E: Display> From<ImportError> for LoadError<E> {
     /// What stops a file from being imported stops the record holding it from being loaded.
     fn from(error: ImportError) -> Self {
         match error {
@@ -312,21 +242,55 @@ impl<E> From<ImportError> for LoadError<E> {
 
 /// Why a file was not imported.
 #[derive(Debug, Error)]
+#[error("{}", english(self))]
 pub enum ImportError {
     /// The file is no JSON object holding a log and people; the source says where reading it
     /// stopped.
-    #[error("the file is no competition of Tournamo")]
     NoCompetition(#[source] serde_json::Error),
     /// The file is of this format, newer than [`Format::CURRENT`](crate::file::Format::CURRENT).
-    #[error(
-        "the file is of a newer version of Tournamo, which this one cannot open; reload the page \
-         for the newest"
-    )]
     Newer(Format),
     /// The file holds a log and people that do not load, e.g. a log of a plugin this version does
     /// not have; the source says where.
-    #[error("the file is a competition of Tournamo, but damaged")]
     Damaged(#[source] serde_json::Error),
+}
+
+/// Why the engine refused an action, where the app says it in words of its own: the engine errors
+/// the app knows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Refusal {
+    Started,
+    UnknownEntrant,
+    PhaseAlreadyAdded,
+    NoPhase,
+    TooFewEntrants,
+    MatchFinished,
+    DrawNotAllowed,
+}
+
+impl Refusal {
+    /// The refusal `error` says, if the app knows it.
+    pub(crate) fn of(error: &TransitionError) -> Option<Self> {
+        if error.is::<CompetitionAlreadyStarted>() {
+            return Some(Self::Started);
+        }
+        if error.is::<engine::RemoveEntrantError>() {
+            return Some(Self::UnknownEntrant);
+        }
+        if error.is::<engine::AddPhaseError>() {
+            return Some(Self::PhaseAlreadyAdded);
+        }
+        if let Some(error) = error.downcast_ref() {
+            return Some(match error {
+                engine::StartCompetitionError::NoPhases => Self::NoPhase,
+                engine::StartCompetitionError::TooFewEntrants => Self::TooFewEntrants,
+            });
+        }
+        match error.downcast_ref() {
+            Some(engine::ReportMatchResultError::MatchAlreadyFinished) => Some(Self::MatchFinished),
+            Some(engine::ReportMatchResultError::DrawNotAllowed) => Some(Self::DrawNotAllowed),
+            _ => None,
+        }
+    }
 }
 
 impl Message for AddEntrantError {

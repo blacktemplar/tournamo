@@ -2,16 +2,12 @@
 
 use std::collections::HashMap;
 
-use tournament_engine::{
-    AddEntrant, Entrant, EntrantId, RemoveEntrant,
-    transitions::{self as engine, CompetitionAlreadyStarted},
-    uuid::Uuid,
-};
+use tournament_engine::{AddEntrant, Entrant, EntrantId, RemoveEntrant, uuid::Uuid};
 use unicode_normalization::UnicodeNormalization as _;
 
-use super::{Session, rejection};
+use super::{Session, refused};
 use crate::{
-    error::{AddEntrantError, RemoveEntrantError, RenameEntrantError},
+    error::{AddEntrantError, Refusal, RemoveEntrantError, RenameEntrantError},
     people::Person,
     view::EntrantRow,
 };
@@ -107,12 +103,9 @@ impl Session {
         self.history
             .apply_new(&mut self.machine, AddEntrant::new(Entrant::new(id)).into())
             .map_err(|error| {
-                let error = rejection(error);
-                if error.is::<CompetitionAlreadyStarted>() {
-                    AddEntrantError::Started
-                } else {
-                    AddEntrantError::Rejected(error)
-                }
+                refused(error, AddEntrantError::Rejected, |refusal| {
+                    (refusal == Refusal::Started).then_some(AddEntrantError::Started)
+                })
             })?;
         self.people.add(Person::new(id, name));
         self.people_changes += 1;
@@ -163,14 +156,15 @@ impl Session {
         self.history
             .apply_new(&mut self.machine, RemoveEntrant::new(id).into())
             .map_err(|error| {
-                let error = rejection(error);
-                if error.is::<CompetitionAlreadyStarted>() {
-                    RemoveEntrantError::Started
-                } else if error.is::<engine::RemoveEntrantError>() {
-                    RemoveEntrantError::UnknownEntrant
-                } else {
-                    RemoveEntrantError::Rejected(error)
-                }
+                refused(
+                    error,
+                    RemoveEntrantError::Rejected,
+                    |refusal| match refusal {
+                        Refusal::Started => Some(RemoveEntrantError::Started),
+                        Refusal::UnknownEntrant => Some(RemoveEntrantError::UnknownEntrant),
+                        _ => None,
+                    },
+                )
             })?;
         Ok(())
     }

@@ -1,5 +1,7 @@
 //! Loading, saving, catching up with, importing and exporting a session's competition.
 
+use std::fmt::Display;
+
 use tournament_engine::{
     Competition, CompetitionStateMachine, CompetitionTransition, undoable_state_machine::LogEntry,
     uuid::Uuid,
@@ -74,7 +76,7 @@ impl Session {
     /// another session that took over the competition, and the log would fork. An unsaved
     /// competition is no change of the session's own, e.g. of one opened read-only that an older
     /// version saved.
-    pub fn catch_up_with<E>(&mut self, stored: &Stored) -> Result<usize, LoadError<E>> {
+    pub fn catch_up_with<E: Display>(&mut self, stored: &Stored) -> Result<usize, LoadError<E>> {
         assert!(
             self.changes() == self.saved_changes,
             "a session catches up only with nothing unsaved"

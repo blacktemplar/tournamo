@@ -1,0 +1,161 @@
+/* The standings */
+
+/* A shadow at each edge where more is out of sight: the shadows stay at the edges, and a cover in
+ * the colour of the card scrolls with the content, hiding the shadow at an edge reached. */
+.scroll {
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right / 2.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--scroll-shadow), transparent) left / 0.75rem 100%
+      no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right / 0.75rem
+      100% no-repeat scroll;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+th,
+td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+th {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+/* the places with a medal once every match is played (play.rs): bold, the first tinted, the
+ * rank on a disc in the medal's colour, so that the medals differ by their rank, not by the
+ * colour alone; as high as a line, so that the row does not grow. Every rank is in such a box,
+ * coloured or not, its digits as far from the box's right edge, so that they line up */
+.place {
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 1.6em;
+  height: 1.6em;
+  margin-block: -0.3em;
+  padding-inline: 0.5em;
+  line-height: 1.6em;
+  text-align: right;
+}
+
+.medal {
+  border-radius: 0.8em;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 25%);
+  color: var(--on-medal);
+  font-weight: 700;
+}
+
+.medal.gold {
+  background: var(--gold);
+}
+
+.medal.silver {
+  background: var(--silver);
+}
+
+.medal.bronze {
+  background: var(--bronze);
+}
+
+/* the name heading its row (play.rs) reads as a cell, not as a header of the columns */
+#standing-list tbody th {
+  color: var(--text);
+  font-size: inherit;
+  font-weight: normal;
+}
+
+tr.podium td,
+#standing-list tr.podium th {
+  font-weight: 600;
+}
+
+tr.podium[data-rank="1"] :is(td, th) {
+  background: var(--accent-subtle);
+}
+
+/* who won, above everything else once every match is played */
+.winners-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-subtle);
+}
+
+.winners-banner > .icon {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  color: var(--accent);
+}
+
+.winners-banner h2 {
+  margin: 0;
+}
+
+.winners-banner p {
+  margin: var(--space-1) 0 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* the toggletip of a header: small, so that the header row stays low, and its text aligned with
+ * the column's right edge, so that the last column's does not run out of the table */
+th .toggletip > button.small {
+  min-height: 1.75rem;
+  padding: 0 var(--space-1);
+}
+
+/* where it is not across the bottom of a narrow screen; narrow, since the table, which scrolls,
+ * cuts off what reaches out of it, and the columns of metrics follow the rank and the name */
+@media not (max-width: 40rem) {
+  th .toggletip-text {
+    right: 0;
+    left: auto;
+    max-width: 14rem;
+  }
+}
+
+/* the names wrap, and stay in sight while the other columns scroll */
+th.name,
+td.name {
+  position: sticky;
+  left: 0;
+  min-width: 8rem;
+  max-width: 16rem;
+  background: var(--surface);
+  text-align: left;
+  white-space: normal;
+}
+
+/* in the standings, the rank stays in sight with the name, at a width of its own that the name
+ * is placed after */
+#standing-list .rank {
+  position: sticky;
+  left: 0;
+  width: 3.25rem;
+  min-width: 3.25rem;
+  background: var(--surface);
+}
+
+#standing-list .name {
+  left: 3.25rem;
+  min-width: 7rem;
+}
+
+/* the metrics of an entrant yet to play, all alike, recede behind the name */
+#standing-list tr.unplayed td.metric {
+  color: var(--text-muted);
+}

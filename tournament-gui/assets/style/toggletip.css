@@ -1,0 +1,69 @@
+/* A toggletip (toggletip.rs): its text below its button, shown while the pointer is on either,
+ * while the button has the focus of the keyboard, and once a click opened it; not after Escape or
+ * a click closing it hid it, which also ends what a tap leaves hovered */
+
+.toggletip {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.toggletip > button.small {
+  padding: 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+.toggletip-text {
+  position: absolute;
+  z-index: 10;
+  /* right below the button, so that the pointer moving on to it does not leave the toggletip */
+  top: 100%;
+  left: 0;
+  display: none;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-style: normal;
+  font-weight: normal;
+  text-align: left;
+  white-space: normal;
+}
+
+.toggletip[data-opened] > .toggletip-text,
+.toggletip:not([data-hidden]):hover > .toggletip-text,
+.toggletip:not([data-hidden]):has(> button:focus-visible) > .toggletip-text {
+  display: block;
+}
+
+/* extending to the left of a button in the right half of where it can show, above one in the
+ * lower half (toggletip.rs) */
+@media not (max-width: 40rem) {
+  .toggletip[data-align="end"] > .toggletip-text {
+    right: 0;
+    left: auto;
+  }
+
+  .toggletip[data-side="above"] > .toggletip-text {
+    top: auto;
+    bottom: 100%;
+  }
+}
+
+/* across the bottom of a narrow screen, where it fits wherever its button is */
+@media (max-width: 40rem) {
+  .toggletip-text {
+    position: fixed;
+    top: auto;
+    right: var(--space-3);
+    bottom: var(--space-3);
+    left: var(--space-3);
+    width: auto;
+    max-width: none;
+  }
+}

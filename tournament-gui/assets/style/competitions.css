@@ -1,0 +1,61 @@
+/* The competitions */
+
+#competition-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+#competition-list li {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-2);
+}
+
+#competition-list li:last-child {
+  border-bottom: 0;
+}
+
+/* the name, and below it how far the competition is */
+#competition-list .listing {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+#competition-list .name {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  color: inherit;
+  font-weight: 600;
+}
+
+#competition-list .progress {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.listing-buttons {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+/* the field of a dialog asking for a text, e.g. a new name */
+.dialog-form > label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.dialog-form > input {
+  width: 100%;
+}
+
+.file-button {
+  margin-top: var(--space-3);
+}

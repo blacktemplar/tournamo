@@ -1,0 +1,57 @@
+/* Before the start (setup.rs): the entrants, and the start */
+
+/* Entrants */
+
+/* growing with the page, the field adding one below it */
+#entrant-list {
+  padding: 0;
+  margin: 0 0 var(--space-3);
+  counter-reset: entrant;
+  list-style: none;
+}
+
+#entrant-list li {
+  display: flex;
+  align-items: center;
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+  counter-increment: entrant;
+  gap: var(--space-2);
+}
+
+#entrant-list li::before {
+  width: 2em;
+  flex: none;
+  color: var(--text-muted);
+  content: counter(entrant);
+  text-align: right;
+}
+
+#entrant-list .name,
+#entrant-list .rename-entrant {
+  flex: 1;
+}
+
+#entrant-list .rename-entrant {
+  align-items: center;
+}
+
+/* the start, apart from the phase above it */
+/* below the field and its button; no room, and no gap, while it says nothing, staying a live
+ * region all the same */
+#entrant-like,
+.name-taken {
+  width: 100%;
+  margin: 0;
+}
+
+#entrant-like:empty,
+.name-taken:empty {
+  display: contents;
+}
+
+.start {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-4);
+}

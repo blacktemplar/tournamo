@@ -1,0 +1,83 @@
+/* The page's tokens. Every colour of the other stylesheets is one of them, each light and dark
+ * (`light-dark()`), whichever `color-scheme` says: the system's, unless the operator chose one
+ * (`data-theme` of `<html>`, see theme.rs). The accent is the navy of the icon. The pairs meet
+ * WCAG AA in both: text 4.5:1 against what it is on, borders of controls and the focus ring 3:1. */
+
+:root {
+  color-scheme: light dark;
+
+  --text: light-dark(#1b1f24, #e6e8eb);
+  --text-muted: light-dark(#57606a, #9aa4ae);
+  /* the cards; in the dark lighter than the page by 1.2:1, so that they stand out from it */
+  --surface: light-dark(#fff, #21262d);
+  --background: light-dark(#f3f5f7, #111418);
+  --bar: light-dark(#fff, #161a1f);
+  /* under what the pointer is on, and what is chosen without being the accent */
+  --hover: light-dark(#eef1f4, #2d333b);
+  --border: light-dark(#d8dee4, #2f363d);
+  --border-strong: light-dark(#848d97, #6b7681);
+  /* navy would not stand out from the dark, so lighter there */
+  --accent: light-dark(#1f4e79, #79b0e6);
+  --accent-hover: light-dark(#173b5c, #9cc5ee);
+  --on-accent: light-dark(#fff, #0b1a2a);
+  /* a tint of the accent, e.g. under what is chosen */
+  --accent-subtle: light-dark(#e7eff7, #1f3a57);
+  --focus: light-dark(#2f73d0, #58a6ff);
+  --error: light-dark(#b42318, #ff8a80);
+  --error-subtle: light-dark(#fef3f2, #2d1a1a);
+  /* under a win, e.g. in the cross table, as --error-subtle is under a loss */
+  --win-subtle: light-dark(#e8f5ec, #1a2e22);
+  /* text on the colour of errors, e.g. on a button deleting */
+  --on-error: light-dark(#fff, #2a0d0b);
+  --warning: light-dark(#b54708, #e3a13b);
+  --warning-subtle: light-dark(#fffaeb, #2a2113);
+  /* the discs of the medals, under their rank, which tells them apart, so that they need not
+   * stand out 3:1 and can have the medals' colours; the rank on them 4.5:1 in --on-medal */
+  --gold: light-dark(#f2c230, #e0b84a);
+  --silver: light-dark(#c9ced3, #c0c7ce);
+  --bronze: light-dark(#d08a50, #d08a50);
+  --on-medal: light-dark(#1b1f24, #1b1f24);
+  --shadow: 0 1px 2px light-dark(rgb(16 24 40 / 6%), transparent);
+  /* at the edge where more of what scrolls sideways is out of sight */
+  --scroll-shadow: light-dark(rgb(16 24 40 / 18%), rgb(0 0 0 / 70%));
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --radius: 0.4rem;
+  --radius-card: 0.6rem;
+  /* the height of a control, big enough to be tapped */
+  --control: 2.75rem;
+  --bar-height: 3.5rem;
+
+  /* The components (src/components) in the colours of the page: each of their theme's variables
+   * is one of the tokens, which follow the system themselves. */
+  --primary-color: var(--surface);
+  --primary-color-1: var(--surface);
+  --primary-color-2: var(--surface);
+  --primary-color-3: var(--surface);
+  --primary-color-4: var(--hover);
+  --primary-color-5: var(--hover);
+  /* the outlines of controls, 3:1 */
+  --primary-color-6: var(--border-strong);
+  --primary-color-7: var(--border-strong);
+  --secondary-color: var(--text);
+  --secondary-color-1: var(--text);
+  --secondary-color-2: var(--text);
+  --secondary-color-3: var(--text);
+  --secondary-color-4: var(--text);
+  --secondary-color-5: var(--text-muted);
+  --secondary-color-6: var(--border);
+  --focused-border-color: var(--focus);
+}
+
+/* the colours the operator chose, whatever the system's */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

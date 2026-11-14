@@ -1,0 +1,117 @@
+/* Notices */
+
+.error {
+  color: var(--error);
+}
+
+/* the alert stays on the page while it says nothing, without taking room */
+.error[role="alert"]:not(:empty) {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-left: 4px solid var(--error);
+  border-radius: var(--radius);
+  background: var(--error-subtle);
+}
+
+.error[role="alert"]:empty {
+  margin: 0;
+}
+
+/* what a library or the browser said, below the alert, for whoever looks into it */
+.error-detail {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.error-detail p {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.warning,
+.notice {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--warning-subtle);
+}
+
+/* that the competition is only shown here: information rather than a warning */
+.notice {
+  border-left-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+/* shown on every screen until dismissed, so it takes little room */
+.warning {
+  font-size: 0.9rem;
+}
+
+.warning p {
+  margin: var(--space-1) 0;
+}
+
+/* the first line, which unfolds the rest */
+.warning summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.warning-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+  gap: var(--space-2);
+}
+
+.warning-buttons button {
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+}
+
+/* big enough to be tapped, as every control */
+@media (pointer: coarse) {
+  .warning-buttons button {
+    min-height: var(--control);
+  }
+}
+
+/* What was just done, over the bottom of the page, which it does not move, and gone after a while;
+ * in the colours of the page's text and surface, swapped. It takes no tap, so that it never
+ * catches one meant for what is below it. */
+.toast {
+  position: fixed;
+  z-index: 30;
+  bottom: var(--space-4);
+  left: 50%;
+  max-width: min(32rem, calc(100vw - 2 * var(--space-4)));
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  animation: toast 4s ease-in forwards;
+  background: var(--text);
+  box-shadow: var(--shadow);
+  color: var(--surface);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+@keyframes toast {
+  0%,
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation-timing-function: step-end;
+  }
+}

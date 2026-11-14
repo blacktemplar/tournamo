@@ -22,21 +22,44 @@ use thiserror::Error;
 use tournament_app::{
     error::{self as app_error, ImportError, RedoError, UndoError},
     file::{File, Format},
+    form::PhaseForm,
     i18n::{Language, Translator},
     session::Session as AppSession,
     view,
 };
 use tournament_engine::{
     Annotated as _, Competition, Division, DivisionData, Entrant, EntrantId, Match, MatchId,
-    MatchResult, Phase, PhasePlugins, RankingId, Sides, TypeMap,
+    MatchResult, Phase, PhaseId, PhasePlugins, RankingId, Sides, Source, SourceOf, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
 use crate::{
-    command::{Command, Reported, ReportedResult},
+    command::{Command, Reported, ReportedResult, SourceArg},
     questionnaire::{self, AcceptDefaults, IssueList},
     storage::Storage,
 };
+
+/// What a phase configured at the prompt is for, see [`Session::apply_phase`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Configuring {
+    /// A phase added, named `name` and taking entrants `from`, see `add-phase`.
+    Added {
+        name: Option<String>,
+        from: Vec<SourceArg>,
+    },
+    /// The phase of the number `phase` edited, by default the only running one.
+    Edited { phase: Option<NonZeroUsize> },
+}
+
+impl Configuring {
+    /// What the prompt says when the configuration is cancelled.
+    pub fn cancelled(&self) -> &'static str {
+        match self {
+            Self::Added { .. } => "cancelled, no phase added",
+            Self::Edited { .. } => "cancelled, the phase is unchanged",
+        }
+    }
+}
 
 /// What the prompt does after a command was executed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +82,17 @@ pub enum Error {
     #[error(transparent)]
     EditPhase(app_error::EditPhaseError),
     #[error(transparent)]
+    UndoReport(app_error::UndoReportError),
+    #[error(transparent)]
     Start(#[from] app_error::StartError),
+    #[error(transparent)]
+    StartPhase(#[from] app_error::StartPhaseError),
+    #[error("there is no phase number {0}")]
+    UnknownPhase(NonZeroUsize),
+    #[error("several phases are running; name one with --phase")]
+    SeveralRunning,
+    #[error("the phase has not started yet")]
+    PhaseNotStarted,
     #[error(transparent)]
     Report(#[from] app_error::ReportError),
     #[error("there is no entrant named {0:?}")]
@@ -69,7 +102,7 @@ pub enum Error {
     #[error("configuring a phase needs a terminal to ask at; name a format, see `help add-phase`")]
     NotConfigured,
     /// A session never reads from the terminal, so the phase has to be edited before it reaches
-    /// one, see [`Session::edit_phase`].
+    /// one, see [`Session::apply_phase`].
     #[error("editing the phase needs a terminal to ask at")]
     NotEdited,
     #[error("the competition has no phase yet")]
@@ -225,15 +258,34 @@ impl Session {
             Command::Entrants => self.entrants(),
             Command::AddEntrant { names } => self.add_entrants(names)?,
             Command::RemoveEntrant { name } => self.remove_entrant(&name)?,
-            Command::AddPhase { format, answers } => {
-                self.add_phase_in(&format.ok_or(Error::NotConfigured)?, &answers)?
+            Command::AddPhase {
+                format,
+                answers,
+                name,
+                from,
+            } => {
+                let format = format.ok_or(Error::NotConfigured)?;
+                self.add_phase_in(&format, &answers, Configuring::Added { name, from })?
             }
-            Command::EditPhase => return Err(Error::NotEdited),
+            Command::EditPhase { .. } => return Err(Error::NotEdited),
             Command::Start => self.start()?,
-            Command::Matches { open, round } => self.matches(open, round)?,
-            Command::Report { number, entry } => self.report(number, entry)?,
-            Command::UndoReport { number } => self.undo_report(number)?,
-            Command::Ranking => self.ranking()?,
+            Command::StartPhase { phase } => self.start_phase(phase)?,
+            Command::Phases => self.phases(),
+            Command::Matches { open, round, phase } => {
+                self.matches(self.played_phase(phase)?, open, round)?
+            }
+            Command::Report {
+                phase,
+                number,
+                entry,
+            } => self.report(self.played_phase(phase)?, number, entry)?,
+            Command::UndoReport { phase, number } => {
+                self.undo_report(self.played_phase(phase)?, number)?
+            }
+            Command::Ranking {
+                competition: true, ..
+            } => self.competition_ranking(),
+            Command::Ranking { phase, .. } => self.ranking(self.played_phase(phase)?)?,
             Command::Undo => self.undo()?,
             Command::Redo => self.redo()?,
             Command::Save { name } => self.save(name)?,
@@ -291,72 +343,162 @@ impl Session {
         Ok(format!("{name} removed"))
     }
 
-    /// Adds the phase `draft` configures, which is the only phase the competition is played in.
-    /// `draft` is a [`Competition::phase_draft`] of this session's competition.
+    /// Adds the phase `draft` configures or edits a phase to it, as `configuring` says. `draft` is
+    /// a [`Competition::phase_draft`] of this session's competition.
     ///
     /// A calculator that has nothing to be configured is added for a metric the phase needs and
     /// nothing calculates, see [`Draft::add_implied`]; one with fields is never added unasked.
-    /// `draft` itself is left as it is, so that it can be fixed and added again.
+    /// `draft` itself is left as it is, so that it can be fixed and applied again.
     ///
     /// # Errors
-    /// Returns an error if the competition already has a phase, does not accept one anymore
-    /// because it has started, or if the plugins `draft` configures do not fit together, e.g.
-    /// [`Error::InvalidPhase`].
-    pub fn add_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<String, Error> {
-        self.session.add_phase(draft).map_err(|error| match error {
+    /// Returns an error if the plugins `draft` configures do not fit together, e.g.
+    /// [`Error::InvalidPhase`], the sources of an added phase are refused, or, for an edit, there
+    /// is no such phase or a change made after the phase was added, e.g. a reported result, does
+    /// not fit the edited phase.
+    pub fn apply_phase(
+        &mut self,
+        configuring: &Configuring,
+        draft: &Draft<PhasePlugins>,
+    ) -> Result<String, Error> {
+        match configuring {
+            Configuring::Added { name, from } => self.add_phase(draft, name.clone(), from),
+            Configuring::Edited { phase } => self.edit_phase(*phase, draft),
+        }
+    }
+
+    /// Adds the phase `draft` configures, named `name` and taking entrants `from`, by default
+    /// the whole registration for the first phase, else every place of the phase before.
+    fn add_phase(
+        &mut self,
+        draft: &Draft<PhasePlugins>,
+        name: Option<String>,
+        from: &[SourceArg],
+    ) -> Result<String, Error> {
+        let sources = if from.is_empty() {
+            vec![match self.competition().phases().values().last() {
+                Some(before) => Source::everyone(SourceOf::Phase(before.id())),
+                None => Source::registration(),
+            }]
+        } else {
+            from.iter()
+                .map(|source| {
+                    let of = match source.phase {
+                        None => SourceOf::Registration,
+                        Some(number) => SourceOf::Phase(self.phase_id(Some(number))?),
+                    };
+                    Ok(Source::new(of, source.from, source.to))
+                })
+                .collect::<Result<_, Error>>()?
+        };
+        let mut form = PhaseForm::new(draft.clone());
+        form.set_name(name.as_deref().unwrap_or_default());
+        form.set_sources(sources);
+        let id = self.session.add_phase(&form).map_err(|error| match error {
             app_error::AddPhaseError::Invalid(issues) => Error::InvalidPhase(issues),
             error => Error::AddPhase(error),
         })?;
-        let summary = summary(&self.added_phase()?.config());
+        let summary = summary(&self.phase(id)?.config());
         Ok(format!("phase added: {summary}"))
     }
 
-    /// A draft of the phase of the competition holding the configuration it is played with, see
-    /// [`Phase::config`], to be changed and handed to [`Self::edit_phase`].
+    /// A draft of the phase of the number `phase`, by default the only running one, holding the
+    /// configuration it is played with, see [`Phase::config`], to be changed and handed to
+    /// [`Self::apply_phase`].
     ///
     /// # Errors
-    /// Returns [`Error::NoPhase`] if the competition has no phase.
-    pub fn phase_draft_to_edit(&self) -> Result<Draft<PhasePlugins>, Error> {
+    /// Returns [`Error::NoPhase`] if the competition has no phase, and an error if there is no
+    /// such phase.
+    pub fn phase_draft_to_edit(
+        &self,
+        phase: Option<NonZeroUsize>,
+    ) -> Result<Draft<PhasePlugins>, Error> {
         self.session
-            .phase_draft_to_edit()
+            .phase_draft_to_edit(self.phase_id(phase)?)
             .map_err(|_| Error::NoPhase)
     }
 
-    /// Plays the phase of the competition as `draft` configures it, as if it had been added that
-    /// way, see [`reconfigure_phase`]. `draft` is completed, and left as it is, as by
-    /// [`Self::add_phase`].
+    /// Plays the phase of the number `phase`, by default the only running one, as `draft`
+    /// configures it, keeping its name and sources, as if it had been added that way, see
+    /// [`reconfigure_phase`].
     ///
     /// [`reconfigure_phase`]: tournament_engine::CompetitionStateMachineExt::reconfigure_phase
-    ///
-    /// # Errors
-    /// Returns [`Error::NoPhase`] if the competition has no phase, [`Error::InvalidPhase`] if the
-    /// plugins `draft` configures do not fit together, and [`Error::EditPhase`] if a change
-    /// made after the phase was added, e.g. a reported result, does not fit the edited phase.
-    pub fn edit_phase(&mut self, draft: &Draft<PhasePlugins>) -> Result<String, Error> {
+    fn edit_phase(
+        &mut self,
+        phase: Option<NonZeroUsize>,
+        draft: &Draft<PhasePlugins>,
+    ) -> Result<String, Error> {
+        let id = self.phase_id(phase)?;
+        let added = self.phase(id)?;
+        let mut form = PhaseForm::new(draft.clone());
+        form.set_name(added.name().unwrap_or_default());
+        form.set_sources(added.sources().to_vec());
         let edited = self
             .session
-            .edit_phase(draft)
+            .edit_phase(id, &form)
             .map_err(|error| match error {
                 app_error::EditPhaseError::NoPhase(_) => Error::NoPhase,
                 app_error::EditPhaseError::Invalid(issues) => Error::InvalidPhase(issues),
                 error => Error::EditPhase(error),
             })?;
         Ok(if edited {
-            format!("phase changed: {}", summary(&self.added_phase()?.config()))
+            format!("phase changed: {}", summary(&self.phase(id)?.config()))
         } else {
             "nothing changed".to_owned()
         })
     }
 
-    /// The phase of the competition, whether started or not.
-    fn added_phase(&self) -> Result<&Phase, Error> {
-        self.competition().only_phase().ok_or(Error::NoPhase)
+    /// The phase `id`, whether started or not.
+    fn phase(&self, id: PhaseId) -> Result<&Phase, Error> {
+        self.competition().phase(&id).ok_or(Error::NoPhase)
+    }
+
+    /// The phase of the number `number` as [`Self::phase_id`] finds it, of a started competition.
+    fn played_phase(&self, number: Option<NonZeroUsize>) -> Result<PhaseId, Error> {
+        if !self.competition().is_started() {
+            return Err(Error::NotStarted);
+        }
+        self.phase_id(number)
+    }
+
+    /// The phase of the number `number`, from 1; by default the only running phase, or else the
+    /// last started one, or else the first one.
+    ///
+    /// # Errors
+    /// Returns an error if there is no phase, none of that number, or several are running.
+    fn phase_id(&self, number: Option<NonZeroUsize>) -> Result<PhaseId, Error> {
+        let phases = self.competition().phases();
+        if let Some(number) = number {
+            return phases
+                .get_index(number.get() - 1)
+                .map(|(id, _)| *id)
+                .ok_or(Error::UnknownPhase(number));
+        }
+        let running: Vec<_> = phases
+            .values()
+            .filter(|phase| phase.is_started() && !phase.is_finished())
+            .collect();
+        match running[..] {
+            [phase] => Ok(phase.id()),
+            [] => phases
+                .values()
+                .rev()
+                .find(|phase| phase.is_started())
+                .or_else(|| phases.values().next())
+                .map(Phase::id)
+                .ok_or(Error::NoPhase),
+            _ => Err(Error::SeveralRunning),
+        }
     }
 
     /// Adds the phase played in the format named `format`, with its fields answered by `answers`,
     /// each written as `FIELD=VALUE`, and every other part answered as offered, see
-    /// [`AcceptDefaults`].
-    fn add_phase_in(&mut self, format: &str, answers: &[String]) -> Result<String, Error> {
+    /// [`AcceptDefaults`], as `configuring` says.
+    fn add_phase_in(
+        &mut self,
+        format: &str,
+        answers: &[String],
+        configuring: Configuring,
+    ) -> Result<String, Error> {
         let entry = AnyAxis::of::<dyn PhaseFormat>()
             .entries()
             .find(|entry| entry.id() == format || format_name(entry).eq_ignore_ascii_case(format))
@@ -384,35 +526,117 @@ impl Session {
         let mut draft = self.competition().phase_draft();
         draft.set(&ConfigPath::ROOT.field(PhasePlugins::FORMAT), config)?;
         questionnaire::fill_phase(&mut draft, &mut AcceptDefaults)?;
-        self.add_phase(&draft)
+        self.apply_phase(&configuring, &draft)
     }
 
     fn start(&mut self) -> Result<String, Error> {
         self.session.start()?;
+        let scheduled: usize = self
+            .competition()
+            .phases()
+            .values()
+            .flat_map(|phase| phase.divisions())
+            .map(|division| division.data().matches().len())
+            .sum();
         Ok(format!(
-            "competition started, {} match(es) scheduled",
-            self.division()?.data().matches().len()
+            "competition started, {scheduled} match(es) scheduled"
         ))
     }
 
-    /// The division the single phase of a started competition is played in.
-    fn division(&self) -> Result<&Division, Error> {
-        let competition = self.competition();
-        if !competition.is_started() {
-            return Err(Error::NotStarted);
-        }
-        Ok(&competition
-            .only_phase()
-            .expect("a started competition must have a phase")
-            .divisions()[0])
+    /// Starts the phase of the number `phase`.
+    fn start_phase(&mut self, phase: NonZeroUsize) -> Result<String, Error> {
+        let id = self.phase_id(Some(phase))?;
+        let warning = match self.session.start_phase_refusal(id) {
+            Some(tie @ app_error::StartPhaseError::CutThroughTie(_)) => {
+                format!("\nnote: {tie}")
+            }
+            _ => String::new(),
+        };
+        self.session.start_phase(id)?;
+        Ok(format!(
+            "phase {phase} started, {} match(es) scheduled{warning}",
+            self.division(id)?.data().matches().len()
+        ))
     }
 
-    /// Lists the matches, numbered the way [`Self::report`] addresses them and independently of
-    /// the filters applied, followed by the byes unless only open matches are asked for.
-    fn matches(&self, only_open: bool, only_round: Option<NonZeroU32>) -> Result<String, Error> {
-        let format = self.division()?.format();
+    /// The phases, with where they take entrants from and how far they are.
+    fn phases(&self) -> String {
+        let phases = self.session.phases();
+        if phases.is_empty() {
+            return "there are no phases yet".to_owned();
+        }
+        let english = Translator::new(Language::English, &[]);
+        let number_of = |id: PhaseId| {
+            phases
+                .iter()
+                .position(|phase| phase.id == id)
+                .map_or_else(|| "?".to_owned(), |index| (index + 1).to_string())
+        };
+        let rows: Vec<_> = phases
+            .iter()
+            .map(|phase| {
+                let from = phase
+                    .sources
+                    .iter()
+                    .map(|source| {
+                        let of = source
+                            .phase
+                            .map_or_else(|| "registration".to_owned(), number_of);
+                        let to = source.to.map(|to| to.to_string()).unwrap_or_default();
+                        format!("{of}:{}-{to}", source.from)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let state = match &phase.state {
+                    view::PhaseState::NotStarted { waiting_for } if waiting_for.is_empty() => {
+                        "not started".to_owned()
+                    }
+                    view::PhaseState::NotStarted { waiting_for } => format!(
+                        "waiting for {}",
+                        waiting_for
+                            .iter()
+                            .map(|source| number_of(source.phase))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    view::PhaseState::Running => "running".to_owned(),
+                    view::PhaseState::Finished { .. } => "finished".to_owned(),
+                };
+                vec![
+                    phase.name.number.to_string(),
+                    plain(&english.phase_name(&phase.name)),
+                    from,
+                    state,
+                ]
+            })
+            .collect();
+        table(&["#", "name", "from", "state"], &rows)
+    }
+
+    /// The first division of the phase `phase`, once started.
+    fn division(&self, phase: PhaseId) -> Result<&Division, Error> {
+        if !self.competition().is_started() {
+            return Err(Error::NotStarted);
+        }
+        self.phase(phase)?
+            .divisions()
+            .first()
+            .ok_or(Error::PhaseNotStarted)
+    }
+
+    /// Lists the matches of the phase `phase`, numbered the way [`Self::report`] addresses them
+    /// and independently of the filters applied, followed by the byes unless only open matches are
+    /// asked for.
+    fn matches(
+        &self,
+        phase: PhaseId,
+        only_open: bool,
+        only_round: Option<NonZeroU32>,
+    ) -> Result<String, Error> {
+        let format = self.division(phase)?.format();
         let stage_of = |entity: &TypeMap| format.stage(entity).map(|stage| stage.to_string());
-        let division = self.division()?.data();
+        let division = self.division(phase)?;
+        let division = division.data();
         // only a format that names its stages gets a column for them
         let has_stages = division
             .matches()
@@ -436,7 +660,7 @@ impl Session {
                         self.team_name(division, r#match.team_a()),
                         "vs".to_owned(),
                         self.team_name(division, r#match.team_b()),
-                        self.result_text(division, r#match),
+                        self.result_text(phase, r#match),
                     ])
                     .collect()
             })
@@ -505,13 +729,13 @@ impl Session {
             .join("\n\n"))
     }
 
-    /// The phase of the match numbered `number` (see [`Match::number`]), as [`Self::matches`]
-    /// lists it, and that match.
+    /// The match of the phase `phase` numbered `number` (see [`Match::number`]), as
+    /// [`Self::matches`] lists it.
     ///
     /// # Errors
-    /// Returns an error if the competition has not started or has no such match.
-    fn match_numbered(&self, number: NonZeroUsize) -> Result<MatchId, Error> {
-        let division = self.division()?;
+    /// Returns an error if the phase has not started or has no such match.
+    fn match_numbered(&self, phase: PhaseId, number: NonZeroUsize) -> Result<MatchId, Error> {
+        let division = self.division(phase)?;
         let match_id = division
             .data()
             .matches()
@@ -524,8 +748,13 @@ impl Session {
 
     /// Reports `entry` for the match `number`: its scores, the match's own or else those of its
     /// parts in order, then its result, if not the one they give.
-    fn report(&mut self, number: NonZeroUsize, entry: Vec<Reported>) -> Result<String, Error> {
-        let match_id = self.match_numbered(number)?;
+    fn report(
+        &mut self,
+        phase: PhaseId,
+        number: NonZeroUsize,
+        entry: Vec<Reported>,
+    ) -> Result<String, Error> {
+        let match_id = self.match_numbered(phase, number)?;
         let (scores, result) = match entry.split_last() {
             Some((Reported::Result(result), scores)) => (scores, Some(*result)),
             _ => (&entry[..], None),
@@ -544,9 +773,9 @@ impl Session {
         });
         let reported = if scores.is_empty() {
             let result = result.expect("an entry is a result or scores");
-            self.session.report(match_id, result)?
+            self.session.report(phase, match_id, result)?
         } else {
-            let mut form = self.session.result_form(match_id)?;
+            let mut form = self.session.result_form(phase, match_id)?;
             if !form.enter_scores(&scores) {
                 return Err(Error::ScoresNotTaken(number));
             }
@@ -554,36 +783,42 @@ impl Session {
             self.session.report_form(&form)?
         };
 
-        let division = self.division()?.data();
+        let (_, division) = self
+            .phase(phase)?
+            .division_of(&match_id)
+            .expect("the match reported is of the phase");
         let mut output = format!(
             "#{number}: {}",
-            self.result_text(division, &division.matches()[&match_id])
+            self.result_text(phase, &division.data().matches()[&match_id])
         );
         let new_matches = reported.new_matches;
         if new_matches > 0 {
             write!(output, "\n{new_matches} new match(es) scheduled").unwrap();
         } else if reported.winners.is_some() {
             output.push_str("\nall matches are finished");
+        } else if reported.finished_phase {
+            output.push_str("\nevery match of the phase is finished");
         }
         Ok(output)
     }
 
     /// Undoes the result reported for the match `number`, which may be any reported match rather
     /// than only the one reported last. Every other change stays in effect.
-    fn undo_report(&mut self, number: NonZeroUsize) -> Result<String, Error> {
-        let match_id = self.match_numbered(number)?;
+    fn undo_report(&mut self, phase: PhaseId, number: NonZeroUsize) -> Result<String, Error> {
+        let match_id = self.match_numbered(phase, number)?;
         let reopened = self
             .session
-            .undo_report(match_id)
+            .undo_report(phase, match_id)
             .map_err(|error| match error {
                 app_error::UndoReportError::NotStarted => Error::NotStarted,
                 app_error::UndoReportError::UnknownMatch => Error::UnknownMatch(number),
                 app_error::UndoReportError::NotReported => Error::NotReported(number),
                 app_error::UndoReportError::DependedOn
                 | app_error::UndoReportError::DependedOnBy(_) => Error::ReportDependedOn(number),
+                error @ app_error::UndoReportError::PhaseStarted(_) => Error::UndoReport(error),
             })?;
 
-        let division = self.division()?.data();
+        let division = self.division(phase)?.data();
         let r#match = &division.matches()[&match_id];
         let mut output = format!(
             "#{number} is open again: {} vs {}",
@@ -598,8 +833,42 @@ impl Session {
         Ok(output)
     }
 
-    fn ranking(&self) -> Result<String, Error> {
-        let division = self.division()?;
+    /// Every entrant's place in the competition, as things stand.
+    fn competition_ranking(&self) -> String {
+        let ranking = self.session.ranking();
+        if ranking.rows.is_empty() {
+            return "nobody is placed yet".to_owned();
+        }
+        let english = Translator::new(Language::English, &[]);
+        let rows: Vec<_> = ranking
+            .rows
+            .iter()
+            .map(|row| {
+                vec![
+                    row.place.to_string(),
+                    row.entrants
+                        .iter()
+                        .map(|entrant| entrant.name.as_deref().unwrap_or("<unnamed>"))
+                        .collect::<Vec<_>>()
+                        .join(" & "),
+                    self.session
+                        .name_of_phase(row.phase)
+                        .map(|name| plain(&english.phase_name(&name)))
+                        .unwrap_or_default(),
+                ]
+            })
+            .collect();
+        let note = if ranking.is_final {
+            ""
+        } else {
+            "\nas things stand: not every phase is finished"
+        };
+        format!("{}{note}", table(&["#", "name", "phase"], &rows))
+    }
+
+    /// The standings of the phase `phase`.
+    fn ranking(&self, phase: PhaseId) -> Result<String, Error> {
+        let division = self.division(phase)?;
         let columns: Vec<_> = division
             .plugins()
             .metrics()
@@ -676,16 +945,22 @@ impl Session {
             .join(" & ")
     }
 
-    fn result_text(&self, division: &DivisionData, r#match: &Match) -> String {
-        let a = self.team_name(division, r#match.team_a());
-        let b = self.team_name(division, r#match.team_b());
+    /// What `r#match`, a match of the phase `phase`, ended in, as a line says it.
+    fn result_text(&self, phase: PhaseId, r#match: &Match) -> String {
+        let (_, division) = self
+            .phase(phase)
+            .ok()
+            .and_then(|phase| phase.division_of(&r#match.id()))
+            .expect("a match has a division");
+        let data = division.data();
+        let a = self.team_name(data, r#match.team_a());
+        let b = self.team_name(data, r#match.team_b());
         let text = match r#match.result() {
             Some(MatchResult::AWins) => format!("{a} beat {b}"),
             Some(MatchResult::BWins) => format!("{b} beat {a}"),
             Some(MatchResult::Draw) => "draw".to_owned(),
             None => "open".to_owned(),
         };
-        let division = self.division().expect("a match has a division");
         let root = division
             .match_format()
             .template(division.data(), r#match)
@@ -700,6 +975,11 @@ impl Session {
             format!("{text}: {scores}")
         }
     }
+}
+
+/// `text` without the marks isolating the variables of a translated text, which a terminal shows.
+fn plain(text: &str) -> String {
+    text.replace(['\u{2068}', '\u{2069}'], "")
 }
 
 /// The name `add-phase` takes the format of `entry` by: its label with hyphens for spaces, e.g.
@@ -929,16 +1209,92 @@ mod tests {
     }
 
     #[test]
-    fn only_one_phase_can_be_added() {
+    fn a_further_phase_takes_every_place_of_the_phase_before() {
         let mut session = Session::new(MemoryStorage::default());
         output(&mut session, "add-phase round-robin");
 
-        let result = execute(&mut session, "add-phase single-elimination");
+        output(&mut session, "add-phase single-elimination --name Final");
+
+        let phases = output(&mut session, "phases");
+        let rows: Vec<Vec<_>> = phases
+            .lines()
+            .skip(HEADER_LINES)
+            .map(|row| {
+                row.split("  ")
+                    .filter(|cell| !cell.is_empty())
+                    .map(str::trim)
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ["1", "1 · Round robin", "registration:1-", "not started"],
+                ["2", "Final", "1:1-", "waiting for 1"],
+            ]
+        );
+    }
+
+    #[test]
+    fn a_phase_taking_places_another_takes_is_refused() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add-phase round-robin");
+
+        let result = execute(
+            &mut session,
+            "add-phase single-elimination --from registration:1-4",
+        );
 
         let Err(Error::AddPhase(error)) = &result else {
             panic!("got {result:?}");
         };
-        assert!(error.to_string().contains("already has a phase"), "{error}");
+        assert!(
+            error.to_string().contains("takes some of these places"),
+            "{error}"
+        );
+    }
+
+    /// A qualification of four, then a final of its places 1–2, played through at the prompt.
+    #[test]
+    fn a_phase_is_started_once_the_one_it_takes_entrants_from_is_finished() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob Carol Dave");
+        output(&mut session, "add-phase round-robin");
+        output(
+            &mut session,
+            "add-phase single-elimination --from 1:1-2 --name Final",
+        );
+        output(&mut session, "start");
+        assert!(matches!(
+            execute(&mut session, "start-phase 2"),
+            Err(Error::StartPhase(_))
+        ));
+        for number in 1..=6 {
+            output(&mut session, &format!("report {number} a"));
+        }
+
+        let started = output(&mut session, "start-phase 2");
+
+        assert!(
+            started.starts_with("phase 2 started, 1 match(es) scheduled"),
+            "{started}"
+        );
+        // the final is the only running phase, its match numbered after the round robin's
+        output(&mut session, "report 7 a");
+        let ranking = output(&mut session, "ranking --competition");
+        assert_eq!(ranking.lines().count(), HEADER_LINES + 4, "{ranking}");
+        assert!(
+            ranking
+                .lines()
+                .nth(HEADER_LINES)
+                .unwrap()
+                .ends_with("Final"),
+            "{ranking}"
+        );
+        assert_eq!(
+            output(&mut session, "ranking --phase 1").lines().count(),
+            HEADER_LINES + 4
+        );
     }
 
     /// Every preset is its format with the plugins the format recommends, which the engine checks
@@ -1058,14 +1414,16 @@ mod tests {
             .unwrap()
             .to_owned();
 
-        let mut draft = session.phase_draft_to_edit().unwrap();
+        let mut draft = session.phase_draft_to_edit(None).unwrap();
         draft
             .set(
                 &ConfigPath::ROOT.field("ranking"),
                 vec![plugin::<MoreWins>()],
             )
             .unwrap();
-        let edited = session.edit_phase(&draft).unwrap();
+        let edited = session
+            .apply_phase(&Configuring::Edited { phase: None }, &draft)
+            .unwrap();
 
         assert_eq!(edited, "phase changed: round robin, ranked by more wins");
         assert_eq!(
@@ -1088,9 +1446,14 @@ mod tests {
         let mut session = started("round-robin");
         let changes = session.session.changes();
 
-        let draft = session.phase_draft_to_edit().unwrap();
+        let draft = session.phase_draft_to_edit(None).unwrap();
 
-        assert_eq!(session.edit_phase(&draft).unwrap(), "nothing changed");
+        assert_eq!(
+            session
+                .apply_phase(&Configuring::Edited { phase: None }, &draft)
+                .unwrap(),
+            "nothing changed"
+        );
         assert_eq!(session.session.changes(), changes);
     }
 
@@ -1100,7 +1463,7 @@ mod tests {
     fn an_edit_a_reported_result_does_not_fit_is_rejected() {
         let mut session = started("round-robin");
         output(&mut session, "report 1 a");
-        let mut draft = session.phase_draft_to_edit().unwrap();
+        let mut draft = session.phase_draft_to_edit(None).unwrap();
         draft
             .set(
                 &ConfigPath::ROOT.field("format"),
@@ -1108,7 +1471,7 @@ mod tests {
             )
             .unwrap();
 
-        let result = session.edit_phase(&draft);
+        let result = session.apply_phase(&Configuring::Edited { phase: None }, &draft);
 
         assert!(
             matches!(
@@ -1118,7 +1481,15 @@ mod tests {
             "{result:?}"
         );
         assert_eq!(
-            format!("{:?}", session.added_phase().unwrap().plugins().format()),
+            format!(
+                "{:?}",
+                session
+                    .competition()
+                    .only_phase()
+                    .unwrap()
+                    .plugins()
+                    .format()
+            ),
             "RoundRobin",
             "the phase must stay as it was"
         );
@@ -1127,26 +1498,34 @@ mod tests {
     #[test]
     fn an_edit_is_undone_like_any_change() {
         let mut session = started("round-robin");
-        let before = session.phase_draft_to_edit().unwrap().answers().clone();
-        let mut draft = session.phase_draft_to_edit().unwrap();
+        let before = session.phase_draft_to_edit(None).unwrap().answers().clone();
+        let mut draft = session.phase_draft_to_edit(None).unwrap();
         draft
             .set(
                 &ConfigPath::ROOT.field("ranking"),
                 vec![plugin::<MoreWins>()],
             )
             .unwrap();
-        session.edit_phase(&draft).unwrap();
+        session
+            .apply_phase(&Configuring::Edited { phase: None }, &draft)
+            .unwrap();
 
         output(&mut session, "undo");
 
-        assert_eq!(session.phase_draft_to_edit().unwrap().answers(), &before);
+        assert_eq!(
+            session.phase_draft_to_edit(None).unwrap().answers(),
+            &before
+        );
     }
 
     #[test]
     fn only_a_phase_that_was_added_can_be_edited() {
         let mut session = Session::new(MemoryStorage::default());
 
-        assert!(matches!(session.phase_draft_to_edit(), Err(Error::NoPhase)));
+        assert!(matches!(
+            session.phase_draft_to_edit(None),
+            Err(Error::NoPhase)
+        ));
         assert!(matches!(
             execute(&mut session, "edit-phase"),
             Err(Error::NotEdited)
@@ -1166,7 +1545,7 @@ mod tests {
             vec![plugin::<MorePoints>()],
             vec![plugin::<WinsDrawsLossesCalculator>(), chess_points()],
         );
-        let added = session.add_phase(&draft).unwrap();
+        let added = session.add_phase(&draft, None, &[]).unwrap();
 
         assert_eq!(added, "phase added: round robin, ranked by more points");
         output(&mut session, "start");
@@ -1210,7 +1589,7 @@ mod tests {
             Vec::new(),
             vec![chess_points(), sonneborn_berger],
         );
-        session.add_phase(&draft).unwrap();
+        session.add_phase(&draft, None, &[]).unwrap();
         output(&mut session, "start");
         for number in 1..=6 {
             output(&mut session, &format!("report {number} a"));
@@ -1244,7 +1623,7 @@ mod tests {
             Vec::new(),
         );
 
-        let result = session.add_phase(&draft);
+        let result = session.add_phase(&draft, None, &[]);
 
         let Err(Error::InvalidPhase(issues)) = result else {
             panic!("got {result:?}");
@@ -1267,7 +1646,7 @@ mod tests {
             .with("match_format", plugin::<BestOf>().with("games", 3))
             .and_then(|draft| draft.with_defaults())
             .unwrap();
-        session.add_phase(&draft).unwrap();
+        session.add_phase(&draft, None, &[]).unwrap();
         output(&mut session, "start");
         session
     }
@@ -1328,7 +1707,7 @@ mod tests {
             vec![plugin::<MoreWins>()],
             Vec::new(),
         );
-        let added = session.add_phase(&draft).unwrap();
+        let added = session.add_phase(&draft, None, &[]).unwrap();
 
         assert_eq!(added, "phase added: round robin, ranked by more wins");
         output(&mut session, "start");
@@ -1381,7 +1760,7 @@ mod tests {
             vec![plugin::<FewerMatchesPlayed>()],
             Vec::new(),
         );
-        session.add_phase(&draft).unwrap();
+        session.add_phase(&draft, None, &[]).unwrap();
         output(&mut session, "start");
 
         output(&mut session, "report 1 a");
@@ -1418,7 +1797,7 @@ mod tests {
             Vec::new(),
             vec![plugin::<WinsDrawsLossesCalculator>()],
         );
-        let added = session.add_phase(&draft).unwrap();
+        let added = session.add_phase(&draft, None, &[]).unwrap();
         assert_eq!(added, "phase added: round robin, not ranked by anything");
         output(&mut session, "start");
 

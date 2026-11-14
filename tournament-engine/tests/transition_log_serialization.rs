@@ -10,6 +10,8 @@
 //!
 //! [`CompetitionTransition`]: tournament_engine::transitions::CompetitionTransition
 
+use std::num::NonZeroU32;
+
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -17,8 +19,8 @@ use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
     CompetitionStateMachineExt, Decision, EnteredValue, Entrant, EntrantId, FieldKey, Match,
     MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant,
-    ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, StartCompetition,
-    TypeMapValue,
+    ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
+    StartCompetition, StartPhase, TypeMapValue,
     plugins::{
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MorePoints, Points, PointsCalculator,
@@ -29,6 +31,7 @@ use tournament_engine::{
     undoable_state_machine::{LogEntry, LogEntryKind, SessionHistory, TransitionId},
     uuid::Uuid,
 };
+use vec1::vec1;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -198,6 +201,61 @@ fn every_transition_is_serialized_under_its_pinned_tag() {
     );
 }
 
+/// A phase taking entrants from another is added with its name and sources, and started by a
+/// transition of its own, each under its pinned tag.
+#[test]
+fn a_phase_of_another_phase_is_added_and_started_under_pinned_tags() {
+    let mut machine = played_competition();
+    let next = PhaseId::new(Uuid::from_u128(0x2e));
+    let sources = vec1![Source::new(
+        SourceOf::Phase(phase_id()),
+        NonZeroU32::MIN,
+        NonZeroU32::new(2),
+    )];
+    let plugins = PhasePluginsBuilder::new().build().unwrap();
+    let added = machine
+        .apply_new(
+            AddPhase::new(next, plugins)
+                .with_name(Some("Final".to_owned()))
+                .with_sources(sources)
+                .into(),
+        )
+        .unwrap();
+    while let Some(open) = machine.current().phases()[&phase_id()].divisions()[0]
+        .data()
+        .matches()
+        .values()
+        .find(|r#match| !r#match.is_finished())
+    {
+        let report = ReportMatchResult::new(phase_id(), open.id(), MatchResult::AWins);
+        machine.apply_new(report.into()).unwrap();
+    }
+    let started = machine.apply_new(StartPhase::new(next).into()).unwrap();
+
+    let log = serialized_log(&machine);
+    let entry = |id| {
+        log.as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["id"] == json!(id))
+            .unwrap()["kind"]["Apply"]
+            .clone()
+    };
+
+    let added = &entry(added)["AddPhase"];
+    assert_eq!(added["name"], json!("Final"));
+    assert_eq!(
+        added["sources"],
+        json!([{ "of": { "Phase": phase_id() }, "from": 1, "to": 2 }])
+    );
+    assert_eq!(
+        entry(started),
+        json!({ "StartPhase": { "phase_id": next } })
+    );
+    assert_current_is(&round_trip(&machine), machine.current());
+    assert_current_is(&binary_round_trip(&machine), machine.current());
+}
+
 #[test]
 fn a_transition_is_serialized_as_its_payload_under_its_tag() {
     let mut machine = CompetitionStateMachine::default();
@@ -335,7 +393,10 @@ fn a_reconfigured_phase_round_trips() {
         .build()
         .unwrap();
     machine
-        .reconfigure_phase(&mut SessionHistory::new(), phase_id(), ranked_by_points)
+        .reconfigure_phase(
+            &mut SessionHistory::new(),
+            AddPhase::new(phase_id(), ranked_by_points),
+        )
         .unwrap()
         .expect("the plugins changed");
 

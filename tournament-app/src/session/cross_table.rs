@@ -5,17 +5,17 @@ use std::collections::HashMap;
 use tournament_engine::{Match, MatchResult, RankingId, Score, Sides};
 
 use super::{Session, bracket::plays_bracket};
-use crate::view::{self, Chart, CrossMatch, CrossRow, CrossTable, Outcome};
+use crate::view::{self, Chart, CrossMatch, CrossRow, CrossTable, DivisionRef, Outcome};
 
 /// What a draw adds to the total of a row.
 const HALF: Score = Score::new(0.5);
 
 impl Session {
-    /// What the phase shows of all its matches at once: its [`bracket`](Self::bracket), else its
-    /// [`cross table`](Self::cross_table), if it has either; `None` before the start. It builds
-    /// neither.
-    pub fn chart(&self) -> Option<Chart> {
-        let division = self.division()?;
+    /// What the division `of` shows of all its matches at once: its [`bracket`](Self::bracket),
+    /// else its [`cross table`](Self::cross_table), if it has either; `None` before the start of
+    /// its phase. It builds neither.
+    pub fn chart(&self, of: DivisionRef) -> Option<Chart> {
+        let division = self.division(of)?;
         if plays_bracket(division) {
             Some(Chart::Bracket)
         } else if division
@@ -30,12 +30,12 @@ impl Session {
         }
     }
 
-    /// The cross table of the phase, if each of its matches is played by two teams of one
+    /// The cross table of the division `of`, if each of its matches is played by two teams of one
     /// ranking each and its format plays no bracket (see [`Self::bracket`]), e.g. a round robin
-    /// or random rounds; `None` before the start, and for teams drawn anew each round, as in a
-    /// Monster DYP.
-    pub fn cross_table(&self) -> Option<CrossTable> {
-        let division = self.division()?;
+    /// or random rounds; `None` before the start of its phase, and for teams drawn anew each
+    /// round, as in a Monster DYP.
+    pub fn cross_table(&self, of: DivisionRef) -> Option<CrossTable> {
+        let division = self.division(of)?;
         if plays_bracket(division) {
             return None;
         }
@@ -65,7 +65,7 @@ impl Session {
             })
             .collect();
         for (a, b, r#match) in pairs {
-            let row = self.match_row(division, r#match);
+            let row = self.match_row(of.phase, of.division, division, r#match);
             let outcomes = match row.result {
                 None => [None; 2],
                 Some(MatchResult::AWins) => [Some(Outcome::Win), Some(Outcome::Loss)],

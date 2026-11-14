@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use dyn_clone::DynClone;
 use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
@@ -36,9 +38,11 @@ pub trait PhaseFormat: Plugin + DynClone {
     /// or byes of the same round. Rounds have to order the matches of each ranking by when they are
     /// played, since metrics such as [`RoundOfFirstLoss`] read a later round as a later match.
     ///
-    /// A match is numbered in the order it is scheduled unless it asks for a number with
-    /// [`NewMatch::with_number`], e.g. its place in a bracket numbered from the start; a number
-    /// asked for must not be one another match of the phase has or asks for.
+    /// A match is numbered in the order it is scheduled, across the competition, unless it asks
+    /// for a number with [`NewMatch::with_number`], e.g. its place in a bracket numbered from the
+    /// start; a number asked for is relative to the division (see
+    /// [`Division::number_base`](crate::Division::number_base)) and must not be one another match
+    /// of the division has or asks for, nor above [`Self::highest_number`].
     ///
     /// Anything a consumer needs to know about a match or a bye beyond its round, e.g. the stage of
     /// a bracket it belongs to, is attached to it with [`Annotated::with_annotation`]. Every
@@ -72,6 +76,14 @@ pub trait PhaseFormat: Plugin + DynClone {
     /// the phase starts. Each pairing is annotated as its match or bye will be, so with its stage.
     fn bracket(&self) -> Option<&Bracket> {
         None
+    }
+
+    /// The highest number a match of this format asks for, relative to its division, once it has
+    /// scheduled for the first time: the numbers up to it are kept for its matches, and a match
+    /// of another division asking for no number is numbered after them. `None` if it asks for
+    /// none; by default the highest number of its [`bracket`](Self::bracket), if any.
+    fn highest_number(&self) -> Option<NonZeroU32> {
+        self.bracket().and_then(Bracket::highest_number)
     }
 }
 

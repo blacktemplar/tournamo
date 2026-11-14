@@ -13,7 +13,7 @@ fn every_format_adds_a_phase_with_the_answers_it_offers() {
     for format in formats {
         let started = Given::new().format(format.id).started();
 
-        assert!(!started.rounds().is_empty(), "{format:?}");
+        assert!(!started.rounds(started.all()).is_empty(), "{format:?}");
     }
 }
 
@@ -54,7 +54,7 @@ fn a_phase_whose_plugins_do_not_fit_is_not_added() {
         )
         .unwrap();
 
-    let result = session.add_phase(&draft);
+    let result = session.add_phase(&form(draft.clone()));
 
     assert!(
         matches!(result, Err(AddPhaseError::Invalid(_))),
@@ -63,14 +63,16 @@ fn a_phase_whose_plugins_do_not_fit_is_not_added() {
     assert!(session.competition().phases().is_empty());
 }
 
+/// The engine refuses a phase taking places another one takes, and the session says which.
 #[test]
-fn only_one_phase_is_added() {
+fn a_phase_taking_places_another_takes_is_refused() {
     let mut session = Given::new().added();
     let draft = session.phase_draft(SingleElimination::ID).unwrap();
+    let first = session.name_of_phase(session.first());
 
     assert!(matches!(
-        session.add_phase(&draft),
-        Err(AddPhaseError::PhaseAlreadyAdded)
+        session.add_phase(&form(draft)),
+        Err(AddPhaseError::Sources(SourcesError::Overlap(phase))) if phase == first
     ));
 }
 
@@ -80,9 +82,9 @@ fn only_one_phase_is_added() {
 fn a_phase_is_edited_starting_out_at_its_configuration() {
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
-    let mut draft = session.phase_draft_to_edit().unwrap();
+    let mut draft = session.phase_draft_to_edit(session.first()).unwrap();
     draft
         .set(
             &ConfigPath::ROOT.field("ranking"),
@@ -90,11 +92,15 @@ fn a_phase_is_edited_starting_out_at_its_configuration() {
         )
         .unwrap();
 
-    assert!(session.edit_phase(&draft).unwrap());
+    assert!(
+        session
+            .edit_phase(session.first(), &form(draft.clone()))
+            .unwrap()
+    );
 
     assert_eq!(matches(&session)[0].result, Some(MatchResult::AWins));
     let headers: Vec<_> = session
-        .standings()
+        .standings(session.only())
         .unwrap()
         .columns
         .iter()
@@ -102,11 +108,14 @@ fn a_phase_is_edited_starting_out_at_its_configuration() {
         .collect();
     assert_eq!(headers, ["W-D-L", "points", "Sonneborn-Berger"]);
     session.undo().unwrap();
+    let unedited = Given::new().started();
     assert_eq!(
-        session.phase_draft_to_edit().unwrap().answers(),
-        Given::new()
-            .started()
-            .phase_draft_to_edit()
+        session
+            .phase_draft_to_edit(session.first())
+            .unwrap()
+            .answers(),
+        unedited
+            .phase_draft_to_edit(unedited.first())
             .unwrap()
             .answers()
     );
@@ -115,10 +124,14 @@ fn a_phase_is_edited_starting_out_at_its_configuration() {
 #[test]
 fn a_phase_edited_without_a_change_is_left_as_it_is() {
     let mut session = Given::new().started();
-    let draft = session.phase_draft_to_edit().unwrap();
+    let draft = session.phase_draft_to_edit(session.first()).unwrap();
     let undoable = session.actions().undo;
 
-    assert!(!session.edit_phase(&draft).unwrap());
+    assert!(
+        !session
+            .edit_phase(session.first(), &form(draft.clone()))
+            .unwrap()
+    );
     session.undo().unwrap();
 
     assert!(undoable);
@@ -136,15 +149,21 @@ fn rounds_are_added_to_random_rounds_after_a_result() {
         .format(RandomRounds::ID)
         .started();
     let first = numbered(&session, 1);
-    session.report(first, MatchResult::AWins).unwrap();
-    let mut draft = session.phase_draft_to_edit().unwrap();
+    session
+        .report(session.first(), first, MatchResult::AWins)
+        .unwrap();
+    let mut draft = session.phase_draft_to_edit(session.first()).unwrap();
     draft
         .set(&ConfigPath::ROOT.field("format").field("rounds"), 7_u32)
         .unwrap();
 
-    assert!(session.edit_phase(&draft).unwrap());
+    assert!(
+        session
+            .edit_phase(session.first(), &form(draft.clone()))
+            .unwrap()
+    );
 
-    assert_eq!(session.rounds().len(), 7);
+    assert_eq!(session.rounds(session.all()).len(), 7);
     assert_eq!(numbered(&session, 1), first);
     assert_eq!(
         matches(&session)[0].result,
@@ -159,11 +178,11 @@ fn rounds_are_added_to_random_rounds_after_a_result() {
 fn an_edit_a_reported_result_does_not_fit_is_refused() {
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     let draft = session.phase_draft(MonsterDyp::ID).unwrap();
 
-    let result = session.edit_phase(&draft);
+    let result = session.edit_phase(session.first(), &form(draft.clone()));
 
     assert!(
         matches!(&result, Err(EditPhaseError::ResultDoesNotFit(numbers)) if *numbers == [1]),
@@ -171,7 +190,7 @@ fn an_edit_a_reported_result_does_not_fit_is_refused() {
     );
     assert_eq!(matches(&session)[0].result, Some(MatchResult::AWins));
     assert!(matches!(
-        Session::new("cup").phase_draft_to_edit(),
+        Session::new("cup").phase_draft_to_edit(session.first()),
         Err(NoPhase)
     ));
 }
@@ -182,12 +201,16 @@ fn an_edit_names_every_reported_result_it_does_not_fit() {
     let mut session = Given::new().started();
     for number in 1..=2 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
     let draft = session.phase_draft(MonsterDyp::ID).unwrap();
 
-    let result = session.edit_phase(&draft);
+    let result = session.edit_phase(session.first(), &form(draft.clone()));
 
     assert!(
         matches!(&result, Err(EditPhaseError::ResultDoesNotFit(numbers)) if *numbers == [1, 2]),
@@ -209,16 +232,19 @@ fn reported(session: &Session) -> Vec<(MatchId, MatchResult)> {
 fn a_knockout_changed_to_a_round_robin_keeps_its_first_results() {
     let mut session = Given::new().format(SingleElimination::ID).started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     session
-        .report(numbered(&session, 2), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 2), MatchResult::AWins)
         .unwrap();
     let before = reported(&session);
 
     assert!(
         session
-            .edit_phase(&session.phase_draft(RoundRobin::ID).unwrap())
+            .edit_phase(
+                session.first(),
+                &form(session.phase_draft(RoundRobin::ID).unwrap())
+            )
             .unwrap()
     );
 
@@ -237,11 +263,16 @@ fn a_finished_knockout_is_not_changed_to_a_round_robin() {
         .into_iter()
         .find(|row| row.result.is_none())
     {
-        session.report(open.id, MatchResult::AWins).unwrap();
+        session
+            .report(session.first(), open.id, MatchResult::AWins)
+            .unwrap();
     }
     let before = reported(&session);
 
-    let result = session.edit_phase(&session.phase_draft(RoundRobin::ID).unwrap());
+    let result = session.edit_phase(
+        session.first(),
+        &form(session.phase_draft(RoundRobin::ID).unwrap()),
+    );
 
     assert!(
         matches!(result, Err(EditPhaseError::ResultDoesNotFit(_))),

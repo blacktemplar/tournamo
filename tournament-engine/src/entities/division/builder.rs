@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use uuid::Uuid;
 use vec1::vec1;
 
@@ -92,7 +94,8 @@ impl DivisionBuilder {
         let mut division = Division::new(plugins, Seed::default());
         division.set_rankings(
             (0..self.players)
-                .map(|index| vec1![EntrantId::new(Uuid::from_u128(index.into()))])
+                .zip(NonZeroU32::MIN..)
+                .map(|(index, lot)| (vec1![EntrantId::new(Uuid::from_u128(index.into()))], lot))
                 .collect(),
         );
         division

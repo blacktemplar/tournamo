@@ -28,8 +28,8 @@ pub enum Command {
     /// Remove an entrant from the competition
     #[command(visible_alias = "remove")]
     RemoveEntrant { name: String },
-    /// Add the phase the competition is played in, configuring it at the prompt unless a format
-    /// is given
+    /// Add a phase the competition is played in, configuring it at the prompt unless a format is
+    /// given
     AddPhase {
         /// The format, by its label with hyphens for spaces (e.g. `round-robin`) or by its id;
         /// everything else is what the format recommends
@@ -38,13 +38,34 @@ pub enum Command {
         /// answered as it offers
         #[arg(requires = "format", value_name = "FIELD=VALUE")]
         answers: Vec<String>,
+        /// The name of the phase, e.g. "Group phase"
+        #[arg(long)]
+        name: Option<String>,
+        /// Where the phase takes entrants from, in order: the places of `registration` or of the
+        /// phase of a number, e.g. `1:1-8` or `1:9-` (to the last place) or `1` (every place);
+        /// by default the whole registration for the first phase, else every place of the phase
+        /// before
+        #[arg(long, value_name = "SOURCE")]
+        from: Vec<SourceArg>,
     },
-    /// Change the configuration of the phase at the prompt, starting out at its current one; the
+    /// Change the configuration of a phase at the prompt, starting out at its current one; the
     /// results reported so far stay as long as the changed phase schedules their matches
-    EditPhase,
-    /// Start the competition, which schedules the first matches
+    EditPhase {
+        /// The number of the phase, by default the only running one
+        #[arg(long)]
+        phase: Option<NonZeroUsize>,
+    },
+    /// Start the competition, which schedules the first matches of the phases taking their
+    /// entrants from the registration
     Start,
-    /// List the matches scheduled so far, with their number and result
+    /// Start a phase taking entrants from other phases, once those are finished
+    StartPhase {
+        /// The number of the phase, as `phases` lists it
+        phase: NonZeroUsize,
+    },
+    /// List the phases, with where they take their entrants from and how far they are
+    Phases,
+    /// List the matches of a phase scheduled so far, with their number and result
     Matches {
         /// Only list the matches that have no result yet
         #[arg(long)]
@@ -52,9 +73,15 @@ pub enum Command {
         /// Only list the matches of this round
         #[arg(long)]
         round: Option<NonZeroU32>,
+        /// The number of the phase, by default the only running one
+        #[arg(long)]
+        phase: Option<NonZeroUsize>,
     },
     /// Report the result of a match
     Report {
+        /// The number of the phase, by default the only running one
+        #[arg(long)]
+        phase: Option<NonZeroUsize>,
         /// The number of the match, as listed by `matches`
         number: NonZeroUsize,
         /// The result, `a`, `b` or `draw` (in any case, so that the sides can be named the way
@@ -66,11 +93,21 @@ pub enum Command {
     /// Undo the result reported for a match, which may be any reported match rather than only the
     /// one reported last
     UndoReport {
+        /// The number of the phase, by default the only running one
+        #[arg(long)]
+        phase: Option<NonZeroUsize>,
         /// The number of the match, as listed by `matches`
         number: NonZeroUsize,
     },
-    /// Show the current ranking
-    Ranking,
+    /// Show the current standings of a phase, or the ranking of the competition
+    Ranking {
+        /// The number of the phase, by default the only running one
+        #[arg(long, conflicts_with = "competition")]
+        phase: Option<NonZeroUsize>,
+        /// Show every entrant's place in the competition instead
+        #[arg(long)]
+        competition: bool,
+    },
     /// Undo the last change
     Undo,
     /// Redo the last undone change
@@ -84,6 +121,49 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+}
+
+/// Where a phase takes entrants from, as `add-phase --from` takes it: the places of the
+/// registration or of a phase by its number, e.g. `registration:1-8`, `1:9-` or `2`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SourceArg {
+    /// The number of the phase, `None` for the registration.
+    pub phase: Option<NonZeroUsize>,
+    pub from: NonZeroU32,
+    /// To the last place if `None`.
+    pub to: Option<NonZeroU32>,
+}
+
+impl FromStr for SourceArg {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let wrong = || {
+            format!(
+                "“{text}” names no places; write e.g. `registration:1-8`, `1:9-` (to the last) \
+                 or `1` (every place of phase 1)"
+            )
+        };
+        let (of, range) = text.split_once(':').unwrap_or((text, ""));
+        let phase = if of.eq_ignore_ascii_case("registration") {
+            None
+        } else {
+            Some(of.parse().map_err(|_| wrong())?)
+        };
+        let (from, to) = match range.split_once('-') {
+            _ if range.is_empty() => (NonZeroU32::MIN, None),
+            Some((from, "")) => (from.parse().map_err(|_| wrong())?, None),
+            Some((from, to)) => (
+                from.parse().map_err(|_| wrong())?,
+                Some(to.parse().map_err(|_| wrong())?),
+            ),
+            None => {
+                let place = range.parse().map_err(|_| wrong())?;
+                (place, Some(place))
+            }
+        };
+        Ok(Self { phase, from, to })
+    }
 }
 
 /// What an operator reports of a match: its result, or a score.
@@ -210,6 +290,8 @@ mod tests {
             Command::AddPhase {
                 format: Some("random-rounds".to_owned()),
                 answers: vec!["rounds=5".to_owned()],
+                name: None,
+                from: Vec::new(),
             }
         );
     }
@@ -223,6 +305,8 @@ mod tests {
             Command::AddPhase {
                 format: None,
                 answers: Vec::new(),
+                name: None,
+                from: Vec::new(),
             }
         );
     }
@@ -233,14 +317,16 @@ mod tests {
             parse("matches --open --round 2"),
             Command::Matches {
                 open: true,
-                round: NonZeroU32::new(2)
+                round: NonZeroU32::new(2),
+                phase: None,
             }
         );
         assert_eq!(
             parse("matches"),
             Command::Matches {
                 open: false,
-                round: None
+                round: None,
+                phase: None,
             }
         );
     }
@@ -255,6 +341,7 @@ mod tests {
         assert_eq!(
             parse("report 3 draw"),
             Command::Report {
+                phase: None,
                 number: NonZeroUsize::new(3).unwrap(),
                 entry: vec![Reported::Result(ReportedResult::Draw)]
             }
@@ -275,6 +362,7 @@ mod tests {
         assert_eq!(
             parse("report 2 21-17 19:21 21–15 a"),
             Command::Report {
+                phase: None,
                 number: NonZeroUsize::new(2).unwrap(),
                 entry: vec![
                     counts(21, 17),
@@ -304,6 +392,7 @@ mod tests {
         assert_eq!(
             parse("report 1 A"),
             Command::Report {
+                phase: None,
                 number: NonZeroUsize::new(1).unwrap(),
                 entry: vec![Reported::Result(ReportedResult::A)]
             }
@@ -311,6 +400,7 @@ mod tests {
         assert_eq!(
             parse("report 1 B"),
             Command::Report {
+                phase: None,
                 number: NonZeroUsize::new(1).unwrap(),
                 entry: vec![Reported::Result(ReportedResult::B)]
             }
@@ -318,6 +408,7 @@ mod tests {
         assert_eq!(
             parse("report 1 Draw"),
             Command::Report {
+                phase: None,
                 number: NonZeroUsize::new(1).unwrap(),
                 entry: vec![Reported::Result(ReportedResult::Draw)]
             }
@@ -335,9 +426,67 @@ mod tests {
         assert_eq!(
             parse("undo-report 3"),
             Command::UndoReport {
+                phase: None,
                 number: NonZeroUsize::new(3).unwrap()
             }
         );
+    }
+
+    #[test]
+    fn a_phase_takes_entrants_from_places_of_the_registration_or_of_phases() {
+        let place = |place| NonZeroU32::new(place).unwrap();
+        let phase = NonZeroUsize::new(1);
+
+        assert_eq!(
+            parse("add-phase single-elimination --name Final --from 1:1-8 --from registration:9-"),
+            Command::AddPhase {
+                format: Some("single-elimination".to_owned()),
+                answers: Vec::new(),
+                name: Some("Final".to_owned()),
+                from: vec![
+                    SourceArg {
+                        phase,
+                        from: place(1),
+                        to: Some(place(8)),
+                    },
+                    SourceArg {
+                        phase: None,
+                        from: place(9),
+                        to: None,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            SourceArg::from_str("1").unwrap(),
+            SourceArg {
+                phase,
+                from: place(1),
+                to: None,
+            }
+        );
+        assert!(SourceArg::from_str("one:1-8").is_err());
+        assert!(SourceArg::from_str("1:0-8").is_err());
+    }
+
+    #[test]
+    fn a_result_is_reported_in_the_phase_named() {
+        assert_eq!(
+            parse("report --phase 2 3 a"),
+            Command::Report {
+                phase: NonZeroUsize::new(2),
+                number: NonZeroUsize::new(3).unwrap(),
+                entry: vec![Reported::Result(ReportedResult::A)]
+            }
+        );
+        assert_eq!(
+            parse("ranking --competition"),
+            Command::Ranking {
+                phase: None,
+                competition: true
+            }
+        );
+        assert!(Command::parse_line("ranking --competition --phase 1").is_err());
     }
 
     #[test]

@@ -11,8 +11,9 @@ fn the_scale_of_a_phase_is_known_before_the_start() {
     let names: Vec<&'static str> = (1..=24)
         .map(|number| &*format!("Entrant {number}").leak())
         .collect();
-    let scale =
-        |session: &Session, format: &str| session.scale(&session.phase_draft(format).unwrap());
+    let scale = |session: &Session, format: &str| {
+        session.scale(&form(session.phase_draft(format).unwrap()))
+    };
     let exactly = |count| Count {
         least: count,
         most: count,

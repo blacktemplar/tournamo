@@ -34,7 +34,9 @@ fn the_action_an_undo_would_undo_is_told_before() {
     assert_eq!(session.next_undo(), Some(Action::Start));
     let first = matches(&session).remove(0);
 
-    session.report(first.id, MatchResult::AWins).unwrap();
+    session
+        .report(session.first(), first.id, MatchResult::AWins)
+        .unwrap();
 
     assert!(matches!(session.next_undo(), Some(Action::Report(_))));
     session.undo().unwrap();
@@ -46,8 +48,10 @@ fn the_action_an_undo_would_undo_is_told_before() {
 fn undo_and_redo_tell_the_action_they_walked_through() {
     let mut session = Given::new().started();
     let first = matches(&session).remove(0);
-    session.report(first.id, MatchResult::AWins).unwrap();
-    session.undo_report(first.id).unwrap();
+    session
+        .report(session.first(), first.id, MatchResult::AWins)
+        .unwrap();
+    session.undo_report(session.first(), first.id).unwrap();
     let reported = MatchRow {
         result: Some(MatchResult::AWins),
         ..first
@@ -79,8 +83,10 @@ fn undo_and_redo_tell_the_action_they_walked_through() {
 fn undo_brings_back_a_result_undone_by_its_match() {
     let mut session = Given::new().started();
     let first = numbered(&session, 1);
-    session.report(first, MatchResult::AWins).unwrap();
-    session.undo_report(first).unwrap();
+    session
+        .report(session.first(), first, MatchResult::AWins)
+        .unwrap();
+    session.undo_report(session.first(), first).unwrap();
 
     session.undo().unwrap();
 

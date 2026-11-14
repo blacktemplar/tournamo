@@ -9,6 +9,21 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Added
+
+- A competition is played in several phases: each takes its entrants from the
+  registration or from places of the standings of phases before it, e.g. a
+  qualification, then knockouts of its places 1–8 and 9–16. A phase can be
+  named, and removed while no other phase takes entrants from it. A phase is
+  started by hand once the phases it takes entrants from are finished; a tie
+  through the cut is decided by lot, which the page asks about first. The
+  standings mark who goes on, and the ranking of the competition places
+  everyone by the phase they reached. Match numbers are unique in the whole
+  competition.
+- CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
+  --competition`, and `--phase` for `matches`, `report`, `undo-report`,
+  `ranking` and `edit-phase`.
+
 ### Changed
 
 - A competition is saved in format 3: each change in its log is written under
@@ -27,8 +42,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   log, a phase holds its matches and standings in its divisions
   (`"divisions": [{"plugins", "data"}]`, one once it has started, none before),
   next to its `"plugins"` as configured, its `"seed"` and whether it has
-  `"started"`. Competitions of formats 1 to 4 open unchanged; earlier versions
-  refuse format 5.
+  `"started"`. A phase and the change adding it hold their `"name"` and
+  `"sources"`, the competition its `"lots"` and `"highest_number"`, a division
+  its `"number_base"`, a ranking its `"lot"`; the log can hold the new change
+  `"StartPhase"`. Competitions of formats 1 to 4 open unchanged; earlier
+  versions refuse format 5.
+- Ties in the standings left by every criterion are broken by lot, which an
+  existing competition gets as the order it started in, so nothing changes in
+  it.
 - Library users: the engine reads only the current layout of a competition and
   its log; a file of an older format is converted when read, by
   `tournament_app::file::File::read` (`file::upgrade_competition` for the
@@ -48,6 +69,12 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `Phase::plugins` are the plugins as configured. `DivisionData`,
   `DivisionView` and `DivisionBuilder` replace `PhaseData`, `PhaseView` and
   `PhaseBuilder`.
+- Library users: `AddPhase::with_name` and `with_sources`, `StartPhase`,
+  `Competition::{lots, field_of, ranking, first_place}`, `Ranking::lot`;
+  `reconfigure_phase` takes an `AddPhase`, `remove_phase` is new, and
+  `AddPhaseError::PhaseAlreadyAdded` is gone. In the app, `Session` takes the
+  phase (`PhaseId`, `MatchesOf`, `DivisionRef`) every view and action is
+  about, `add_phase` and `edit_phase` take a `PhaseForm`.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time.

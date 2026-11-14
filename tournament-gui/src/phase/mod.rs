@@ -1,6 +1,7 @@
 //! The phase: the form configuring it, generated from the [`FormView`] of a [`PhaseForm`], a
 //! summary of how it is played, and the dialog changing it once added.
 
+mod entry;
 mod fields;
 mod lists;
 mod summary;
@@ -10,11 +11,13 @@ use tournament_app::{
     error::PhaseDraftError,
     form::{FormView, PhaseForm},
     i18n::{Message as _, Text},
-    view::Count,
+    view::{Count, MatchesOf},
 };
+use tournament_engine::PhaseId;
 
 pub use self::summary::answer;
 use self::{
+    entry::Entry,
     fields::{Fields, Issues},
     summary::Summary,
 };
@@ -24,11 +27,13 @@ use crate::{
     components::dialog::{Dialog, DialogDescription, DialogTitle},
     focus::focus_later,
     i18n::t,
+    icons,
+    phases::{StartPhaseButton, phase_id_text, sources_text},
 };
 
-/// The form of a new phase, and the button adding it.
+/// The form of a new phase, and the button adding it; once added, `on_added` runs.
 #[component]
-pub fn NewPhase() -> Element {
+pub fn NewPhase(on_added: Option<EventHandler<()>>) -> Element {
     let ctx = use_context::<Ctx>();
     let created = use_hook(|| {
         ctx.session
@@ -52,10 +57,13 @@ pub fn NewPhase() -> Element {
                     focus_first_issue("new-phase");
                     return;
                 }
-                if ctx.act(|session| session.add_phase(form.read().draft())).is_some() {
+                if ctx.act(|session| session.add_phase(&form.read())).is_some() {
                     ctx.announce(Announcement::AddedPhase);
-                    // the form is gone, and with it what had the focus
-                    focus_later(&["#start:enabled", "#phase"]);
+                    match on_added {
+                        Some(on_added) => on_added.call(()),
+                        // the form is gone, and with it what had the focus
+                        None => focus_later(&["#start:enabled", "#phase"]),
+                    }
                 }
             },
             Form { form, disabled: !actions.add_phase }
@@ -72,23 +80,66 @@ pub fn NewPhase() -> Element {
     }
 }
 
-/// How many rounds and matches the phase takes with the entrants entered, until the start, which
-/// shows them: the phase of `form`, or else the phase added. Said as it changes, since it is what
-/// a format is chosen by.
+/// A button opening a dialog with the form of a new phase, for a competition that has started.
 #[component]
-fn PhaseScale(form: Option<Signal<PhaseForm>>) -> Element {
+pub fn AddPhaseDialog() -> Element {
+    let ctx = use_context::<Ctx>();
+    let mut open = use_signal(|| false);
+    let tr = ctx.translator.read();
+    rsx! {
+        button {
+            class: "quiet add-phase",
+            onclick: move |_| {
+                open.set(true);
+                focus_later(&["#field-name"]);
+            },
+            icons::Plus {}
+            {tr.get("add-phase")}
+        }
+        Dialog {
+            open: Some(open()),
+            on_open_change: move |is_open: bool| open.set(is_open),
+            DialogTitle { {tr.get("add-phase")} }
+            DialogDescription { {tr.get("add-phase-description")} }
+            if open() {
+                div { class: "dialog-form",
+                    NewPhase { on_added: move |()| open.set(false) }
+                    div { class: "dialog-buttons",
+                        button { r#type: "button", onclick: move |_| open.set(false),
+                            {tr.get("cancel")}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// How many rounds and matches the phase takes with the entrants its sources take as many as
+/// there are now, until it starts: the phase of `form`, or else the phase `phase`. Said as it
+/// changes, since it is what a format is chosen by.
+#[component]
+fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Element {
     let ctx = use_context::<Ctx>();
     // played out anew only when the phase or the entrants change, see `Session::scale`
     let scale = use_memo(move || {
         let session = ctx.session.read();
-        if session.competition().is_started() {
-            return None;
-        }
-        let scale = match form {
-            Some(form) => session.scale(form.read().draft()),
-            None => session.scale(&session.phase_draft_to_edit().ok()?),
+        let form = match (form, phase) {
+            (Some(form), _) => form.read().clone(),
+            (None, Some(phase)) => {
+                let started = session
+                    .competition()
+                    .phase(&phase)
+                    .is_some_and(|phase| phase.is_started());
+                if started {
+                    return None;
+                }
+                session.phase_form_to_edit(phase).ok()?
+            }
+            (None, None) => return None,
         };
-        scale.map(|scale| (session.competition().entrants().len(), scale))
+        let scale = session.scale(&form)?;
+        Some((session.entrants_taken(&form), scale))
     });
     let tr = ctx.translator.read();
     let count = |count: Count, exact: &'static str, range: &'static str| {
@@ -111,40 +162,77 @@ fn PhaseScale(form: Option<Signal<PhaseForm>>) -> Element {
         )
     });
     rsx! {
-        p { id: "phase-scale", class: "hint", role: "status", {text} }
+        p { class: "hint phase-scale", role: "status", {text} }
     }
 }
 
-/// How the phase is played, and a button opening the dialog that changes it.
+/// How the phase `phase` is played, where it takes its entrants from where the competition has
+/// several phases, and the buttons changing and removing it.
 #[component]
-pub fn PhaseSummary() -> Element {
+pub fn PhaseSummary(phase: PhaseId) -> Element {
     let ctx = use_context::<Ctx>();
-    let Ok(form) = ctx.session.read().phase_form_to_edit() else {
+    let Ok(form) = ctx.session.read().phase_form_to_edit(phase) else {
         return rsx! {};
     };
     let actions = ctx.actions();
     rsx! {
         Summary { fields: form.view().fields }
-        PhaseScale {}
+        PhaseScale { phase }
         if actions.edit_phase {
-            EditPhase {}
+            div { class: "phase-actions",
+                EditPhase { phase }
+                RemovePhase { phase }
+            }
         }
     }
 }
 
-/// The button editing the phase, and the dialog it opens: the form of the phase as it is played.
+/// A phase that has not started after the start of the competition: how it is played, where its
+/// entrants come from, and the button starting it.
 #[component]
-fn EditPhase() -> Element {
+pub fn PendingPhase(phase: PhaseId) -> Element {
+    let ctx = use_context::<Ctx>();
+    let session = ctx.session.read();
+    let phases = session.phases();
+    let Some(overview) = phases.iter().find(|overview| overview.id == phase).cloned() else {
+        return rsx! {};
+    };
+    drop(session);
+    let tr = ctx.translator.read();
+    rsx! {
+        div { class: "columns play",
+            div { class: "column wide",
+                section { class: "card", aria_labelledby: "phase",
+                    h2 { id: "phase", tabindex: "-1", {tr.phase_name(&overview.name)} }
+                    p { class: "sources", {sources_text(&tr, &phases, &overview.sources)} }
+                    PhaseSummary { phase }
+                    div { class: "start",
+                        StartPhaseButton { phase, primary: true }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The button editing the phase `phase`, and the dialog it opens: the form of the phase as it is.
+#[component]
+fn EditPhase(phase: PhaseId) -> Element {
     let ctx = use_context::<Ctx>();
     // the form while the dialog is open
     let mut editing = use_signal(|| None::<Signal<PhaseForm>>);
     let mut error = use_signal(|| None::<Text>);
     let tr = ctx.translator.read();
     let open = editing.read().is_some();
+    let name = ctx.session.read().name_of_phase(phase);
+    let several = ctx.session.read().phases().len() > 1;
     rsx! {
         button {
+            aria_label: several.then(|| {
+                name.as_ref().map(|name| t!(tr, "edit-phase-named", phase = tr.phase_name(name)))
+            }).flatten(),
             onclick: move |_| {
-                if let Ok(form) = ctx.session.peek().phase_form_to_edit() {
+                if let Ok(form) = ctx.session.peek().phase_form_to_edit(phase) {
                     error.set(None);
                     editing.set(Some(Signal::new(form)));
                     // the first field, rather than the first button, what is said about it,
@@ -152,6 +240,7 @@ fn EditPhase() -> Element {
                     focus_later(&["#field-format"]);
                 }
             },
+            icons::Pencil {}
             {tr.get("edit-phase")}
         }
         Dialog {
@@ -174,14 +263,14 @@ fn EditPhase() -> Element {
                             focus_first_issue("edit-phase");
                             return;
                         }
-                        match ctx.try_act(|session| session.edit_phase(form.read().draft())) {
+                        match ctx.try_act(|session| session.edit_phase(phase, &form.read())) {
                             Ok(edited) => {
                                 editing.set(None);
                                 if edited {
                                     let results = ctx
                                         .session
                                         .read()
-                                        .rounds()
+                                        .rounds(MatchesOf::phase(phase))
                                         .iter()
                                         .map(|summary| summary.matches - summary.open)
                                         .sum();
@@ -209,6 +298,50 @@ fn EditPhase() -> Element {
     }
 }
 
+/// The button removing the phase `phase`, without a question, since undo brings it back:
+/// `aria-disabled` with the reason while it cannot be removed.
+#[component]
+fn RemovePhase(phase: PhaseId) -> Element {
+    let ctx = use_context::<Ctx>();
+    let refusal = ctx
+        .session
+        .read()
+        .remove_phase_refusal(phase)
+        .map(|refusal| refusal.text());
+    let name = ctx.session.read().name_of_phase(phase);
+    let several = ctx.session.read().phases().len() > 1;
+    let tr = ctx.translator.read();
+    let described = format!("remove-refusal-{}", phase_id_text(phase));
+    let disabled = refusal.is_some();
+    rsx! {
+        button {
+            aria_disabled: disabled.then_some("true"),
+            aria_describedby: disabled.then(|| described.clone()),
+            aria_label: several
+                .then(|| {
+                    name.as_ref()
+                        .map(|name| t!(tr, "remove-phase-named", phase = tr.phase_name(name)))
+                })
+                .flatten(),
+            onclick: move |_| {
+                if disabled {
+                    return;
+                }
+                if ctx.act(|session| session.remove_phase(phase)).is_some() {
+                    ctx.announce(Announcement::RemovedPhase);
+                    focus_later(&["#phases", "#phase"]);
+                }
+            },
+            icons::Trash {}
+            {tr.get("remove-phase")}
+        }
+        if let Some(refusal) = &refusal {
+            " "
+            span { id: "{described}", class: "hint", {tr.sentence(refusal)} }
+        }
+    }
+}
+
 /// The fields of `form`, which the operator changes unless `disabled`, with what is wrong with
 /// the answers as a whole.
 #[component]
@@ -220,10 +353,12 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
         fields,
         issues,
         following_suggestions,
+        entry,
         ..
     } = form.read().view();
     rsx! {
         div { class: "phase-form",
+            Entry { form, entry, disabled }
             Fields { form, fields, disabled }
             p { role: "status",
                 if following_suggestions {

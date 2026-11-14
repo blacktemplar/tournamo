@@ -54,7 +54,10 @@ pub fn Bracket() -> Element {
             }
         }
     };
-    let Some(bracket) = ctx.session.read().bracket() else {
+    let Some(bracket) = ctx
+        .division()
+        .and_then(|division| ctx.session.read().bracket(division))
+    else {
         return rsx! {};
     };
     let tr = ctx.translator.read();
@@ -330,7 +333,7 @@ fn AfterBye() -> Element {
 #[component]
 fn WinButtons(row: MatchRow, after_bye: [bool; 2], focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
-    let id = row.id;
+    let (phase, id) = (row.phase, row.id);
     let tr = ctx.translator.read();
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
     let (a_wins, b_wins) = (
@@ -339,7 +342,7 @@ fn WinButtons(row: MatchRow, after_bye: [bool; 2], focus: Signal<Option<Focus>>)
     );
     let report = move |result| {
         move |_| {
-            if let Some(reported) = ctx.act(move |session| session.report(id, result)) {
+            if let Some(reported) = ctx.act(move |session| session.report(phase, id, result)) {
                 ctx.announce(Announcement::Reported(reported));
                 move_focus(focus, Focus::Heading);
             }

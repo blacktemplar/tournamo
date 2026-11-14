@@ -17,7 +17,7 @@ use plugin_factory::draft::Draft;
 use tournament_cli::{
     command::{Command, ParseError},
     questionnaire,
-    session::{self, Outcome, Session},
+    session::{self, Configuring, Outcome, Session},
     storage::Storage,
 };
 use tournament_engine::PhasePlugins;
@@ -81,47 +81,20 @@ pub enum Reply {
 pub struct Shell {
     session: Session,
     /// The phase being configured, while its questions are asked.
-    configuring: Option<Configuring>,
+    configuring: Option<Asking>,
 }
 
 /// A phase being configured by asking its questions, see [`Shell::configure`].
-struct Configuring {
+struct Asking {
     /// Fills the draft of the phase, waiting for the lines answering its questions.
     filling: Pin<Box<dyn Future<Output = Filled>>>,
     /// Shares the questions and their answers with `filling`.
     prompter: LinePrompter,
-    phase: Phase,
+    phase: Configuring,
 }
 
 /// The draft of a phase whose questions were asked, and whether all of them were answered.
 type Filled = (Draft<PhasePlugins>, Result<(), questionnaire::Error>);
-
-/// What the shell does with the phase it configures.
-#[derive(Clone, Copy)]
-enum Phase {
-    Added,
-    Edited,
-}
-
-impl Phase {
-    fn apply(
-        self,
-        session: &mut Session,
-        draft: &Draft<PhasePlugins>,
-    ) -> Result<String, session::Error> {
-        match self {
-            Self::Added => session.add_phase(draft),
-            Self::Edited => session.edit_phase(draft),
-        }
-    }
-
-    fn cancelled(self) -> &'static str {
-        match self {
-            Self::Added => "cancelled, no phase added",
-            Self::Edited => "cancelled, the phase is unchanged",
-        }
-    }
-}
 
 impl Shell {
     /// A shell for a new competition, which has no name yet.
@@ -178,13 +151,19 @@ impl Shell {
             Err(error) => return vec![failed(error)],
         };
         let draft = match command {
-            Command::AddPhase { format: None, .. } => {
-                Ok((self.session.competition().phase_draft(), Phase::Added))
-            }
-            Command::EditPhase => self
+            Command::AddPhase {
+                format: None,
+                name,
+                from,
+                ..
+            } => Ok((
+                self.session.competition().phase_draft(),
+                Configuring::Added { name, from },
+            )),
+            Command::EditPhase { phase } => self
                 .session
-                .phase_draft_to_edit()
-                .map(|draft| (draft, Phase::Edited)),
+                .phase_draft_to_edit(phase)
+                .map(|draft| (draft, Configuring::Edited { phase })),
             command => return self.execute(command),
         };
         match draft {
@@ -214,7 +193,7 @@ impl Shell {
 
     /// Starts asking the questions of `draft`, the draft of the phase that is to be `phase`,
     /// starting out at its answers, and returns what the first question shows.
-    fn configure(&mut self, draft: Draft<PhasePlugins>, phase: Phase) -> Vec<Reply> {
+    fn configure(&mut self, draft: Draft<PhasePlugins>, phase: Configuring) -> Vec<Reply> {
         let prompter = LinePrompter::default();
         let mut asking = prompter.clone();
         let filling = Box::pin(async move {
@@ -222,7 +201,7 @@ impl Shell {
             let result = questionnaire::fill_phase_async(&mut draft, &mut asking).await;
             (draft, result)
         });
-        self.configuring = Some(Configuring {
+        self.configuring = Some(Asking {
             filling,
             prompter,
             phase,
@@ -245,10 +224,10 @@ impl Shell {
             return configuring.prompter.shown();
         };
         let mut replies = configuring.prompter.shown();
-        let phase = configuring.phase;
+        let phase = configuring.phase.clone();
         self.configuring = None;
         match filled {
-            Ok(()) => match phase.apply(&mut self.session, &draft) {
+            Ok(()) => match self.session.apply_phase(&phase, &draft) {
                 Ok(output) => replies.push(Reply::Output(output)),
                 Err(error @ session::Error::InvalidPhase(_)) => {
                     replies.push(Reply::Error(format!("error: {error}\nplease answer again")));

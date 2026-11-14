@@ -21,7 +21,7 @@ use thiserror::Error;
 use tournament_cli::{
     command::{Command, ParseError},
     questionnaire::{self, Terminal},
-    session::{self, Outcome, Session},
+    session::{self, Configuring, Outcome, Session},
     storage::FileStorage,
 };
 use tournament_engine::PhasePlugins;
@@ -101,15 +101,20 @@ fn run(mut session: Session) -> Result<(), Error> {
         // a session never asks the operator anything, so a phase that is to be configured is
         // configured here and reaches the session as the configuration it produced
         let outcome = match command {
-            Command::AddPhase { format: None, .. } => {
+            Command::AddPhase {
+                format: None,
+                name,
+                from,
+                ..
+            } => {
                 let draft = session.competition().phase_draft();
-                configure_phase(&mut session, draft, Session::add_phase, Phase::Added)
+                configure_phase(&mut session, draft, &Configuring::Added { name, from })
             }
-            Command::EditPhase => session
-                .phase_draft_to_edit()
+            Command::EditPhase { phase } => session
+                .phase_draft_to_edit(phase)
                 .map_err(Error::Session)
                 .and_then(|draft| {
-                    configure_phase(&mut session, draft, Session::edit_phase, Phase::Edited)
+                    configure_phase(&mut session, draft, &Configuring::Edited { phase })
                 }),
             command => session.execute(command).map_err(Error::Session),
         };
@@ -122,43 +127,32 @@ fn run(mut session: Session) -> Result<(), Error> {
     }
 }
 
-/// What [`configure_phase`] does with the phase it configures.
-#[derive(Clone, Copy)]
-enum Phase {
-    Added,
-    Edited,
-}
-
-/// Configures a phase at the prompt, starting out at the answers of `draft`, and hands it to
-/// `apply`, leaving the competition untouched if the operator cancels the configuration. A phase
-/// whose plugins do not fit together is configured again, starting out at the answers given.
+/// Configures a phase at the prompt, starting out at the answers of `draft`, and hands it to the
+/// session as `configuring` says, leaving the competition untouched if the operator cancels the
+/// configuration. A phase whose plugins do not fit together is configured again, starting out at
+/// the answers given.
 fn configure_phase(
     session: &mut Session,
     mut draft: Draft<PhasePlugins>,
-    apply: fn(&mut Session, &Draft<PhasePlugins>) -> Result<String, session::Error>,
-    phase: Phase,
+    configuring: &Configuring,
 ) -> Result<Outcome, Error> {
     loop {
         match questionnaire::fill_phase(&mut draft, &mut Terminal) {
             Ok(()) => {}
             Err(questionnaire::Error::Cancelled) => {
-                let cancelled = match phase {
-                    Phase::Added => "cancelled, no phase added",
-                    Phase::Edited => "cancelled, the phase is unchanged",
-                };
-                return Ok(Outcome::Continue(cancelled.to_owned()));
+                return Ok(Outcome::Continue(configuring.cancelled().to_owned()));
             }
             // input that is piped in cannot answer any question, which is what the session says
             // when it is handed the command itself
             Err(questionnaire::Error::Prompt(InquireError::NotTTY)) => {
-                return Err(Error::Session(match phase {
-                    Phase::Added => session::Error::NotConfigured,
-                    Phase::Edited => session::Error::NotEdited,
+                return Err(Error::Session(match configuring {
+                    Configuring::Added { .. } => session::Error::NotConfigured,
+                    Configuring::Edited { .. } => session::Error::NotEdited,
                 }));
             }
             Err(error) => return Err(Error::Configure(error)),
         }
-        match apply(session, &draft) {
+        match session.apply_phase(configuring, &draft) {
             Err(error @ session::Error::InvalidPhase(_)) => {
                 eprintln!("error: {error}\nplease answer again");
             }

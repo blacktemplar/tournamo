@@ -4,7 +4,8 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    Decision, Division, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Score, Sides,
+    Decision, Division, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, PhaseId, Score,
+    Sides,
     plugins::{
         match_format::{Level, Parts},
         metrics_calculator::Cell,
@@ -167,8 +168,12 @@ pub struct Round {
 /// A match as a screen lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchRow {
+    /// The phase the match is of.
+    pub phase: PhaseId,
+    /// The index of the division of the phase the match is of.
+    pub division: usize,
     pub id: MatchId,
-    /// The position of the match among all matches of the phase, from 1, which never changes.
+    /// The number of the match, unique in the competition, from 1, which never changes.
     pub number: usize,
     pub round: NonZeroU32,
     /// The stage the format names the match by, e.g. the final.
@@ -470,6 +475,149 @@ pub struct StandingRow {
     pub cells: Vec<Option<StandingCell>>,
     /// The medal of its rank, once every match has a result; `None` before that.
     pub medal: Option<Medal>,
+    /// Where the row goes on to from here, as the standings are now; `None` if no phase takes it.
+    pub advances: Option<Advance>,
+}
+
+/// That a row of the standings goes on to the phase `to`, and how sure that is as the standings
+/// are now: neither says that a place can no longer be lost while matches are left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Advance {
+    pub to: PhaseId,
+    pub how: Advancing,
+}
+
+/// How a row of the standings advances, see [`Advance`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Advancing {
+    /// Its place alone takes it there.
+    ByPlace,
+    /// It shares its rank with rows on the other side of the cut, so what decides is the
+    /// comparison, in the end the lot.
+    Compared,
+}
+
+/// A division of a phase: the phase and the index of the division, from 0, in the order the
+/// phase has them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DivisionRef {
+    pub phase: PhaseId,
+    pub division: usize,
+}
+
+impl DivisionRef {
+    /// The first division of the phase `phase`, the only one of a phase of one division.
+    pub fn first(phase: PhaseId) -> Self {
+        Self { phase, division: 0 }
+    }
+}
+
+/// The matches of a phase: of all its divisions, or of one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MatchesOf {
+    pub phase: PhaseId,
+    pub division: Option<usize>,
+}
+
+impl MatchesOf {
+    /// The matches of every division of the phase `phase`.
+    pub fn phase(phase: PhaseId) -> Self {
+        Self {
+            phase,
+            division: None,
+        }
+    }
+}
+
+/// What a phase is called: the name it was given, or else its number and the label of its
+/// format, e.g. "2 · Single elimination", as
+/// [`Translator::phase_name`](crate::i18n::Translator::phase_name) says it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PhaseName {
+    /// The place of the phase among the phases, from 1.
+    pub number: usize,
+    pub name: Option<String>,
+    /// The id and English label of the format of the phase.
+    pub format: Plugin,
+}
+
+/// A phase as the list of phases shows it, see
+/// [`Session::phases`](crate::session::Session::phases).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PhaseOverview {
+    pub id: PhaseId,
+    pub name: PhaseName,
+    /// Where its entrants come from, in order.
+    pub sources: Vec<SourceRow>,
+    pub state: PhaseState,
+    /// Its divisions, none before it is started.
+    pub divisions: Vec<DivisionOverview>,
+}
+
+/// A source of a phase: the places `from..=to` of the registration or of a phase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SourceRow {
+    /// The phase it takes places of, `None` for the registration.
+    pub phase: Option<PhaseId>,
+    pub from: NonZeroU32,
+    /// To the last place if `None`.
+    pub to: Option<NonZeroU32>,
+}
+
+/// Where a phase is.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PhaseState {
+    /// Not started: waiting for the phases it takes entrants from that are not finished, or, if
+    /// none, it can start now, or with the competition if it takes entrants from the registration
+    /// alone.
+    NotStarted {
+        waiting_for: Vec<SourceProgress>,
+    },
+    Running,
+    /// Every match has a result; the phases that can start now, taking entrants from it.
+    Finished {
+        can_start: Vec<PhaseId>,
+    },
+}
+
+/// How far a phase another one waits for is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SourceProgress {
+    pub phase: PhaseId,
+    /// Its matches with a result, of all its matches scheduled; both 0 before it is started.
+    pub played: usize,
+    pub matches: usize,
+}
+
+/// A division of a phase, as the list of phases shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DivisionOverview {
+    pub division: DivisionRef,
+    /// Its matches with a result, of all its matches scheduled.
+    pub played: usize,
+    pub matches: usize,
+}
+
+/// Every entrant's place in the competition, see
+/// [`Session::ranking`](crate::session::Session::ranking).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CompetitionRanking {
+    /// Best first, the entrants of one ranking kept together.
+    pub rows: Vec<PlacedRow>,
+    /// Whether every phase is finished; else the places are as things stand.
+    pub is_final: bool,
+}
+
+/// A row of the [`CompetitionRanking`]: entrants ranked together and their place.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PlacedRow {
+    /// Shared by rows placed equal.
+    pub place: NonZeroU32,
+    pub entrants: Vec<EntrantRow>,
+    /// The phase they stopped in, i.e. the latest started phase they are in.
+    pub phase: PhaseId,
+    /// The medal of the place, once the ranking is final.
+    pub medal: Option<Medal>,
 }
 
 /// A cell of the standings.
@@ -514,9 +662,15 @@ pub struct Actions {
     pub remove_entrant: bool,
     pub rename_entrant: bool,
     pub add_phase: bool,
+    /// A phase can be edited: there is one. What keeps a phase from being removed or started is
+    /// said for each, see [`Session::remove_phase_refusal`] and [`Session::start_phase_refusal`].
+    ///
+    /// [`Session::remove_phase_refusal`]: crate::session::Session::remove_phase_refusal
+    /// [`Session::start_phase_refusal`]: crate::session::Session::start_phase_refusal
     pub edit_phase: bool,
+    /// The competition can start.
     pub start: bool,
-    /// Some match has no result yet.
+    /// Some match of a started phase has no result yet.
     pub report: bool,
     pub undo: bool,
     pub redo: bool,
@@ -541,8 +695,11 @@ pub struct Reported {
     pub row: MatchRow,
     /// The matches the result made the format schedule.
     pub new_matches: usize,
-    /// Once every match of the phase has a result, who is ranked first, as
-    /// [`Session::winners`](crate::session::Session::winners) says; `None` while a match has none.
+    /// Whether the result finished the phase of the match.
+    pub finished_phase: bool,
+    /// Once the competition ranking is final, who is placed first, as
+    /// [`Session::competition_winners`](crate::session::Session::competition_winners) says;
+    /// `None` before.
     pub winners: Option<Vec<Vec<EntrantRow>>>,
 }
 
@@ -561,9 +718,15 @@ pub struct Reopened {
 pub enum Action {
     AddEntrant(EntrantRow),
     RemoveEntrant(EntrantRow),
-    AddPhase,
-    EditPhase,
+    AddPhase(PhaseName),
+    EditPhase(PhaseName),
+    /// A phase removed, as it was called.
+    RemovePhase(PhaseName),
+    /// The competition started.
     Start,
+    /// A phase started on its own, see
+    /// [`Session::start_phase`](crate::session::Session::start_phase).
+    StartPhase(PhaseName),
     /// A result reported, see [`Reported::row`].
     Report(MatchRow),
     /// A result undone by its match, see [`Reopened::row`].

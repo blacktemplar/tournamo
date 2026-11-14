@@ -56,7 +56,7 @@
 }
 
 /* how long the phase takes (phase/mod.rs): no room while it says nothing, staying a live region */
-#phase-scale:empty {
+.phase-scale:empty {
   display: contents;
 }
 

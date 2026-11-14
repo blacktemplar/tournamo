@@ -367,7 +367,9 @@ fn phrases_of_rules(id: &str) -> BTreeSet<String> {
         .with("match_format", PluginConfig::new(id))
         .and_then(|draft| draft.with_defaults())
         .unwrap();
-    session.add_phase(&draft).unwrap();
+    session
+        .add_phase(&crate::session::tests::form(draft.clone()))
+        .unwrap();
     session.start().unwrap();
     let r#match = session
         .competition()
@@ -380,7 +382,11 @@ fn phrases_of_rules(id: &str) -> BTreeSet<String> {
     let id = r#match.matches().values().next().unwrap().id();
     let mut attributes = BTreeSet::new();
     collect(
-        &session.result_form(id).unwrap().view().root,
+        &session
+            .result_form(session.first(), id)
+            .unwrap()
+            .view()
+            .root,
         &mut attributes,
     );
     attributes

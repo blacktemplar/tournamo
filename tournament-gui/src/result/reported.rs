@@ -38,7 +38,7 @@ pub fn ResultDetails(row: MatchRow) -> Element {
             r#type: "button",
             aria_label: t!(tr, "result-details-of", number = row.number),
             onclick: move |_| {
-                shown.set(ctx.session.peek().reported_result(id));
+                shown.set(ctx.session.peek().reported_result(row.phase, id));
                 focus_later(&["#result-details button"]);
             },
         }

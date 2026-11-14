@@ -166,10 +166,6 @@ impl Transition<Competition> for ReportMatchResult {
     }
 
     fn apply(&self, competition: &mut Competition) {
-        let phase = competition
-            .phases_mut()
-            .get_mut(&self.phase_id)
-            .expect("check_applicable found the phase");
-        phase.report_match(self.match_id, self.contest.clone());
+        competition.report_match(self.phase_id, self.match_id, self.contest.clone());
     }
 }

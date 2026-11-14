@@ -17,6 +17,7 @@ use crate::{
     icons,
     notices::use_cleared_on_language_change,
     phase::{NewPhase, PhaseSummary},
+    phases::sources_text,
     team_name,
 };
 
@@ -310,12 +311,15 @@ fn scroll_to_field() {
     );
 }
 
-/// The phase: its form until it is added, then how it is played; and the start.
+/// The phases: the form of the first until it is added, then how each is played, where its
+/// entrants come from, and a button opening the form of another; and the start.
 #[component]
-pub fn Phase() -> Element {
+pub fn Phases() -> Element {
     let ctx = use_context::<Ctx>();
     let actions = ctx.actions();
-    let has_phase = !ctx.session.read().competition().phases().is_empty();
+    let phases = ctx.session.read().phases();
+    // whether the form of a further phase is open
+    let mut adding = use_signal(|| false);
     // what keeps the competition from starting, said only to the tab that could start it
     let refusal = ctx
         .changes()
@@ -323,19 +327,59 @@ pub fn Phase() -> Element {
         .flatten()
         .map(|refusal| refusal.text());
     let tr = ctx.translator.read();
+    let several = phases.len() > 1;
+    let has_phase = !phases.is_empty();
     rsx! {
         section { class: "card", aria_labelledby: "phase",
             // focused once the phase is added, unless it can start
-            h2 { id: "phase", tabindex: "-1", {tr.get("phase-heading")} }
+            h2 { id: "phase", tabindex: "-1",
+                if several {
+                    {tr.get("phases")}
+                } else {
+                    {tr.get("phase-heading")}
+                }
+            }
             p {
                 HelpLink { section: help::FORMATS, text: tr.get("formats-explained") }
             }
             if has_phase {
-                PhaseSummary {}
+                ol {
+                    id: "phases",
+                    class: if several { "phases numbered" } else { "phases" },
+                    tabindex: "-1",
+                    for phase in phases.iter() {
+                        li { key: "{phase.id:?}",
+                            if several {
+                                h3 { {tr.phase_name(&phase.name)} }
+                                p { class: "sources", {sources_text(&tr, &phases, &phase.sources)} }
+                            }
+                            PhaseSummary { phase: phase.id }
+                        }
+                    }
+                }
+                if adding() {
+                    h3 { id: "new-phase-heading", {tr.get("new-phase")} }
+                    NewPhase {
+                        on_added: move |()| {
+                            adding.set(false);
+                            focus_later(&["#phases"]);
+                        },
+                    }
+                } else if actions.add_phase {
+                    button {
+                        id: "add-phase",
+                        onclick: move |_| {
+                            adding.set(true);
+                            focus_later(&["#field-name"]);
+                        },
+                        icons::Plus {}
+                        {tr.get("add-phase")}
+                    }
+                }
             } else {
                 NewPhase {}
             }
-            // apart from the phase above it, the card's primary action once the phase is added
+            // apart from the phases above it, the card's primary action once a phase is added
             div { class: "start",
                 button {
                     id: "start",
@@ -344,8 +388,14 @@ pub fn Phase() -> Element {
                     aria_describedby: refusal.is_some().then_some("start-refusal"),
                     onclick: move |_| {
                         if ctx.act(Session::start).is_some() {
-                            let rounds = ctx.session.peek().rounds();
-                            let matches = rounds.iter().map(|round| round.open).sum();
+                            let matches = ctx
+                                .session
+                                .peek()
+                                .phases()
+                                .iter()
+                                .flat_map(|phase| &phase.divisions)
+                                .map(|division| division.matches - division.played)
+                                .sum();
                             ctx.announce(Announcement::Started(matches));
                             // the setup is gone, and the matches take its place
                             focus_later(&["#matches"]);

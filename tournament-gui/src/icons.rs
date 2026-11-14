@@ -3,6 +3,55 @@
 
 use dioxus::prelude::*;
 
+/// Forward, to what comes next, e.g. the phase a row of the standings goes on to.
+#[component]
+pub fn ArrowRight() -> Element {
+    rsx! {
+        Icon {
+            path { d: "M5 12h14" }
+            path { d: "m12 5 7 7-7 7" }
+        }
+    }
+}
+
+/// Not started yet: an empty circle.
+#[component]
+pub fn Circle() -> Element {
+    rsx! {
+        Icon { circle { cx: "12", cy: "12", r: "9" } }
+    }
+}
+
+/// Under way: a circle half filled.
+#[component]
+pub fn HalfCircle() -> Element {
+    rsx! {
+        Icon {
+            circle { cx: "12", cy: "12", r: "9" }
+            path { d: "M12 3a9 9 0 0 1 0 18z", fill: "currentColor" }
+        }
+    }
+}
+
+/// Done: a check mark.
+#[component]
+pub fn Check() -> Element {
+    rsx! {
+        Icon { path { d: "M20 6 9 17l-5-5" } }
+    }
+}
+
+/// Something to add, e.g. a phase.
+#[component]
+pub fn Plus() -> Element {
+    rsx! {
+        Icon {
+            path { d: "M5 12h14" }
+            path { d: "M12 5v14" }
+        }
+    }
+}
+
 /// Back, or the one before.
 #[component]
 pub fn ChevronLeft() -> Element {

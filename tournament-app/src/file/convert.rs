@@ -38,7 +38,7 @@ const CONVERTERS: &[Converter] = &[
         competition: v4::competition,
     },
     Converter {
-        log_entry: |_| {},
+        log_entry: v5::log_entry,
         competition: v5::competition,
     },
 ];
@@ -358,9 +358,25 @@ mod v4 {
 /// Format 4 to 5: a phase holds its divisions, each with its own copy of the phase's plugins,
 /// once it has started: what a phase held as its `"plugins"` and `"data"` is its only division,
 /// and the phase keeps the plugins, the `"seed"` of its data and whether it has `"started"`, as
-/// the competition has.
+/// the competition has. A phase has a `"name"` (none) and `"sources"` (the whole registration),
+/// as an `AddPhase` has. A started competition holds its `"lots"`, the order its phase started
+/// in, and every ranking its `"lot"`, its initial unique rank; the competition holds the
+/// `"highest_number"` of a match or of a pairing of a bracket, a division the `"number_base"` 0.
 mod v5 {
     use serde_json::{Map, Value, json};
+
+    /// An `AddPhase`, applied or replacing another, gets no name and the whole registration as
+    /// its source.
+    pub(super) fn log_entry(entry: &mut Value) {
+        let transition = if entry.pointer("/kind/Apply").is_some() {
+            "/kind/Apply/AddPhase"
+        } else {
+            "/kind/Replace/with/AddPhase"
+        };
+        if let Some(Value::Object(add_phase)) = entry.pointer_mut(transition) {
+            name_and_sources(add_phase);
+        }
+    }
 
     pub(super) fn competition(competition: &mut Value) {
         let Some(started) = competition.get("started").and_then(Value::as_bool) else {
@@ -369,29 +385,97 @@ mod v5 {
         let Some(Value::Array(phases)) = competition.get_mut("phases") else {
             return;
         };
+        let mut lots = None;
+        let mut highest_number = 0;
+        let mut converted = false;
         for phase in phases.iter_mut().filter_map(Value::as_object_mut) {
-            divisions(phase, started);
+            if let Some(rankings) = phase
+                .get_mut("data")
+                .and_then(|data| data.get_mut("rankings"))
+                .and_then(Value::as_array_mut)
+            {
+                lots = lots.or_else(|| started.then(|| lots_of(rankings)));
+            }
+            highest_number = highest_number.max(highest_number_of(phase));
+            converted |= divisions(phase, started);
+        }
+        if converted && let Some(competition) = competition.as_object_mut() {
+            competition
+                .entry("lots")
+                .or_insert_with(|| lots.unwrap_or_default().into());
+            competition
+                .entry("highest_number")
+                .or_insert_with(|| highest_number.into());
         }
     }
 
-    /// A phase holding its plugins and data holds them as its only division if `started`, else
+    /// The entrants of `rankings` by initial unique rank, i.e. by lot; every ranking gets its
+    /// initial unique rank as its lot.
+    fn lots_of(rankings: &mut [Value]) -> Vec<Value> {
+        let mut lots: Vec<(u64, Vec<Value>)> = Vec::new();
+        for ranking in rankings.iter_mut().filter_map(Value::as_object_mut) {
+            let Some(rank) = ranking.get("initial_unique_rank").cloned() else {
+                continue;
+            };
+            if let Some(Value::Array(entrants)) = ranking.get("entrants") {
+                lots.push((rank.as_u64().unwrap_or(u64::MAX), entrants.clone()));
+            }
+            ranking.entry("lot").or_insert(rank);
+        }
+        lots.sort_by_key(|(rank, _)| *rank);
+        lots.into_iter()
+            .flat_map(|(_, entrants)| entrants)
+            .collect()
+    }
+
+    /// The highest number of a match of `phase`, or of a pairing of its bracket, 0 if it has
     /// none.
-    fn divisions(phase: &mut Map<String, Value>, started: bool) {
+    fn highest_number_of(phase: &Map<String, Value>) -> u64 {
+        fn numbers(of: Option<&Value>) -> impl Iterator<Item = u64> + '_ {
+            of.and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|numbered| numbered.get("number").and_then(Value::as_u64))
+        }
+        let matches = phase.get("data").and_then(|data| data.get("matches"));
+        let pairings = phase
+            .get("plugins")
+            .and_then(|plugins| plugins.pointer("/format/value/bracket/pairings"));
+        numbers(matches).chain(numbers(pairings)).max().unwrap_or(0)
+    }
+
+    /// A phase holding its plugins and data holds them as its only division if `started`, else
+    /// none. Returns whether it was converted.
+    fn divisions(phase: &mut Map<String, Value>, started: bool) -> bool {
         let Some(seed) = phase.get("data").and_then(|data| data.get("seed")).cloned() else {
-            return;
+            return false;
         };
         if phase.contains_key("divisions") || !phase.contains_key("plugins") {
-            return;
+            return false;
         }
         let data = phase.remove("data").unwrap_or_default();
         let divisions = if started {
-            json!([{ "plugins": phase["plugins"].clone(), "data": data }])
+            json!([{ "plugins": phase["plugins"].clone(), "data": data, "number_base": 0 }])
         } else {
             json!([])
         };
+        name_and_sources(phase);
         phase.insert("seed".to_owned(), seed);
         phase.insert("started".to_owned(), started.into());
         phase.insert("divisions".to_owned(), divisions);
+        true
+    }
+
+    /// A phase, or an `AddPhase`, without a name and sources gets none and the whole registration.
+    fn name_and_sources(phase: &mut Map<String, Value>) {
+        if phase.contains_key("sources") || !phase.contains_key("plugins") {
+            return;
+        }
+        phase.entry("name").or_insert(Value::Null);
+        phase.insert(
+            "sources".to_owned(),
+            json!([{ "of": "Registration", "from": 1, "to": null }]),
+        );
     }
 }
 
@@ -690,11 +774,15 @@ mod tests {
             session.add_entrant(name).unwrap();
         }
         let draft = session.phase_draft(SingleElimination::ID).unwrap();
-        session.add_phase(&draft).unwrap();
+        session
+            .add_phase(&crate::session::tests::form(draft.clone()))
+            .unwrap();
         session.start().unwrap();
         for _ in 0..2 {
-            let semifinal = session.playable()[0].id;
-            session.report(semifinal, MatchResult::AWins).unwrap();
+            let semifinal = session.playable(session.all())[0].id;
+            session
+                .report(session.first(), semifinal, MatchResult::AWins)
+                .unwrap();
         }
         session
     }
@@ -707,11 +795,15 @@ mod tests {
             session.add_entrant(name).unwrap();
         }
         let draft = session.phase_draft(DoubleElimination::ID).unwrap();
-        session.add_phase(&draft).unwrap();
+        session
+            .add_phase(&crate::session::tests::form(draft.clone()))
+            .unwrap();
         session.start().unwrap();
         for _ in 0..3 {
-            let next = session.playable()[0].id;
-            session.report(next, MatchResult::BWins).unwrap();
+            let next = session.playable(session.all())[0].id;
+            session
+                .report(session.first(), next, MatchResult::BWins)
+                .unwrap();
         }
         session
     }
@@ -720,8 +812,16 @@ mod tests {
     /// plugins and data of its only division, or else its plugins and the data of a phase not
     /// started.
     fn as_of_format_4(competition: &mut Value) {
+        let competition_of = competition.as_object_mut().unwrap();
+        competition_of.remove("lots").unwrap();
+        competition_of.remove("highest_number").unwrap();
         for phase in competition["phases"].as_array_mut().unwrap() {
             let phase = phase.as_object_mut().unwrap();
+            assert_eq!(phase.remove("name"), Some(Value::Null));
+            assert_eq!(
+                phase.remove("sources"),
+                Some(json!([{ "of": "Registration", "from": 1, "to": null }]))
+            );
             let seed = phase.remove("seed").unwrap();
             let started = phase.remove("started").unwrap();
             let Some(Value::Array(divisions)) = phase.remove("divisions") else {
@@ -731,6 +831,14 @@ mod tests {
             let data = match <[Value; 1]>::try_from(divisions) {
                 Ok([mut division]) => {
                     assert_eq!(division["data"]["seed"], seed);
+                    assert_eq!(division["number_base"], json!(0));
+                    for ranking in division["data"]["rankings"].as_array_mut().unwrap() {
+                        let ranking = ranking.as_object_mut().unwrap();
+                        assert_eq!(
+                            ranking.remove("lot"),
+                            ranking.get("initial_unique_rank").cloned()
+                        );
+                    }
                     phase.insert("plugins".to_owned(), division["plugins"].take());
                     division["data"].take()
                 }
@@ -923,7 +1031,9 @@ mod tests {
             session.add_entrant(name).unwrap();
         }
         let draft = session.phase_draft(SingleElimination::ID).unwrap();
-        session.add_phase(&draft).unwrap();
+        session
+            .add_phase(&crate::session::tests::form(draft.clone()))
+            .unwrap();
         let competition = serde_json::to_value(session.competition()).unwrap();
         let mut held = competition.clone();
         as_of_format_4(&mut held);
@@ -934,6 +1044,69 @@ mod tests {
         assert_eq!(held["phases"][0]["divisions"], json!([]));
         let read: Competition = serde_json::from_value(held).unwrap();
         assert_eq!(serde_json::to_value(read).unwrap(), competition);
+    }
+
+    /// A phase added, or added in place of another, takes the whole registration, without a name.
+    #[test]
+    fn a_phase_added_gets_no_name_and_the_whole_registration_in_format_5() {
+        let plugins =
+            json!({ "format": { "type": "tournament_engine::round_robin", "value": null } });
+        let added = json!({ "id": "phase", "plugins": plugins });
+        let converted = json!({
+            "id": "phase",
+            "name": null,
+            "sources": [{ "of": "Registration", "from": 1, "to": null }],
+            "plugins": plugins,
+        });
+        let apply =
+            |phase: &Value| json!({ "id": "add", "kind": { "Apply": { "AddPhase": phase } } });
+        let replace = |phase: &Value| {
+            json!({ "id": "edit", "kind": { "Replace": {
+                "target": "add",
+                "with": { "AddPhase": phase },
+            } } })
+        };
+
+        assert_eq!(
+            converted_by(v5::log_entry, apply(&added)),
+            apply(&converted)
+        );
+        assert_eq!(
+            converted_by(v5::log_entry, replace(&added)),
+            replace(&converted)
+        );
+        // a phase with sources already stays as it is
+        assert_eq!(
+            converted_by(v5::log_entry, apply(&converted)),
+            apply(&converted)
+        );
+    }
+
+    /// A started competition of format 4 gets its lots in the order its phase started in, and the
+    /// highest number of a match or a pairing of a bracket.
+    #[test]
+    fn a_started_competition_of_format_4_gets_its_lots_and_highest_number() {
+        let session = double_elimination_under_way();
+        let competition = serde_json::to_value(session.competition()).unwrap();
+        let mut held = competition.clone();
+        as_of_format_4(&mut held);
+
+        upgrade_competition(&mut held, Format(4));
+
+        assert_eq!(held["lots"], competition["lots"]);
+        assert_eq!(held["highest_number"], competition["highest_number"]);
+        let matches = competition["phases"][0]["divisions"][0]["data"]["matches"]
+            .as_array()
+            .unwrap();
+        // the bracket keeps numbers for matches not scheduled yet
+        assert!(
+            held["highest_number"].as_u64().unwrap()
+                > matches
+                    .iter()
+                    .map(|m| m["number"].as_u64().unwrap())
+                    .max()
+                    .unwrap()
+        );
     }
 
     /// A phase of an unexpected shape, or holding its divisions already, stays as it is.

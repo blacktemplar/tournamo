@@ -141,6 +141,20 @@ medal-gold = Gold medal,
 medal-silver = Silver medal,
 medal-bronze = Bronze medal,
 add-phase = Add phase
+add-phase-description = The phase takes its entrants from the registration or from places of the phases before it.
+new-phase = New phase
+# the heading of the card once a competition has several phases
+phases = Phases
+remove-phase = Remove phase
+# $phase: what a phase is called, its name or else its number and format
+edit-phase-named = Edit phase: { $phase }
+remove-phase-named = Remove phase: { $phase }
+# where a phase takes its entrants from
+everyone-registered = everyone registered
+registration = the registration
+every-place-of = every place of { $phase }
+places-of = places { $from }–{ $to } of { $phase }
+places-from-of = places from { $from } of { $phase }
 # how long the phase takes with the entrants entered, before the start; $rounds and $matches: what
 # the messages below say
 phase-scale = With { $entrants } entrants, the phase takes { $rounds } and { $matches }.
@@ -158,6 +172,18 @@ scale-matches-range = { $least } to { $most } matches
 start = Start
 
 ## Configuring the phase
+
+# the name of a phase, optional; without one, a phase is called by its number and format
+phase-name = Name
+entrants-from = Entrants from
+# a row taking a range of places; $number counts the rows from 1
+source-of = Source { $number }
+from-place = from place
+to-place = to place
+# what the last place of a range shows while it is empty
+to-last-place = last
+remove-source = Remove source { $number }
+add-source = Add source
 
 # what a choice of a plugin shows while none is chosen
 choose-plugin = Choose…
@@ -189,6 +215,29 @@ save-changes = Save changes
 cancel = Cancel
 
 ## After the start
+
+# the state of a phase, next to its link, for screen readers
+phase-not-started = not started:
+phase-running = running:
+phase-done = finished:
+start-phase = Start { $phase }
+phase-finished = { $phase } is finished
+# a cut between the places taken and those not taken goes through a tie
+tie-at-cut-title = Start with a tie decided by lot?
+tie-at-cut-description = To decide it otherwise, cancel and add a criterion to the ranking of the phase first.
+start-anyway = Start anyway
+# the ranking of the competition: every entrant's place
+ranking = Ranking
+ranking-provisional = As things stand: not every phase is finished.
+place = Place
+phase-reached = Phase reached
+# a row of the standings going on to another phase: by its place, or for now by a comparison
+# the column of the standings saying where a row goes on to
+goes-on = Goes on
+advances-to = goes on to { $phase }
+advances-to-for-now = goes on to { $phase } for now, by comparison
+advances-by-place = goes on to { $phase } by its place
+advances-compared = shares its rank with rows that do not go on to { $phase }, so the comparison decides, in the end the lot
 
 matches = Matches
 # what a narrow screen shows: the matches or the standings (or a knockout's bracket); a wide screen
@@ -351,6 +400,13 @@ announce-removed-entrant = Removed { $name }.
 announce-renamed-entrant = Renamed { $name } to { $new_name }.
 announce-added-phase = The phase is added.
 announce-edited-phase = The phase is changed.
+announce-removed-phase = The phase is removed.
+announce-phase-finished = Every match of the phase has a result.
+# $count: the matches without a result
+announce-started-phase = Started { $phase }: { $count ->
+        [one] one match
+       *[other] { $count } matches
+    } to play.
 # $count: the matches with a result, at least one
 announce-results-stay = { $count ->
         [one] The result reported stays.
@@ -363,8 +419,10 @@ announce-started = Started: { $count ->
     } to play.
 action-add-entrant = adding { $name }
 action-remove-entrant = removing { $name }
-action-add-phase = adding the phase
-action-edit-phase = editing the phase
+action-add-phase = adding { $phase }
+action-edit-phase = editing { $phase }
+action-remove-phase = removing { $phase }
+action-start-phase = the start of { $phase }
 action-start = the start
 # $result: as `won` or `draw` say it
 action-report = the result of match { $number } ({ $result })

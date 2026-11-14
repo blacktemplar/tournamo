@@ -12,6 +12,8 @@
 //! whole section stays as chosen, until [`PhaseForm::apply_suggestions`] replaces it and resumes
 //! following. Existing phases start with their settings kept.
 
+pub(crate) use entry::Context;
+pub use entry::{End, EntryView, SourceChoice, SourceRowView};
 pub use plugin_factory::config::Path;
 use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
@@ -26,7 +28,10 @@ use crate::{
     rejected::Rejections,
 };
 
-/// The plugins of a phase being configured, see the [module](self).
+mod entry;
+
+/// The plugins of a phase being configured, see the [module](self), with its name and where it
+/// takes its entrants from, see [`Self::entry_view`].
 #[derive(Clone)]
 pub struct PhaseForm {
     draft: Draft<PhasePlugins>,
@@ -34,6 +39,8 @@ pub struct PhaseForm {
     /// What was entered into a number field and not taken, with why, by the path of the field.
     /// Dropped when its section is replaced or edited structurally, which may move the fields.
     rejected: Rejections<Path>,
+    entry: entry::Entry,
+    context: entry::Context,
 }
 
 /// What a [`PhaseForm`] shows: plain data for a screen to lay out.
@@ -46,8 +53,10 @@ pub struct FormView {
     /// What is wrong with the answers that no field in particular fixes.
     pub issues: Vec<Text>,
     /// Whether nothing is wrong with the answers, so that a phase can be played with them, and
-    /// every number entered was taken.
+    /// every number entered was taken, its sources included.
     pub complete: bool,
+    /// Its name and where it takes its entrants from.
+    pub entry: EntryView,
 }
 
 impl FormView {
@@ -262,15 +271,35 @@ impl PluginOption {
 }
 
 impl PhaseForm {
-    /// A form preserving the settings of `draft`. [`Self::apply_suggestions`] starts following
-    /// suggestions; [`Session::phase_form`](crate::session::Session::phase_form) does so for a
-    /// new phase.
+    /// A form preserving the settings of `draft`, of the first phase of a competition, without a
+    /// name. [`Self::apply_suggestions`] starts following suggestions;
+    /// [`Session::phase_form`](crate::session::Session::phase_form) does so for a new phase, and
+    /// knows the phases of its competition.
     pub fn new(draft: Draft<PhasePlugins>) -> Self {
         Self {
             draft,
             following_suggestions: false,
             rejected: Rejections::default(),
+            entry: entry::Entry::default(),
+            context: entry::Context::default(),
         }
+    }
+
+    /// This form of a phase of the competition `context` describes, named `name` and taking its
+    /// entrants from `sources`.
+    pub(crate) fn of_phase(
+        mut self,
+        context: Context,
+        name: Option<&str>,
+        sources: Vec<tournament_engine::Source>,
+    ) -> Self {
+        self.context = context;
+        self.entry = entry::Entry {
+            name: name.unwrap_or_default().to_owned(),
+            sources,
+            rejected: Rejections::default(),
+        };
+        self
     }
 
     /// The draft as the form answered it.
@@ -326,8 +355,11 @@ impl PhaseForm {
         FormView {
             fields,
             following_suggestions: self.following_suggestions,
-            complete: issues.is_empty() && self.rejected.is_empty(),
+            complete: issues.is_empty()
+                && self.rejected.is_empty()
+                && self.sources_issue().is_none(),
             issues: unplaced,
+            entry: self.entry_view(),
         }
     }
 

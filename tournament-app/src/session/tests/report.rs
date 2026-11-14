@@ -8,7 +8,9 @@ fn a_reported_result_comes_with_its_match() {
     let mut session = Given::new().started();
     let first = matches(&session).remove(0);
 
-    let reported = session.report(first.id, MatchResult::BWins).unwrap();
+    let reported = session
+        .report(session.first(), first.id, MatchResult::BWins)
+        .unwrap();
 
     assert_eq!(
         reported.row,
@@ -25,22 +27,27 @@ fn a_result_the_match_does_not_take_is_refused() {
     let first = numbered(&session, 1);
     let elsewhere = numbered(&Given::new().started(), 1);
 
-    assert!(!session.round(round(1)).unwrap().draws);
+    assert!(!session.round(session.all(), round(1)).unwrap().draws);
     assert!(matches!(
-        session.report(first, MatchResult::Draw),
+        session.report(session.first(), first, MatchResult::Draw),
         Err(ReportError::DrawNotAllowed)
     ));
-    session.report(first, MatchResult::AWins).unwrap();
+    session
+        .report(session.first(), first, MatchResult::AWins)
+        .unwrap();
     assert!(matches!(
-        session.report(first, MatchResult::BWins),
+        session.report(session.first(), first, MatchResult::BWins),
         Err(ReportError::AlreadyFinished)
     ));
     assert!(matches!(
-        session.report(elsewhere, MatchResult::AWins),
+        session.report(session.first(), elsewhere, MatchResult::AWins),
         Err(ReportError::UnknownMatch)
     ));
     assert!(matches!(
-        Given::new().added().report(first, MatchResult::AWins),
+        {
+            let mut added = Given::new().added();
+            added.report(added.first(), first, MatchResult::AWins)
+        },
         Err(ReportError::NotStarted)
     ));
 }
@@ -52,11 +59,17 @@ fn a_result_is_undone_by_its_match() {
     let mut session = Given::new().started();
     for number in 1..=3 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
 
-    let reopened = session.undo_report(numbered(&session, 1)).unwrap();
+    let reopened = session
+        .undo_report(session.first(), numbered(&session, 1))
+        .unwrap();
 
     assert_eq!(reopened.unscheduled, 0);
     assert_eq!(
@@ -70,7 +83,7 @@ fn a_result_is_undone_by_its_match() {
         [None, Some(MatchResult::AWins), Some(MatchResult::AWins)]
     );
     assert!(matches!(
-        session.undo_report(numbered(&session, 1)),
+        session.undo_report(session.first(), numbered(&session, 1)),
         Err(UndoReportError::NotReported)
     ));
 }
@@ -82,17 +95,23 @@ fn a_result_a_later_one_depends_on_is_undone_after_it() {
     let mut session = Given::new().format(SingleElimination::ID).started();
     for number in 1..=3 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
     let semifinal = numbered(&session, 1);
 
     assert!(matches!(
-        session.undo_report(semifinal),
+        session.undo_report(session.first(), semifinal),
         Err(UndoReportError::DependedOnBy(numbers)) if numbers == [3]
     ));
-    session.undo_report(numbered(&session, 3)).unwrap();
-    let reopened = session.undo_report(semifinal).unwrap();
+    session
+        .undo_report(session.first(), numbered(&session, 3))
+        .unwrap();
+    let reopened = session.undo_report(session.first(), semifinal).unwrap();
 
     assert_eq!(
         reopened.unscheduled, 2,
@@ -107,11 +126,15 @@ fn every_result_depending_on_an_undone_one_is_named() {
     let mut session = Given::new().format(SingleElimination::ID).started();
     for number in 1..=4 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
 
-    let result = session.undo_report(numbered(&session, 1));
+    let result = session.undo_report(session.first(), numbered(&session, 1));
 
     assert!(
         matches!(&result, Err(UndoReportError::DependedOnBy(numbers)) if *numbers == [3, 4]),

@@ -7,7 +7,7 @@ use super::*;
 fn the_matches_are_listed_by_round_with_the_names_of_their_entrants() {
     let session = Given::new().started();
 
-    let rounds = session.rounds();
+    let rounds = session.rounds(session.all());
 
     assert_eq!(
         rounds,
@@ -21,7 +21,7 @@ fn the_matches_are_listed_by_round_with_the_names_of_their_entrants() {
             .collect::<Vec<_>>(),
         "a round robin of four plays three rounds of two matches, none of a stage"
     );
-    let first = session.round(round(1)).unwrap();
+    let first = session.round(session.all(), round(1)).unwrap();
     assert_eq!(
         first
             .matches
@@ -40,16 +40,16 @@ fn the_matches_are_listed_by_round_with_the_names_of_their_entrants() {
     assert!(first.matches.iter().all(|row| row.stage.is_none()));
     assert!(first.byes.is_empty());
     assert!(first.draws, "a round robin takes draws");
-    assert_eq!(session.round(round(4)), None);
+    assert_eq!(session.round(session.all(), round(4)), None);
 }
 
 #[test]
 fn nothing_is_played_before_the_start() {
     let session = Given::new().added();
 
-    assert!(session.rounds().is_empty());
-    assert_eq!(session.round(round(1)), None);
-    assert_eq!(session.standings(), None);
+    assert!(session.rounds(session.all()).is_empty());
+    assert_eq!(session.round(session.all(), round(1)), None);
+    assert_eq!(session.standings(session.only()), None);
 }
 
 /// A round robin of three has one entrant sit out every round.
@@ -57,7 +57,7 @@ fn nothing_is_played_before_the_start() {
 fn a_round_lists_its_byes() {
     let session = Given::new().entrants(&["Alice", "Bob", "Carol"]).started();
 
-    let second = session.round(round(2)).unwrap();
+    let second = session.round(session.all(), round(2)).unwrap();
 
     assert_eq!(second.matches.len(), 1);
     assert_eq!(second.byes.len(), 1);
@@ -75,7 +75,7 @@ fn a_bye_is_named_by_its_stage_where_its_round_has_several() {
         .format(DoubleElimination::ID)
         .started();
     let bye_stages = |session: &Session, number| -> Vec<Option<String>> {
-        let round = session.round(round(number)).unwrap();
+        let round = session.round(session.all(), round(number)).unwrap();
         round
             .byes
             .into_iter()
@@ -90,7 +90,11 @@ fn a_bye_is_named_by_its_stage_where_its_round_has_several() {
 
     for number in 1..=2 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
 
@@ -118,10 +122,10 @@ fn a_knockout_names_the_stage_of_every_match() {
     );
 
     let first = session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     let second = session
-        .report(numbered(&session, 2), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 2), MatchResult::AWins)
         .unwrap();
 
     assert_eq!((first.new_matches, first.winners), (0, None));
@@ -135,13 +139,13 @@ fn a_knockout_names_the_stage_of_every_match() {
         [Some("Final".to_owned()), Some("Third place".to_owned())]
     );
     session
-        .report(numbered(&session, 3), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 3), MatchResult::AWins)
         .unwrap();
     let last = session
-        .report(numbered(&session, 4), MatchResult::BWins)
+        .report(session.first(), numbered(&session, 4), MatchResult::BWins)
         .unwrap();
     assert_eq!(last.new_matches, 0);
-    assert_eq!(last.winners, session.winners());
+    assert_eq!(last.winners, session.winners(session.only()));
     assert!(last.winners.is_some_and(|winners| winners.len() == 1));
 }
 
@@ -151,12 +155,16 @@ fn a_round_of_one_stage_is_named_by_it() {
     let mut session = Given::new().format(SingleElimination::ID).started();
     for number in 1..=2 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
 
     let stages: Vec<_> = session
-        .rounds()
+        .rounds(session.all())
         .into_iter()
         .map(|summary| english(summary.stage))
         .collect();
@@ -171,11 +179,15 @@ fn the_standings_name_the_round_of_a_cell_by_its_stage() {
     let mut session = Given::new().format(SingleElimination::ID).started();
     for number in 1..=4 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
 
-    let standings = session.standings().unwrap();
+    let standings = session.standings(session.only()).unwrap();
 
     let column = standings
         .columns
@@ -201,11 +213,15 @@ fn the_standings_show_the_columns_of_the_metrics() {
     let mut session = Given::new().started();
     for number in 1..=6 {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
 
-    let standings = session.standings().unwrap();
+    let standings = session.standings(session.only()).unwrap();
 
     assert_eq!(
         standings.columns,
@@ -257,11 +273,11 @@ fn the_standings_count_the_matches_played() {
     let mut session = Given::new().started();
 
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
 
     let mut played: Vec<_> = session
-        .standings()
+        .standings(session.only())
         .unwrap()
         .rows
         .iter()
@@ -278,7 +294,7 @@ fn the_first_three_ranks_win_medals_once_every_match_has_a_result() {
     let mut session = Given::new().started();
     let medals = |session: &Session| -> Vec<_> {
         session
-            .standings()
+            .standings(session.only())
             .unwrap()
             .rows
             .iter()
@@ -289,7 +305,7 @@ fn the_first_three_ranks_win_medals_once_every_match_has_a_result() {
 
     // Alice beats everyone, Bob everyone else, Carol and Dave draw
     let strength = ["Alice", "Bob", "Carol"];
-    while let Some(row) = session.playable().first().cloned() {
+    while let Some(row) = session.playable(session.all()).first().cloned() {
         let rank = |team: &[EntrantRow]| {
             strength
                 .iter()
@@ -301,7 +317,7 @@ fn the_first_three_ranks_win_medals_once_every_match_has_a_result() {
             Ordering::Greater => MatchResult::BWins,
             Ordering::Equal => MatchResult::Draw,
         };
-        session.report(row.id, result).unwrap();
+        session.report(session.first(), row.id, result).unwrap();
     }
 
     let mut medals = medals(&session);
@@ -324,20 +340,25 @@ fn the_first_three_ranks_win_medals_once_every_match_has_a_result() {
 fn a_match_can_be_played_once_its_entrants_played_the_rounds_before() {
     let mut session = Given::new().started();
     let numbers = |session: &Session| -> Vec<usize> {
-        session.playable().iter().map(|row| row.number).collect()
+        session
+            .playable(session.all())
+            .iter()
+            .map(|row| row.number)
+            .collect()
     };
     assert_eq!(numbers(&session), [1, 2]);
 
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     assert_eq!(numbers(&session), [2]);
     session
-        .report(numbered(&session, 2), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 2), MatchResult::AWins)
         .unwrap();
 
     assert_eq!(numbers(&session), [3, 4]);
-    assert!(Given::new().added().playable().is_empty());
+    let added = Given::new().added();
+    assert!(added.playable(added.all()).is_empty());
 }
 
 /// The numbers of the matches a list of rounds shows.
@@ -352,13 +373,13 @@ fn listed(view: &RoundsView) -> Vec<usize> {
 fn the_rounds_show_the_first_round_with_an_open_match_unless_another_is_chosen() {
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     session
-        .report(numbered(&session, 2), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 2), MatchResult::AWins)
         .unwrap();
 
-    let view = session.rounds_view(None, "").unwrap();
+    let view = session.rounds_view(session.all(), None, "").unwrap();
     assert_eq!(view.current, round(2));
     assert_eq!(view.shown, Shown::Round(round(2)));
     assert_eq!((view.previous, view.next), (Some(round(1)), Some(round(3))));
@@ -369,13 +390,13 @@ fn the_rounds_show_the_first_round_with_an_open_match_unless_another_is_chosen()
     );
 
     let first = session
-        .rounds_view(Some(Shown::Round(round(1))), "")
+        .rounds_view(session.all(), Some(Shown::Round(round(1))), "")
         .unwrap();
     assert_eq!((first.previous, first.next), (None, Some(round(2))));
     assert_eq!(listed(&first), [1, 2]);
 
     let gone = session
-        .rounds_view(Some(Shown::Round(round(9))), "")
+        .rounds_view(session.all(), Some(Shown::Round(round(9))), "")
         .unwrap();
     assert_eq!(
         gone.shown,
@@ -388,7 +409,9 @@ fn the_rounds_show_the_first_round_with_an_open_match_unless_another_is_chosen()
 fn the_rounds_show_the_playable_matches_each_by_its_round() {
     let session = Given::new().started();
 
-    let view = session.rounds_view(Some(Shown::Playable), "").unwrap();
+    let view = session
+        .rounds_view(session.all(), Some(Shown::Playable), "")
+        .unwrap();
 
     assert_eq!(listed(&view), [1, 2]);
     assert_eq!(view.playable, 2);
@@ -404,10 +427,10 @@ fn each_open_match_listed_leads_on_to_the_next_open_one() {
         .entrants(&["Alice", "Bob", "Carol", "Dave", "Erin", "Frank"])
         .started();
     session
-        .report(numbered(&session, 2), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 2), MatchResult::AWins)
         .unwrap();
 
-    let view = session.rounds_view(None, "").unwrap();
+    let view = session.rounds_view(session.all(), None, "").unwrap();
 
     let next: Vec<_> = view
         .matches
@@ -422,7 +445,7 @@ fn each_open_match_listed_leads_on_to_the_next_open_one() {
 fn the_rounds_show_the_matches_a_typed_result_fits() {
     let mut session = Given::new().started();
 
-    let view = session.rounds_view(None, " 3 1 ").unwrap();
+    let view = session.rounds_view(session.all(), None, " 3 1 ").unwrap();
 
     let entry = view.entry.as_ref().unwrap();
     assert_eq!(entry.text, "3 1");
@@ -430,14 +453,16 @@ fn the_rounds_show_the_matches_a_typed_result_fits() {
     assert_eq!(listed(&view), [3]);
     assert!(view.with_round);
     assert!(view.byes.is_empty());
-    let blank = session.rounds_view(None, "  ").unwrap();
+    let blank = session.rounds_view(session.all(), None, "  ").unwrap();
     assert!(blank.entry.is_none());
     assert_eq!(listed(&blank), [1, 2]);
 
-    while let Some(row) = session.playable().first().cloned() {
-        session.report(row.id, MatchResult::AWins).unwrap();
+    while let Some(row) = session.playable(session.all()).first().cloned() {
+        session
+            .report(session.first(), row.id, MatchResult::AWins)
+            .unwrap();
     }
-    let finished = session.rounds_view(None, "3 1").unwrap();
+    let finished = session.rounds_view(session.all(), None, "3 1").unwrap();
     assert!(finished.finished);
     assert!(
         finished.entry.is_none(),
@@ -448,7 +473,8 @@ fn the_rounds_show_the_matches_a_typed_result_fits() {
 
 #[test]
 fn there_are_no_rounds_to_show_before_the_start() {
-    assert!(Given::new().added().rounds_view(None, "1 1").is_none());
+    let added = Given::new().added();
+    assert!(added.rounds_view(added.all(), None, "1 1").is_none());
 }
 
 /// A round robin of four plays three rounds of two matches.
@@ -467,7 +493,11 @@ fn the_progress_is_the_first_round_with_a_match_to_play() {
 
     for number in 1..=2 {
         session
-            .report(numbered(&session, number), MatchResult::Draw)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::Draw,
+            )
             .unwrap();
     }
     assert_eq!(
@@ -479,7 +509,11 @@ fn the_progress_is_the_first_round_with_a_match_to_play() {
     );
     for number in 3..=6 {
         session
-            .report(numbered(&session, number), MatchResult::Draw)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::Draw,
+            )
             .unwrap();
     }
 
@@ -500,13 +534,15 @@ fn the_winner_is_the_team_ranked_first_once_every_match_is_played() {
         .entrants(&["Alice", "Bob"])
         .format(SingleElimination::ID)
         .started();
-    assert_eq!(session.winners(), None);
+    assert_eq!(session.winners(session.only()), None);
     let final_ = &matches(&session)[0];
     let winner = final_.a.clone();
 
-    session.report(final_.id, MatchResult::AWins).unwrap();
+    session
+        .report(session.first(), final_.id, MatchResult::AWins)
+        .unwrap();
 
-    assert_eq!(session.winners(), Some(vec![winner.clone()]));
+    assert_eq!(session.winners(session.only()), Some(vec![winner.clone()]));
     assert_eq!(
         session.progress(),
         Progress::Won {
@@ -514,5 +550,5 @@ fn the_winner_is_the_team_ranked_first_once_every_match_is_played() {
         }
     );
     session.undo().unwrap();
-    assert_eq!(session.winners(), None);
+    assert_eq!(session.winners(session.only()), None);
 }

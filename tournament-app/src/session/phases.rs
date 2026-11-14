@@ -1,0 +1,439 @@
+//! The phases of the competition: what each is, where it is, starting and removing one, who
+//! advances, and the ranking of the competition.
+
+use std::num::NonZeroU32;
+
+use plugin_factory::catalog::AnyAxis;
+use tournament_engine::{
+    AddPhase, CompetitionStateMachineExt as _, CompetitionTransition, Phase, PhaseId, SourceOf,
+    Standing, StartPhase,
+    plugins::phase_format::PhaseFormat,
+    transitions::{RemovePhaseError as EngineRemovePhaseError, StartPhaseError as Engine},
+    undoable_state_machine::TransitionId,
+};
+
+use super::{Session, rejection};
+use crate::{
+    error::{RemovePhaseError, StartPhaseError, Tie},
+    view::{
+        Advance, Advancing, CompetitionRanking, DivisionOverview, DivisionRef, Medal, PhaseName,
+        PhaseOverview, PhaseState, PlacedRow, Plugin, SourceProgress, SourceRow,
+    },
+};
+
+impl Session {
+    /// Every phase, in the order they were added, which is the order they are played in: a phase
+    /// takes entrants only from phases before it.
+    pub fn phases(&self) -> Vec<PhaseOverview> {
+        let competition = self.competition();
+        competition
+            .phases()
+            .values()
+            .map(|phase| PhaseOverview {
+                id: phase.id(),
+                name: self.phase_name(phase),
+                sources: phase
+                    .sources()
+                    .iter()
+                    .map(|source| SourceRow {
+                        phase: match source.of() {
+                            SourceOf::Registration => None,
+                            SourceOf::Phase(id) => Some(id),
+                        },
+                        from: source.from(),
+                        to: source.to(),
+                    })
+                    .collect(),
+                state: self.phase_state(phase),
+                divisions: phase
+                    .divisions()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, division)| {
+                        let matches = division.data().matches();
+                        DivisionOverview {
+                            division: DivisionRef {
+                                phase: phase.id(),
+                                division: index,
+                            },
+                            played: matches.values().filter(|m| m.is_finished()).count(),
+                            matches: matches.len(),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+
+    /// What the phase `id` is called, see [`PhaseName`]; `None` if there is no such phase.
+    pub fn name_of_phase(&self, id: PhaseId) -> Option<PhaseName> {
+        self.phase(id).map(|phase| self.phase_name(phase))
+    }
+
+    /// What `phase`, a phase of the competition, is called.
+    pub(super) fn phase_name(&self, phase: &Phase) -> PhaseName {
+        let number = self
+            .competition()
+            .phases()
+            .get_index_of(&phase.id())
+            .map_or(0, |index| index + 1);
+        named(number, phase.name(), phase.plugins().format())
+    }
+
+    /// What the phase the [`AddPhase`] of the log entry `entry` adds is called, the number it has
+    /// counting the phases added by the entries before it in effect: also of a phase no longer
+    /// added, e.g. as its adding is undone.
+    pub(super) fn added_phase_name(&self, entry: TransitionId, added: &AddPhase) -> PhaseName {
+        let before = self
+            .machine
+            .log()
+            .iter()
+            .take_while(|logged| logged.id() != entry)
+            .filter(|logged| {
+                matches!(
+                    self.machine.effective_transition(logged.id()),
+                    Some(CompetitionTransition::AddPhase(_))
+                )
+            })
+            .count();
+        named(before + 1, added.name(), added.plugins().format())
+    }
+
+    /// The phase shown first when the competition is opened: the first running phase, else the
+    /// first that can start, else the last finished, else the first; `None` if there is no phase.
+    pub fn shown_first(&self) -> Option<PhaseId> {
+        let phases = self.competition().phases();
+        let running = phases
+            .values()
+            .find(|phase| phase.is_started() && !phase.is_finished());
+        let can_start = || {
+            phases
+                .values()
+                .find(|phase| self.competition().is_started() && self.can_start(phase))
+        };
+        let finished = || phases.values().rev().find(|phase| phase.is_finished());
+        running
+            .or_else(can_start)
+            .or_else(finished)
+            .or_else(|| phases.values().next())
+            .map(Phase::id)
+    }
+
+    /// Whether `phase` is not started and every phase it takes entrants from is finished.
+    fn can_start(&self, phase: &Phase) -> bool {
+        !phase.is_started()
+            && !phase.is_fed_by_registration_alone()
+            && self.waiting_for(phase).is_empty()
+    }
+
+    /// The phases `phase` takes entrants from that are not finished, with their progress.
+    fn waiting_for(&self, phase: &Phase) -> Vec<SourceProgress> {
+        let mut waiting: Vec<SourceProgress> = Vec::new();
+        for source in phase.sources() {
+            let SourceOf::Phase(id) = source.of() else {
+                continue;
+            };
+            let Some(from) = self.phase(id) else {
+                continue;
+            };
+            if from.is_finished() || waiting.iter().any(|w| w.phase == id) {
+                continue;
+            }
+            let matches = || {
+                from.divisions()
+                    .iter()
+                    .flat_map(|division| division.data().matches().values())
+            };
+            waiting.push(SourceProgress {
+                phase: id,
+                played: matches().filter(|m| m.is_finished()).count(),
+                matches: matches().count(),
+            });
+        }
+        waiting
+    }
+
+    /// Where `phase` is.
+    fn phase_state(&self, phase: &Phase) -> PhaseState {
+        if !phase.is_started() {
+            return PhaseState::NotStarted {
+                waiting_for: self.waiting_for(phase),
+            };
+        }
+        if !phase.is_finished() {
+            return PhaseState::Running;
+        }
+        let started = self.competition().is_started();
+        PhaseState::Finished {
+            can_start: self
+                .competition()
+                .phases()
+                .values()
+                .filter(|next| {
+                    started
+                        && next
+                            .sources()
+                            .iter()
+                            .any(|source| source.of() == SourceOf::Phase(phase.id()))
+                        && self.can_start(next)
+                })
+                .map(Phase::id)
+                .collect(),
+        }
+    }
+
+    /// Why [`Self::start_phase`] would refuse to start the phase `id` now, or warns of starting
+    /// it, see [`StartPhaseError::CutThroughTie`]; `None` if it would start it as it is.
+    pub fn start_phase_refusal(&self, id: PhaseId) -> Option<StartPhaseError> {
+        let competition = self.competition();
+        let Some(phase) = self.phase(id) else {
+            return Some(StartPhaseError::NoSuchPhase);
+        };
+        if phase.is_started() {
+            return Some(StartPhaseError::Started);
+        }
+        if phase.is_fed_by_registration_alone() {
+            return Some(StartPhaseError::WithTheCompetition);
+        }
+        if !competition.is_started() {
+            return Some(StartPhaseError::CompetitionNotStarted);
+        }
+        let waiting = self.waiting_for(phase);
+        if !waiting.is_empty() {
+            let waiting = waiting
+                .into_iter()
+                .map(|source| (self.name_of_phase(source.phase), source))
+                .filter_map(|(name, source)| Some((name?, source.played, source.matches)))
+                .collect();
+            return Some(StartPhaseError::Waiting(waiting));
+        }
+        let needed = phase.plugins().format().min_entrants();
+        let field = competition.field_of(&id).len();
+        if field < needed {
+            return Some(StartPhaseError::TooFewForFormat(needed));
+        }
+        let ties = self.ties_at_cuts(phase);
+        (!ties.is_empty()).then_some(StartPhaseError::CutThroughTie(ties))
+    }
+
+    /// Starts the phase `id`, taking the entrants of its sources as their standings are now, a
+    /// tie at a cut decided by lot (see [`StartPhaseError::CutThroughTie`]).
+    ///
+    /// # Errors
+    /// Returns an error if the phase does not exist, has started, starts with the competition,
+    /// the competition has not started, a phase it takes entrants from is not finished, or it
+    /// would start with fewer entrants than its format needs.
+    pub fn start_phase(&mut self, id: PhaseId) -> Result<(), StartPhaseError> {
+        if let Some(refusal) = self.start_phase_refusal(id)
+            && !matches!(refusal, StartPhaseError::CutThroughTie(_))
+        {
+            return Err(refusal);
+        }
+        self.history
+            .apply_new(&mut self.machine, StartPhase::new(id).into())
+            .map_err(|error| {
+                let error = rejection(error);
+                match error.downcast_ref::<Engine>() {
+                    Some(Engine::AlreadyStarted) => StartPhaseError::Started,
+                    _ => StartPhaseError::Rejected(error),
+                }
+            })?;
+        Ok(())
+    }
+
+    /// The ties the cuts of the sources of `phase` go through: for each source of a phase, at its
+    /// first and its last place, the rows sharing a rank on both sides of the cut.
+    fn ties_at_cuts(&self, phase: &Phase) -> Vec<Tie> {
+        let mut ties = Vec::new();
+        for source in phase.sources() {
+            let SourceOf::Phase(from) = source.of() else {
+                continue;
+            };
+            let Some(from_phase) = self.phase(from) else {
+                continue;
+            };
+            let standings = from_phase.standings();
+            let rows: Vec<Standing> = standings.iter().copied().collect();
+            let cuts = [
+                source.from().get().checked_sub(1).and_then(NonZeroU32::new),
+                source.to(),
+            ];
+            for last_above in cuts.into_iter().flatten() {
+                let at = last_above.get() as usize;
+                let (Some(above), Some(below)) = (rows.get(at - 1), rows.get(at)) else {
+                    continue;
+                };
+                if above.rank() != below.rank() {
+                    continue;
+                }
+                let rank = above.rank();
+                let team = |standing: &Standing| {
+                    let data = from_phase
+                        .divisions()
+                        .first()
+                        .expect("a phase with standings has a division")
+                        .data();
+                    self.team(data, &[standing.ranking().id()])
+                };
+                let tied = |range: &[Standing]| -> Vec<_> {
+                    range
+                        .iter()
+                        .filter(|standing| standing.rank() == rank)
+                        .map(team)
+                        .collect()
+                };
+                ties.push(Tie {
+                    phase: self.phase_name(from_phase),
+                    rank,
+                    favoured: tied(&rows[..at]),
+                    others: tied(&rows[at..]),
+                });
+            }
+        }
+        ties
+    }
+
+    /// Why [`Self::remove_phase`] would refuse to remove the phase `id`, or `None` if it would
+    /// remove it.
+    pub fn remove_phase_refusal(&self, id: PhaseId) -> Option<RemovePhaseError> {
+        let phase = self.phase(id)?;
+        if phase.is_started() {
+            return Some(RemovePhaseError::Started);
+        }
+        let users: Vec<_> = self
+            .competition()
+            .phases()
+            .values()
+            .filter(|other| {
+                other
+                    .sources()
+                    .iter()
+                    .any(|source| source.of() == SourceOf::Phase(id))
+            })
+            .map(|other| self.phase_name(other))
+            .collect();
+        (!users.is_empty()).then_some(RemovePhaseError::InUse(users))
+    }
+
+    /// Removes the phase `id`, which has not started and from which no phase takes entrants. Undo
+    /// brings it back.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such phase, it has started, or other phases take entrants
+    /// from it.
+    pub fn remove_phase(&mut self, id: PhaseId) -> Result<(), RemovePhaseError> {
+        if let Some(refusal) = self.remove_phase_refusal(id) {
+            return Err(refusal);
+        }
+        self.machine
+            .remove_phase(&mut self.history, id)
+            .map_err(|error| match error {
+                EngineRemovePhaseError::NotAdded => RemovePhaseError::NoSuchPhase,
+                EngineRemovePhaseError::Started => RemovePhaseError::Started,
+                EngineRemovePhaseError::InUse(_) => {
+                    unreachable!("a phase in use is refused before")
+                }
+                EngineRemovePhaseError::Rejected(error) => {
+                    RemovePhaseError::Rejected(rejection(error))
+                }
+            })?;
+        Ok(())
+    }
+
+    /// Every entrant's place in the competition, as things stand: by the latest started phase
+    /// they are in, see [`Competition::ranking`](tournament_engine::Competition::ranking), the
+    /// entrants of one ranking together. Final once every phase is finished.
+    pub fn ranking(&self) -> CompetitionRanking {
+        let competition = self.competition();
+        let is_final = competition.is_started()
+            && competition
+                .phases()
+                .values()
+                .all(|phase| phase.is_finished());
+        let mut rows: Vec<PlacedRow> = Vec::new();
+        let mut last_ranking = None;
+        for placed in competition.ranking() {
+            let entrant = self.entrant_row(&placed.entrant);
+            // the entrants of a ranking follow each other, being placed by their ranking
+            if let Some(row) = rows.last_mut()
+                && last_ranking == Some((placed.phase, placed.ranking))
+            {
+                row.entrants.push(entrant);
+                continue;
+            }
+            last_ranking = Some((placed.phase, placed.ranking));
+            rows.push(PlacedRow {
+                place: placed.place,
+                entrants: vec![entrant],
+                phase: placed.phase,
+                medal: is_final.then(|| Medal::of(placed.place)).flatten(),
+            });
+        }
+        CompetitionRanking { rows, is_final }
+    }
+
+    /// Where each row of the standings of the phase `phase` goes on to, as they are now: a
+    /// function of a row.
+    pub(super) fn advancing(&self, phase: PhaseId) -> impl Fn(&Standing) -> Option<Advance> {
+        let competition = self.competition();
+        // the sources of other phases taking places of this one, with the phase taking them
+        let takers: Vec<_> = competition
+            .phases()
+            .values()
+            .flat_map(|taker| {
+                taker
+                    .sources()
+                    .iter()
+                    .filter(|source| source.of() == SourceOf::Phase(phase))
+                    .map(move |source| (taker.id(), *source))
+            })
+            .collect();
+        // the unique ranks of every rank, as `(rank, unique rank)`
+        let ranks: Vec<(NonZeroU32, NonZeroU32)> = competition
+            .phase(&phase)
+            .map(|phase| {
+                phase
+                    .standings()
+                    .iter()
+                    .map(|standing| (standing.rank(), standing.unique_rank()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        move |standing: &Standing| {
+            let taker_of = |unique_rank: NonZeroU32| {
+                takers
+                    .iter()
+                    .find(|(_, source)| source.takes(unique_rank))
+                    .map(|(taker, _)| *taker)
+            };
+            let to = taker_of(standing.unique_rank())?;
+            let all_go_there = ranks
+                .iter()
+                .filter(|(rank, _)| *rank == standing.rank())
+                .all(|(_, unique_rank)| taker_of(*unique_rank) == Some(to));
+            Some(Advance {
+                to,
+                how: if all_go_there {
+                    Advancing::ByPlace
+                } else {
+                    Advancing::Compared
+                },
+            })
+        }
+    }
+}
+
+/// What the phase `number` with `name`, played in `format`, is called.
+fn named(number: usize, name: Option<&str>, format: &dyn PhaseFormat) -> PhaseName {
+    let id = plugin_factory::id_of(format);
+    let entry = AnyAxis::of::<dyn PhaseFormat>().entry(id);
+    PhaseName {
+        number,
+        name: name.map(str::to_owned),
+        format: Plugin {
+            id,
+            label: entry.map_or(id, |entry| entry.label()),
+            description: entry.and_then(|entry| entry.description()),
+        },
+    }
+}

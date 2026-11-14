@@ -10,8 +10,33 @@ error-unknown-format = there is no format “{ $format }”
 # $reason: in English, from the format's code
 error-format-misconfigured = { $reason }
 error-invalid-phase = the phase cannot be played this way; the form shows what to change
-error-phase-already-added = the competition already has a phase, and only one is supported
-error-phase-added-after-start = the competition has started, so no phase can be added anymore
+error-no-sources = choose where the phase takes its entrants from
+error-source-empty = a range of places ends before it starts
+error-sources-overlap = two ranges of places of the phase overlap
+# $phase: the phase that takes some of the same places already
+error-source-taken = { $phase } takes some of these places already
+error-registration-closed = the competition has started, so a phase cannot take entrants from the registration alone anymore
+error-place-not-taken = enter a place: a whole number from 1
+error-no-such-phase = there is no such phase
+error-phase-started-already = the phase has started already
+error-phase-starts-with-competition = the phase takes its entrants from the registration and starts with the competition
+# $phases: each phase not finished with its progress, see phase-progress
+error-phase-waiting = the phase can start once its entrants are known: { $phases }
+error-phase-removed-after-start = the phase has started, so it cannot be removed anymore
+# $phases: the phases taking entrants from the one to remove
+error-phase-in-use = { $count ->
+        [one] { $phases } takes entrants from this phase; remove that first
+       *[other] { $phases } take entrants from this phase; remove those first
+    }
+# $phase: a later phase, started, taking entrants from the one changed
+error-later-phase-started = { $phase } has started with the entrants of this phase; undo its start first
+# a tie that a cut between places goes through; $favoured and $others: the names of the teams
+# before and after the cut
+warning-cut-through-tie = { $favoured } and { $others } share place { $rank } of { $phase }; the lot puts { $favoured } ahead
+# a phase without a name: its number and the label of its format
+phase-unnamed = { $number } · { $format }
+# a phase that is not finished: e.g. "Group phase: 12 of 18 matches played"
+phase-progress = { $phase }: { $played } of { $matches } matches played
 error-no-phase = the competition has no phase yet
 # $count: how many matches that have a result the changed phase does not play; $numbers: their
 # numbers, e.g. "5, 7, 9"

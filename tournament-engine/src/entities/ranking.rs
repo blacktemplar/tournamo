@@ -15,6 +15,7 @@ pub struct Ranking {
     pub(super) id: RankingId,
     pub(super) entrants: Vec1<EntrantId>,
     pub(super) initial_unique_rank: NonZeroU32,
+    pub(super) lot: NonZeroU32,
     pub(super) played_matches: Vec<MatchId>,
     pub(super) metrics: TypeMap,
 }
@@ -28,12 +29,19 @@ impl IdAble for Ranking {
 }
 
 impl Ranking {
-    pub fn new(entrants: Vec1<EntrantId>, initial_unique_rank: NonZeroU32) -> Self {
+    /// The ranking of `entrants`, at `initial_unique_rank` when its division starts, with the best
+    /// [lot](crate::Competition::lot) of its entrants.
+    pub fn new(
+        entrants: Vec1<EntrantId>,
+        initial_unique_rank: NonZeroU32,
+        lot: NonZeroU32,
+    ) -> Self {
         let id = RankingId::derive(&entrants);
         Self {
             id,
             entrants,
             initial_unique_rank,
+            lot,
             played_matches: Vec::new(),
             metrics: TypeMap::new(),
         }
@@ -47,10 +55,16 @@ impl Ranking {
         &self.entrants
     }
 
-    /// The place of the ranking when the phase started, unique within the phase. It breaks the
-    /// ties of the [`Standings`].
+    /// The place of the ranking when its division started, unique within the division: what its
+    /// format seeds by.
     pub fn initial_unique_rank(&self) -> NonZeroU32 {
         self.initial_unique_rank
+    }
+
+    /// The best lot of the entrants of this ranking, see
+    /// [`Competition::lot`](crate::Competition::lot). It breaks the ties of the [`Standings`].
+    pub fn lot(&self) -> NonZeroU32 {
+        self.lot
     }
 
     /// The matches of this ranking that have a result, in the order the results were reported in.

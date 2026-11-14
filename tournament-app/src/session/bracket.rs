@@ -13,7 +13,7 @@ use tournament_engine::{
 use super::{Session, views::stage};
 use crate::view::{
     Bracket, BracketColumn, BracketEntry, BracketLine, BracketPairing, BracketPart, BracketSection,
-    BracketSource, Unplayed,
+    BracketSource, DivisionRef, Unplayed,
 };
 
 /// What a pairing is laid out with.
@@ -33,10 +33,11 @@ struct Place {
 }
 
 impl Session {
-    /// The bracket of the phase, if its format plays one, e.g. a single or a double elimination;
-    /// `None` before the start.
-    pub fn bracket(&self) -> Option<Bracket> {
-        let division = self.division()?;
+    /// The bracket of the division `of`, if its format plays one, e.g. a single or a double
+    /// elimination; `None` before the start of its phase. Its numbers are those of the matches,
+    /// unique in the competition.
+    pub fn bracket(&self, of: DivisionRef) -> Option<Bracket> {
+        let division = self.division(of)?;
         let bracket = division.format().bracket()?;
         let pairings = bracket.pairings();
         let by_id: HashMap<PairingId, &Pairing> = pairings
@@ -164,9 +165,12 @@ impl Session {
             }
         }
 
+        // a bracket numbers its pairings relative to its division
+        let base =
+            usize::try_from(division.number_base()).expect("a number of a match fits a usize");
         let number = |pairing: &Pairing| {
             pairing.number.map(|number| {
-                usize::try_from(number.get()).expect("a number of a match fits a usize")
+                base + usize::try_from(number.get()).expect("a number of a match fits a usize")
             })
         };
         let source = |id: PairingId| {
@@ -235,7 +239,7 @@ impl Session {
                         .matches()
                         .get(&id)
                         .expect("the bracket only holds matches of its division");
-                    self.match_row(division, r#match)
+                    self.match_row(of.phase, of.division, division, r#match)
                 }),
                 row: if folded.contains(&(place.section, place.column)) {
                     next[&pairing.id].index

@@ -11,11 +11,12 @@ use wasm_bindgen::JsCast as _;
 use crate::{
     announcement::Announcement,
     competition::Ctx,
+    focus::focus_later,
     help,
     i18n::t,
     icons,
     notices::use_cleared_on_language_change,
-    phase::{NewPhase, PhaseSummary, focus_later},
+    phase::{NewPhase, PhaseSummary},
     team_name,
 };
 

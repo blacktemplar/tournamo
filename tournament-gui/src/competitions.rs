@@ -14,13 +14,13 @@ use crate::{
     Notices, Page,
     competition::{SAVED, lock_name},
     components::dialog::{Dialog, DialogDescription, DialogTitle},
-    download, help,
+    download,
+    focus::focus_later,
+    help,
     i18n::t,
     icons,
     notices::{Detail, use_cleared_on_language_change},
-    open,
-    phase::focus_later,
-    winners_text,
+    open, winners_text,
 };
 
 #[component]

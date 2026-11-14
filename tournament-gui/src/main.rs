@@ -19,6 +19,7 @@ mod competition;
 mod competitions;
 mod components;
 mod cross_table;
+mod focus;
 mod help;
 mod i18n;
 mod icons;

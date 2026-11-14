@@ -1191,7 +1191,7 @@ rather than snapshotting fields before they have been chosen.
   why, the answer unchanged. A `type=number` hands over nothing for what the
   browser cannot read (`0,5`).
 - **The focus stays with the operator's work** after a change moves or removes
-  what had it (`phase::focus_later`); buttons that become unavailable while
+  what had it (`focus::focus_later`); buttons that become unavailable while
   focused are `aria-disabled`.
 - **Once added, the phase is a summary** edited in a dialog starting at its
   config; a refusal shows in the dialog.

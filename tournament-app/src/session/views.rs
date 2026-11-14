@@ -395,6 +395,7 @@ impl Session {
     /// The row of `r#match`, a match of `phase`.
     pub(super) fn match_row(&self, phase: &Phase, r#match: &Match) -> MatchRow {
         let data = phase.data();
+        let root = phase.match_format().template(data, r#match).root;
         MatchRow {
             id: r#match.id(),
             number: number(r#match),
@@ -403,17 +404,11 @@ impl Session {
             a: self.team(data, r#match.team_a()),
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
-            scores: view::scores(phase, r#match),
-            parts_won: view::parts_won(phase, r#match),
-            details: details(phase, r#match),
+            scores: view::scores(&root, r#match),
+            parts_won: view::parts_won(&root, r#match),
+            details: !root.fields.is_empty() || !matches!(root.parts, Parts::None),
         }
     }
-}
-
-/// Whether the match format of `r#match` enters more than who won, see [`MatchRow::details`].
-fn details(phase: &Phase, r#match: &Match) -> bool {
-    let root = phase.match_format().template(phase.data(), r#match).root;
-    !root.fields.is_empty() || !matches!(root.parts, Parts::None)
 }
 
 /// The number of `r#match`, as [`MatchRow::number`] shows it.

@@ -683,8 +683,9 @@ impl Session {
             None => "open".to_owned(),
         };
         let phase = self.phase().expect("a match has a phase");
-        let scores = view::scores(phase, r#match);
-        let parts_won = view::parts_won(phase, r#match);
+        let root = phase.match_format().template(phase.data(), r#match).root;
+        let scores = view::scores(&root, r#match);
+        let parts_won = view::parts_won(&root, r#match);
         if scores.is_empty() && parts_won.is_none() {
             text
         } else {

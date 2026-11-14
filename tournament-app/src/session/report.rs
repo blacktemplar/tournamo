@@ -109,13 +109,9 @@ impl Session {
                     _ => None,
                 })
             })?;
-        let matches = self
-            .started_phase()
-            .expect("still started")
-            .data()
-            .matches();
         let phase = self.started_phase().expect("still started");
-        let row = self.match_row(phase, &phase.data().matches()[&id]);
+        let matches = phase.data().matches();
+        let row = self.match_row(phase, &matches[&id]);
         Ok(Reported {
             row,
             new_matches: matches.len() - matches_before,

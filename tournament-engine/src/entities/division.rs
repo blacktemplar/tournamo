@@ -31,6 +31,7 @@ use crate::{
 pub struct Division {
     plugins: PhasePlugins,
     data: DivisionData,
+    number_base: u32,
 }
 
 /// Everything a [`Division`] holds but its plugins: its rankings, matches, byes and seed. Where
@@ -76,31 +77,32 @@ impl DivisionData {
 }
 
 impl DivisionData {
-    /// `matches` numbered as they ask, or else each with the number after the highest one so far.
-    fn number(&self, matches: Vec<NewMatch>) -> Vec<Match> {
-        // looked for only if a match asks for no number, since a bracket schedules after every
-        // result, each match with a number
-        let mut highest = matches
+    /// `matches` numbered as they ask, relative to `base`, or else each with the number after
+    /// `highest`, the highest number given in the competition so far, which is raised to the
+    /// highest number given or `reserved`.
+    fn number(matches: Vec<NewMatch>, base: u32, reserved: u32, highest: &mut u32) -> Vec<Match> {
+        let relative = |number: NonZeroU32| {
+            number
+                .checked_add(base)
+                .expect("fewer matches than u32::MAX")
+        };
+        *highest = matches
             .iter()
-            .any(|r#match| r#match.number().is_none())
-            .then(|| {
-                self.matches
-                    .values()
-                    .map(Match::number)
-                    .chain(matches.iter().filter_map(NewMatch::number))
-                    .max()
-            })
-            .flatten();
+            .filter_map(NewMatch::number)
+            .map(|number| relative(number).get())
+            .chain([*highest, reserved])
+            .max()
+            .unwrap_or(*highest);
         matches
             .into_iter()
             .map(|r#match| {
-                let number = r#match.number().unwrap_or_else(|| {
-                    let next = highest.map_or(NonZeroU32::MIN, |highest| {
-                        highest.checked_add(1).expect("fewer matches than u32::MAX")
-                    });
-                    highest = Some(next);
-                    next
-                });
+                let number = r#match.number().map_or_else(
+                    || {
+                        *highest = highest.checked_add(1).expect("fewer matches than u32::MAX");
+                        NonZeroU32::new(*highest).expect("one more than a number")
+                    },
+                    relative,
+                );
                 r#match.numbered(number)
             })
             .collect()
@@ -189,6 +191,7 @@ impl Division {
                 seed,
             },
             plugins,
+            number_base: 0,
         }
     }
 
@@ -209,6 +212,13 @@ impl Division {
         &self.plugins
     }
 
+    /// What the numbers its format asks for are relative to: the highest number of a match in the
+    /// competition when this division started. A match asking for number `n` has number
+    /// `number_base + n`, see [`NewMatch::with_number`].
+    pub fn number_base(&self) -> u32 {
+        self.number_base
+    }
+
     /// The format the matches of this division are scheduled by, with its state.
     pub fn format(&self) -> &dyn PhaseFormat {
         self.plugins.format()
@@ -219,19 +229,23 @@ impl Division {
         self.plugins.match_format()
     }
 
-    pub(crate) fn start(&mut self, ranking_entrants: Vec<Vec1<EntrantId>>) {
-        self.set_rankings(ranking_entrants);
-        self.create_new_matches();
+    /// Starts this division with a ranking of each of `field`, its entrants and their best lot, in
+    /// seeding order, and schedules its first matches, numbered after `highest`, the highest
+    /// number of a match in the competition, which is raised to the highest number given.
+    pub(crate) fn start(&mut self, field: Vec<(Vec1<EntrantId>, NonZeroU32)>, highest: &mut u32) {
+        self.number_base = *highest;
+        self.set_rankings(field);
+        self.schedule(highest);
     }
 
-    /// Gives this division a ranking of each of `ranking_entrants`, ranked initially in this
-    /// order, with the default value of every metric calculated for it.
-    fn set_rankings(&mut self, ranking_entrants: Vec<Vec1<EntrantId>>) {
-        self.data.rankings = ranking_entrants
+    /// Gives this division a ranking of each of `field`, its entrants and lot, ranked initially in
+    /// this order, with the default value of every metric calculated for it.
+    pub(super) fn set_rankings(&mut self, field: Vec<(Vec1<EntrantId>, NonZeroU32)>) {
+        self.data.rankings = field
             .into_iter()
-            .enumerate()
-            .map(|(index, entrants)| {
-                Ranking::new(entrants, NonZeroU32::new(index as u32 + 1).unwrap())
+            .zip(NonZeroU32::MIN..)
+            .map(|((entrants, lot), initial_unique_rank)| {
+                Ranking::new(entrants, initial_unique_rank, lot)
             })
             .collect();
         self.initialize_metrics();
@@ -260,11 +274,15 @@ impl Division {
         }
     }
 
-    /// Adds the matches and byes the format schedules next, and updates the metrics for every
-    /// new bye its ranking reaches.
-    pub(crate) fn create_new_matches(&mut self) {
+    /// Adds the matches and byes the format schedules next, numbered after `highest` (see
+    /// [`Self::start`]), and updates the metrics for every new bye its ranking reaches.
+    pub(crate) fn schedule(&mut self, highest: &mut u32) {
         let Schedule { matches, byes } = self.plugins.schedule(&self.data);
-        let matches = self.data.number(matches);
+        let reserved = self
+            .format()
+            .highest_number()
+            .map_or(0, |number| number.get().saturating_add(self.number_base));
+        let matches = DivisionData::number(matches, self.number_base, reserved, highest);
         self.data.debug_check(&matches, &byes);
         let new_bye_ids: Vec<_> = byes.iter().map(Bye::id).collect();
         self.data.matches.extend(matches);
@@ -299,18 +317,48 @@ impl Division {
         }
     }
 
-    /// Reports `decision` alone for the match `match_id`, see [`Division::report_match`].
+    /// Reports `decision` alone for the match `match_id`, see [`Division::report`].
     #[cfg(test)]
     pub(crate) fn report_match_result(&mut self, match_id: MatchId, decision: impl Into<Decision>) {
         self.report_match(match_id, Part::new().with_decision(decision));
     }
 
+    /// Reports what was `entered` for the match `match_id` of this division standing alone, see
+    /// [`Division::report`].
+    #[cfg(test)]
+    pub(crate) fn report_match(&mut self, match_id: MatchId, entered: Part) {
+        let mut highest = self.highest_number();
+        self.report(match_id, entered, &mut highest);
+    }
+
+    /// Schedules what the format schedules next in this division standing alone, see
+    /// [`Division::schedule`].
+    #[cfg(test)]
+    pub(crate) fn create_new_matches(&mut self) {
+        let mut highest = self.highest_number();
+        self.schedule(&mut highest);
+    }
+
+    /// The highest number of a match of this division standing alone, or of those its format
+    /// keeps.
+    #[cfg(test)]
+    fn highest_number(&self) -> u32 {
+        self.data
+            .matches
+            .values()
+            .map(|r#match| r#match.number().get())
+            .chain(self.format().highest_number().map(NonZeroU32::get))
+            .max()
+            .unwrap_or(0)
+    }
+
     /// Finishes the match `match_id` with what was `entered` for it: its decision, values and
-    /// parts, as its [contest](Match::contest).
+    /// parts, as its [contest](Match::contest), and schedules what follows, numbered after
+    /// `highest` (see [`Self::start`]).
     ///
     /// # Panics
     /// Panics if the match is finished, or `entered` has no decision.
-    pub(crate) fn report_match(&mut self, match_id: MatchId, entered: Part) {
+    pub(crate) fn report(&mut self, match_id: MatchId, entered: Part, highest: &mut u32) {
         assert!(entered.decision().is_some(), "a report decides its match");
         let r#match = self.data.matches.get_mut(&match_id).unwrap();
         assert!(!r#match.is_finished());
@@ -341,7 +389,7 @@ impl Division {
             .map(Bye::id)
             .collect();
         self.reach_byes(candidates);
-        self.create_new_matches();
+        self.schedule(highest);
     }
 
     /// Runs every metrics calculator, in order, through `updates_of` and stores the metrics it
@@ -390,6 +438,7 @@ impl Serialize for Division {
         struct Saved<'a> {
             plugins: &'a PhasePlugins,
             data: SavedData<'a>,
+            number_base: u32,
         }
         #[derive(Serialize)]
         #[serde(rename = "PhaseData")]
@@ -406,6 +455,7 @@ impl Serialize for Division {
             id: RankingId,
             entrants: &'a Vec1<EntrantId>,
             initial_unique_rank: NonZeroU32,
+            lot: NonZeroU32,
             unique_rank: NonZeroU32,
             rank: NonZeroU32,
             played_matches: &'a [MatchId],
@@ -427,6 +477,7 @@ impl Serialize for Division {
                     id: ranking.id,
                     entrants: &ranking.entrants,
                     initial_unique_rank: ranking.initial_unique_rank,
+                    lot: ranking.lot,
                     unique_rank: standing.unique_rank(),
                     rank: standing.rank(),
                     played_matches: &ranking.played_matches,
@@ -446,6 +497,7 @@ impl Serialize for Division {
                 byes: &self.data.byes,
                 seed: self.data.seed,
             },
+            number_base: self.number_base,
         }
         .serialize(serializer)
     }
@@ -458,6 +510,7 @@ impl<'de> Deserialize<'de> for Division {
         struct Saved {
             plugins: PhasePlugins,
             data: SavedData,
+            number_base: u32,
         }
         #[derive(Deserialize)]
         #[serde(rename = "PhaseData")]
@@ -475,6 +528,7 @@ impl<'de> Deserialize<'de> for Division {
             id: RankingId,
             entrants: Vec1<EntrantId>,
             initial_unique_rank: NonZeroU32,
+            lot: NonZeroU32,
             #[serde(rename = "unique_rank")]
             _unique_rank: NonZeroU32,
             #[serde(rename = "rank")]
@@ -492,6 +546,7 @@ impl<'de> Deserialize<'de> for Division {
                 id: ranking.id,
                 entrants: ranking.entrants,
                 initial_unique_rank: ranking.initial_unique_rank,
+                lot: ranking.lot,
                 played_matches: ranking.played_matches,
                 metrics: ranking.metrics,
             })
@@ -504,6 +559,7 @@ impl<'de> Deserialize<'de> for Division {
                 byes: saved.data.byes,
                 seed: saved.data.seed,
             },
+            number_base: saved.number_base,
         })
     }
 }

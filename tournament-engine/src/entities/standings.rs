@@ -15,11 +15,11 @@ pub struct Standings<'a> {
 
 impl<'a> Standings<'a> {
     /// The standings of `ranked`, every ranking of a phase with its rank as
-    /// [`HierarchicalRanker::rank`] ranks them: ordered by rank, ties by their initial unique rank.
+    /// [`HierarchicalRanker::rank`] ranks them: ordered by rank, ties by their lot.
     ///
     /// [`HierarchicalRanker::rank`]: crate::plugins::ranker::HierarchicalRanker::rank
     pub(crate) fn new(mut ranked: Vec<(&'a Ranking, NonZeroU32)>) -> Self {
-        ranked.sort_by_key(|&(ranking, rank)| (rank, ranking.initial_unique_rank()));
+        ranked.sort_by_key(|&(ranking, rank)| (rank, ranking.lot()));
         // the invariant of the ranks, see `HierarchicalRanker::rank`
         debug_assert!(
             ranked
@@ -80,7 +80,7 @@ impl<'a> Standing<'a> {
     }
 
     /// The unique rank of the ranking, i.e. its place in the standings, which is its
-    /// [`rank`](Self::rank) with ties broken by their [`Ranking::initial_unique_rank`].
+    /// [`rank`](Self::rank) with ties broken by their [`Ranking::lot`].
     pub fn unique_rank(&self) -> NonZeroU32 {
         self.unique_rank
     }

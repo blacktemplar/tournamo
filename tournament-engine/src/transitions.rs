@@ -9,8 +9,8 @@ use undoable_state_machine::{
 };
 
 use crate::{
+    SourceOf,
     entities::{Competition, MatchId, PhaseId},
-    plugins::PhasePlugins,
 };
 
 pub mod add_entrant;
@@ -19,6 +19,7 @@ pub mod remove_entrant;
 pub mod report_match_result;
 pub mod set_competition_seed;
 pub mod start_competition;
+pub mod start_phase;
 
 pub use add_entrant::{AddEntrant, AddEntrantError};
 pub use add_phase::{AddPhase, AddPhaseError};
@@ -26,6 +27,7 @@ pub use remove_entrant::{RemoveEntrant, RemoveEntrantError};
 pub use report_match_result::{ReportMatchResult, ReportMatchResultError};
 pub use set_competition_seed::SetCompetitionSeed;
 pub use start_competition::{StartCompetition, StartCompetitionError};
+pub use start_phase::{StartPhase, StartPhaseError};
 
 /// A transition of a [`Competition`], as a transition log holds it: one of the transitions of this
 /// module.
@@ -51,6 +53,7 @@ pub enum CompetitionTransition {
     AddPhase(AddPhase),
     StartCompetition(StartCompetition),
     ReportMatchResult(ReportMatchResult),
+    StartPhase(StartPhase),
 }
 
 /// `$body` with `$transition` bound to the transition `$self`, a `CompetitionTransition`, holds,
@@ -64,6 +67,7 @@ macro_rules! with_transition {
             Self::AddPhase($transition) => $body,
             Self::StartCompetition($transition) => $body,
             Self::ReportMatchResult($transition) => $body,
+            Self::StartPhase($transition) => $body,
         }
     };
 }
@@ -94,7 +98,8 @@ from_transitions!(
     RemoveEntrant,
     AddPhase,
     StartCompetition,
-    ReportMatchResult
+    ReportMatchResult,
+    StartPhase
 );
 
 /// The state machine of a competition, driven by transitions that can be persisted.
@@ -144,6 +149,22 @@ pub enum ReconfigurePhaseError {
     /// from the config, or a later change in the log does not apply to the reconfigured phase, e.g.
     /// the result reported for a match its new format does not schedule. The error names the
     /// change that would no longer apply.
+    #[error(transparent)]
+    Rejected(#[from] StateMachineError),
+}
+
+/// Why a phase could not be removed.
+#[derive(Debug, Error)]
+pub enum RemovePhaseError {
+    #[error("no phase with this id was added")]
+    NotAdded,
+    #[error("the phase has started")]
+    Started,
+    /// These phases take entrants from it.
+    #[error("other phases take entrants from the phase")]
+    InUse(Vec<PhaseId>),
+    /// The undo was rejected by the state machine, because a later change in the log depends on
+    /// the phase.
     #[error(transparent)]
     Rejected(#[from] StateMachineError),
 }
@@ -252,20 +273,21 @@ pub trait CompetitionStateMachineExt {
         match_id: MatchId,
     ) -> Result<TransitionId, UndoMatchResultError>;
 
-    /// Reconfigures the phase `phase_id` as if it had been added with `plugins`, as an action of
+    /// Reconfigures the phase `phase.id()` as if it had been added by `phase`, as an action of
     /// the session of `history`, and returns the id of the entry appended for that: a
-    /// [`LogEntryKind::Replace`] of the [`AddPhase`] in effect that added it by one adding it with
-    /// `plugins`. Every change made after it applies to the reconfigured phase, so the results
-    /// reported so far stay as long as the reconfigured phase schedules their matches as well.
+    /// [`LogEntryKind::Replace`] of the [`AddPhase`] in effect that added it by `phase`. Every
+    /// change made after it applies to the reconfigured phase, so the results reported so far stay
+    /// as long as the reconfigured phase schedules their matches as well, and every phase started
+    /// after it starts with the field it has then.
     ///
     /// The plugins are built from a draft holding the config of the phase, see
     /// [`Phase::config`](crate::Phase::config), changed as needed. Returns `None`, leaving the log
-    /// unchanged, if they have the config of the phase already.
+    /// unchanged, if the phase has its name, sources and config already.
     ///
     /// # Errors
     /// Returns [`ReconfigurePhaseError::NotAdded`] if no [`AddPhase`] in effect added a phase with
-    /// this id, and [`ReconfigurePhaseError::Rejected`] if `plugins` do not fit together in the
-    /// competition or a change made after the phase was added does not apply to the
+    /// this id, and [`ReconfigurePhaseError::Rejected`] if `phase` does not apply in its place (see
+    /// [`AddPhase`]) or a change made after the phase was added does not apply to the
     /// reconfigured phase. In either case neither the log nor `history` changes.
     ///
     /// # Examples
@@ -299,7 +321,7 @@ pub trait CompetitionStateMachineExt {
     ///     .expect("the plugins fit together");
     ///
     /// let mut history = SessionHistory::new();
-    /// machine.reconfigure_phase(&mut history, phase_id, plugins)?;
+    /// machine.reconfigure_phase(&mut history, AddPhase::new(phase_id, plugins))?;
     ///
     /// // the phase was started in its new format: two rounds of two matches
     /// let phase = &machine.current().phases()[&phase_id];
@@ -318,9 +340,23 @@ pub trait CompetitionStateMachineExt {
     fn reconfigure_phase(
         &mut self,
         history: &mut SessionHistory,
-        phase_id: PhaseId,
-        plugins: PhasePlugins,
+        phase: AddPhase,
     ) -> Result<Option<TransitionId>, ReconfigurePhaseError>;
+
+    /// Removes the phase `phase_id` by undoing the [`AddPhase`] in effect that added it, as an
+    /// action of the session of `history`, and returns the id of the undo entry appended for that.
+    /// Undoing that action, see [`SessionHistory::undo_last`], brings the phase back.
+    ///
+    /// # Errors
+    /// Returns [`RemovePhaseError::NotAdded`] if no [`AddPhase`] in effect added a phase with this
+    /// id, [`RemovePhaseError::Started`] if it has started, [`RemovePhaseError::InUse`] if other
+    /// phases take entrants from it, and [`RemovePhaseError::Rejected`] if a later change in the
+    /// log depends on it otherwise. In either case neither the log nor `history` changes.
+    fn remove_phase(
+        &mut self,
+        history: &mut SessionHistory,
+        phase_id: PhaseId,
+    ) -> Result<TransitionId, RemovePhaseError>;
 
     /// The id of the log entry in effect that reported the result of the match `match_id` of the
     /// phase `phase_id`: the latest [`ReportMatchResult`] in effect for it, which
@@ -410,26 +446,57 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
     fn reconfigure_phase(
         &mut self,
         history: &mut SessionHistory,
-        phase_id: PhaseId,
-        plugins: PhasePlugins,
+        phase: AddPhase,
     ) -> Result<Option<TransitionId>, ReconfigurePhaseError> {
         let target = self
-            .added_by(phase_id)
+            .added_by(phase.id())
             .ok_or(ReconfigurePhaseError::NotAdded)?;
-        if self
-            .current()
-            .phase(&phase_id)
-            .is_some_and(|phase| phase.config() == plugins.config())
-        {
+        if self.current().phase(&phase.id()).is_some_and(|added| {
+            added.name() == phase.name()
+                && added.sources() == phase.sources()
+                && added.config() == phase.plugins().config()
+        }) {
             return Ok(None);
         }
         let id = TransitionId::new();
-        let with = AddPhase::new(phase_id, plugins).into();
+        let with = phase.into();
         history.apply(
             self,
             LogEntry::new(id, LogEntryKind::Replace { target, with }),
         )?;
         Ok(Some(id))
+    }
+
+    fn remove_phase(
+        &mut self,
+        history: &mut SessionHistory,
+        phase_id: PhaseId,
+    ) -> Result<TransitionId, RemovePhaseError> {
+        let target = self.added_by(phase_id).ok_or(RemovePhaseError::NotAdded)?;
+        let competition = self.current();
+        if competition
+            .phase(&phase_id)
+            .is_some_and(|phase| phase.is_started())
+        {
+            return Err(RemovePhaseError::Started);
+        }
+        let users: Vec<_> = competition
+            .phases()
+            .values()
+            .filter(|phase| {
+                phase
+                    .sources()
+                    .iter()
+                    .any(|source| source.of() == SourceOf::Phase(phase_id))
+            })
+            .map(|phase| phase.id())
+            .collect();
+        if !users.is_empty() {
+            return Err(RemovePhaseError::InUse(users));
+        }
+        let id = TransitionId::new();
+        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
+        Ok(id)
     }
 
     fn reported_by(&self, phase_id: PhaseId, match_id: MatchId) -> Option<TransitionId> {
@@ -753,7 +820,10 @@ mod tests {
             .unwrap();
 
         machine
-            .reconfigure_phase(&mut SessionHistory::new(), phase_id(), with_record.clone())
+            .reconfigure_phase(
+                &mut SessionHistory::new(),
+                AddPhase::new(phase_id(), with_record.clone()),
+            )
             .unwrap()
             .expect("the plugins changed");
 
@@ -785,7 +855,10 @@ mod tests {
         let log_len = machine.log().len();
 
         assert!(matches!(
-            machine.reconfigure_phase(&mut SessionHistory::new(), phase_id(), unchanged),
+            machine.reconfigure_phase(
+                &mut SessionHistory::new(),
+                AddPhase::new(phase_id(), unchanged)
+            ),
             Ok(None)
         ));
         assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
@@ -799,8 +872,7 @@ mod tests {
         assert!(matches!(
             machine.reconfigure_phase(
                 &mut SessionHistory::new(),
-                unknown,
-                PhasePluginsBuilder::new().build().unwrap()
+                AddPhase::new(unknown, PhasePluginsBuilder::new().build().unwrap())
             ),
             Err(ReconfigurePhaseError::NotAdded)
         ));
@@ -820,7 +892,10 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = machine.reconfigure_phase(&mut SessionHistory::new(), phase_id(), monster_dyp);
+        let result = machine.reconfigure_phase(
+            &mut SessionHistory::new(),
+            AddPhase::new(phase_id(), monster_dyp),
+        );
 
         assert!(matches!(result, Err(ReconfigurePhaseError::Rejected(_))));
         assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
@@ -836,7 +911,7 @@ mod tests {
             .unwrap();
         let mut history = SessionHistory::new();
         machine
-            .reconfigure_phase(&mut history, phase_id(), monster_dyp.clone())
+            .reconfigure_phase(&mut history, AddPhase::new(phase_id(), monster_dyp.clone()))
             .unwrap();
 
         history
@@ -862,7 +937,7 @@ mod tests {
             .build()
             .unwrap();
         machine
-            .reconfigure_phase(&mut history, phase_id(), monster_dyp)
+            .reconfigure_phase(&mut history, AddPhase::new(phase_id(), monster_dyp))
             .unwrap();
         // the teams of a Monster DYP are pairs, so the knockout never schedules this match
         let first = matches(&machine)[0];

@@ -129,7 +129,8 @@ impl Session {
                     Action::RemoveEntrant(self.entrant_row(&removed.entrant_id()))
                 }
                 CompetitionTransition::AddPhase(_) => Action::AddPhase,
-                CompetitionTransition::StartCompetition(_) => Action::Start,
+                CompetitionTransition::StartCompetition(_)
+                | CompetitionTransition::StartPhase(_) => Action::Start,
                 CompetitionTransition::ReportMatchResult(report) => {
                     Action::Report(reported(report))
                 }

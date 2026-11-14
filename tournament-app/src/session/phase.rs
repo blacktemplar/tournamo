@@ -137,7 +137,7 @@ impl Session {
         let plugins = completed(draft).map_err(EditPhaseError::Invalid)?;
         let edited = self
             .machine
-            .reconfigure_phase(&mut self.history, phase_id, plugins)
+            .reconfigure_phase(&mut self.history, AddPhase::new(phase_id, plugins))
             .map_err(|error| match error {
                 ReconfigurePhaseError::Rejected(error) => self.edit_refusal(phase_id, draft, error),
                 ReconfigurePhaseError::NotAdded => {

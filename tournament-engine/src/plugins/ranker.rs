@@ -238,6 +238,7 @@ mod tests {
         let ranking = Ranking::new(
             vec1![EntrantId::new(Uuid::from_u128(index))],
             NonZeroU32::new(index as u32 + 1).unwrap(),
+            NonZeroU32::new(index as u32 + 1).unwrap(),
         );
         match points {
             Some(points) => ranking.with_metric(Points(points.into())),

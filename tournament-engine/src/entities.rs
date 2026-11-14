@@ -9,11 +9,12 @@ mod r#match;
 mod phase;
 mod ranking;
 mod seed;
+mod source;
 pub mod standings;
 
 pub use annotated::Annotated;
 pub use bye::Bye;
-pub use competition::Competition;
+pub use competition::{Competition, Placed};
 #[cfg(feature = "test-util")]
 pub use division::builder::DivisionBuilder;
 pub use division::{Division, DivisionData, DivisionView};
@@ -23,3 +24,4 @@ pub use r#match::{Match, MatchResult, NewMatch, ResultOfTeam, Team};
 pub use phase::Phase;
 pub use ranking::Ranking;
 pub use seed::Seed;
+pub use source::{Origin, Qualifier, Source, SourceOf};

@@ -9,8 +9,8 @@ pub mod type_map;
 pub use entities::DivisionBuilder;
 pub use entities::{
     Annotated, Bye, ByeId, Competition, Division, DivisionData, DivisionView, Entrant, EntrantId,
-    Match, MatchId, MatchResult, NewMatch, Phase, PhaseId, Ranking, RankingId, ResultOfTeam, Seed,
-    Team,
+    Match, MatchId, MatchResult, NewMatch, Origin, Phase, PhaseId, Placed, Qualifier, Ranking,
+    RankingId, ResultOfTeam, Seed, Source, SourceOf, Team,
     details::{Decision, EnteredValue, FieldKey, Part, ResultReason, Sides, Values},
     standings::{Standing, Standings},
 };
@@ -21,6 +21,7 @@ pub use score::Score;
 pub use transitions::{
     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt,
     CompetitionTransition, RemoveEntrant, ReportMatchResult, SetCompetitionSeed, StartCompetition,
+    StartPhase,
 };
 pub use type_map::{TypeMap, TypeMapValue};
 // the crates the API of this one is written in, so that a user does not have to depend on them

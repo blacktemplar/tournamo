@@ -126,6 +126,15 @@ impl Default for BracketBuilder {
 }
 
 impl Bracket {
+    /// The highest number of a pairing, see [`BracketPairing::number`]; `None` if no pairing can
+    /// be a match.
+    pub fn highest_number(&self) -> Option<NonZeroU32> {
+        self.pairings
+            .iter()
+            .filter_map(|pairing| pairing.number)
+            .max()
+    }
+
     /// Its pairings, in the order the format added them. The pairings of a round of a knockout are
     /// in bracket order: the winners of two neighbours meet in the same pairing of the next round.
     pub fn pairings(&self) -> Vec<BracketPairing<'_>> {

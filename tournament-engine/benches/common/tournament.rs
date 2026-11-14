@@ -48,7 +48,7 @@ pub fn phase_id() -> PhaseId {
 /// which is unique and unaffected by any reported result, so that the schedule does not depend on
 /// the iteration order of the match map.
 fn reporting_schedule(sm: &CompetitionStateMachine) -> Vec<(MatchId, MatchResult)> {
-    let phase = sm.current().phases()[&phase_id()].data();
+    let phase = sm.current().phases()[&phase_id()].divisions()[0].data();
     let mut rng = StdRng::seed_from_u64(0x7e57_5eed);
     phase
         .matches()

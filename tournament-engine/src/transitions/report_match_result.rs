@@ -146,20 +146,19 @@ impl Transition<Competition> for ReportMatchResult {
             .phases()
             .get(&self.phase_id)
             .ok_or(ReportMatchResultError::PhaseDoesNotExist)?;
-        let r#match = phase
-            .data()
-            .matches()
-            .get(&self.match_id)
+        let (_, division) = phase
+            .division_of(&self.match_id)
             .ok_or(ReportMatchResultError::MatchDoesNotExist)?;
+        let r#match = &division.data().matches()[&self.match_id];
         if r#match.is_finished() {
             return Err(Box::new(ReportMatchResultError::MatchAlreadyFinished));
         }
-        if self.match_result() == MatchResult::Draw && !phase.format().allows_draws() {
+        if self.match_result() == MatchResult::Draw && !division.format().allows_draws() {
             return Err(Box::new(ReportMatchResultError::DrawNotAllowed));
         }
-        phase
+        division
             .match_format()
-            .template(phase.data(), r#match)
+            .template(division.data(), r#match)
             .root
             .check(&self.contest)
             .map_err(ReportMatchResultError::from)?;

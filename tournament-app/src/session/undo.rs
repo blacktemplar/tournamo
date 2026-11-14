@@ -113,9 +113,7 @@ impl Session {
             .entry(id)
             .expect("an action is an entry of the log");
         let reported = |report: &ReportMatchResult| {
-            let phase = self
-                .started_phase()
-                .expect("a match is reported once started");
+            let phase = self.division().expect("a match is reported once started");
             let r#match = &phase.data().matches()[&report.match_id()];
             MatchRow {
                 result: Some(report.match_result()),

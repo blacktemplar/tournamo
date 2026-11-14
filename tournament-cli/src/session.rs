@@ -27,8 +27,8 @@ use tournament_app::{
     view,
 };
 use tournament_engine::{
-    Annotated as _, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseData,
-    PhasePlugins, RankingId, Sides, TypeMap,
+    Annotated as _, Competition, Division, DivisionData, Entrant, EntrantId, Match, MatchId,
+    MatchResult, Phase, PhasePlugins, RankingId, Sides, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
@@ -391,33 +391,34 @@ impl Session {
         self.session.start()?;
         Ok(format!(
             "competition started, {} match(es) scheduled",
-            self.phase()?.data().matches().len()
+            self.division()?.data().matches().len()
         ))
     }
 
-    /// The single phase of a started competition.
-    fn phase(&self) -> Result<&Phase, Error> {
+    /// The division the single phase of a started competition is played in.
+    fn division(&self) -> Result<&Division, Error> {
         let competition = self.competition();
         if !competition.is_started() {
             return Err(Error::NotStarted);
         }
-        Ok(competition
+        Ok(&competition
             .only_phase()
-            .expect("a started competition must have a phase"))
+            .expect("a started competition must have a phase")
+            .divisions()[0])
     }
 
     /// Lists the matches, numbered the way [`Self::report`] addresses them and independently of
     /// the filters applied, followed by the byes unless only open matches are asked for.
     fn matches(&self, only_open: bool, only_round: Option<NonZeroU32>) -> Result<String, Error> {
-        let format = self.phase()?.format();
+        let format = self.division()?.format();
         let stage_of = |entity: &TypeMap| format.stage(entity).map(|stage| stage.to_string());
-        let phase = self.phase()?.data();
+        let division = self.division()?.data();
         // only a format that names its stages gets a column for them
-        let has_stages = phase
+        let has_stages = division
             .matches()
             .values()
             .any(|r#match| stage_of(r#match.annotations()).is_some());
-        let mut listed: Vec<&Match> = phase
+        let mut listed: Vec<&Match> = division
             .matches()
             .values()
             .filter(|r#match| !(only_open && r#match.is_finished()))
@@ -432,10 +433,10 @@ impl Session {
                     .into_iter()
                     .chain(has_stages.then(|| stage_of(r#match.annotations()).unwrap_or_default()))
                     .chain([
-                        self.team_name(phase, r#match.team_a()),
+                        self.team_name(division, r#match.team_a()),
                         "vs".to_owned(),
-                        self.team_name(phase, r#match.team_b()),
-                        self.result_text(phase, r#match),
+                        self.team_name(division, r#match.team_b()),
+                        self.result_text(division, r#match),
                     ])
                     .collect()
             })
@@ -443,14 +444,16 @@ impl Session {
         // a bye is named by its stage only if its round has several, e.g. one of the loser
         // bracket in a round of the winner bracket
         let mut stages_of_round: HashMap<NonZeroU32, HashSet<Option<String>>> = HashMap::new();
-        let all_stages = (phase.matches().values())
+        let all_stages = (division.matches().values())
             .map(|r#match| (r#match.round(), stage_of(r#match.annotations())))
-            .chain((phase.byes().values()).map(|bye| (bye.round(), stage_of(bye.annotations()))));
+            .chain(
+                (division.byes().values()).map(|bye| (bye.round(), stage_of(bye.annotations()))),
+            );
         for (round, stage) in all_stages {
             stages_of_round.entry(round).or_default().insert(stage);
         }
         // a bye is never open: it has nothing to report
-        let byes: Vec<_> = phase
+        let byes: Vec<_> = division
             .byes()
             .values()
             .filter(|_| !only_open)
@@ -469,7 +472,7 @@ impl Session {
                 [bye.round().to_string()]
                     .into_iter()
                     .chain(byes_have_stages.then(|| stage.unwrap_or_default()))
-                    .chain([self.team_name(phase, &[bye.ranking()])])
+                    .chain([self.team_name(division, &[bye.ranking()])])
                     .collect()
             })
             .collect();
@@ -508,8 +511,8 @@ impl Session {
     /// # Errors
     /// Returns an error if the competition has not started or has no such match.
     fn match_numbered(&self, number: NonZeroUsize) -> Result<MatchId, Error> {
-        let phase = self.phase()?;
-        let match_id = phase
+        let division = self.division()?;
+        let match_id = division
             .data()
             .matches()
             .values()
@@ -551,10 +554,10 @@ impl Session {
             self.session.report_form(&form)?
         };
 
-        let phase = self.phase()?.data();
+        let division = self.division()?.data();
         let mut output = format!(
             "#{number}: {}",
-            self.result_text(phase, &phase.matches()[&match_id])
+            self.result_text(division, &division.matches()[&match_id])
         );
         let new_matches = reported.new_matches;
         if new_matches > 0 {
@@ -580,12 +583,12 @@ impl Session {
                 | app_error::UndoReportError::DependedOnBy(_) => Error::ReportDependedOn(number),
             })?;
 
-        let phase = self.phase()?.data();
-        let r#match = &phase.matches()[&match_id];
+        let division = self.division()?.data();
+        let r#match = &division.matches()[&match_id];
         let mut output = format!(
             "#{number} is open again: {} vs {}",
-            self.team_name(phase, r#match.team_a()),
-            self.team_name(phase, r#match.team_b())
+            self.team_name(division, r#match.team_a()),
+            self.team_name(division, r#match.team_b())
         );
         // a match that was only scheduled because of the undone result is gone with it
         let unscheduled = reopened.unscheduled;
@@ -596,15 +599,15 @@ impl Session {
     }
 
     fn ranking(&self) -> Result<String, Error> {
-        let phase = self.phase()?;
-        let columns: Vec<_> = phase
+        let division = self.division()?;
+        let columns: Vec<_> = division
             .plugins()
             .metrics()
             .iter()
             .filter_map(|calculator| calculator.column())
             .collect();
-        let standings = phase.standings();
-        let phase = phase.data();
+        let standings = division.standings();
+        let division = division.data();
         let header: Vec<_> = ["#", "name"]
             .into_iter()
             .chain(columns.iter().map(MetricColumn::header))
@@ -615,7 +618,7 @@ impl Session {
                 let ranking = standing.ranking();
                 [
                     standing.rank().to_string(),
-                    self.team_name(phase, &[ranking.id()]),
+                    self.team_name(division, &[ranking.id()]),
                 ]
                 .into_iter()
                 // a column of a metric its calculator does not calculate is left empty
@@ -664,26 +667,29 @@ impl Session {
         Ok(output)
     }
 
-    fn team_name(&self, phase: &PhaseData, rankings: &[RankingId]) -> String {
+    fn team_name(&self, division: &DivisionData, rankings: &[RankingId]) -> String {
         rankings
             .iter()
-            .flat_map(|id| phase.rankings()[id].entrants())
+            .flat_map(|id| division.rankings()[id].entrants())
             .map(|id| self.name_of(id))
             .collect::<Vec<_>>()
             .join(" & ")
     }
 
-    fn result_text(&self, phase: &PhaseData, r#match: &Match) -> String {
-        let a = self.team_name(phase, r#match.team_a());
-        let b = self.team_name(phase, r#match.team_b());
+    fn result_text(&self, division: &DivisionData, r#match: &Match) -> String {
+        let a = self.team_name(division, r#match.team_a());
+        let b = self.team_name(division, r#match.team_b());
         let text = match r#match.result() {
             Some(MatchResult::AWins) => format!("{a} beat {b}"),
             Some(MatchResult::BWins) => format!("{b} beat {a}"),
             Some(MatchResult::Draw) => "draw".to_owned(),
             None => "open".to_owned(),
         };
-        let phase = self.phase().expect("a match has a phase");
-        let root = phase.match_format().template(phase.data(), r#match).root;
+        let division = self.division().expect("a match has a division");
+        let root = division
+            .match_format()
+            .template(division.data(), r#match)
+            .root;
         let scores = view::scores(&root, r#match);
         let parts_won = view::parts_won(&root, r#match);
         if scores.is_empty() && parts_won.is_none() {
@@ -1112,7 +1118,7 @@ mod tests {
             "{result:?}"
         );
         assert_eq!(
-            format!("{:?}", session.phase().unwrap().format()),
+            format!("{:?}", session.added_phase().unwrap().plugins().format()),
             "RoundRobin",
             "the phase must stay as it was"
         );

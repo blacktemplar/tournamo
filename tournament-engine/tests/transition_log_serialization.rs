@@ -112,7 +112,7 @@ fn played_competition() -> CompetitionStateMachine {
 /// which is unique within a round and unaffected by any reported result, so that the order does not
 /// depend on the iteration order of the match map.
 fn matches_of_round(phase: &Phase, round: u32) -> Vec<MatchId> {
-    let phase = phase.data();
+    let phase = phase.divisions()[0].data();
     phase
         .matches()
         .values()
@@ -243,7 +243,7 @@ fn a_reported_contest_survives_a_round_trip() {
             .into(),
         )
         .unwrap();
-    let contest = machine.current().phases()[&games::phase_id()]
+    let contest = machine.current().phases()[&games::phase_id()].divisions()[0]
         .data()
         .matches()[&open]
         .contest();
@@ -393,7 +393,7 @@ fn a_round_tripped_log_can_still_be_undone() {
 
     // one of the two first round results is gone, so the final it scheduled is gone with it and
     // only one ranking holds the points of a win
-    let phase = restored.current().phases()[&phase_id()].data();
+    let phase = restored.current().phases()[&phase_id()].divisions()[0].data();
     assert_eq!(phase.matches().len(), 2);
     assert_eq!(
         phase
@@ -438,7 +438,7 @@ fn a_round_tripped_log_can_continue_the_tournament() {
         .apply_new(ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins).into())
         .unwrap();
 
-    let phase = machine.current().phases()[&phase_id()].data();
+    let phase = machine.current().phases()[&phase_id()].divisions()[0].data();
     assert!(phase.matches().values().all(Match::is_finished));
 }
 

@@ -131,6 +131,7 @@ fn full_tournament() {
     assert!(sm.current().is_started());
     let phase = &sm.current().phases().values().next().unwrap();
     assert_eq!(phase.id(), phase_id);
+    let phase = &phase.divisions()[0];
     let standings = phase.standings();
     let phase = phase.data();
     assert_eq!(phase.rankings().len(), 4);
@@ -200,7 +201,7 @@ fn full_tournament() {
         .unwrap();
 
     // asserts after the first round of single elimination
-    let phase = sm.current().phases().values().next().unwrap();
+    let phase = &sm.current().phases().values().next().unwrap().divisions()[0];
     let standings = phase.standings();
     let phase = phase.data();
     let matches = phase.matches();
@@ -259,7 +260,7 @@ fn full_tournament() {
         .unwrap();
 
     // final asserts
-    let phase = sm.current().phases().values().next().unwrap();
+    let phase = &sm.current().phases().values().next().unwrap().divisions()[0];
     let standings = phase.standings();
     let phase = phase.data();
     let matches = phase.matches();
@@ -341,7 +342,7 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
     sm.apply_new(StartCompetition.into()).unwrap();
     // the byes scored by each ranking, by the round of its bye
     let byes_scored = |sm: &CompetitionStateMachine| {
-        let phase = sm.current().phases()[&phase_id].data();
+        let phase = sm.current().phases()[&phase_id].divisions()[0].data();
         phase
             .byes()
             .values()
@@ -357,7 +358,7 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
             .collect_vec()
     };
 
-    let phase = sm.current().phases()[&phase_id].data();
+    let phase = sm.current().phases()[&phase_id].divisions()[0].data();
     assert_eq!(phase.matches().len(), 3);
     assert_eq!(phase.byes().len(), 3);
     assert_eq!(byes_scored(&sm), [(1, 1), (2, 0), (3, 0)]);
@@ -390,7 +391,7 @@ fn single_elimination_rejects_a_draw() {
     sm.apply_new(AddPhase::new(phase_id, plugins).into())
         .unwrap();
     sm.apply_new(StartCompetition.into()).unwrap();
-    let final_id = *sm.current().phases()[&phase_id]
+    let final_id = *sm.current().phases()[&phase_id].divisions()[0]
         .data()
         .matches()
         .keys()
@@ -403,7 +404,12 @@ fn single_elimination_rejects_a_draw() {
         panic!("a draw must not be applicable, got {draw:?}");
     };
     assert_eq!(error.to_string(), "the phase format does not allow draws");
-    assert!(!sm.current().phases()[&phase_id].data().matches()[&final_id].is_finished());
+    assert!(
+        !sm.current().phases()[&phase_id].divisions()[0]
+            .data()
+            .matches()[&final_id]
+            .is_finished()
+    );
     sm.apply_new(ReportMatchResult::new(phase_id, final_id, MatchResult::AWins).into())
         .unwrap();
 }

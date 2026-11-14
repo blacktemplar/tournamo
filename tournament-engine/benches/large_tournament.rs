@@ -61,7 +61,7 @@ fn standings(c: &mut Criterion) {
     let mut group = c.benchmark_group("standings");
     for entrants in entrant_counts() {
         let sm = tournament::run_tournament(entrants);
-        let phase = &sm.current().phases()[&tournament::phase_id()];
+        let phase = &sm.current().phases()[&tournament::phase_id()].divisions()[0];
 
         group.bench_with_input(BenchmarkId::from_parameter(entrants), phase, |b, phase| {
             b.iter(|| phase.standings());

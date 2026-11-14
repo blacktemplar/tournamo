@@ -64,8 +64,8 @@ bracket, a structure it would otherwise rebuild on every reported result).
 following the phase's progress take `&mut self` and the phase's data:
 
 ```rust
-fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule;       // PhaseFormat
-fn update_after_match_result(&mut self, phase_data: &PhaseData, /* ... */)
+fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule;       // PhaseFormat
+fn update_after_match_result(&mut self, phase_data: &DivisionData, /* ... */)
     -> Vec<(RankingId, Metric)>;                                           // MetricsCalculator
 ```
 
@@ -75,15 +75,17 @@ progress: it ranks whenever the standings are read (see
 [Metrics](#metrics-plugin-produced-ranking-data)), so `SliceRanker::rank` takes
 `&self`.
 
-- **`PhaseData` is everything in a `Phase` but its plugins** (rankings, matches,
-  byes, seed). A phase holds its `PhasePlugins` whole, as it was added with
-  them, next to its `data`: a call borrows a plugin mutably and `data`
-  immutably, disjoint fields, so no plugin is moved out. A plugin therefore
-  does not see the other plugins; what it needs of them reaches it through
-  `PhaseData` (metrics, annotations). The format gets a `PhaseView`: the data,
-  and the standings on request, ranked by the slice rankers, a field of the
-  plugins beside the format, borrowed immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
-  cannot read.
+- **`DivisionData` is everything in a `Division` but its plugins** (rankings,
+  matches, byes, seed). A division holds its copy of the phase's
+  `PhasePlugins` whole (see [Phases, divisions and
+  qualification](#phases-divisions-and-qualification)) next to its `data`: a
+  call borrows a plugin mutably and `data` immutably, disjoint fields, so no
+  plugin is moved out. A plugin therefore does not see the other plugins; what
+  it needs of them reaches it through `DivisionData` (metrics, annotations).
+  The format gets a `DivisionView`: the data, and the standings on request,
+  ranked by the slice rankers, a field of the plugins beside the format,
+  borrowed immutably. `data` is a nested field, not `#[serde(flatten)]`, which
+  postcard cannot read.
 - **State is a field left out of the schema**: `#[plugin(skip)]` plus
   `#[serde(default)]`. A plugin built from a configuration starts at the
   default; a saved one comes back with its state. It is always serialized
@@ -91,12 +93,12 @@ progress: it ranks whenever the standings are read (see
   dropped.
 - **Undo needs nothing extra.** The plugin is part of the state, so a replay
   rebuilds it from its configuration through the same calls. The contract is
-  determinism: its state depends only on the `PhaseData` and calls it has seen.
+  determinism: its state depends only on the `DivisionData` and calls it has seen.
 
 Rejected:
 - Stateless plugins recomputing from `&Phase` on every call: cost grows with the
   phase on the hot path.
-- State in a `TypeMap` of `PhaseData`: exposed to every plugin, and two plugins
+- State in a `TypeMap` of `DivisionData`: exposed to every plugin, and two plugins
   of one type collide.
 - Interior mutability: hides the mutation the replay contract governs.
 - Passing `&Phase` with the plugin taken out: the plugin sees a phase that
@@ -204,7 +206,7 @@ at `StartCompetition`. All of it runs once per phase; the hot path pays nothing.
 
 **Tests build plugins directly**, behind the `test-util` feature: constructors
 of plugins with fields, `PhasePluginsBuilder` (defaults: round robin, empty
-ranking, no metrics: a phase that can be played) and `PhaseBuilder`. A consumer
+ranking, no metrics: a phase that can be played) and `DivisionBuilder`. A consumer
 enables the feature only in dev-dependencies, so production code cannot skip
 configuration. Tests of configuration still use drafts.
 
@@ -291,9 +293,9 @@ where the `typetag` tag is used. A `Ranking` stores its metrics in a `TypeMap`
 #[axis]
 pub trait MetricsCalculator: Plugin + DynClone {
     fn default_metric_value(&self) -> Metric;
-    fn update_after_match_result(&mut self, phase_data: &PhaseData, r#match: &Match,
+    fn update_after_match_result(&mut self, phase_data: &DivisionData, r#match: &Match,
                                  old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)>;
-    fn update_after_bye(&mut self, phase_data: &PhaseData, bye: &Bye,
+    fn update_after_bye(&mut self, phase_data: &DivisionData, bye: &Bye,
                         old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)>;
 }
 ```
@@ -301,7 +303,7 @@ pub trait MetricsCalculator: Plugin + DynClone {
 `default_metric_value()` seeds every ranking and names the metric the
 calculator owns. A calculator depending on another (Buchholz on points) reads
 the pre-update values through `OldMetrics::of::<M>()` and the new ones in
-`PhaseData`, which is why calculators run in dependency order.
+`DivisionData`, which is why calculators run in dependency order.
 
 **A calculator states its metric as a type.** It implements `Calculator`, whose
 associated `Metric` (with its `Default` as the starting value) is what
@@ -325,11 +327,11 @@ measurable on `large_tournament`.
   `large_tournament`.
 
 **Ranks are computed when the standings are read**; only the metrics are
-stored. `Phase::standings` ranks the rankings by the phase's slice rankers on
+stored. `Division::standings` ranks the rankings by the phase's slice rankers on
 every call and returns them best first, each with its rank and its unique rank
 (the rank, ties broken by the initial unique rank). The standings borrow the
-phase, so they are never stale; a reader asks once and keeps them. A format
-asks through the `PhaseView` it schedules with, as a Swiss system will once per
+division, so they are never stale; a reader asks once and keeps them. A format
+asks through the `DivisionView` it schedules with, as a Swiss system will once per
 round; the standings count every result reported and every bye reached.
 Sorting after every result made each replay (undo, redo, loading, editing a
 phase) sort once per result in the log, about 90% of its time. Natively, on the
@@ -436,7 +438,7 @@ entities (below).
 `Competition<E, M, R>` with the library working through traits is the natural
 idea, and fails on three blockers verified against `typetag` 0.2.23's source:
 
-1. Generic entities make `PhaseData<M, R>` and so every plugin trait generic,
+1. Generic entities make `DivisionData<M, R>` and so every plugin trait generic,
    and `typetag` rejects generic traits for deserialization
    (`tagged_trait.rs:7`), so `Box<dyn PhaseFormat>` would lose `Deserialize`.
 2. Reusable third-party plugins need generic impls
@@ -717,6 +719,52 @@ for the match's decision); checking the rules of a sport in the engine; the
 name `MatchRules` (the plugin describes the shape of a match, as a
 `PhaseFormat` does of a phase, not the rules of a sport).
 
+## Phases, divisions and qualification
+
+A competition is played in phases (issue #6). A phase is one configuration of
+plugins, played by one or more divisions: the groups of a group phase, the
+knockouts A, B and C of a phase of knockouts. *Planned*: several phases, each
+taking its entrants from the registration or from the standings of earlier
+ones, and a draw dealing them to its divisions. So far every phase has one
+division.
+
+- **A phase keeps its configuration, each division a copy of it.** `Phase`
+  holds its `PhasePlugins` as configured, never changed after it was added,
+  its seed, whether it has started, and its divisions, none until it starts. A
+  `Division` is what a phase was before: its own copy of the plugins, which
+  holds the state of its format and calculators, and its `DivisionData`.
+  Configuring reads the phase's plugins (`Phase::config`), playing a
+  division's.
+- **Names.** `Phase` is the upper level. What every plugin signature names is
+  `DivisionData` and `DivisionView`: a plugin plays a division and never sees
+  its phase.
+- **Addressing.** A match stays addressed by `(PhaseId, MatchId)`: a ranking
+  is in one division of a phase, so a match id is unique within its phase, and
+  `ReportMatchResult` is saved as it was. `Phase::division_of` asks the
+  `IdMap` of each division: k lookups on the result path, no scan of matches.
+  A division is addressed by its index.
+- **Seeds.** Division 0 has the seed of its phase, so an old log replays into
+  the same competition. (*Planned*: a later division derives its seed from the
+  phase's and its index.)
+- **Saved layout.** A phase is saved as `{"id", "plugins", "seed", "started",
+  "divisions": [{"plugins", "data"}]}` (format 5), a division's data in the
+  layout a phase's had, ranks written, read and dropped. The converter from
+  format 4 moves a started phase's `plugins` and `data` into its only division
+  and leaves the phase its plugins whole: knowing no plugin, it cannot tell
+  their state from their configuration. The typed read of a phase drops the
+  state (`PhasePlugins::without_state`, each plugin built again from its
+  answer in the config), since `#[serde(default)]` fills a state that is
+  missing but keeps one that is there.
+
+Rejected:
+- Empty divisions from the moment a phase is added, with the plugins split
+  into a configuration and a state type: saves the copy, but needs divisions
+  before the draw has dealt the entrants.
+- Keeping `PhaseData` and `PhaseView` as names: every plugin signature would
+  name the wrong level.
+- Addressing a match by its division too: changes the saved `ReportMatchResult`
+  for what k lookups give.
+
 ## Persistence
 
 ### Snapshots
@@ -792,7 +840,7 @@ a persistence contract too: a change of it raises the file's format and adds a
 converter, as one of the log does (see [Golden saves](#golden-saves)). Holding
 it did not raise the format, since older versions ignore it. It still
 holds the rank and unique rank of every ranking and the order of the standings,
-as when they were stored: a phase computes them when it is written, and reads
+as when they were stored: a division computes them when it is written, and reads
 but drops them when it is read (see [Metrics](#metrics-plugin-produced-ranking-data)).
 
 Rejected: every version of every transition (unbounded, and keeps old bugs);

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::{
-        Match, MatchResult, PhaseData,
+        DivisionData, Match, MatchResult,
         details::{Part, Sides},
     },
     plugins::{
@@ -104,14 +104,14 @@ impl BestOf {
 
 #[register]
 impl MatchFormat for BestOf {
-    fn template(&self, _: &PhaseData, _: &Match) -> Template {
+    fn template(&self, _: &DivisionData, _: &Match) -> Template {
         Template {
             root: self.match_level(),
         }
     }
 
     /// The games each side won, and the points it scored in all of them.
-    fn tally(&self, _: &PhaseData, r#match: &Match) -> TypeMap {
+    fn tally(&self, _: &DivisionData, r#match: &Match) -> TypeMap {
         let games = r#match.contest().parts();
         let mut points = Sides::new(0u32, 0u32);
         for score in games.iter().filter_map(score) {

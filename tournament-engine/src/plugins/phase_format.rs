@@ -2,7 +2,7 @@ use dyn_clone::DynClone;
 use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
 use crate::{
-    entities::{Bye, NewMatch, PhaseView},
+    entities::{Bye, DivisionView, NewMatch},
     plugins::{Phrase, facts::NoDraws},
     type_map::TypeMap,
 };
@@ -11,8 +11,8 @@ use crate::{
 ///
 /// A format may keep state in `self` and update it in [`Self::create_new_matches`], in a field
 /// left out of its schema with `#[plugin(skip)]`. That state is serialized together with the
-/// phase, and it must only depend on what the [`PhaseView`]s showed the format and the calls it has
-/// seen, so that replaying the transition log recomputes it.
+/// phase, and it must only depend on what the [`DivisionView`]s showed the format and the calls it
+/// has seen, so that replaying the transition log recomputes it.
 #[axis]
 pub trait PhaseFormat: Plugin + DynClone {
     /// Suggested ranking and scoring settings for this configuration. Consumers apply these
@@ -49,7 +49,7 @@ pub trait PhaseFormat: Plugin + DynClone {
     /// [`CalculatesMetric`]: crate::plugins::facts::CalculatesMetric
     /// [`RoundOfFirstLoss`]: super::metrics_calculator::round_of_first_loss::RoundOfFirstLoss
     /// [`Annotated::with_annotation`]: crate::entities::Annotated::with_annotation
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule;
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule;
 
     /// The fewest entrants this format schedules matches for, 2 unless it says otherwise; with
     /// fewer, it schedules none. The start is not refused for it, so that a log started with fewer

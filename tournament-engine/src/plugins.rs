@@ -41,17 +41,18 @@
 //! plugin's id and the field's name, and shows the English where it has no translation.
 
 use plugin_factory::{
+    catalog::Axis,
     config::{Config, ConfigError, Path, PluginConfig, Value},
     draft::Draft,
     schema::{Configurable, DependencyOrderedSet},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[cfg(feature = "test-util")]
 pub use crate::plugins::builder::PhasePluginsBuilder;
 pub use crate::plugins::phrase::Phrase;
 use crate::{
-    entities::{PhaseData, PhaseView},
+    entities::{DivisionData, DivisionView},
     plugins::{
         match_format::MatchFormat,
         metrics_calculator::MetricsCalculator,
@@ -227,6 +228,29 @@ impl PhasePlugins {
         Config::of(self).expect("every plugin serializes as it is configured")
     }
 
+    /// These plugins as they are configured, without their runtime state: each built from its
+    /// answer in [`Self::config`].
+    pub(crate) fn without_state(&self) -> Self {
+        fn built<A: Axis + ?Sized>(answer: &Value) -> Box<A>
+        where
+            Box<A>: DeserializeOwned,
+        {
+            PluginConfig::from_answer(answer)
+                .and_then(|plugin| plugin.build::<A>().ok())
+                .expect("a plugin builds from the config it serializes as")
+        }
+        let config = self.config();
+        let answer = |field| config.get(field).expect("every field is answered");
+        let list = |field| answer(field).as_array().expect("a list is answered by one");
+        Self::from_parts(
+            built(answer(Self::FORMAT)),
+            built(answer(Self::MATCH_FORMAT)),
+            list(Self::RANKING).iter().map(built).collect(),
+            list(Self::METRICS).iter().map(built).collect(),
+        )
+        .expect("the calculators were in order")
+    }
+
     /// The ranker of a phase with these plugins: its slice rankers in order.
     pub(crate) fn ranker(&self) -> HierarchicalRanker<'_> {
         HierarchicalRanker::new(&self.ranking)
@@ -234,8 +258,8 @@ impl PhasePlugins {
 
     /// The matches and byes the format schedules next in the phase of `data` played with these
     /// plugins, see [`PhaseFormat::create_new_matches`].
-    pub(crate) fn schedule(&mut self, data: &PhaseData) -> Schedule {
-        let view = PhaseView::new(data, HierarchicalRanker::new(&self.ranking));
+    pub(crate) fn schedule(&mut self, data: &DivisionData) -> Schedule {
+        let view = DivisionView::new(data, HierarchicalRanker::new(&self.ranking));
         self.format.create_new_matches(&view)
     }
 

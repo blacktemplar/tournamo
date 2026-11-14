@@ -1,6 +1,6 @@
 //! Reading and reporting a result typed as one line, see [`Session::read_entered`].
 
-use tournament_engine::{EnteredValue, MatchResult, Phase, Sides, Team};
+use tournament_engine::{Division, EnteredValue, MatchResult, Sides, Team};
 
 use super::Session;
 use crate::{
@@ -69,7 +69,7 @@ impl Session {
             found: Vec::new(),
             report: Err(error),
         };
-        let Some(phase) = self.started_phase() else {
+        let Some(division) = self.division() else {
             return nothing(ReportError::NotStarted.into());
         };
         let entry = entry.trim();
@@ -82,22 +82,22 @@ impl Session {
             result,
         }) = read_entry(entry)
         else {
-            let mut open: Vec<_> = phase
+            let mut open: Vec<_> = division
                 .data()
                 .matches()
                 .values()
                 .filter(|r#match| !r#match.is_finished())
-                .map(|r#match| self.match_row(phase, r#match))
+                .map(|r#match| self.match_row(division, r#match))
                 .collect();
             open.sort_by_key(|row| row.number);
-            let Named { found, says } = read_named(&open, entry, phase.format().allows_draws());
+            let Named { found, says } = read_named(&open, entry, division.format().allows_draws());
             let report = says.and_then(|Says { row, scores }| {
                 let result = row.result;
-                self.with_scores(phase, row, &scores, result)
+                self.with_scores(division, row, &scores, result)
             });
             return Entered { found, report };
         };
-        let Some(r#match) = phase
+        let Some(r#match) = division
             .data()
             .matches()
             .values()
@@ -105,11 +105,11 @@ impl Session {
         else {
             return nothing(ReportEnteredError::NoMatch(number));
         };
-        let row = self.match_row(phase, r#match);
+        let row = self.match_row(division, r#match);
         let report = match result {
             _ if r#match.is_finished() => Err(ReportEnteredError::AlreadyFinished(number)),
             None if scores.is_empty() => Err(ReportEnteredError::MissingResult(number)),
-            result => self.with_scores(phase, row.clone(), &scores, result),
+            result => self.with_scores(division, row.clone(), &scores, result),
         };
         Entered {
             found: vec![row],
@@ -117,11 +117,11 @@ impl Session {
         }
     }
 
-    /// `row`, an open match of `phase`, with the result `scores` (side A's first) and `result`
+    /// `row`, an open match of `division`, with the result `scores` (side A's first) and `result`
     /// say, see [`Self::read_entered`].
     fn with_scores(
         &self,
-        phase: &Phase,
+        division: &Division,
         row: MatchRow,
         scores: &[Sides<EnteredValue>],
         result: Option<MatchResult>,
@@ -146,7 +146,7 @@ impl Session {
             }
         };
         let result = result.expect("a result entered or suggested");
-        if result == MatchResult::Draw && !phase.format().allows_draws() {
+        if result == MatchResult::Draw && !division.format().allows_draws() {
             return Err(ReportError::DrawNotAllowed.into());
         }
         Ok(MatchRow {

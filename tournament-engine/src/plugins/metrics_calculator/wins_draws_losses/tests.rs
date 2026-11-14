@@ -3,22 +3,22 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{MatchResult, Phase, PhaseBuilder},
+    entities::{Division, DivisionBuilder, MatchResult},
     plugins::metrics_calculator::test_utils::{self, MatchSpec, match_id},
 };
 
 /// Builds a phase with `num_players` rankings whose wins/draws/losses got initialized and
 /// with all matches of `matches` already scheduled.
-fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
+fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Division {
     test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(WinsDrawsLossesCalculator),
         matches,
     )
 }
 
-fn metric_of(phase: &Phase, ranking_index: usize) -> WinsDrawsLosses {
+fn metric_of(phase: &Division, ranking_index: usize) -> WinsDrawsLosses {
     test_utils::metric_of(phase, ranking_index)
 }
 
@@ -122,7 +122,7 @@ fn results_accumulate_over_multiple_matches() {
 #[test]
 fn a_bye_is_counted_as_soon_as_it_is_scheduled_but_not_as_a_match() {
     let mut phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(3)
             .add_metric(WinsDrawsLossesCalculator),
         vec![(1, vec![0], vec![1])],

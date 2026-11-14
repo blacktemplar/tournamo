@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Cell, MetricColumn, OldMetrics, ToCell};
 use crate::{
-    entities::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, DivisionData, Match, RankingId},
     plugins::{
         facts::{CalculatesMetric, NoDraws},
         metrics_calculator::{Calculator, provides_metric, wins_draws_losses::WinsDrawsLosses},
@@ -105,7 +105,7 @@ impl PointsCalculator {
         self
     }
 
-    fn points_of(&self, ranking_id: &RankingId, phase_data: &PhaseData) -> Points {
+    fn points_of(&self, ranking_id: &RankingId, phase_data: &DivisionData) -> Points {
         let WinsDrawsLosses {
             wins, draws, byes, ..
         } = *phase_data.rankings()[ranking_id]
@@ -129,7 +129,7 @@ impl Calculator for PointsCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         _: &OldMetrics,
     ) -> Vec<(RankingId, Points)> {
@@ -141,7 +141,7 @@ impl Calculator for PointsCalculator {
 
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         bye: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, Points)> {

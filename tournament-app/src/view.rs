@@ -4,7 +4,7 @@
 use std::num::NonZeroU32;
 
 use tournament_engine::{
-    Decision, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Phase, Score, Sides,
+    Decision, Division, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, Score, Sides,
     plugins::{
         match_format::{Level, Parts},
         metrics_calculator::Cell,
@@ -621,11 +621,14 @@ pub fn scores(root: &Level, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>>
 
 /// The score of `r#match` at its highest level once finished, as [`CrossMatch::score`] has it,
 /// side A's first.
-pub(crate) fn top_score(phase: &Phase, r#match: &Match) -> Option<Sides<Option<EnteredValue>>> {
+pub(crate) fn top_score(
+    division: &Division,
+    r#match: &Match,
+) -> Option<Sides<Option<EnteredValue>>> {
     if !r#match.is_finished() {
         return None;
     }
-    let template = phase.match_format().template(phase.data(), r#match);
+    let template = division.match_format().template(division.data(), r#match);
     let contest = r#match.contest();
     score(&template.root, contest).or_else(|| {
         parts_won_of(&template.root, contest).map(|won| {

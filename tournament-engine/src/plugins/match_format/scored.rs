@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     entities::{
-        Match, MatchResult, PhaseData,
+        DivisionData, Match, MatchResult,
         details::{EnteredValue, FieldKey, Part, Sides},
     },
     plugins::{
@@ -97,7 +97,7 @@ pub(crate) fn score_field(winning_score: Option<u16>) -> FieldSpec {
 
 #[register]
 impl MatchFormat for Scored {
-    fn template(&self, _: &PhaseData, _: &Match) -> Template {
+    fn template(&self, _: &DivisionData, _: &Match) -> Template {
         Template {
             root: Level {
                 fields: vec![score_field(self.winning_score)],
@@ -106,7 +106,7 @@ impl MatchFormat for Scored {
         }
     }
 
-    fn tally(&self, _: &PhaseData, r#match: &Match) -> TypeMap {
+    fn tally(&self, _: &DivisionData, r#match: &Match) -> TypeMap {
         let mut tallies = TypeMap::new();
         tallies.insert(PointsScored(score(r#match.contest()).unwrap_or_default()));
         tallies
@@ -124,7 +124,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::{Phase, PhaseBuilder, details::Decision},
+        entities::{Division, DivisionBuilder, details::Decision},
         plugins::metrics_calculator::test_utils::{match_id, phase_with},
     };
 
@@ -137,9 +137,9 @@ mod tests {
     }
 
     /// A phase of two players, with one match in round 1, its results entered by `format`.
-    fn phase(format: Scored) -> Phase {
+    fn phase(format: Scored) -> Division {
         phase_with(
-            PhaseBuilder::new().match_format(format).add_players(2),
+            DivisionBuilder::new().match_format(format).add_players(2),
             vec![(1, vec![0], vec![1])],
         )
     }

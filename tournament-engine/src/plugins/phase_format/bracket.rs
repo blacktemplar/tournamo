@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::{Annotated, Bye, MatchId, NewMatch, PhaseData, RankingId, Team, details::Sides},
+    entities::{Annotated, Bye, DivisionData, MatchId, NewMatch, RankingId, Team, details::Sides},
     plugins::phase_format::Schedule,
     type_map::TypeMap,
 };
@@ -190,7 +190,7 @@ impl Bracket {
     /// Decides every pairing in play whose match got a result, moves its winner and its loser on,
     /// and returns the matches and the byes of the pairings that got both of their seats taken by
     /// that, each ordered by round and then by the order their pairings were added in.
-    pub(super) fn create_new_matches(&mut self, phase_data: &PhaseData) -> Schedule {
+    pub(super) fn create_new_matches(&mut self, phase_data: &DivisionData) -> Schedule {
         let mut new_matches = Vec::new();
         let mut new_byes = Vec::new();
         let mut to_check = mem::take(&mut self.in_play);
@@ -346,7 +346,7 @@ impl BracketBuilder {
     /// field is not a power of two the best seeds get the byes.
     pub(super) fn add_knockout(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         phase_round: impl Fn(u32) -> NonZeroU32,
         annotations: impl Fn(u32, u32) -> TypeMap,
     ) -> Vec<Vec<PairingId>> {

@@ -16,7 +16,7 @@ pub use tallies::{GamesWon, PointsScored};
 
 use crate::{
     entities::{
-        Match, MatchResult, PhaseData,
+        DivisionData, Match, MatchResult,
         details::{Decision, EnteredValue, FieldKey, Part, ResultReason},
     },
     plugins::Phrase,
@@ -31,7 +31,7 @@ use crate::{
 #[axis]
 pub trait MatchFormat: Plugin + DynClone {
     /// What a result of `match` looks like. May depend on the match, e.g. on its stage.
-    fn template(&self, phase_data: &PhaseData, r#match: &Match) -> Template;
+    fn template(&self, phase_data: &DivisionData, r#match: &Match) -> Template;
 
     /// What the metrics read of `match`, which has just been decided: its tallies, e.g. the points
     /// each side scored, from its [contest](Match::contest). Each tally is declared as a
@@ -39,7 +39,7 @@ pub trait MatchFormat: Plugin + DynClone {
     ///
     /// The contest fits the [`template`](Self::template), but is not checked against the rules of
     /// any sport: a tally takes what was entered, as it was entered.
-    fn tally(&self, phase_data: &PhaseData, r#match: &Match) -> TypeMap;
+    fn tally(&self, phase_data: &DivisionData, r#match: &Match) -> TypeMap;
 
     /// The result the values and parts of `part`, at `level` of the template, suggest, for a
     /// consumer filling in a result: `None` if they suggest none, e.g. since they are missing.
@@ -216,13 +216,13 @@ pub struct WinnerOnly;
 
 #[register]
 impl MatchFormat for WinnerOnly {
-    fn template(&self, _: &PhaseData, _: &Match) -> Template {
+    fn template(&self, _: &DivisionData, _: &Match) -> Template {
         Template {
             root: Level::new(Phrase::new("match", "match")),
         }
     }
 
-    fn tally(&self, _: &PhaseData, _: &Match) -> TypeMap {
+    fn tally(&self, _: &DivisionData, _: &Match) -> TypeMap {
         TypeMap::new()
     }
 

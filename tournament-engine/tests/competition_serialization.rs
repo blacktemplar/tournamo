@@ -6,8 +6,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tournament_engine::{
-    AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine, Entrant, EntrantId,
-    Match, MatchId, MatchResult, PhaseData, PhaseId, PhasePluginsBuilder, Ranking,
+    AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine, DivisionData, Entrant,
+    EntrantId, Match, MatchId, MatchResult, PhaseId, PhasePluginsBuilder, Ranking,
     ReportMatchResult, Score, Seed, SetCompetitionSeed, StartCompetition, TypeMapValue,
     plugins::{
         metrics_calculator::{
@@ -101,7 +101,7 @@ fn started_competition() -> CompetitionStateMachine {
 /// phase holds updated metrics, reranked rankings and the freshly scheduled final.
 fn competition_in_the_final() -> CompetitionStateMachine {
     let mut sm = started_competition();
-    for match_id in matches_of_round(sm.current().phases()[&phase_id()].data(), 1) {
+    for match_id in matches_of_round(sm.current().phases()[&phase_id()].divisions()[0].data(), 1) {
         sm.apply_new(ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into())
             .unwrap();
     }
@@ -111,7 +111,7 @@ fn competition_in_the_final() -> CompetitionStateMachine {
 /// The matches of `round`, ordered by the initial unique rank of the first ranking of their team
 /// A, which is unique within a round and unaffected by any reported result, so that the order does
 /// not depend on the iteration order of the match map.
-fn matches_of_round(phase: &PhaseData, round: u32) -> Vec<MatchId> {
+fn matches_of_round(phase: &DivisionData, round: u32) -> Vec<MatchId> {
     phase
         .matches()
         .values()
@@ -208,38 +208,43 @@ fn assert_same_competition(left: &Competition, right: &Competition) {
             .get(&phase.id())
             .expect("the phase must exist");
         assert_eq!(phase.id(), other.id());
-        let (standings, other_standings) = (phase.standings(), other.standings());
-        let (phase, other) = (phase.data(), other.data());
-        assert_eq!(phase.seed(), other.seed());
-        assert_eq!(standings.len(), other_standings.len());
-        for (standing, other_standing) in standings.iter().zip(other_standings.iter()) {
-            let (ranking, other_ranking) = (standing.ranking(), other_standing.ranking());
-            assert_eq!(ranking.id(), other_ranking.id());
-            assert_eq!(ranking.entrants(), other_ranking.entrants());
-            assert_eq!(standing.rank(), other_standing.rank());
-            assert_eq!(standing.unique_rank(), other_standing.unique_rank());
-            assert_eq!(
-                ranking.initial_unique_rank(),
-                other_ranking.initial_unique_rank()
-            );
-            assert_same_metrics(ranking, other_ranking);
-        }
-        assert_eq!(phase.matches().len(), other.matches().len());
-        for r#match in phase.matches() {
-            let other_match = other
-                .matches()
-                .get(&r#match.id())
-                .expect("the match must exist");
-            assert_eq!(r#match.team_a(), other_match.team_a());
-            assert_eq!(r#match.team_b(), other_match.team_b());
-            assert_eq!(r#match.round(), other_match.round());
-            assert_eq!(r#match.result(), other_match.result());
-        }
-        assert_eq!(phase.byes().len(), other.byes().len());
-        for bye in phase.byes() {
-            let other_bye = other.byes().get(&bye.id()).expect("the bye must exist");
-            assert_eq!(bye.ranking(), other_bye.ranking());
-            assert_eq!(bye.round(), other_bye.round());
+        assert_eq!(phase.config(), other.config());
+        assert_eq!(phase.is_started(), other.is_started());
+        assert_eq!(phase.divisions().len(), other.divisions().len());
+        for (division, other) in phase.divisions().iter().zip(other.divisions()) {
+            let (standings, other_standings) = (division.standings(), other.standings());
+            let (phase, other) = (division.data(), other.data());
+            assert_eq!(phase.seed(), other.seed());
+            assert_eq!(standings.len(), other_standings.len());
+            for (standing, other_standing) in standings.iter().zip(other_standings.iter()) {
+                let (ranking, other_ranking) = (standing.ranking(), other_standing.ranking());
+                assert_eq!(ranking.id(), other_ranking.id());
+                assert_eq!(ranking.entrants(), other_ranking.entrants());
+                assert_eq!(standing.rank(), other_standing.rank());
+                assert_eq!(standing.unique_rank(), other_standing.unique_rank());
+                assert_eq!(
+                    ranking.initial_unique_rank(),
+                    other_ranking.initial_unique_rank()
+                );
+                assert_same_metrics(ranking, other_ranking);
+            }
+            assert_eq!(phase.matches().len(), other.matches().len());
+            for r#match in phase.matches() {
+                let other_match = other
+                    .matches()
+                    .get(&r#match.id())
+                    .expect("the match must exist");
+                assert_eq!(r#match.team_a(), other_match.team_a());
+                assert_eq!(r#match.team_b(), other_match.team_b());
+                assert_eq!(r#match.round(), other_match.round());
+                assert_eq!(r#match.result(), other_match.result());
+            }
+            assert_eq!(phase.byes().len(), other.byes().len());
+            for bye in phase.byes() {
+                let other_bye = other.byes().get(&bye.id()).expect("the bye must exist");
+                assert_eq!(bye.ranking(), other_bye.ranking());
+                assert_eq!(bye.round(), other_bye.round());
+            }
         }
     }
     assert_eq!(serialized(left), serialized(right));
@@ -265,9 +270,9 @@ fn a_competition_that_has_not_started_round_trips() {
     assert!(!competition.is_started());
     assert_eq!(competition.seed(), SEED);
     assert_eq!(competition.entrants().len(), 4);
-    let phase = competition.phases()[&phase_id()].data();
-    assert!(phase.rankings().is_empty());
-    assert!(phase.matches().is_empty());
+    let phase = &competition.phases()[&phase_id()];
+    assert!(!phase.is_started());
+    assert!(phase.divisions().is_empty());
     assert_same_competition(sm.current(), &competition);
 }
 
@@ -278,7 +283,7 @@ fn a_started_competition_round_trips() {
     let competition = round_trip(sm.current());
 
     assert!(competition.is_started());
-    let phase = competition.phases()[&phase_id()].data();
+    let phase = competition.phases()[&phase_id()].divisions()[0].data();
     assert_eq!(phase.rankings().len(), 4);
     assert_eq!(phase.matches().len(), 2);
     // the metrics of a started competition are all at their default value, so this only shows
@@ -295,7 +300,7 @@ fn a_partially_played_competition_round_trips() {
 
     let competition = round_trip(sm.current());
 
-    let phase = competition.phases()[&phase_id()].data();
+    let phase = competition.phases()[&phase_id()].divisions()[0].data();
     // the two first round matches plus the final that reporting them scheduled
     assert_eq!(phase.matches().len(), 3);
     assert_eq!(
@@ -329,7 +334,7 @@ fn a_played_competition_round_trips_through_a_binary_format() {
     // the bracket holds the ids of the matches, which a plain round trip would silently write in
     // the wrong representation
     assert!(
-        !sm.current().phases()[&phase_id()]
+        !sm.current().phases()[&phase_id()].divisions()[0]
             .data()
             .matches()
             .is_empty()
@@ -358,7 +363,7 @@ fn a_competition_with_a_bye_round_trips() {
     sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
     sm.apply_new(StartCompetition.into()).unwrap();
-    let bye = sm.current().phases()[&phase_id()]
+    let bye = sm.current().phases()[&phase_id()].divisions()[0]
         .data()
         .byes()
         .values()
@@ -384,7 +389,13 @@ fn a_round_tripped_competition_can_be_started() {
     sm.apply_new(StartCompetition.into()).unwrap();
     apply_directly(&mut competition, &StartCompetition);
 
-    assert_eq!(competition.phases()[&phase_id()].data().matches().len(), 2);
+    assert_eq!(
+        competition.phases()[&phase_id()].divisions()[0]
+            .data()
+            .matches()
+            .len(),
+        2
+    );
     assert_same_competition(sm.current(), &competition);
 }
 
@@ -392,14 +403,15 @@ fn a_round_tripped_competition_can_be_started() {
 fn a_round_tripped_competition_can_continue_the_tournament() {
     let mut sm = competition_in_the_final();
     let mut competition = round_trip(sm.current());
-    let final_match = matches_of_round(competition.phases()[&phase_id()].data(), 2)[0];
+    let final_match =
+        matches_of_round(competition.phases()[&phase_id()].divisions()[0].data(), 2)[0];
     let report = ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins);
 
     sm.apply_new(ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins).into())
         .unwrap();
     apply_directly(&mut competition, &report);
 
-    let phase = competition.phases()[&phase_id()].data();
+    let phase = competition.phases()[&phase_id()].divisions()[0].data();
     assert!(phase.matches().values().all(Match::is_finished));
     assert_same_competition(sm.current(), &competition);
 }
@@ -445,7 +457,10 @@ fn deserializing_a_competition_with_an_unknown_metric_fails() {
     let sm = competition_in_the_final();
     let mut value = serde_json::to_value(sm.current()).unwrap();
     for phase in value["phases"].as_array_mut().unwrap() {
-        for ranking in phase["data"]["rankings"].as_array_mut().unwrap() {
+        for ranking in phase["divisions"][0]["data"]["rankings"]
+            .as_array_mut()
+            .unwrap()
+        {
             ranking["metrics"][0]["type"] = Value::String("NotAMetric".to_owned());
         }
     }

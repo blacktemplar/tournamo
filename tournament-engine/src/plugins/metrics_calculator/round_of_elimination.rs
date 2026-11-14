@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{Annotated, Bye, Match, MatchResult, PhaseData, RankingId, Team},
+    entities::{Annotated, Bye, DivisionData, Match, MatchResult, RankingId, Team},
     plugins::{
         Phrase,
         facts::MatchAnnotation,
@@ -91,7 +91,7 @@ impl Calculator for RoundOfEliminationCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         _: &OldMetrics,
     ) -> Vec<(RankingId, RoundOfElimination)> {
@@ -122,7 +122,7 @@ impl Calculator for RoundOfEliminationCalculator {
     /// A bye knocks out nobody.
     fn after_bye(
         &mut self,
-        _: &PhaseData,
+        _: &DivisionData,
         _: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, RoundOfElimination)> {

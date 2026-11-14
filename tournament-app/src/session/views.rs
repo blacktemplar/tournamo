@@ -7,7 +7,7 @@ use std::{
 
 use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use tournament_engine::{
-    Annotated as _, Bye, EntrantId, Match, Phase, PhaseData, Ranking, RankingId, TypeMap,
+    Annotated as _, Bye, Division, DivisionData, EntrantId, Match, Ranking, RankingId, TypeMap,
     plugins::{
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
@@ -54,8 +54,8 @@ impl Session {
     /// tied, by the names of their entrants, each team by its entrants; `None` before the start or
     /// while a match has no result.
     pub fn winners(&self) -> Option<Vec<Vec<EntrantRow>>> {
-        let phase = self.started_phase()?;
-        let data = phase.data();
+        let division = self.division()?;
+        let data = division.data();
         if data
             .matches()
             .values()
@@ -63,7 +63,7 @@ impl Session {
         {
             return None;
         }
-        let standings = phase.standings();
+        let standings = division.standings();
         let mut winners: Vec<_> = standings
             .iter()
             .filter(|standing| standing.rank() == NonZeroU32::MIN)
@@ -80,10 +80,10 @@ impl Session {
 
     /// The rounds the phase has scheduled matches or byes in, in order; none before the start.
     pub fn rounds(&self) -> Vec<RoundSummary> {
-        let Some(phase) = self.started_phase() else {
+        let Some(division) = self.division() else {
             return Vec::new();
         };
-        let data = phase.data();
+        let data = division.data();
         let empty = |round| RoundSummary {
             round,
             matches: 0,
@@ -94,7 +94,7 @@ impl Session {
         // the stage of each round, until a match or a bye of another one makes it `None`
         let mut stages: BTreeMap<NonZeroU32, Option<StageName>> = BTreeMap::new();
         let mut note_stage = |round, annotations| {
-            let stage = stage(phase, annotations);
+            let stage = stage(division, annotations);
             stages
                 .entry(round)
                 .and_modify(|kept| {
@@ -129,13 +129,13 @@ impl Session {
 
     /// The matches and byes of `round`, or `None` if it has neither, e.g. before the start.
     pub fn round(&self, round: NonZeroU32) -> Option<Round> {
-        let phase = self.started_phase()?;
-        let data = phase.data();
+        let division = self.division()?;
+        let data = division.data();
         let mut matches: Vec<_> = data
             .matches()
             .values()
             .filter(|r#match| r#match.round() == round)
-            .map(|r#match| self.match_row(phase, r#match))
+            .map(|r#match| self.match_row(division, r#match))
             .collect();
         // a bracket numbers its matches before it schedules them, in another order
         matches.sort_by_key(|row| row.number);
@@ -143,7 +143,7 @@ impl Session {
             .byes()
             .values()
             .filter(|bye| bye.round() == round)
-            .map(|bye| (bye, stage(phase, bye.annotations())))
+            .map(|bye| (bye, stage(division, bye.annotations())))
             .collect();
         let stages: HashSet<_> = matches
             .iter()
@@ -162,7 +162,7 @@ impl Session {
             round,
             matches,
             byes,
-            draws: phase.format().allows_draws(),
+            draws: division.format().allows_draws(),
         })
     }
 
@@ -272,10 +272,10 @@ impl Session {
     /// result none of whose entrants still has to play a match of an earlier round. None before
     /// the start.
     pub fn playable(&self) -> Vec<MatchRow> {
-        let Some(phase) = self.started_phase() else {
+        let Some(division) = self.division() else {
             return Vec::new();
         };
-        let data = phase.data();
+        let data = division.data();
         let open = || {
             data.matches()
                 .values()
@@ -304,17 +304,17 @@ impl Session {
                     .iter()
                     .all(|entrant| next_round[entrant] == r#match.round())
             })
-            .map(|r#match| self.match_row(phase, r#match))
+            .map(|r#match| self.match_row(division, r#match))
             .collect()
     }
 
     /// The standings of the phase, with a column for every calculator that offers one; `None`
     /// before the start.
     pub fn standings(&self) -> Option<Standings> {
-        let phase = self.started_phase()?;
+        let division = self.division()?;
         let calculators = AnyAxis::of::<dyn MetricsCalculator>();
         // the calculators each criterion ranks by, in the order of the criteria
-        let ranked_by: Vec<&str> = phase
+        let ranked_by: Vec<&str> = division
             .plugins()
             .ranking()
             .iter()
@@ -324,7 +324,7 @@ impl Session {
             .flat_map(|criterion| criterion.providers_in(calculators))
             .map(PluginEntry::id)
             .collect();
-        let mut columns: Vec<_> = phase
+        let mut columns: Vec<_> = division
             .plugins()
             .metrics()
             .iter()
@@ -339,9 +339,9 @@ impl Session {
                 .position(|ranked| ranked == calculator)
                 .unwrap_or(usize::MAX)
         });
-        let data = phase.data();
+        let data = division.data();
         let finished = data.matches().values().all(Match::is_finished);
-        let standings = phase.standings();
+        let standings = division.standings();
         Some(Standings {
             columns: columns
                 .iter()
@@ -367,7 +367,7 @@ impl Session {
                         cells: columns
                             .iter()
                             .map(|(_, column)| {
-                                Some(standing_cell(phase, ranking, column.cell(ranking)?))
+                                Some(standing_cell(division, ranking, column.cell(ranking)?))
                             })
                             .collect(),
                         medal: finished.then(|| Medal::of(standing.rank())).flatten(),
@@ -384,23 +384,23 @@ impl Session {
         }
     }
 
-    pub(super) fn team(&self, phase: &PhaseData, rankings: &[RankingId]) -> Vec<EntrantRow> {
+    pub(super) fn team(&self, division: &DivisionData, rankings: &[RankingId]) -> Vec<EntrantRow> {
         rankings
             .iter()
-            .flat_map(|id| phase.rankings()[id].entrants())
+            .flat_map(|id| division.rankings()[id].entrants())
             .map(|id| self.entrant_row(id))
             .collect()
     }
 
-    /// The row of `r#match`, a match of `phase`.
-    pub(super) fn match_row(&self, phase: &Phase, r#match: &Match) -> MatchRow {
-        let data = phase.data();
-        let root = phase.match_format().template(data, r#match).root;
+    /// The row of `r#match`, a match of `division`.
+    pub(super) fn match_row(&self, division: &Division, r#match: &Match) -> MatchRow {
+        let data = division.data();
+        let root = division.match_format().template(data, r#match).root;
         MatchRow {
             id: r#match.id(),
             number: number(r#match),
             round: r#match.round(),
-            stage: stage(phase, r#match.annotations()),
+            stage: stage(division, r#match.annotations()),
             a: self.team(data, r#match.team_a()),
             b: self.team(data, r#match.team_b()),
             result: r#match.result(),
@@ -418,11 +418,11 @@ pub(super) fn number(r#match: &Match) -> usize {
 
 /// `cell` of `ranking` as the standings show it: a [`Cell::Round`] by the stage of the ranking's
 /// match or bye in it, where the format names one.
-fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
+fn standing_cell(division: &Division, ranking: &Ranking, cell: Cell) -> StandingCell {
     let Cell::Round(round) = cell else {
         return StandingCell::Metric(cell);
     };
-    let data = phase.data();
+    let data = division.data();
     let matches = ranking
         .played_matches()
         .iter()
@@ -437,16 +437,16 @@ fn standing_cell(phase: &Phase, ranking: &Ranking, cell: Cell) -> StandingCell {
     match matches
         .chain(byes)
         .next()
-        .and_then(|annotations| stage(phase, annotations))
+        .and_then(|annotations| stage(division, annotations))
     {
         Some(stage) => StandingCell::Stage(stage),
         None => StandingCell::Metric(cell),
     }
 }
 
-/// The stage the format of `phase` names a match or a bye with `annotations` by.
-pub(super) fn stage(phase: &Phase, annotations: &TypeMap) -> Option<StageName> {
-    let format = phase.format();
+/// The stage the format of `division` names a match or a bye with `annotations` by.
+pub(super) fn stage(division: &Division, annotations: &TypeMap) -> Option<StageName> {
+    let format = division.format();
     Some(StageName {
         format: plugin_factory::id_of(format),
         stage: format.stage(annotations)?,

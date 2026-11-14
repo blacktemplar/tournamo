@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::{Bye, NewMatch, PhaseView},
+    entities::{Bye, DivisionView, NewMatch},
     plugins::{
         facts::EntrantsPerRanking,
         metrics_calculator::{
@@ -86,7 +86,7 @@ impl PhaseFormat for MonsterDyp {
         4
     }
 
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let phase_data = phase.data();
         // all rounds are scheduled at once
         if phase_data.has_schedule() || phase_data.rankings().len() < 4 {

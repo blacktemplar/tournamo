@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use tournament_engine::{
-    Phase, Sides, Team, TypeMap,
+    Division, Sides, Team, TypeMap,
     plugins::phase_format::{
         Advance, BracketPairing as Pairing, BracketSide, DoubleEliminationRound, KnockoutRound,
         PairingId, Seat,
@@ -36,8 +36,8 @@ impl Session {
     /// The bracket of the phase, if its format plays one, e.g. a single or a double elimination;
     /// `None` before the start.
     pub fn bracket(&self) -> Option<Bracket> {
-        let phase = self.started_phase()?;
-        let bracket = phase.format().bracket()?;
+        let division = self.division()?;
+        let bracket = division.format().bracket()?;
         let pairings = bracket.pairings();
         let by_id: HashMap<PairingId, &Pairing> = pairings
             .iter()
@@ -58,7 +58,7 @@ impl Session {
                     layout.len() - 1
                 });
             let columns = &mut layout[section].1;
-            let stage = stage(phase, pairing.annotations);
+            let stage = stage(division, pairing.annotations);
             let column = columns
                 .iter()
                 .position(|(other, _)| *other == stage)
@@ -78,7 +78,7 @@ impl Session {
             ids.push(pairing.id);
         }
 
-        let data = phase.data();
+        let data = division.data();
         // the sides only a bye can take
         let byes: HashMap<PairingId, Sides<bool>> = pairings
             .iter()
@@ -174,7 +174,7 @@ impl Session {
             let (index, count) = drawn[&id];
             BracketSource {
                 number: number(pairing),
-                stage: stage(phase, pairing.annotations),
+                stage: stage(division, pairing.annotations),
                 position: (count > 1).then_some(index + 1),
             }
         };
@@ -234,8 +234,8 @@ impl Session {
                     let r#match = data
                         .matches()
                         .get(&id)
-                        .expect("the bracket only holds matches of its phase");
-                    self.match_row(phase, r#match)
+                        .expect("the bracket only holds matches of its division");
+                    self.match_row(division, r#match)
                 }),
                 row: if folded.contains(&(place.section, place.column)) {
                     next[&pairing.id].index
@@ -296,9 +296,9 @@ impl Session {
     }
 }
 
-/// Whether the format of `phase`, which has started, plays a bracket, see [`Session::bracket`].
-pub(super) fn plays_bracket(phase: &Phase) -> bool {
-    phase.format().bracket().is_some()
+/// Whether the format of `division` plays a bracket, see [`Session::bracket`].
+pub(super) fn plays_bracket(division: &Division) -> bool {
+    division.format().bracket().is_some()
 }
 
 /// The section a pairing annotated with `annotations` is drawn in, by the stages of the knockouts

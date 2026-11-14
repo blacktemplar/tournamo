@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, compatibility::Declaration, config::PluginConfig, r
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{PhaseData, PhaseView},
+    entities::{DivisionData, DivisionView},
     plugins::{
         facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
@@ -172,7 +172,7 @@ impl PhaseFormat for SingleElimination {
         }
     }
 
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let phase_data = phase.data();
         let third_place_match = self.third_place_match;
         self.bracket
@@ -191,7 +191,7 @@ impl PhaseFormat for SingleElimination {
 }
 
 /// The whole knockout between the rankings of `phase_data`, see [`SingleElimination`].
-fn bracket(phase_data: &PhaseData, third_place_match: bool) -> Bracket {
+fn bracket(phase_data: &DivisionData, third_place_match: bool) -> Bracket {
     let mut bracket = BracketBuilder::default();
     let knockout = bracket.add_knockout(phase_data, phase_round, |round, rounds| {
         TypeMap::new().with(KnockoutRound::RoundOf(1 << (rounds - round + 1)))

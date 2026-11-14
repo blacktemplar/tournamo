@@ -3,13 +3,13 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Match, MatchResult, Phase, PhaseBuilder, PhaseData, RankingId},
+    entities::{Division, DivisionBuilder, DivisionData, Match, MatchResult, RankingId},
     map::Map,
     plugins::metrics_calculator::wins_draws_losses::{WinsDrawsLosses, WinsDrawsLossesCalculator},
 };
 
-fn phase(rounds: u32, num_players: u32) -> Phase {
-    let mut phase = PhaseBuilder::new()
+fn phase(rounds: u32, num_players: u32) -> Division {
+    let mut phase = DivisionBuilder::new()
         .format(MonsterDyp::new(rounds))
         .add_metric(WinsDrawsLossesCalculator)
         .add_players(num_players)
@@ -18,7 +18,7 @@ fn phase(rounds: u32, num_players: u32) -> Phase {
     phase
 }
 
-fn matches_per_ranking(phase: &PhaseData) -> Map<RankingId, u32> {
+fn matches_per_ranking(phase: &DivisionData) -> Map<RankingId, u32> {
     let mut matches_per_ranking: Map<_, _> = phase.rankings().keys().map(|r| (*r, 0)).collect();
     for ranking_id in phase.matches().values().flat_map(Match::rankings) {
         matches_per_ranking[ranking_id] += 1;

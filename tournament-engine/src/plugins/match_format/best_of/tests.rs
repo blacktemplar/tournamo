@@ -4,7 +4,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Phase, PhaseBuilder, details::EnteredValue},
+    entities::{Division, DivisionBuilder, details::EnteredValue},
     plugins::{
         match_format::scored::SCORE,
         metrics_calculator::test_utils::{match_id, phase_with},
@@ -26,9 +26,9 @@ fn decided(result: MatchResult, games: Vec<Part>) -> Part {
         .fold(Part::new().with_decision(result), Part::with_part)
 }
 
-fn phase(format: BestOf) -> Phase {
+fn phase(format: BestOf) -> Division {
     phase_with(
-        PhaseBuilder::new().match_format(format).add_players(2),
+        DivisionBuilder::new().match_format(format).add_players(2),
         vec![(1, vec![0], vec![1])],
     )
 }

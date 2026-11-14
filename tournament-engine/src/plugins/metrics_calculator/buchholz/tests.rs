@@ -3,7 +3,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Phase, PhaseBuilder},
+    entities::{Division, DivisionBuilder},
     plugins::metrics_calculator::{
         points::PointsCalculator,
         test_utils::{self, MatchSpec, SCENARIO, match_id, play_scenario, scenario_matches},
@@ -32,9 +32,9 @@ fn score(text: &str) -> Score {
 /// first, and [`Points`] in turn derives from
 /// [`WinsDrawsLosses`](super::wins_draws_losses::WinsDrawsLosses). Those are the only metrics
 /// it declares, so the phase calculates nothing else.
-fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
+fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Division {
     test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(THREE_ONE)
@@ -45,9 +45,9 @@ fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
 
 /// Like [`phase_with`], with the buchholz of buchholz calculated as well, which reads the
 /// [`Buchholz`] and therefore runs last.
-fn phase_with_buchholz_of_buchholz(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
+fn phase_with_buchholz_of_buchholz(num_players: u32, matches: Vec<MatchSpec>) -> Division {
     test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(THREE_ONE)
@@ -62,7 +62,7 @@ fn phase_with_sonneborn_berger(
     num_players: u32,
     matches: Vec<MatchSpec>,
     calculator: SonnebornBergerCalculator,
-) -> Phase {
+) -> Division {
     phase_with_points(num_players, matches, THREE_ONE, calculator)
 }
 
@@ -77,9 +77,9 @@ fn phase_with_points(
     matches: Vec<MatchSpec>,
     points: PointsCalculator,
     calculator: SonnebornBergerCalculator,
-) -> Phase {
+) -> Division {
     test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(points)
@@ -88,28 +88,28 @@ fn phase_with_points(
     )
 }
 
-fn buchholz_of(phase: &Phase, ranking_index: usize) -> Buchholz {
+fn buchholz_of(phase: &Division, ranking_index: usize) -> Buchholz {
     test_utils::metric_of(phase, ranking_index)
 }
 
-fn buchholz_of_buchholz_of(phase: &Phase, ranking_index: usize) -> BuchholzOfBuchholz {
+fn buchholz_of_buchholz_of(phase: &Division, ranking_index: usize) -> BuchholzOfBuchholz {
     test_utils::metric_of(phase, ranking_index)
 }
 
-fn sonneborn_berger_of(phase: &Phase, ranking_index: usize) -> SonnebornBerger {
+fn sonneborn_berger_of(phase: &Division, ranking_index: usize) -> SonnebornBerger {
     test_utils::metric_of(phase, ranking_index)
 }
 
 /// Plays [`SCENARIO`] in a phase calculating the buchholz, see [`play_scenario`]. Scored with
 /// [`THREE_ONE`], it leaves the players with the following points: `0`: 3, `1`: 3, `2`: 7,
 /// `3`: 1.
-fn scenario(report_order: impl Iterator<Item = usize>) -> Phase {
+fn scenario(report_order: impl Iterator<Item = usize>) -> Division {
     play_scenario(phase_with(4, scenario_matches()), report_order)
 }
 
 /// Plays [`SCENARIO`] in a phase calculating the buchholz of buchholz as well, see
 /// [`play_scenario`].
-fn scenario_with_buchholz_of_buchholz(report_order: impl Iterator<Item = usize>) -> Phase {
+fn scenario_with_buchholz_of_buchholz(report_order: impl Iterator<Item = usize>) -> Division {
     play_scenario(
         phase_with_buchholz_of_buchholz(4, scenario_matches()),
         report_order,
@@ -121,7 +121,7 @@ fn scenario_with_buchholz_of_buchholz(report_order: impl Iterator<Item = usize>)
 fn scenario_with_sonneborn_berger(
     calculator: SonnebornBergerCalculator,
     report_order: impl Iterator<Item = usize>,
-) -> Phase {
+) -> Division {
     play_scenario(
         phase_with_sonneborn_berger(4, scenario_matches(), calculator),
         report_order,
@@ -226,7 +226,7 @@ fn every_ranking_of_a_team_counts_the_points_of_every_opponent_ranking() {
 #[test]
 fn the_points_of_a_bye_count_for_the_opponents_of_its_ranking() {
     let mut phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(3)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
@@ -255,7 +255,7 @@ fn the_points_of_a_bye_count_for_the_opponents_of_its_ranking() {
 #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
 fn calculating_the_buchholz_without_the_points_metric_panics() {
     let mut phase = test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(2)
             .add_metric(BuchholzCalculator),
         vec![(1, vec![0], vec![1])],
@@ -475,7 +475,7 @@ fn every_ranking_of_a_team_counts_the_buchholz_of_every_opponent_ranking() {
 #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
 fn calculating_the_buchholz_of_buchholz_without_the_buchholz_metric_panics() {
     let mut phase = test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(2)
             .add_metric(BuchholzOfBuchholzCalculator),
         vec![(1, vec![0], vec![1])],
@@ -800,7 +800,7 @@ fn the_neustadtl_scores_of_a_published_cross_table_are_reproduced() {
 #[test]
 fn the_points_of_a_bye_count_for_the_opponents_that_beat_its_ranking() {
     let mut phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(3)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
@@ -829,7 +829,7 @@ fn the_points_of_a_bye_count_for_the_opponents_that_beat_its_ranking() {
 #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
 fn calculating_the_sonneborn_berger_without_the_points_metric_panics() {
     let mut phase = test_utils::phase_with(
-        PhaseBuilder::new().add_players(2).add_metric(FULL_HALF),
+        DivisionBuilder::new().add_players(2).add_metric(FULL_HALF),
         vec![(1, vec![0], vec![1])],
     );
     let match_id = match_id(&phase, 1, &[0], &[1]);

@@ -5,7 +5,7 @@ use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, DivisionData, Match, RankingId},
     plugins::{
         Phrase,
         facts::{CalculatesMetric, MatchTally},
@@ -127,7 +127,7 @@ impl Calculator for PointsBalanceCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         _: &OldMetrics,
     ) -> Vec<(RankingId, PointsBalance)> {
@@ -142,7 +142,7 @@ impl Calculator for PointsBalanceCalculator {
     /// A bye has no score.
     fn after_bye(
         &mut self,
-        _: &PhaseData,
+        _: &DivisionData,
         _: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, PointsBalance)> {
@@ -177,7 +177,7 @@ impl Calculator for PointsDifferenceCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, PointsDifference)> {
@@ -186,7 +186,7 @@ impl Calculator for PointsDifferenceCalculator {
 
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, PointsDifference)> {
@@ -208,7 +208,7 @@ mod tests {
     use super::*;
     use crate::{
         entities::{
-            MatchResult, Phase, PhaseBuilder,
+            Division, DivisionBuilder, MatchResult,
             details::{EnteredValue, FieldKey, Part, Sides},
         },
         plugins::{
@@ -221,9 +221,9 @@ mod tests {
         type_map::TypeMap,
     };
 
-    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Phase {
+    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Division {
         phase_with_byes(
-            PhaseBuilder::new()
+            DivisionBuilder::new()
                 .match_format(Scored::default())
                 .add_metric(PointsBalanceCalculator)
                 .add_metric(PointsDifferenceCalculator)
@@ -233,7 +233,7 @@ mod tests {
         )
     }
 
-    fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], score: (u16, u16)) {
+    fn report(phase: &mut Division, round: u32, a: &[usize], b: &[usize], score: (u16, u16)) {
         let id = match_id(phase, round, a, b);
         let values = Sides::new(
             Some(EnteredValue::Count(score.0)),

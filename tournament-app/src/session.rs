@@ -13,8 +13,8 @@ use std::collections::HashMap;
 
 use plugin_factory::config::Config;
 use tournament_engine::{
-    Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, MatchId, Part, Phase,
-    Seed, SetCompetitionSeed, StartCompetition,
+    Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division, MatchId, Part,
+    Phase, Seed, SetCompetitionSeed, StartCompetition,
     transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
     uuid::Uuid,
@@ -143,13 +143,9 @@ impl Session {
             add_phase: !started && !has_phase,
             edit_phase: has_phase,
             start: self.start_refusal().is_none(),
-            report: self.started_phase().is_some_and(|phase| {
-                phase
-                    .data()
-                    .matches()
-                    .values()
-                    .any(|r#match| !r#match.is_finished())
-            }),
+            report: self
+                .phase()
+                .is_some_and(|phase| phase.is_started() && !phase.is_finished()),
             undo: self.history.next_undo(&self.machine).is_some(),
             redo: self.history.next_redo(&self.machine).is_some(),
         }
@@ -167,7 +163,7 @@ impl Session {
             Some(StartError::TooFewEntrants)
         } else {
             self.phase()
-                .map(|phase| phase.format().min_entrants())
+                .map(|phase| phase.plugins().format().min_entrants())
                 .filter(|needed| competition.entrants().len() < *needed)
                 .map(StartError::TooFewForFormat)
         }
@@ -204,8 +200,11 @@ impl Session {
             .conflicts_of(change)?
             .iter()
             .filter_map(|conflict| {
-                let phase = self.competition().phase(&conflict.phase_id)?;
-                phase
+                let (_, division) = self
+                    .competition()
+                    .phase(&conflict.phase_id)?
+                    .division_of(&conflict.match_id)?;
+                division
                     .data()
                     .matches()
                     .get(&conflict.match_id)
@@ -221,8 +220,9 @@ impl Session {
         self.competition().only_phase()
     }
 
-    fn started_phase(&self) -> Option<&Phase> {
-        self.phase().filter(|_| self.competition().is_started())
+    /// The division the phase is played in, once it is started.
+    fn division(&self) -> Option<&Division> {
+        self.phase()?.divisions().first()
     }
 }
 

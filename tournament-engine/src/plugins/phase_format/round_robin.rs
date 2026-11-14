@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, config::PluginConfig, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::PhaseView,
+    entities::DivisionView,
     plugins::{
         metrics_calculator::{
             buchholz::{MoreSonnebornBerger, SonnebornBergerCalculator},
@@ -49,7 +49,7 @@ impl PhaseFormat for RoundRobin {
         }
     }
 
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let phase_data = phase.data();
         // all rounds are scheduled at once
         if phase_data.has_schedule() {

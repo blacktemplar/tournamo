@@ -23,6 +23,12 @@ later one: a file whose `"format"` changes is migrated, not refused.
   and every pairing of a knockout's bracket holds the number of its match.
   Competitions of formats 1 to 3 open unchanged; earlier versions refuse
   format 4.
+- A competition is saved in format 5: in the competition stored next to the
+  log, a phase holds its matches and standings in its divisions
+  (`"divisions": [{"plugins", "data"}]`, one once it has started, none before),
+  next to its `"plugins"` as configured, its `"seed"` and whether it has
+  `"started"`. Competitions of formats 1 to 4 open unchanged; earlier versions
+  refuse format 5.
 - Library users: the engine reads only the current layout of a competition and
   its log; a file of an older format is converted when read, by
   `tournament_app::file::File::read` (`file::upgrade_competition` for the
@@ -35,6 +41,13 @@ later one: a file whose `"format"` changes is migrated, not refused.
 - Library users: `Phase::plugins` replaces `Phase::metrics_calculators` and
   `Phase::slice_rankers`, and a `HierarchicalRanker` borrows its slice
   rankers.
+- Library users: a `Phase` is played by its divisions once it has started
+  (`Phase::divisions`, `Phase::division_of`, `Phase::is_finished`). A
+  `Division` has what a phase had: `data`, `standings`, `format`,
+  `match_format`, and its `plugins` with the state of its format;
+  `Phase::plugins` are the plugins as configured. `DivisionData`,
+  `DivisionView` and `DivisionBuilder` replace `PhaseData`, `PhaseView` and
+  `PhaseBuilder`.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time.

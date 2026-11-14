@@ -3,7 +3,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Phase, PhaseBuilder},
+    entities::{Division, DivisionBuilder},
     plugins::metrics_calculator::test_utils::{self, AnnotatedMatchSpec, MatchSpec, match_id},
     type_map::TypeMap,
 };
@@ -16,9 +16,9 @@ const STILL_IN: RoundOfElimination = RoundOfElimination(None);
 ///
 /// [`RoundOfEliminationCalculator`] reads nothing but the [`Eliminates`] annotation and the
 /// result of the match it is called for, so it is the only calculator of the phase.
-fn phase_with(num_players: u32, matches: Vec<AnnotatedMatchSpec>) -> Phase {
+fn phase_with(num_players: u32, matches: Vec<AnnotatedMatchSpec>) -> Division {
     test_utils::phase_with_annotated_matches(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(RoundOfEliminationCalculator),
         matches,
@@ -38,7 +38,7 @@ fn eliminating_the_loser(r#match: MatchSpec) -> AnnotatedMatchSpec {
     eliminating(r#match, Eliminates::Loser)
 }
 
-fn metric_of(phase: &Phase, ranking_index: usize) -> RoundOfElimination {
+fn metric_of(phase: &Division, ranking_index: usize) -> RoundOfElimination {
     test_utils::metric_of(phase, ranking_index)
 }
 
@@ -48,7 +48,7 @@ fn out_in(round: u32) -> RoundOfElimination {
 }
 
 /// Reports `result` for the match of `round` between the two single-ranking teams.
-fn report(phase: &mut Phase, round: u32, result: MatchResult) {
+fn report(phase: &mut Division, round: u32, result: MatchResult) {
     let match_id = match_id(phase, round, &[0], &[1]);
     phase.report_match_result(match_id, result);
 }
@@ -149,7 +149,7 @@ fn a_ranking_that_is_already_out_keeps_the_round_it_was_knocked_out_in() {
 #[test]
 fn a_bye_knocks_nobody_out() {
     let phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(2)
             .add_metric(RoundOfEliminationCalculator),
         vec![],

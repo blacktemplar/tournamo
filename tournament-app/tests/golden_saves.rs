@@ -97,7 +97,7 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
         );
         let saved: Value = serde_json::from_str(competition).unwrap();
         assert!(
-            ranks_in(&replayed) == ranks_in(&saved),
+            ranks_in(&replayed) == ranks_in(&converted(file, competition)),
             "{save} replays into other ranks than it was saved with"
         );
         let file: Value = serde_json::from_str(file).unwrap();
@@ -111,24 +111,31 @@ fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
 /// The competition saved with `file` as this version reads it and would save it: one of an older
 /// format is converted first, as the competition in `file` would be.
 fn as_read(file: &str, competition: &str) -> Value {
+    let competition: Competition = serde_json::from_value(converted(file, competition)).unwrap();
+    serde_json::to_value(competition).unwrap()
+}
+
+/// The competition saved with `file` in the layout of the current format, as it was written
+/// otherwise: converted, not read.
+fn converted(file: &str, competition: &str) -> Value {
     let format = serde_json::from_str::<File<IgnoredAny, IgnoredAny>>(file)
         .unwrap()
         .format;
     let mut competition = serde_json::from_str(competition).unwrap();
     file::upgrade_competition(&mut competition, format);
-    let competition: Competition = serde_json::from_value(competition).unwrap();
-    serde_json::to_value(competition).unwrap()
+    competition
 }
 
-/// What a serialized competition says of the ranks in its phases: per phase the order of the
-/// rankings and the ranks of each.
+/// What a serialized competition says of the ranks in the divisions of its phases: per division
+/// the order of the rankings and the ranks of each.
 fn ranks_in(competition: &Value) -> Vec<Value> {
     competition["phases"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|phase| {
-            let data = &phase["data"];
+        .flat_map(|phase| phase["divisions"].as_array().unwrap())
+        .map(|division| {
+            let data = &division["data"];
             let rankings: Vec<_> = data["rankings"]
                 .as_array()
                 .unwrap()

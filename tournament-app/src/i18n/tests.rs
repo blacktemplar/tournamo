@@ -375,6 +375,7 @@ fn phrases_of_rules(id: &str) -> BTreeSet<String> {
         .values()
         .next()
         .unwrap()
+        .divisions()[0]
         .data();
     let id = r#match.matches().values().next().unwrap().id();
     let mut attributes = BTreeSet::new();

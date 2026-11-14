@@ -3,7 +3,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{MatchResult, Phase, PhaseBuilder},
+    entities::{Division, DivisionBuilder, MatchResult},
     plugins::metrics_calculator::test_utils::{self, MatchSpec, match_id},
 };
 
@@ -14,16 +14,16 @@ const UNBEATEN: RoundOfFirstLoss = RoundOfFirstLoss(None);
 ///
 /// [`RoundOfFirstLossCalculator`] reads nothing but the result and the round of the match it is
 /// called for, so it is the only calculator of the phase.
-fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Phase {
+fn phase_with(num_players: u32, matches: Vec<MatchSpec>) -> Division {
     test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(RoundOfFirstLossCalculator),
         matches,
     )
 }
 
-fn metric_of(phase: &Phase, ranking_index: usize) -> RoundOfFirstLoss {
+fn metric_of(phase: &Division, ranking_index: usize) -> RoundOfFirstLoss {
     test_utils::metric_of(phase, ranking_index)
 }
 
@@ -33,7 +33,7 @@ fn lost_in(round: u32) -> RoundOfFirstLoss {
 }
 
 /// Reports `result` for the match of `round` between the two single-ranking teams.
-fn report(phase: &mut Phase, round: u32, result: MatchResult) {
+fn report(phase: &mut Division, round: u32, result: MatchResult) {
     let match_id = match_id(phase, round, &[0], &[1]);
     phase.report_match_result(match_id, result);
 }
@@ -107,7 +107,7 @@ fn the_earliest_round_lost_counts_whenever_it_is_reported() {
 #[test]
 fn a_bye_is_never_lost() {
     let phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(2)
             .add_metric(RoundOfFirstLossCalculator),
         vec![],

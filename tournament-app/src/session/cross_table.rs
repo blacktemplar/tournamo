@@ -15,10 +15,10 @@ impl Session {
     /// [`cross table`](Self::cross_table), if it has either; `None` before the start. It builds
     /// neither.
     pub fn chart(&self) -> Option<Chart> {
-        let phase = self.started_phase()?;
-        if plays_bracket(phase) {
+        let division = self.division()?;
+        if plays_bracket(division) {
             Some(Chart::Bracket)
-        } else if phase
+        } else if division
             .data()
             .matches()
             .values()
@@ -35,18 +35,18 @@ impl Session {
     /// or random rounds; `None` before the start, and for teams drawn anew each round, as in a
     /// Monster DYP.
     pub fn cross_table(&self) -> Option<CrossTable> {
-        let phase = self.started_phase()?;
-        if plays_bracket(phase) {
+        let division = self.division()?;
+        if plays_bracket(division) {
             return None;
         }
-        let data = phase.data();
+        let data = division.data();
         let mut pairs: Vec<(RankingId, RankingId, &_)> = Vec::new();
         for r#match in data.matches().values() {
             let (a, b) = pair(r#match)?;
             pairs.push((a, b, r#match));
         }
         // in the order of the standings
-        let ranked: Vec<_> = phase
+        let ranked: Vec<_> = division
             .standings()
             .iter()
             .map(|standing| standing.ranking())
@@ -65,14 +65,14 @@ impl Session {
             })
             .collect();
         for (a, b, r#match) in pairs {
-            let row = self.match_row(phase, r#match);
+            let row = self.match_row(division, r#match);
             let outcomes = match row.result {
                 None => [None; 2],
                 Some(MatchResult::AWins) => [Some(Outcome::Win), Some(Outcome::Loss)],
                 Some(MatchResult::BWins) => [Some(Outcome::Loss), Some(Outcome::Win)],
                 Some(MatchResult::Draw) => [Some(Outcome::Draw); 2],
             };
-            let score = view::top_score(phase, r#match);
+            let score = view::top_score(division, r#match);
             let scores = [score, score.map(|score| Sides::new(score.b, score.a))];
             let (a, b) = (index[&a], index[&b]);
             for (((team, against), outcome), score) in

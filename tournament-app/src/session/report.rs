@@ -1,7 +1,7 @@
 //! Reporting results and taking them back.
 
 use tournament_engine::{
-    CompetitionStateMachineExt as _, Match, MatchId, MatchResult, Part, Phase, PhaseId,
+    CompetitionStateMachineExt as _, Division, Match, MatchId, MatchResult, Part, PhaseId,
     ReportMatchResult,
     plugins::match_format::Template,
     transitions::{Change, UndoMatchResultError},
@@ -34,9 +34,9 @@ impl Session {
     /// Returns an error if the competition has not started, has no such match, or the match has a
     /// result already.
     pub fn result_form(&self, id: MatchId) -> Result<ResultForm, ReportError> {
-        let (phase, r#match) = self.open_match(id)?;
-        let format = phase.match_format();
-        let template = format.template(phase.data(), r#match);
+        let (division, r#match) = self.open_match(id)?;
+        let format = division.match_format();
+        let template = format.template(division.data(), r#match);
         // the match format may have changed since, e.g. with the phase edited
         let reopened = self
             .reopened
@@ -55,21 +55,21 @@ impl Session {
     /// # Errors
     /// Returns an error as [`Self::result_form`] does.
     pub fn result_template(&self, id: MatchId) -> Result<Template, ReportError> {
-        let (phase, r#match) = self.open_match(id)?;
-        Ok(phase.match_format().template(phase.data(), r#match))
+        let (division, r#match) = self.open_match(id)?;
+        Ok(division.match_format().template(division.data(), r#match))
     }
 
     /// The result of the finished match `id` as it was reported, to be shown, not changed: as a
     /// [`ResultForm`] shows it, a result reported against the values that suggest another one
     /// shown as chosen, with its warning. `None` if there is no such match or it is not finished.
     pub fn reported_result(&self, id: MatchId) -> Option<ResultView> {
-        let phase = self.started_phase()?;
-        let r#match = phase.data().matches().get(&id)?;
+        let division = self.division()?;
+        let r#match = division.data().matches().get(&id)?;
         if !r#match.is_finished() {
             return None;
         }
-        let format = phase.match_format();
-        let template = format.template(phase.data(), r#match);
+        let format = division.match_format();
+        let template = format.template(division.data(), r#match);
         let form = ResultForm::reported(
             id,
             dyn_clone::clone_box(format),
@@ -93,12 +93,12 @@ impl Session {
 
     /// Reports `contest` as what was entered for the match `id`, see [`Self::report_form`].
     fn report_contest(&mut self, id: MatchId, contest: Part) -> Result<Reported, ReportError> {
-        let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
-        if !phase.data().matches().contains_key(&id) {
+        let division = self.division().ok_or(ReportError::NotStarted)?;
+        if !division.data().matches().contains_key(&id) {
             return Err(ReportError::UnknownMatch);
         }
-        let phase_id = phase.id();
-        let matches_before = phase.data().matches().len();
+        let phase_id = self.phase().expect("a started phase").id();
+        let matches_before = division.data().matches().len();
         let report = ReportMatchResult::of(phase_id, id, contest).ok_or(ReportError::Undecided)?;
         self.history
             .apply_new(&mut self.machine, report.into())
@@ -109,9 +109,9 @@ impl Session {
                     _ => None,
                 })
             })?;
-        let phase = self.started_phase().expect("still started");
-        let matches = phase.data().matches();
-        let row = self.match_row(phase, &matches[&id]);
+        let division = self.division().expect("still started");
+        let matches = division.data().matches();
+        let row = self.match_row(division, &matches[&id]);
         Ok(Reported {
             row,
             new_matches: matches.len() - matches_before,
@@ -128,14 +128,14 @@ impl Session {
     /// result, or later results depend on it ([`UndoReportError::DependedOnBy`], naming every
     /// one).
     pub fn undo_report(&mut self, id: MatchId) -> Result<Reopened, UndoReportError> {
-        let phase = self.started_phase().ok_or(UndoReportError::NotStarted)?;
-        let Some(r#match) = phase.data().matches().get(&id) else {
+        let division = self.division().ok_or(UndoReportError::NotStarted)?;
+        let Some(r#match) = division.data().matches().get(&id) else {
             return Err(UndoReportError::UnknownMatch);
         };
-        let row = self.match_row(phase, r#match);
+        let row = self.match_row(division, r#match);
         let contest = r#match.contest().clone();
-        let phase_id = phase.id();
-        let matches_before = phase.data().matches().len();
+        let phase_id = self.phase().expect("a started phase").id();
+        let matches_before = division.data().matches().len();
         self.machine
             .undo_match_result(&mut self.history, phase_id, id)
             .map_err(|error| match error {
@@ -143,11 +143,7 @@ impl Session {
                 UndoMatchResultError::Rejected(_) => self.undo_refusal(phase_id, id),
             })?;
         self.reopened.insert(id, contest);
-        let matches = self
-            .started_phase()
-            .expect("still started")
-            .data()
-            .matches();
+        let matches = self.division().expect("still started").data().matches();
         Ok(Reopened {
             row,
             unscheduled: matches_before - matches.len(),
@@ -170,16 +166,16 @@ impl Session {
     /// The match `id` with what was reported for it, if it has a result, which undoing its report
     /// takes back.
     pub(super) fn reported_contest(&self, id: MatchId) -> Option<(MatchId, Part)> {
-        let r#match = self.started_phase()?.data().matches().get(&id)?;
+        let r#match = self.division()?.data().matches().get(&id)?;
         r#match
             .is_finished()
             .then(|| (id, r#match.contest().clone()))
     }
 
     /// The started phase and its match `id`, which has no result yet.
-    fn open_match(&self, id: MatchId) -> Result<(&Phase, &Match), ReportError> {
-        let phase = self.started_phase().ok_or(ReportError::NotStarted)?;
-        let r#match = phase
+    fn open_match(&self, id: MatchId) -> Result<(&Division, &Match), ReportError> {
+        let division = self.division().ok_or(ReportError::NotStarted)?;
+        let r#match = division
             .data()
             .matches()
             .get(&id)
@@ -187,6 +183,6 @@ impl Session {
         if r#match.is_finished() {
             return Err(ReportError::AlreadyFinished);
         }
-        Ok((phase, r#match))
+        Ok((division, r#match))
     }
 }

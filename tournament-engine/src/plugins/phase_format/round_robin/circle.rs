@@ -4,7 +4,7 @@ use itertools::Itertools;
 use vec1::vec1;
 
 use crate::{
-    entities::{Bye, NewMatch, PhaseData, RankingId},
+    entities::{Bye, DivisionData, NewMatch, RankingId},
     plugins::phase_format::Schedule,
 };
 
@@ -25,7 +25,7 @@ impl Circle {
     /// # Panics
     ///
     /// If `phase_data` has fewer than two rankings.
-    pub(super) fn new(phase_data: &PhaseData) -> Self {
+    pub(super) fn new(phase_data: &DivisionData) -> Self {
         let ranking_ids = phase_data.rankings().keys().copied().collect_vec();
         assert!(ranking_ids.len() > 1);
         let seats = ranking_ids.len().next_multiple_of(2);

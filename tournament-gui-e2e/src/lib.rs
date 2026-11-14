@@ -390,6 +390,13 @@ impl Gui {
         Ok(())
     }
 
+    /// Scrolls the field at `path` of the form of the phase into the middle of the window, as an
+    /// operator looks at the field they type into.
+    pub async fn scroll_to_field(&self, path: &str) -> WebDriverResult<()> {
+        let input = self.driver.query(By::Id(field_id(path))).first().await?;
+        self.scroll_to_middle(&input).await
+    }
+
     /// Types `text` into the field at `path` of the form of the phase in place of what it shows,
     /// and stays there, e.g. to press Enter next.
     pub async fn type_into(&self, path: &str, text: &str) -> WebDriverResult<()> {
@@ -616,7 +623,8 @@ impl Gui {
         Ok(())
     }
 
-    /// Waits until how the phase is played reads `answers`, the answers of its fields in order,
+    /// Waits until how the phase, or the phases one after the other, are played reads `answers`,
+    /// the answers of their fields in order,
     /// e.g. `"round robin"`, with the plugins of a list joined by commas, or each an answer of its
     /// own if any of them has fields.
     ///
@@ -627,7 +635,9 @@ impl Gui {
             .expect_texts(
                 By::Css(
                     "[aria-labelledby=phase] > dl > dd > .answer, \
-                     [aria-labelledby=phase] > dl > dd > ul > li > .answer",
+                     [aria-labelledby=phase] > dl > dd > ul > li > .answer, \
+                     #phases > li > dl > dd > .answer, \
+                     #phases > li > dl > dd > ul > li > .answer",
                 ),
                 answers,
             )
@@ -1031,6 +1041,122 @@ impl Gui {
     pub async fn expect_start_refusal(&self, text: Option<&str>) -> WebDriverResult<()> {
         self.page
             .expect_texts(By::Id("start-refusal"), text.as_slice())
+            .await
+    }
+
+    /// Opens the form of a further phase, in place before the start, else in a dialog, and names
+    /// the phase `name`; it starts out at every place of the phase before.
+    pub async fn open_new_phase(&self, name: &str) -> WebDriverResult<()> {
+        let button = self
+            .driver
+            .query(By::Css("#add-phase, button.add-phase"))
+            .and_displayed()
+            .first()
+            .await?;
+        self.click_in_sight(&button).await?;
+        self.type_phase_name(name).await
+    }
+
+    /// Types `name` as the name of the phase of the form shown.
+    pub async fn type_phase_name(&self, name: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::Id("field-name"))
+            .and_displayed()
+            .first()
+            .await?;
+        input.send_keys(name).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Enters `text` as the place `end`, `"from"` or `"to"`, of the source at `index` of the form
+    /// of the phase shown, and leaves the field, which takes it.
+    pub async fn enter_place(&self, index: usize, end: &str, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::Id(format!("source-{index}-{end}")))
+            .and_displayed()
+            .first()
+            .await?;
+        input.clear().await?;
+        input.send_keys(format!("{text}\t")).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Goes to the phase or the ranking whose link under the bar says `text`.
+    pub async fn go_to_phase(&self, text: &str) -> WebDriverResult<()> {
+        let by = By::XPath(format!(
+            "//nav[contains(@class,'phase-links')]//a[{}='{text}']",
+            without_isolation_marks("normalize-space(span[last()])")
+        ));
+        // the links are drawn anew as the phases change, e.g. right after a start, which may leave
+        // the link found stale before the click
+        let mut attempts = 3;
+        loop {
+            let link = self.driver.query(by.clone()).first().await?;
+            match self.click_in_sight(&link).await {
+                Err(error) if attempts > 1 && error.to_string().contains("stale") => attempts -= 1,
+                clicked => return clicked,
+            }
+        }
+    }
+
+    /// Waits until the links under the bar name `names`, the phases and last the ranking, the
+    /// one shown being `current`; none for no names.
+    ///
+    /// # Panics
+    /// Panics if they do not in time.
+    pub async fn expect_phase_links(&self, names: &[&str], current: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".phase-links a > span:last-child"), names)
+            .await?;
+        if !names.is_empty() {
+            self.page
+                .expect_texts(
+                    By::Css(".phase-links a[aria-current=page] > span:last-child"),
+                    &[current],
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Waits until the bar shows `phase` after the name of the competition, or nothing for `None`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_bar_phase(&self, phase: Option<&str>) -> WebDriverResult<()> {
+        let shown = phase.map(|phase| format!("· {phase}"));
+        self.page
+            .expect_texts(
+                By::Css(".bar-phase"),
+                &shown.as_deref().into_iter().collect::<Vec<_>>(),
+            )
+            .await
+    }
+
+    /// Waits until the rows of the standings say where they go on to, best first: a marker's text,
+    /// what a screen reader gets and then what shows, e.g. `"goes on to Final\nFinal"`, or `""`
+    /// for a row going nowhere.
+    ///
+    /// # Panics
+    /// Panics if they do not in time.
+    pub async fn expect_going_on(&self, markers: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#standing-list tbody td.goes-on"), markers)
+            .await
+    }
+
+    /// Waits until the ranking of the competition lists `rows`, best first, each its place, names
+    /// and the phase reached, e.g. `"1 Alice Final"`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_ranking(&self, rows: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#ranking-list tbody tr"), rows)
             .await
     }
 
@@ -1719,7 +1845,7 @@ impl Gui {
     pub async fn expect_phase_scale(&self, text: Option<&str>) -> WebDriverResult<()> {
         self.page
             .expect_texts(
-                By::Css("#phase-scale[role=status]:not(:empty)"),
+                By::Css(".phase-scale[role=status]:not(:empty)"),
                 &Vec::from_iter(text),
             )
             .await

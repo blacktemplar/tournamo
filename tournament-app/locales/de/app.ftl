@@ -9,8 +9,25 @@ error-entrant-removed-after-start = das Turnier hat begonnen, daher kann kein Te
 error-unknown-format = es gibt kein Format „{ $format }“
 error-format-misconfigured = das Format ist fehlerhaft: { $reason }
 error-invalid-phase = so kann die Phase nicht gespielt werden; das Formular zeigt, was zu ändern ist
-error-phase-already-added = das Turnier hat schon eine Phase, und mehr als eine wird nicht unterstützt
-error-phase-added-after-start = das Turnier hat begonnen, daher kann keine Phase mehr hinzugefügt werden
+error-no-sources = wähle, woher die Phase ihre Teilnehmer nimmt
+error-source-empty = ein Bereich von Plätzen endet, bevor er beginnt
+error-sources-overlap = zwei Bereiche von Plätzen der Phase überschneiden sich
+error-source-taken = { $phase } nimmt manche dieser Plätze schon
+error-registration-closed = das Turnier hat begonnen, daher kann eine Phase nicht mehr allein aus der Anmeldung nehmen
+error-place-not-taken = gib einen Platz ein: eine ganze Zahl ab 1
+error-no-such-phase = diese Phase gibt es nicht
+error-phase-started-already = die Phase hat schon begonnen
+error-phase-starts-with-competition = die Phase nimmt ihre Teilnehmer aus der Anmeldung und beginnt mit dem Turnier
+error-phase-waiting = die Phase kann beginnen, sobald ihre Teilnehmer feststehen: { $phases }
+error-phase-removed-after-start = die Phase hat begonnen, daher kann sie nicht mehr entfernt werden
+error-phase-in-use = { $count ->
+        [one] { $phases } nimmt Teilnehmer aus dieser Phase; entferne zuerst diese
+       *[other] { $phases } nehmen Teilnehmer aus dieser Phase; entferne zuerst diese
+    }
+error-later-phase-started = { $phase } hat mit den Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
+warning-cut-through-tie = { $favoured } und { $others } teilen sich Platz { $rank } in { $phase }; das Los reiht { $favoured } vor
+phase-unnamed = { $number } · { $format }
+phase-progress = { $phase }: { $played } von { $matches } Spielen gespielt
 error-no-phase = das Turnier hat noch keine Phase
 error-result-does-not-fit = { $count ->
         [one] so geändert spielt die Phase Spiel { $numbers } nicht, das schon ein Ergebnis hat; um sie so zu ändern, muss zuerst Spiel { $numbers } wieder geöffnet werden

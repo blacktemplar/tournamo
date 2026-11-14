@@ -26,6 +26,7 @@ mod icons;
 mod install;
 mod notices;
 mod phase;
+mod phases;
 mod play;
 mod result;
 mod setup;
@@ -43,7 +44,7 @@ use tournament_browser::{channel::Events, indexed_db::IndexedDb, persistence};
 use tournament_engine::{MatchResult, uuid::Uuid};
 
 use crate::{
-    competition::{Competition, View},
+    competition::{Competition, Place, ShownPhase},
     competitions::Competitions,
     help::Help,
     i18n::t,
@@ -55,7 +56,7 @@ use crate::{
 const COMPONENTS_THEME: Asset = asset!("/assets/dx-components-theme.css");
 /// The page's own style, by screen (`assets/style/`), in the order of the cascade: where two rules
 /// of the same specificity meet, the later one wins.
-const STYLES: [Asset; 16] = [
+const STYLES: [Asset; 17] = [
     asset!("/assets/style/tokens.css"),
     asset!("/assets/style/page.css"),
     asset!("/assets/style/controls.css"),
@@ -72,6 +73,7 @@ const STYLES: [Asset; 16] = [
     asset!("/assets/style/bracket.css"),
     asset!("/assets/style/standings.css"),
     asset!("/assets/style/cross-table.css"),
+    asset!("/assets/style/phases.css"),
 ];
 
 /// The database of IndexedDB the competitions are stored in.
@@ -95,9 +97,9 @@ enum Screen {
     /// The list of competitions, for a fragment naming nothing, which it says.
     Unknown,
     Help,
-    /// A competition, `#<key>`, and what of it is shown after the start, `#<key>/<view>` (see
-    /// [`View::in_fragment`]), the matches without a view.
-    Competition(CompetitionKey, View),
+    /// A competition, `#<key>`, and what of it is shown after the start, `#<key>/<place>` (see
+    /// [`Place::in_fragment`]), the matches of the phase shown first without a place.
+    Competition(CompetitionKey, Place),
 }
 
 impl Screen {
@@ -114,14 +116,9 @@ impl Screen {
         if fragment == HELP || fragment.starts_with(&format!("{HELP}-")) {
             return Self::Help;
         }
-        let (key, view) = fragment.split_once('/').unwrap_or((fragment, ""));
-        let view = if view.is_empty() {
-            Some(View::Matches)
-        } else {
-            View::in_fragment(view)
-        };
-        match (Uuid::parse_str(key), view) {
-            (Ok(key), Some(view)) => Self::Competition(CompetitionKey::new(key), view),
+        let (key, place) = fragment.split_once('/').unwrap_or((fragment, ""));
+        match (Uuid::parse_str(key), Place::in_fragment(place)) {
+            (Ok(key), Some(place)) => Self::Competition(CompetitionKey::new(key), place),
             _ => Self::Unknown,
         }
     }
@@ -145,8 +142,9 @@ struct Page {
     warning_dismissed: Signal<bool>,
     /// Whether the browser offers to install the page as an app.
     installable: Signal<bool>,
-    /// The name of the competition shown, which the page is headed with.
-    shown: Signal<Option<String>>,
+    /// The name of the competition shown, which the page is headed with, and after it what of it
+    /// is shown, where the competition has several phases.
+    shown: Signal<Option<(String, Option<ShownPhase>)>>,
     /// What the page shows.
     screen: Signal<Screen>,
 }
@@ -294,12 +292,20 @@ fn Header() -> Element {
         _ if help => (tr.get("help-title"), tr.get("help")),
         // a title is plain text, where tabs and windows show the marks isolating a variable as
         // boxes
-        Some(name) => (
+        Some((name, _)) => (
             t!(tr, "competition-title", name = name.as_str()).replace(['\u{2068}', '\u{2069}'], ""),
             name.clone(),
         ),
         None => (tr.get("app-title"), tr.get("app-title")),
     };
+    // so that it is clear where a result goes once the links to the phases scrolled away
+    let phase = shown
+        .as_ref()
+        .and_then(|(_, phase)| phase.as_ref())
+        .map(|phase| match phase {
+            ShownPhase::Phase(name) => tr.phase_name(name),
+            ShownPhase::Ranking => tr.get("ranking"),
+        });
     rsx! {
         document::Title { "{title}" }
         header { class: "bar",
@@ -310,7 +316,16 @@ fn Header() -> Element {
                 }
             }
             // the whole name under the pointer, where the bar cuts it with "…"
-            h1 { title: "{heading}", "{heading}" }
+            // one element whether a phase is named or not, so that it stays as the phase changes
+            h1 { title: match &phase {
+                    Some(phase) => format!("{heading} · {phase}"),
+                    None => heading.clone(),
+                },
+                "{heading}"
+                if let Some(phase) = &phase {
+                    span { class: "bar-phase", " · {phase}" }
+                }
+            }
         }
     }
 }

@@ -707,3 +707,41 @@ fn a_competition_of_several_phases_round_trips_as_a_snapshot() {
     assert_eq!(serde_json::to_value(json).unwrap(), expected);
     assert_eq!(serde_json::to_value(binary).unwrap(), expected);
 }
+
+/// Ranked by nothing, everyone of the qualification shares the first place; the lot takes two of
+/// them on, and the two it leaves behind share the place after the final's.
+#[test]
+fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on() {
+    let mut machine = registered(4);
+    let unranked = PhasePluginsBuilder::new().build().unwrap();
+    add(&mut machine, AddPhase::new(phase(QUALIFICATION), unranked));
+    add(
+        &mut machine,
+        phase_of(
+            phase(UPPER),
+            vec1![places(phase(QUALIFICATION), 1, Some(2))],
+            knockout(),
+        ),
+    );
+    machine.apply_new(StartCompetition.into()).unwrap();
+    play_out(&mut machine, phase(QUALIFICATION));
+    start(&mut machine, phase(UPPER));
+    play_out(&mut machine, phase(UPPER));
+
+    let places = machine
+        .current()
+        .ranking()
+        .iter()
+        .map(|placed| (placed.place.get(), placed.phase))
+        .collect_vec();
+
+    assert_eq!(
+        places,
+        [
+            (1, phase(UPPER)),
+            (2, phase(UPPER)),
+            (3, phase(QUALIFICATION)),
+            (3, phase(QUALIFICATION)),
+        ]
+    );
+}

@@ -1,11 +1,11 @@
 //! Undoing and redoing the actions of the session.
 
 use tournament_engine::{
-    CompetitionTransition, Phase, ReportMatchResult,
+    CompetitionTransition, ReportMatchResult,
     undoable_state_machine::{LogEntry, LogEntryKind, RedoLastError, TransitionId, UndoLastError},
 };
 
-use super::Session;
+use super::{Session, UndonePhase};
 use crate::{
     error::{RedoError, UndoError},
     view::{Action, MatchRow},
@@ -40,12 +40,18 @@ impl Session {
         };
         // read before the undo, which removes the phase, or the result
         let phase = match self.applied(id) {
-            Some(CompetitionTransition::AddPhase(_)) => self.phase().map(Phase::config),
+            Some(CompetitionTransition::AddPhase(added)) => {
+                self.phase(added.id()).map(|phase| UndonePhase {
+                    name: phase.name().map(str::to_owned),
+                    sources: phase.sources().clone(),
+                    config: phase.config(),
+                })
+            }
             _ => None,
         };
         let reported = match self.applied(id) {
             Some(CompetitionTransition::ReportMatchResult(report)) => {
-                self.reported_contest(report.match_id())
+                self.reported_contest(report.phase_id(), report.match_id())
             }
             _ => None,
         };
@@ -79,7 +85,7 @@ impl Session {
         let reported = match self.machine.entry(id).map(LogEntry::kind) {
             Some(LogEntryKind::Undo(target)) => match self.applied(*target) {
                 Some(CompetitionTransition::ReportMatchResult(report)) => {
-                    self.reported_contest(report.match_id())
+                    self.reported_contest(report.phase_id(), report.match_id())
                 }
                 _ => None,
             },
@@ -113,13 +119,15 @@ impl Session {
             .entry(id)
             .expect("an action is an entry of the log");
         let reported = |report: &ReportMatchResult| {
-            let phase = self.division().expect("a match is reported once started");
-            let r#match = &phase.data().matches()[&report.match_id()];
+            let (index, division, r#match) = self
+                .match_of(report.phase_id(), report.match_id())
+                .expect("the match of a report is scheduled");
             MatchRow {
                 result: Some(report.match_result()),
-                ..self.match_row(phase, r#match)
+                ..self.match_row(report.phase_id(), index, division, r#match)
             }
         };
+        let started = |phase| self.name_of_phase(phase).expect("a phase started is added");
         match entry.kind() {
             LogEntryKind::Apply(transition) => match transition {
                 CompetitionTransition::AddEntrant(added) => {
@@ -128,9 +136,13 @@ impl Session {
                 CompetitionTransition::RemoveEntrant(removed) => {
                     Action::RemoveEntrant(self.entrant_row(&removed.entrant_id()))
                 }
-                CompetitionTransition::AddPhase(_) => Action::AddPhase,
-                CompetitionTransition::StartCompetition(_)
-                | CompetitionTransition::StartPhase(_) => Action::Start,
+                CompetitionTransition::AddPhase(added) => {
+                    Action::AddPhase(self.added_phase_name(id, added))
+                }
+                CompetitionTransition::StartCompetition(_) => Action::Start,
+                CompetitionTransition::StartPhase(start) => {
+                    Action::StartPhase(started(start.phase_id()))
+                }
                 CompetitionTransition::ReportMatchResult(report) => {
                     Action::Report(reported(report))
                 }
@@ -138,12 +150,22 @@ impl Session {
                     unreachable!("the seed is applied outside the history")
                 }
             },
-            LogEntryKind::Replace { .. } => Action::EditPhase,
+            LogEntryKind::Replace { target, with } => match with {
+                CompetitionTransition::AddPhase(added) => {
+                    Action::EditPhase(self.added_phase_name(*target, added))
+                }
+                _ => unreachable!("the only replacement a session makes edits a phase"),
+            },
             LogEntryKind::Undo(target) => match self.applied(*target) {
                 Some(CompetitionTransition::ReportMatchResult(report)) => {
                     Action::Reopen(reported(report))
                 }
-                _ => unreachable!("the only undo a session takes as an action reopens a match"),
+                Some(CompetitionTransition::AddPhase(added)) => {
+                    Action::RemovePhase(self.added_phase_name(*target, added))
+                }
+                _ => unreachable!(
+                    "the only undo a session takes as an action reopens a match or removes a phase"
+                ),
             },
         }
     }

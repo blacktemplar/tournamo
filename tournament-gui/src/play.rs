@@ -9,15 +9,16 @@ use dioxus::prelude::*;
 use tournament_app::{
     i18n::{Message as _, PluginText, Text, Translator},
     view::{
-        ListedMatch, MatchRow, Medal, RoundSummary, RoundsView, Shown, StandingCell, TypedEntry,
+        Advancing, ListedMatch, MatchRow, Medal, RoundSummary, RoundsView, Shown, StandingCell,
+        TypedEntry,
     },
 };
-use tournament_engine::{MatchId, MatchResult};
+use tournament_engine::{MatchId, MatchResult, PhaseId};
 
 use crate::{
     announcement::Announcement,
     capitalized,
-    competition::{Ctx, Finished},
+    competition::{Ctx, PhaseFinished},
     focus::{move_focus, use_focus},
     i18n::t,
     icons,
@@ -53,7 +54,10 @@ pub fn Rounds() -> Element {
     } else {
         String::new()
     };
-    let Some(view) = ctx.session.read().rounds_view(chosen(), &typed) else {
+    let Some(of) = ctx.matches_of() else {
+        return rsx! {};
+    };
+    let Some(view) = ctx.session.read().rounds_view(of, chosen(), &typed) else {
         return rsx! {};
     };
     let heading_round = view.shown_round().cloned();
@@ -304,7 +308,10 @@ fn ResultEntry(
             onsubmit: move |event| {
                 event.prevent_default();
                 let entered = entry.peek().clone();
-                match ctx.try_act(|session| session.report_entered(&entered)) {
+                let Some(of) = ctx.matches_of() else {
+                    return;
+                };
+                match ctx.try_act(|session| session.report_entered(of, &entered)) {
                     Ok(reported) => {
                         ctx.announce(Announcement::Reported(reported));
                         entry.set(String::new());
@@ -314,7 +321,13 @@ fn ResultEntry(
                             remember(RESULT_ENTRY_USED, true);
                         }
                         // the entry is gone with the last result, and the focus with it
-                        if ctx.session.peek().winners().is_some() {
+                        let session = ctx.session.peek();
+                        let finished = ctx
+                            .phase()
+                            .and_then(|phase| session.competition().phase(&phase))
+                            .is_some_and(|phase| phase.is_finished());
+                        drop(session);
+                        if finished {
                             focus.set(Some(Focus::Heading));
                         }
                     }
@@ -477,7 +490,7 @@ fn ReportButtons(
     after_report: Focus,
 ) -> Element {
     let ctx = use_context::<Ctx>();
-    let id = row.id;
+    let (phase, id) = (row.phase, row.id);
     let on_mounted = use_focus(focus, Focus::Report(id));
     // only reported by the tab that changes the competition
     let disabled = !ctx.changes();
@@ -485,7 +498,7 @@ fn ReportButtons(
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
     let report = move |result| {
         move |_| {
-            if let Some(reported) = ctx.act(move |session| session.report(id, result)) {
+            if let Some(reported) = ctx.act(move |session| session.report(phase, id, result)) {
                 ctx.announce(Announcement::Reported(reported));
                 move_focus(focus, after_report);
             }
@@ -530,7 +543,7 @@ const REOPEN_DELAY_MS: f64 = 600.0;
 #[component]
 fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
-    let id = row.id;
+    let (phase, id) = (row.phase, row.id);
     // the button shows where the result was reported, on a phone where the draw was, so right
     // after a report it takes no click, which would be the second of a double tap; shown later
     // (another round, a reload), it takes one at once
@@ -601,7 +614,7 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
                 disabled,
                 aria_label: t!(tr, "reopen-match", number = row.number),
                 onclick: move |_| {
-                    if let Some(reopened) = ctx.act(move |session| session.undo_report(id)) {
+                    if let Some(reopened) = ctx.act(move |session| session.undo_report(phase, id)) {
                         ctx.announce(Announcement::Reopened(reopened));
                         move_focus(focus, Focus::Report(id));
                     }
@@ -615,7 +628,7 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
 /// The rank of a place with a medal, on a disc in the medal's colour, said to screen readers by the
 /// medal's name before it.
 #[component]
-fn MedalOf(medal: Medal, rank: u32) -> Element {
+pub fn MedalOf(medal: Medal, rank: u32) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let (class, name) = match medal {
@@ -634,16 +647,20 @@ fn MedalOf(medal: Medal, rank: u32) -> Element {
 #[component]
 pub fn Standings() -> Element {
     let ctx = use_context::<Ctx>();
-    let Some(standings) = ctx.session.read().standings() else {
+    let Some(division) = ctx.division() else {
+        return rsx! {};
+    };
+    let Some(standings) = ctx.session.read().standings(division) else {
         return rsx! {};
     };
     // the settings of the calculators, e.g. the points for a win
     let form = ctx
         .session
         .read()
-        .phase_form_to_edit()
+        .phase_form_to_edit(division.phase)
         .ok()
         .map(|form| form.view());
+    let phases = ctx.session.read().phases();
     let tr = ctx.translator.read();
     let headers: Vec<_> = standings
         .columns
@@ -678,13 +695,24 @@ pub fn Standings() -> Element {
             (header, about, id)
         })
         .collect();
-    // above the standings rather than above the matches, which it would push down below the tap
-    // that finished them
-    let winners = ctx.session.read().winners();
-    rsx! {
-        if let Some(winners) = winners {
-            Finished { winners }
+    // the phases the rows go on to, which the legend names
+    let mut going_to: Vec<(PhaseId, Advancing)> = Vec::new();
+    for advance in standings.rows.iter().filter_map(|row| row.advances) {
+        if !going_to.contains(&(advance.to, advance.how)) {
+            going_to.push((advance.to, advance.how));
         }
+    }
+    let name_of = |phase: PhaseId| {
+        phases
+            .iter()
+            .find(|overview| overview.id == phase)
+            .map(|overview| tr.phase_name(&overview.name))
+            .unwrap_or_default()
+    };
+    rsx! {
+        // above the standings rather than above the matches, which it would push down below the
+        // tap that finished them
+        PhaseFinished {}
         section { class: "card", aria_labelledby: "standings",
             h2 { id: "standings", {tr.get("standings")} }
             // scrolls sideways if its columns do not fit, the names staying in sight
@@ -700,6 +728,9 @@ pub fn Standings() -> Element {
                         tr {
                             th { class: "rank", scope: "col", {tr.get("rank")} }
                             th { class: "name", scope: "col", {tr.get("name")} }
+                            if !going_to.is_empty() {
+                                th { scope: "col", {tr.get("goes-on")} }
+                            }
                             // named by the header alone, which the cells are read with, rather
                             // than with the toggletip's button too; what ranks first right after
                             // the names, the matches played last
@@ -731,6 +762,16 @@ pub fn Standings() -> Element {
                                     }
                                 }
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
+                                if !going_to.is_empty() {
+                                    td { class: "goes-on",
+                                        if let Some(advance) = row.advances {
+                                            AdvanceMarker {
+                                                how: advance.how,
+                                                to: name_of(advance.to),
+                                            }
+                                        }
+                                    }
+                                }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
                                     td { class: "metric",
                                         {
@@ -749,6 +790,53 @@ pub fn Standings() -> Element {
                             }
                         }
                     }
+                }
+            }
+            if !going_to.is_empty() {
+                ul { class: "legend",
+                    for (to, how) in going_to {
+                        li {
+                            AdvanceMarker { how, to: name_of(to) }
+                            " "
+                            {
+                                let key = match how {
+                                    Advancing::ByPlace => "advances-by-place",
+                                    Advancing::Compared => "advances-compared",
+                                };
+                                tr.text(&Text::new(key).with("phase", name_of(to)))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The marker of a row of the standings going on to the phase `to`, in a shape and a text of its
+/// own for each way it advances, see [`Advancing`].
+#[component]
+fn AdvanceMarker(how: Advancing, to: String) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let (class, text) = match how {
+        Advancing::ByPlace => (
+            "advance by-place",
+            t!(tr, "advances-to", phase = to.as_str()),
+        ),
+        Advancing::Compared => (
+            "advance compared",
+            t!(tr, "advances-to-for-now", phase = to.as_str()),
+        ),
+    };
+    rsx! {
+        span { class, title: "{text}",
+            icons::ArrowRight {}
+            span { class: "visually-hidden", "{text}" }
+            span { class: "advance-to", aria_hidden: "true",
+                "{to}"
+                if how == Advancing::Compared {
+                    "?"
                 }
             }
         }

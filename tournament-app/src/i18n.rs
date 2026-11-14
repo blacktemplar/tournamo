@@ -28,7 +28,10 @@ use tournament_engine::{
     },
 };
 
-use crate::{form::FormField, view::StageName};
+use crate::{
+    form::FormField,
+    view::{PhaseName, StageName},
+};
 
 /// A language the app speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -152,6 +155,19 @@ pub enum Arg {
     },
     /// The labels of plugins, each as [`Self::Plugin`] by id and English label, joined by commas.
     Plugins(Vec<(&'static str, &'static str)>),
+    /// What a phase is called, see [`Translator::phase_name`].
+    Phase(PhaseName),
+    /// What phases are called, joined by commas.
+    Phases(Vec<PhaseName>),
+    /// Phases with the matches each played of those it has: `Group phase (12 of 18 matches)`,
+    /// joined by commas.
+    Waiting(Vec<(PhaseName, usize, usize)>),
+}
+
+impl From<PhaseName> for Arg {
+    fn from(value: PhaseName) -> Self {
+        Self::Phase(value)
+    }
 }
 
 impl From<String> for Arg {
@@ -325,6 +341,28 @@ impl Translator {
                             .collect::<Vec<_>>()
                             .join(", "),
                     ),
+                    Arg::Phase(phase) => FluentValue::from(self.phase_name(phase)),
+                    Arg::Phases(phases) => FluentValue::from(
+                        phases
+                            .iter()
+                            .map(|phase| self.phase_name(phase))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ),
+                    Arg::Waiting(waiting) => FluentValue::from(
+                        waiting
+                            .iter()
+                            .map(|(phase, played, matches)| {
+                                self.text(
+                                    &Text::new("phase-progress")
+                                        .with("phase", phase.clone())
+                                        .with("played", *played)
+                                        .with("matches", *matches),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ),
                 },
             );
         }
@@ -360,6 +398,27 @@ impl Translator {
     /// What `message` says, see [`Self::text`].
     pub fn message(&self, message: &(impl Message + ?Sized)) -> String {
         self.text(&message.text())
+    }
+
+    /// What the phase `phase` is called: the name it was given, or else its number and the label
+    /// of its format, e.g. "2 · Single elimination".
+    pub fn phase_name(&self, phase: &PhaseName) -> String {
+        match &phase.name {
+            Some(name) => name.clone(),
+            None => self.text(
+                &Text::new("phase-unnamed")
+                    .with("number", phase.number)
+                    // standing alone after the number, the label is capitalized
+                    .with(
+                        "format",
+                        capitalized(&self.plugin(
+                            phase.format.id,
+                            PluginText::Label,
+                            phase.format.label,
+                        )),
+                    ),
+            ),
+        }
     }
 
     /// `text` of the plugin `id` in the language, or else `english`, what the plugin's code says.
@@ -584,6 +643,15 @@ fn messages(
         }
     }
     messages
+}
+
+/// `label` with its first letter in upper case.
+fn capitalized(label: &str) -> String {
+    let mut chars = label.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// The messages of this crate and of `resources` in `language`.

@@ -334,8 +334,8 @@ fn applying_suggestions_replaces_custom_settings_and_resumes_following() {
 #[test]
 fn editing_an_existing_phase_keeps_its_settings_until_suggestions_are_applied() {
     let mut session = Session::new("cup");
-    session.add_phase(new_form().draft()).unwrap();
-    let mut form = session.phase_form_to_edit().unwrap();
+    session.add_phase(&new_form()).unwrap();
+    let mut form = session.phase_form_to_edit(session.first()).unwrap();
     assert!(!form.view().following_suggestions);
     let before = form.draft().answers().clone();
     form.choose(&path("format"), Some(SingleElimination::ID))
@@ -732,9 +732,9 @@ fn a_phase_is_added_and_edited_through_its_form() {
     form.choose(&path("format"), Some(MonsterDyp::ID)).unwrap();
     form.enter(&path("format.rounds"), "7").unwrap();
 
-    session.add_phase(form.draft()).unwrap();
+    session.add_phase(&form).unwrap();
 
-    let mut form = session.phase_form_to_edit().unwrap();
+    let mut form = session.phase_form_to_edit(session.first()).unwrap();
     let view = form.view();
     assert_eq!(chosen(&view, "format"), MonsterDyp::ID);
     assert!(matches!(
@@ -742,10 +742,10 @@ fn a_phase_is_added_and_edited_through_its_form() {
         Input::Integer { value: Some(7), .. }
     ));
     form.enter(&path("format.rounds"), "3").unwrap();
-    assert!(session.edit_phase(form.draft()).unwrap());
+    assert!(session.edit_phase(session.first(), &form).unwrap());
     assert!(matches!(
         field(
-            &session.phase_form_to_edit().unwrap().view(),
+            &session.phase_form_to_edit(session.first()).unwrap().view(),
             "format.rounds"
         )
         .input,
@@ -760,7 +760,7 @@ fn the_form_of_a_new_phase_starts_out_at_the_phase_whose_adding_was_undone() {
     let mut form = session.phase_form().unwrap();
     form.choose(&path("format"), Some(MonsterDyp::ID)).unwrap();
     form.enter(&path("format.rounds"), "7").unwrap();
-    session.add_phase(form.draft()).unwrap();
+    session.add_phase(&form).unwrap();
 
     session.undo().unwrap();
 

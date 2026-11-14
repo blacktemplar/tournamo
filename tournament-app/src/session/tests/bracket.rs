@@ -40,18 +40,16 @@ fn columns(section: &BracketSection) -> Vec<(String, Vec<[String; 2]>)> {
 
 #[test]
 fn only_a_started_knockout_has_a_bracket() {
-    assert_eq!(Given::new().started().bracket(), None, "a round robin");
+    let round_robin = Given::new().started();
     assert_eq!(
-        Given::new().format(SingleElimination::ID).added().bracket(),
-        None
+        round_robin.bracket(round_robin.only()),
+        None,
+        "a round robin"
     );
-    assert!(
-        Given::new()
-            .format(SingleElimination::ID)
-            .started()
-            .bracket()
-            .is_some()
-    );
+    let added = Given::new().format(SingleElimination::ID).added();
+    assert_eq!(added.bracket(added.only()), None);
+    let started = Given::new().format(SingleElimination::ID).started();
+    assert!(started.bracket(started.only()).is_some());
 }
 
 /// The final and the match for third place, below it, are in the bracket before they are
@@ -61,7 +59,7 @@ fn the_bracket_of_a_knockout_shows_who_meets_whom() {
     let mut session = Given::new().format(SingleElimination::ID).started();
     let first = matches(&session)[0].clone();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
 
     let parts = bracket.sections.iter().map(|section| section.part);
     assert_eq!(parts.collect::<Vec<_>>(), [BracketPart::Knockout]);
@@ -105,9 +103,11 @@ fn the_bracket_of_a_knockout_shows_who_meets_whom() {
     );
     assert_eq!(lines(&knockout[1]), [(true, None)]);
 
-    session.report(first.id, MatchResult::AWins).unwrap();
+    session
+        .report(session.first(), first.id, MatchResult::AWins)
+        .unwrap();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
     let the_final = &bracket.sections[0].columns[1].pairings[0];
     assert_eq!(entry(&the_final.sides[0]), names(&first.a).join(""));
     assert_eq!(
@@ -130,18 +130,18 @@ fn a_knockout_numbers_its_matches_by_the_bracket() {
         .format(SingleElimination::ID)
         .started();
 
-    session.report_entered("2 1").unwrap();
+    session.report_entered(session.all(), "2 1").unwrap();
 
-    let second_round = session.round(round(2)).unwrap();
+    let second_round = session.round(session.all(), round(2)).unwrap();
     let scheduled: Vec<_> = second_round.matches.iter().map(|row| row.number).collect();
     assert_eq!(
         scheduled,
         [4],
         "the second semifinal, though scheduled first"
     );
-    session.report_entered("4 1").unwrap();
+    session.report_entered(session.all(), "4 1").unwrap();
     assert_eq!(
-        session.round(round(2)).unwrap().matches[0].result,
+        session.round(session.all(), round(2)).unwrap().matches[0].result,
         Some(MatchResult::AWins)
     );
 }
@@ -155,7 +155,7 @@ fn a_side_waiting_for_a_pairing_not_scheduled_yet_names_the_number_of_its_match(
         .format(SingleElimination::ID)
         .started();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
 
     let semifinals = &bracket.sections[0].columns[1].pairings;
     assert_eq!(
@@ -186,7 +186,7 @@ fn a_side_waiting_for_a_pairing_not_scheduled_yet_names_the_number_of_its_match(
 fn the_bracket_of_a_double_elimination_shows_where_the_losers_drop() {
     let session = Given::new().format(DoubleElimination::ID).started();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
 
     let parts = bracket.sections.iter().map(|section| section.part);
     assert_eq!(
@@ -236,7 +236,7 @@ fn a_pairing_decided_by_a_bye_is_left_out_of_its_column() {
         .format(DoubleElimination::ID)
         .started();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
 
     let winners = &bracket.sections[0].columns;
     assert_eq!(winners[0].rows, 2, "the rows of the second round");
@@ -272,7 +272,7 @@ fn a_knockout_with_many_byes_is_half_as_high() {
         .format(SingleElimination::ID)
         .started();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
 
     let first = &bracket.sections[0].columns[0];
     assert_eq!((first.rows, first.pairings.len()), (8, 4));
@@ -294,7 +294,7 @@ fn a_bye_is_passed_through_to_whoever_plays_it() {
         .format(DoubleElimination::ID)
         .started();
 
-    let bracket = session.bracket().unwrap();
+    let bracket = session.bracket(session.only()).unwrap();
 
     let losers = &bracket.sections[1].columns;
     let stages = losers
@@ -321,13 +321,13 @@ fn a_bye_is_passed_through_to_whoever_plays_it() {
 /// Reports side A as the winner of every match playable, as long as there is one, except
 /// `exception`, a stage in English whose match side B wins.
 fn play_out(session: &mut Session, exception: &str) {
-    while let Some(row) = session.playable().into_iter().next() {
+    while let Some(row) = session.playable(session.all()).into_iter().next() {
         let result = if english(row.stage.clone()).as_deref() == Some(exception) {
             MatchResult::BWins
         } else {
             MatchResult::AWins
         };
-        session.report(row.id, result).unwrap();
+        session.report(session.first(), row.id, result).unwrap();
     }
 }
 
@@ -336,7 +336,7 @@ fn play_out(session: &mut Session, exception: &str) {
 #[test]
 fn the_reset_of_the_grand_final_is_only_if_needed_until_that_is_decided() {
     let reset = |session: &Session| {
-        let bracket = session.bracket().unwrap();
+        let bracket = session.bracket(session.only()).unwrap();
         bracket.sections[2].columns[1].pairings[0].clone()
     };
     let mut session = Given::new().format(DoubleElimination::ID).started();
@@ -347,7 +347,7 @@ fn the_reset_of_the_grand_final_is_only_if_needed_until_that_is_decided() {
     let not_needed = reset(&session);
     assert!(!not_needed.only_if_needed);
     assert_eq!(not_needed.unplayed, Some(Unplayed::NotNeeded));
-    let grand_final = &session.bracket().unwrap().sections[2].columns[0].pairings[0];
+    let grand_final = &session.bracket(session.only()).unwrap().sections[2].columns[0].pairings[0];
     assert_eq!(grand_final.line_out, None);
 
     let mut session = Given::new().format(DoubleElimination::ID).started();

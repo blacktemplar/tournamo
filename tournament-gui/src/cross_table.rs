@@ -12,7 +12,10 @@ use crate::{competition::Ctx, i18n::t, result::ResultDetails, team_name};
 #[component]
 pub fn CrossTable() -> Element {
     let ctx = use_context::<Ctx>();
-    let Some(table) = ctx.session.read().cross_table() else {
+    let Some(table) = ctx
+        .division()
+        .and_then(|division| ctx.session.read().cross_table(division))
+    else {
         return rsx! {};
     };
     let tr = ctx.translator.read();

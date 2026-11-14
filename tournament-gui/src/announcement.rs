@@ -4,7 +4,7 @@
 
 use tournament_app::{
     i18n::Translator,
-    view::{Action, EntrantRow, Reopened, Reported},
+    view::{Action, EntrantRow, PhaseName, Reopened, Reported},
 };
 
 use crate::{capitalized, i18n::t, result_text, result_with_scores, team_name, winners_text};
@@ -24,6 +24,10 @@ pub enum Announcement {
     EditedPhase(usize),
     /// The start, with the number of matches it scheduled.
     Started(usize),
+    /// A phase removed.
+    RemovedPhase,
+    /// A phase started on its own, as it is called, with the number of matches it scheduled.
+    StartedPhase(Option<PhaseName>, usize),
     Reported(Reported),
     Reopened(Reopened),
     Undone(Action),
@@ -57,6 +61,16 @@ impl Announcement {
                 sentences.join(" ")
             }
             Self::Started(matches) => t!(tr, "announce-started", count = *matches),
+            Self::RemovedPhase => tr.get("announce-removed-phase"),
+            Self::StartedPhase(phase, matches) => t!(
+                tr,
+                "announce-started-phase",
+                phase = phase
+                    .as_ref()
+                    .map(|phase| tr.phase_name(phase))
+                    .unwrap_or_default(),
+                count = *matches,
+            ),
             Self::Reported(reported) => {
                 let row = &reported.row;
                 let mut sentences = vec![t!(
@@ -67,6 +81,9 @@ impl Announcement {
                 )];
                 if reported.new_matches > 0 {
                     sentences.push(t!(tr, "announce-new-matches", count = reported.new_matches));
+                }
+                if reported.finished_phase && reported.winners.is_none() {
+                    sentences.push(tr.get("announce-phase-finished"));
                 }
                 if let Some(winners) = &reported.winners {
                     sentences.push(tr.get("announce-all-finished"));
@@ -108,9 +125,13 @@ fn action_text(tr: &Translator, action: &Action) -> String {
             "action-remove-entrant",
             name = team_name(tr, std::slice::from_ref(entrant)),
         ),
-        Action::AddPhase => tr.get("action-add-phase"),
-        Action::EditPhase => tr.get("action-edit-phase"),
+        Action::AddPhase(phase) => t!(tr, "action-add-phase", phase = tr.phase_name(phase)),
+        Action::EditPhase(phase) => t!(tr, "action-edit-phase", phase = tr.phase_name(phase)),
+        Action::RemovePhase(phase) => {
+            t!(tr, "action-remove-phase", phase = tr.phase_name(phase))
+        }
         Action::Start => tr.get("action-start"),
+        Action::StartPhase(phase) => t!(tr, "action-start-phase", phase = tr.phase_name(phase)),
         Action::Report(row) => t!(
             tr,
             "action-report",

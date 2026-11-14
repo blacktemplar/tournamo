@@ -8,14 +8,17 @@ use super::*;
 #[test]
 fn the_cross_table_shows_the_match_of_every_two_teams() {
     let mut session = Given::new().started();
+    let added = Given::new().added();
     assert!(
-        Given::new().added().cross_table().is_none(),
+        added.cross_table(added.only()).is_none(),
         "before the start"
     );
     let first = numbered(&session, 1);
-    session.report(first, MatchResult::AWins).unwrap();
+    session
+        .report(session.first(), first, MatchResult::AWins)
+        .unwrap();
 
-    let table = session.cross_table().unwrap();
+    let table = session.cross_table(session.only()).unwrap();
 
     let teams: Vec<_> = table
         .rows
@@ -23,7 +26,7 @@ fn the_cross_table_shows_the_match_of_every_two_teams() {
         .map(|row| names(&row.entrants).join(""))
         .collect();
     let standings: Vec<_> = session
-        .standings()
+        .standings(session.only())
         .unwrap()
         .rows
         .iter()
@@ -79,10 +82,10 @@ fn the_cross_table_shows_the_match_of_every_two_teams() {
 fn a_draw_adds_a_half_to_the_cross_table() {
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::Draw)
+        .report(session.first(), numbered(&session, 1), MatchResult::Draw)
         .unwrap();
 
-    let table = session.cross_table().unwrap();
+    let table = session.cross_table(session.only()).unwrap();
 
     let halves = table
         .rows
@@ -99,9 +102,11 @@ fn the_cross_table_has_the_games_won_from_the_side_of_the_row() {
     let mut session = Given::new()
         .match_format(PluginConfig::of::<BestOf>().with("games", 3))
         .started();
-    session.report_entered("1 21-17 19-21 21-15").unwrap();
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
 
-    let table = session.cross_table().unwrap();
+    let table = session.cross_table(session.only()).unwrap();
 
     let mut played: Vec<_> = table
         .rows
@@ -126,9 +131,9 @@ fn the_cross_table_has_the_score_of_a_match_from_the_side_of_the_row() {
     let mut session = Given::new()
         .match_format(PluginConfig::of::<Scored>())
         .started();
-    session.report_entered("1 21-17").unwrap();
+    session.report_entered(session.all(), "1 21-17").unwrap();
 
-    let table = session.cross_table().unwrap();
+    let table = session.cross_table(session.only()).unwrap();
 
     let mut played: Vec<_> = table
         .rows
@@ -147,11 +152,11 @@ fn the_cross_table_has_the_score_of_a_match_from_the_side_of_the_row() {
     );
     let mut unscored = Given::new().started();
     unscored
-        .report(numbered(&unscored, 1), MatchResult::AWins)
+        .report(unscored.first(), numbered(&unscored, 1), MatchResult::AWins)
         .unwrap();
     assert!(
         unscored
-            .cross_table()
+            .cross_table(unscored.only())
             .unwrap()
             .rows
             .iter()
@@ -168,16 +173,17 @@ fn a_cross_table_is_only_of_teams_that_stay_the_same_without_a_bracket() {
     for format in [SingleElimination::ID, DoubleElimination::ID, MonsterDyp::ID] {
         let session = Given::new().format(format).started();
 
-        assert!(session.cross_table().is_none(), "{format}");
+        assert!(session.cross_table(session.only()).is_none(), "{format}");
     }
     let session = Given::new().format(RandomRounds::ID).started();
-    assert!(session.cross_table().is_some());
+    assert!(session.cross_table(session.only()).is_some());
 }
 
 /// The chart a phase shows is the one it has, without building it.
 #[test]
 fn the_chart_is_the_bracket_or_else_the_cross_table() {
-    assert_eq!(Given::new().added().chart(), None, "before the start");
+    let added = Given::new().added();
+    assert_eq!(added.chart(added.only()), None, "before the start");
     for format in [
         RoundRobin::ID,
         RandomRounds::ID,
@@ -187,11 +193,13 @@ fn the_chart_is_the_bracket_or_else_the_cross_table() {
     ] {
         let session = Given::new().format(format).started();
 
-        let has = if session.bracket().is_some() {
+        let has = if session.bracket(session.only()).is_some() {
             Some(Chart::Bracket)
         } else {
-            session.cross_table().map(|_| Chart::CrossTable)
+            session
+                .cross_table(session.only())
+                .map(|_| Chart::CrossTable)
         };
-        assert_eq!(session.chart(), has, "{format}");
+        assert_eq!(session.chart(session.only()), has, "{format}");
     }
 }

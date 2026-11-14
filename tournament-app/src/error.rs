@@ -4,7 +4,7 @@
 //! Each variant is something the operator is told, as a [`Message`] in the operator's language;
 //! its `Display` says that message in English.
 
-use std::fmt::Display;
+use std::{fmt::Display, num::NonZeroU32};
 
 use plugin_factory::{config::ConfigError, draft::Issue};
 use thiserror::Error;
@@ -15,7 +15,8 @@ use tournament_engine::{
 
 use crate::{
     file::Format,
-    i18n::{Message, Text, english},
+    i18n::{Arg, Message, Text, english},
+    view::{EntrantRow, PhaseName},
 };
 
 /// Why an entrant was not added.
@@ -67,10 +68,31 @@ pub enum AddPhaseError {
     /// implied plugin provides. What is wrong is what the [`FormView`](crate::form::FormView) of
     /// the draft shows at its fields, in the operator's language.
     Invalid(Vec<Issue>),
-    PhaseAlreadyAdded,
-    Started,
+    #[error(transparent)]
+    Sources(#[from] SourcesError),
     /// The engine refused the phase for a reason this crate does not know.
     Rejected(TransitionError),
+}
+
+/// Why where a phase takes its entrants from was refused, as the
+/// [`FormView`](crate::form::FormView) shows it too.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("{}", english(self))]
+pub enum SourcesError {
+    /// The phase takes entrants from nowhere.
+    NoSources,
+    /// A place typed is not a place, see [`PhaseForm::enter_place`].
+    ///
+    /// [`PhaseForm::enter_place`]: crate::form::PhaseForm::enter_place
+    NotTaken,
+    /// A source ends before it starts.
+    EmptyRange,
+    /// A source takes a place another source takes: one of the same phase if `None`, else one of
+    /// the phase named.
+    Overlap(Option<PhaseName>),
+    /// The competition has started, so a phase taking entrants from the registration alone would
+    /// never start.
+    RegistrationClosed,
 }
 
 /// The competition has no phase yet.
@@ -91,8 +113,59 @@ pub enum EditPhaseError {
     /// were reported, e.g. since its format does not schedule them; reopening them allows the
     /// edit.
     ResultDoesNotFit(Vec<usize>),
+    #[error(transparent)]
+    Sources(#[from] SourcesError),
+    /// A phase that takes entrants from this one has started; undoing its start allows the edit.
+    PhaseStarted(PhaseName),
     /// The edited phase does not fit another change made after the phase was added.
     DoesNotFit(TransitionError),
+}
+
+/// Why a phase did not start, or a warning about starting it, see
+/// [`Session::start_phase_refusal`](crate::session::Session::start_phase_refusal).
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum StartPhaseError {
+    NoSuchPhase,
+    Started,
+    /// The phase takes entrants from the registration alone, so it starts with the competition.
+    WithTheCompetition,
+    CompetitionNotStarted,
+    /// Phases the phase takes entrants from are not finished: each with the matches it has played
+    /// of those it has.
+    Waiting(Vec<(PhaseName, usize, usize)>),
+    /// The format of the phase needs at least this many entrants, more than its sources take.
+    TooFewForFormat(usize),
+    /// Not a refusal but a warning: the phase starts all the same. A cut of its sources goes
+    /// through rows sharing a rank, so the lot decides who of them is taken.
+    CutThroughTie(Vec<Tie>),
+    /// The engine refused the start for a reason this crate does not know.
+    Rejected(TransitionError),
+}
+
+/// Rows of the standings of a phase sharing a rank that a cut between places goes through, see
+/// [`StartPhaseError::CutThroughTie`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tie {
+    /// The phase whose standings the rows are of.
+    pub phase: PhaseName,
+    pub rank: NonZeroU32,
+    /// The teams of the rank before the cut, which the lot puts ahead.
+    pub favoured: Vec<Vec<EntrantRow>>,
+    /// The teams of the rank after the cut.
+    pub others: Vec<Vec<EntrantRow>>,
+}
+
+/// Why a phase was not removed.
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum RemovePhaseError {
+    NoSuchPhase,
+    Started,
+    /// These phases take entrants from it.
+    InUse(Vec<PhaseName>),
+    /// The engine refused the removal for a reason this crate does not know.
+    Rejected(TransitionError),
 }
 
 /// Why the competition did not start.
@@ -181,6 +254,9 @@ pub enum UndoReportError {
     /// this one, e.g. that of the final the undone semifinal decided the participants of; they
     /// have to be undone first.
     DependedOnBy(Vec<usize>),
+    /// A phase taking entrants from the phase of the match has started; undoing its start allows
+    /// the undo.
+    PhaseStarted(PhaseName),
 }
 
 /// The numbers of matches as a message lists them: `5, 7, 9`.
@@ -254,13 +330,22 @@ pub enum ImportError {
     Damaged(#[source] serde_json::Error),
 }
 
+/// Why the engine refused the sources of a phase, see [`Refusal::Sources`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SourcesRefusal {
+    Empty,
+    Overlap(Option<tournament_engine::PhaseId>),
+    RegistrationClosed,
+}
+
 /// Why the engine refused an action, where the app says it in words of its own: the engine errors
 /// the app knows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Refusal {
     Started,
     UnknownEntrant,
-    PhaseAlreadyAdded,
+    /// A source the app checks before, see [`SourcesError`]; carries what the engine says.
+    Sources(SourcesRefusal),
     NoPhase,
     TooFewEntrants,
     MatchFinished,
@@ -276,8 +361,17 @@ impl Refusal {
         if error.is::<engine::RemoveEntrantError>() {
             return Some(Self::UnknownEntrant);
         }
-        if error.is::<engine::AddPhaseError>() {
-            return Some(Self::PhaseAlreadyAdded);
+        if let Some(error) = error.downcast_ref::<engine::AddPhaseError>() {
+            return match error {
+                engine::AddPhaseError::EmptyRange(_) => Some(Self::Sources(SourcesRefusal::Empty)),
+                engine::AddPhaseError::Overlap { phase, .. } => {
+                    Some(Self::Sources(SourcesRefusal::Overlap(*phase)))
+                }
+                engine::AddPhaseError::RegistrationClosed => {
+                    Some(Self::Sources(SourcesRefusal::RegistrationClosed))
+                }
+                engine::AddPhaseError::PhaseExists | engine::AddPhaseError::UnknownPhase(_) => None,
+            };
         }
         if let Some(error) = error.downcast_ref() {
             return Some(match error {
@@ -345,11 +439,84 @@ impl Message for AddPhaseError {
     fn text(&self) -> Text {
         match self {
             Self::Invalid(_) => Text::new("error-invalid-phase"),
-            Self::PhaseAlreadyAdded => Text::new("error-phase-already-added"),
-            Self::Started => Text::new("error-phase-added-after-start"),
+            Self::Sources(error) => error.text(),
             Self::Rejected(error) => rejected(error),
         }
     }
+}
+
+impl Message for SourcesError {
+    fn text(&self) -> Text {
+        match self {
+            Self::NoSources => Text::new("error-no-sources"),
+            Self::NotTaken => Text::new("error-value-not-taken"),
+            Self::EmptyRange => Text::new("error-source-empty"),
+            Self::Overlap(None) => Text::new("error-sources-overlap"),
+            Self::Overlap(Some(phase)) => {
+                Text::new("error-source-taken").with("phase", phase.clone())
+            }
+            Self::RegistrationClosed => Text::new("error-registration-closed"),
+        }
+    }
+}
+
+impl Message for StartPhaseError {
+    fn text(&self) -> Text {
+        match self {
+            Self::NoSuchPhase => Text::new("error-no-such-phase"),
+            Self::Started => Text::new("error-phase-started-already"),
+            Self::WithTheCompetition => Text::new("error-phase-starts-with-competition"),
+            Self::CompetitionNotStarted => Text::new("error-not-started"),
+            Self::Waiting(waiting) => Text::new("error-phase-waiting").with(
+                "phases",
+                Arg::Waiting(
+                    waiting
+                        .iter()
+                        .map(|(phase, played, matches)| (phase.clone(), *played, *matches))
+                        .collect(),
+                ),
+            ),
+            Self::TooFewForFormat(needed) => {
+                Text::new("error-too-few-for-format").with("count", *needed)
+            }
+            Self::CutThroughTie(ties) => {
+                let tie = ties.first().expect("a tie at a cut is one at least");
+                Text::new("warning-cut-through-tie")
+                    .with("phase", tie.phase.clone())
+                    .with("rank", tie.rank)
+                    .with("favoured", names(&tie.favoured))
+                    .with("others", names(&tie.others))
+            }
+            Self::Rejected(error) => rejected(error),
+        }
+    }
+}
+
+impl Message for RemovePhaseError {
+    fn text(&self) -> Text {
+        match self {
+            Self::NoSuchPhase => Text::new("error-no-such-phase"),
+            Self::Started => Text::new("error-phase-removed-after-start"),
+            Self::InUse(phases) => Text::new("error-phase-in-use")
+                .with("count", phases.len())
+                .with("phases", Arg::Phases(phases.clone())),
+            Self::Rejected(error) => rejected(error),
+        }
+    }
+}
+
+/// The names of `teams`, each by the names of its entrants: `Alice & Bob, Carol`.
+fn names(teams: &[Vec<EntrantRow>]) -> String {
+    teams
+        .iter()
+        .map(|team| {
+            team.iter()
+                .map(|entrant| entrant.name.as_deref().unwrap_or("?"))
+                .collect::<Vec<_>>()
+                .join(" & ")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 impl Message for NoPhase {
@@ -366,6 +533,10 @@ impl Message for EditPhaseError {
             Self::ResultDoesNotFit(numbers) => Text::new("error-result-does-not-fit")
                 .with("count", numbers.len())
                 .with("numbers", listed(numbers)),
+            Self::Sources(error) => error.text(),
+            Self::PhaseStarted(phase) => {
+                Text::new("error-later-phase-started").with("phase", phase.clone())
+            }
             Self::DoesNotFit(error) => {
                 Text::new("error-phase-change-does-not-fit").with("reason", error.to_string())
             }
@@ -451,6 +622,9 @@ impl Message for UndoReportError {
             Self::DependedOnBy(numbers) => Text::new("error-result-depended-on-by")
                 .with("count", numbers.len())
                 .with("numbers", listed(numbers)),
+            Self::PhaseStarted(phase) => {
+                Text::new("error-later-phase-started").with("phase", phase.clone())
+            }
         }
     }
 }

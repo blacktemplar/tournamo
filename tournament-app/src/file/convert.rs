@@ -774,11 +774,15 @@ mod tests {
             session.add_entrant(name).unwrap();
         }
         let draft = session.phase_draft(SingleElimination::ID).unwrap();
-        session.add_phase(&draft).unwrap();
+        session
+            .add_phase(&crate::session::tests::form(draft.clone()))
+            .unwrap();
         session.start().unwrap();
         for _ in 0..2 {
-            let semifinal = session.playable()[0].id;
-            session.report(semifinal, MatchResult::AWins).unwrap();
+            let semifinal = session.playable(session.all())[0].id;
+            session
+                .report(session.first(), semifinal, MatchResult::AWins)
+                .unwrap();
         }
         session
     }
@@ -791,11 +795,15 @@ mod tests {
             session.add_entrant(name).unwrap();
         }
         let draft = session.phase_draft(DoubleElimination::ID).unwrap();
-        session.add_phase(&draft).unwrap();
+        session
+            .add_phase(&crate::session::tests::form(draft.clone()))
+            .unwrap();
         session.start().unwrap();
         for _ in 0..3 {
-            let next = session.playable()[0].id;
-            session.report(next, MatchResult::BWins).unwrap();
+            let next = session.playable(session.all())[0].id;
+            session
+                .report(session.first(), next, MatchResult::BWins)
+                .unwrap();
         }
         session
     }
@@ -1023,7 +1031,9 @@ mod tests {
             session.add_entrant(name).unwrap();
         }
         let draft = session.phase_draft(SingleElimination::ID).unwrap();
-        session.add_phase(&draft).unwrap();
+        session
+            .add_phase(&crate::session::tests::form(draft.clone()))
+            .unwrap();
         let competition = serde_json::to_value(session.competition()).unwrap();
         let mut held = competition.clone();
         as_of_format_4(&mut held);

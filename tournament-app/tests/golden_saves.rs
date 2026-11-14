@@ -23,12 +23,14 @@ use serde::de::IgnoredAny;
 use serde_json::Value;
 use tournament_app::{
     file::{self, File},
+    form::PhaseForm,
     result_form::ResultForm,
     session::Session,
     storage::{MemoryStorage, Storage as _},
+    view::{DivisionRef, MatchesOf},
 };
 use tournament_engine::{
-    Competition, EnteredValue, MatchResult, Sides,
+    Competition, EnteredValue, MatchResult, PhaseId, Sides,
     plugins::{
         match_format::{BestOf, Scored},
         metrics_calculator::{
@@ -42,6 +44,21 @@ use tournament_engine::{
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
+
+/// What the generator plays: the first phase, the only one of each save.
+trait FirstPhase {
+    fn first(&self) -> PhaseId;
+
+    fn all(&self) -> MatchesOf {
+        MatchesOf::phase(self.first())
+    }
+}
+
+impl FirstPhase for Session {
+    fn first(&self) -> PhaseId {
+        *self.competition().phases().keys().next().unwrap()
+    }
+}
 
 /// Every golden save, as `(<version>/<name>, file, competition)`.
 macro_rules! saves {
@@ -174,17 +191,22 @@ fn every_golden_save_shows() {
         session.entrants();
         session.actions();
         session.progress();
-        session.playable();
-        session.standings();
-        session.winners();
-        session.bracket();
-        session.cross_table();
-        for summary in session.rounds() {
-            assert!(
-                session.round(summary.round).is_some(),
-                "{save} lists round {} but does not show it",
-                summary.round
-            );
+        session.ranking();
+        for phase in session.phases() {
+            let all = MatchesOf::phase(phase.id);
+            let only = DivisionRef::first(phase.id);
+            session.playable(all);
+            session.standings(only);
+            session.winners(only);
+            session.bracket(only);
+            session.cross_table(only);
+            for summary in session.rounds(all) {
+                assert!(
+                    session.round(all, summary.round).is_some(),
+                    "{save} lists round {} but does not show it",
+                    summary.round
+                );
+            }
         }
     }
 }
@@ -276,14 +298,18 @@ fn setup(session: &mut Session) {
     add_phase(session, RoundRobin::ID);
     session.undo().unwrap();
     add_phase(session, SingleElimination::ID);
-    let mut draft = session.phase_draft_to_edit().unwrap();
+    let mut draft = session.phase_draft_to_edit(session.first()).unwrap();
     draft
         .set(
             &ConfigPath::ROOT.field("ranking"),
             vec![PluginConfig::of::<MoreWins>()],
         )
         .unwrap();
-    assert!(session.edit_phase(&draft).unwrap());
+    assert!(
+        session
+            .edit_phase(session.first(), &PhaseForm::new(draft))
+            .unwrap()
+    );
 }
 
 /// An odd field, so with byes, all played with draws, a result reopened and reported anew, an edit
@@ -297,22 +323,28 @@ fn round_robin(session: &mut Session) {
         &[MatchResult::AWins, MatchResult::Draw, MatchResult::BWins],
         4,
     );
-    let mut draft = session.phase_draft_to_edit().unwrap();
+    let mut draft = session.phase_draft_to_edit(session.first()).unwrap();
     draft
         .set(
             &ConfigPath::ROOT.field("ranking"),
             vec![PluginConfig::of::<MoreWins>()],
         )
         .unwrap();
-    assert!(session.edit_phase(&draft).unwrap());
+    assert!(
+        session
+            .edit_phase(session.first(), &PhaseForm::new(draft))
+            .unwrap()
+    );
     play(
         session,
         &[MatchResult::BWins, MatchResult::Draw, MatchResult::AWins],
         usize::MAX,
     );
-    let first = session.round(round(1)).unwrap().matches[0].id;
-    session.undo_report(first).unwrap();
-    session.report(first, MatchResult::Draw).unwrap();
+    let first = session.round(session.all(), round(1)).unwrap().matches[0].id;
+    session.undo_report(session.first(), first).unwrap();
+    session
+        .report(session.first(), first, MatchResult::Draw)
+        .unwrap();
     session.undo().unwrap();
     session.redo().unwrap();
 }
@@ -323,11 +355,15 @@ fn random_rounds(session: &mut Session) {
     add_phase(session, RandomRounds::ID);
     session.start().unwrap();
     play(session, &[MatchResult::AWins, MatchResult::Draw], 3);
-    let mut draft = session.phase_draft_to_edit().unwrap();
+    let mut draft = session.phase_draft_to_edit(session.first()).unwrap();
     draft
         .set(&ConfigPath::ROOT.field("format").field("rounds"), 7_u32)
         .unwrap();
-    assert!(session.edit_phase(&draft).unwrap());
+    assert!(
+        session
+            .edit_phase(session.first(), &PhaseForm::new(draft))
+            .unwrap()
+    );
     play(session, &[MatchResult::BWins, MatchResult::AWins], 6);
 }
 
@@ -349,9 +385,11 @@ fn double_elimination(session: &mut Session) {
     add_phase(session, DoubleElimination::ID);
     session.start().unwrap();
     play(session, &[MatchResult::AWins], 2);
-    let first = session.round(round(1)).unwrap().matches[0].id;
-    session.undo_report(first).unwrap();
-    session.report(first, MatchResult::BWins).unwrap();
+    let first = session.round(session.all(), round(1)).unwrap().matches[0].id;
+    session.undo_report(session.first(), first).unwrap();
+    session
+        .report(session.first(), first, MatchResult::BWins)
+        .unwrap();
     play(
         session,
         &[MatchResult::BWins, MatchResult::AWins, MatchResult::AWins],
@@ -393,11 +431,11 @@ fn scored(session: &mut Session) {
             PluginConfig::of::<Scored>().with("winning_score", 10),
         )
         .unwrap();
-    session.add_phase(&draft).unwrap();
+    session.add_phase(&PhaseForm::new(draft)).unwrap();
     session.start().unwrap();
     play_scores(session, &[&[(10, 7)], &[(3, 10)], &[(10, 10)]], 4);
-    let open = session.playable()[0].id;
-    let mut form = session.result_form(open).unwrap();
+    let open = session.playable(session.all())[0].id;
+    let mut form = session.result_form(session.first(), open).unwrap();
     enter_scores(&mut form, &[(2, 10)]);
     form.choose(&[], Some(MatchResult::AWins));
     session.report_form(&form).unwrap();
@@ -415,15 +453,17 @@ fn best_of(session: &mut Session) {
             PluginConfig::of::<BestOf>().with("games", 3),
         )
         .unwrap();
-    session.add_phase(&draft.with_defaults().unwrap()).unwrap();
+    session
+        .add_phase(&PhaseForm::new(draft.with_defaults().unwrap()))
+        .unwrap();
     session.start().unwrap();
     play_scores(
         session,
         &[&[(21, 17), (21, 9)], &[(15, 21), (21, 19), (18, 21)]],
         2,
     );
-    let first = session.round(round(1)).unwrap().matches[0].id;
-    session.undo_report(first).unwrap();
+    let first = session.round(session.all(), round(1)).unwrap().matches[0].id;
+    session.undo_report(session.first(), first).unwrap();
     play_scores(session, &[&[(21, 23), (21, 15), (21, 19)]], 1);
     play_scores(session, &[&[(21, 11), (30, 29)]], usize::MAX);
 }
@@ -460,7 +500,7 @@ fn games(session: &mut Session) {
                 .with("winning_score", 11),
         )
         .unwrap();
-    session.add_phase(&draft).unwrap();
+    session.add_phase(&PhaseForm::new(draft)).unwrap();
     session.start().unwrap();
     play_scores(
         session,
@@ -477,10 +517,10 @@ fn games(session: &mut Session) {
 /// turn, each the scores of a match or of its games.
 fn play_scores(session: &mut Session, played: &[&[(u16, u16)]], matches: usize) {
     for scores in played.iter().cycle().take(matches) {
-        let Some(row) = session.playable().into_iter().next() else {
+        let Some(row) = session.playable(session.all()).into_iter().next() else {
             return;
         };
-        let mut form = session.result_form(row.id).unwrap();
+        let mut form = session.result_form(session.first(), row.id).unwrap();
         enter_scores(&mut form, scores);
         session.report_form(&form).unwrap();
     }
@@ -506,16 +546,16 @@ fn enter(session: &mut Session, names: &[&str]) -> Vec<tournament_engine::Entran
 /// Adds a phase of `format` with the defaults of its form.
 fn add_phase(session: &mut Session, format: &str) {
     let draft = session.phase_draft(format).unwrap();
-    session.add_phase(&draft).unwrap();
+    session.add_phase(&PhaseForm::new(draft)).unwrap();
 }
 
 /// Reports up to `matches` of the playable matches, one at a time, with `results` in turn.
 fn play(session: &mut Session, results: &[MatchResult], matches: usize) {
     for result in results.iter().cycle().take(matches) {
-        let Some(row) = session.playable().into_iter().next() else {
+        let Some(row) = session.playable(session.all()).into_iter().next() else {
             return;
         };
-        session.report(row.id, *result).unwrap();
+        session.report(session.first(), row.id, *result).unwrap();
     }
 }
 

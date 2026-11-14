@@ -31,14 +31,14 @@ use crate::{competition::Ctx, i18n::t, play::Focus};
 #[component]
 pub fn ResultOf(row: MatchRow, focus: Signal<Option<Focus>>, after_report: Focus) -> Element {
     let ctx = use_context::<Ctx>();
-    let id = row.id;
-    let mut form = use_signal(|| ctx.session.peek().result_form(id).ok());
+    let (phase, id) = (row.phase, row.id);
+    let mut form = use_signal(|| ctx.session.peek().result_form(phase, id).ok());
     // what the result looks like, changing only with the match format, e.g. when the phase is
     // edited; what was entered for another one is dropped then
-    let template = use_memo(move || ctx.session.read().result_template(id).ok());
+    let template = use_memo(move || ctx.session.read().result_template(phase, id).ok());
     use_effect(move || {
         if form.peek().as_ref().map(ResultForm::template) != template.read().as_ref() {
-            form.set(ctx.session.peek().result_form(id).ok());
+            form.set(ctx.session.peek().result_form(phase, id).ok());
         }
     });
     let quick = form.read().as_ref().and_then(ResultForm::quick_entry);

@@ -226,35 +226,68 @@ impl Competition {
             .report_match(match_id, entered, &mut self.highest_number);
     }
 
+    /// The place in the competition the overall standings of the phase `phase_id` start at, see
+    /// [`Self::ranking`]; `None` if there is no such phase.
+    pub fn first_place(&self, phase_id: &PhaseId) -> Option<NonZeroU32> {
+        let phase = self.phase(phase_id)?;
+        phase
+            .sources()
+            .iter()
+            .map(|source| {
+                let of = match source.of() {
+                    SourceOf::Registration => Some(NonZeroU32::MIN),
+                    SourceOf::Phase(from) => self.first_place(&from),
+                };
+                of.and_then(|of| of.checked_add(source.from().get() - 1))
+            })
+            .min()
+            .flatten()
+    }
+
     /// The place in the competition every entrant of a started phase has as things stand, best
     /// first. An entrant is placed by the latest started phase they are in, at the place its
-    /// overall standings start at plus their rank there: a phase starts at the smallest place its
-    /// sources start at, a source of the registration at its first place, a source of a phase at
-    /// that phase's start plus its first place, less one.
+    /// overall standings start at (see [`Self::first_place`]) plus their rank there, less one: a
+    /// phase starts at the smallest place its sources start at, a source of the registration at
+    /// its first place, a source of a phase at that phase's start plus its first place, less one.
+    /// Where a cut of a source goes through rows sharing a rank, each side of the cut shares the
+    /// place of its first row, so that the rows the lot left behind are placed after those it
+    /// took on.
     ///
     /// Final once every phase is finished. Sources leaving places between them that no phase
     /// takes leave gaps between the places; entrants of such places are placed by the phase they
     /// stopped in, and entrants in no started phase are not placed at all.
     pub fn ranking(&self) -> Vec<Placed> {
-        let mut starts: Map<PhaseId, u32> = Map::default();
         // (place, unique place, index of the phase, placed) of every entrant placed so far
         let mut placed: Map<EntrantId, (u32, u32, usize, Placed)> = Map::default();
         for (index, phase) in self.phases.values().enumerate() {
-            let start = phase
-                .sources()
-                .iter()
-                .map(|source| {
-                    let of = match source.of() {
-                        SourceOf::Registration => 1,
-                        SourceOf::Phase(from) => starts.get(&from).copied().unwrap_or(1),
-                    };
-                    of + source.from().get() - 1
+            let start = self
+                .first_place(&phase.id())
+                .expect("the phase exists")
+                .get();
+            // the phase taking each unique rank on, if any
+            let taker = |unique_rank: NonZeroU32| {
+                self.phases.values().find_map(|taker| {
+                    taker
+                        .sources()
+                        .iter()
+                        .any(|source| {
+                            source.of() == SourceOf::Phase(phase.id()) && source.takes(unique_rank)
+                        })
+                        .then(|| taker.id())
                 })
-                .min()
-                .expect("a phase has a source");
-            starts.insert(phase.id(), start);
-            for standing in phase.standings().iter() {
-                let place = start + standing.rank().get() - 1;
+            };
+            let standings = phase.standings();
+            // the first unique rank of each rank and taker, by which the rows of a rank on one
+            // side of a cut are placed
+            let mut first_of: Map<(NonZeroU32, Option<PhaseId>), u32> = Map::default();
+            for standing in standings.iter() {
+                first_of
+                    .entry((standing.rank(), taker(standing.unique_rank())))
+                    .or_insert(standing.unique_rank().get());
+            }
+            for standing in standings.iter() {
+                let rank = first_of[&(standing.rank(), taker(standing.unique_rank()))];
+                let place = start + rank - 1;
                 for entrant in standing.ranking().entrants() {
                     placed.insert(
                         *entrant,

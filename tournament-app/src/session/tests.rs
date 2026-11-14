@@ -10,6 +10,7 @@ use std::{
 use plugin_factory::{
     PluginType,
     config::{Path as ConfigPath, PluginConfig},
+    draft::Draft,
 };
 use tournament_engine::{
     EnteredValue, EntrantId, MatchId, MatchResult, PhasePlugins, Score, Sides,
@@ -30,14 +31,16 @@ use crate::{
     error::{
         AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
         PhaseDraftError, RedoError, RemoveEntrantError, RenameEntrantError, ReportEnteredError,
-        ReportError, StartError, UndoError, UndoReportError,
+        ReportError, SourcesError, StartError, UndoError, UndoReportError,
     },
     file::{self},
+    form::PhaseForm,
     storage::{CompetitionKey, Listing, MemoryStorage, Progress, Save, Storage, Stored},
     view::{
         Action, BracketColumn, BracketEntry, BracketLine, BracketPart, BracketSection,
-        BracketSource, Chart, Column, Count, EntrantRow, MatchRow, Medal, NameSearch, Outcome,
-        Plugin, RoundSummary, RoundsView, Scale, Shown, StageName, StandingCell, Unplayed,
+        BracketSource, Chart, Column, Count, DivisionRef, EntrantRow, MatchRow, MatchesOf, Medal,
+        NameSearch, Outcome, Plugin, RoundSummary, RoundsView, Scale, Shown, StageName,
+        StandingCell, Unplayed,
     },
 };
 
@@ -46,11 +49,39 @@ mod cross_table;
 mod entrants;
 mod entry;
 mod phase;
+mod phases;
 mod report;
 mod scale;
 mod storage;
 mod undo;
 mod views;
+
+impl Session {
+    /// The first phase, the only one of most tests.
+    pub(crate) fn first(&self) -> PhaseId {
+        *self
+            .competition()
+            .phases()
+            .keys()
+            .next()
+            .expect("the competition has a phase")
+    }
+
+    /// The matches of the first phase.
+    pub(crate) fn all(&self) -> MatchesOf {
+        MatchesOf::phase(self.first())
+    }
+
+    /// The only division of the first phase.
+    pub(crate) fn only(&self) -> DivisionRef {
+        DivisionRef::first(self.first())
+    }
+}
+
+/// A form of the phase `draft` configures, the first of its competition.
+pub(crate) fn form(draft: Draft<PhasePlugins>) -> PhaseForm {
+    PhaseForm::new(draft)
+}
 
 /// The output of `future`, which a [`MemoryStorage`] finishes right away.
 #[track_caller]
@@ -110,7 +141,7 @@ impl Given {
                 .and_then(|draft| draft.with_defaults())
                 .unwrap();
         }
-        session.add_phase(&draft).unwrap();
+        session.add_phase(&form(draft)).unwrap();
         session
     }
 
@@ -131,9 +162,9 @@ fn names(entrants: &[EntrantRow]) -> Vec<&str> {
 /// Every match of the phase, round by round.
 fn matches(session: &Session) -> Vec<MatchRow> {
     session
-        .rounds()
+        .rounds(session.all())
         .iter()
-        .flat_map(|summary| session.round(summary.round).unwrap().matches)
+        .flat_map(|summary| session.round(session.all(), summary.round).unwrap().matches)
         .collect()
 }
 
@@ -226,8 +257,9 @@ fn what_can_be_done_follows_the_competition() {
     session.add_entrant("Alice").unwrap();
     assert!(session.actions().remove_entrant && session.actions().undo);
     let draft = session.phase_draft(RoundRobin::ID).unwrap();
-    session.add_phase(&draft).unwrap();
-    assert!(!session.actions().add_phase && session.actions().edit_phase);
+    session.add_phase(&form(draft)).unwrap();
+    // a competition is played in as many phases as are added
+    assert!(session.actions().add_phase && session.actions().edit_phase);
     assert!(!session.actions().start, "one entrant is too few");
     session.add_entrant("Bob").unwrap();
     assert!(session.actions().start);
@@ -238,7 +270,7 @@ fn what_can_be_done_follows_the_competition() {
     assert!(!actions.add_entrant && !actions.remove_entrant && !actions.start);
 
     session
-        .report(numbered(&session, 1), MatchResult::Draw)
+        .report(session.first(), numbered(&session, 1), MatchResult::Draw)
         .unwrap();
     assert!(!session.actions().report, "the only match has its result");
     session.undo().unwrap();

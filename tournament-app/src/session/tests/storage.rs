@@ -57,7 +57,7 @@ fn a_saved_competition_loads_as_it_was_saved_without_anything_to_undo() {
     let storage = MemoryStorage::default();
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
 
     now(session.save(&storage)).unwrap();
@@ -67,10 +67,15 @@ fn a_saved_competition_loads_as_it_was_saved_without_anything_to_undo() {
     assert!(!loaded.has_unsaved_changes());
     assert_eq!(loaded.entrants(), session.entrants());
     assert_eq!(matches(&loaded), matches(&session));
-    assert_eq!(loaded.standings(), session.standings());
+    assert_eq!(
+        loaded.standings(loaded.only()),
+        session.standings(session.only())
+    );
     assert!(matches!(loaded.undo(), Err(UndoError::NothingToUndo)));
     // a single result can still be undone, as it is found in the log
-    loaded.undo_report(numbered(&loaded, 1)).unwrap();
+    loaded
+        .undo_report(loaded.first(), numbered(&loaded, 1))
+        .unwrap();
     assert_eq!(
         now(storage.list()).unwrap(),
         [Listing {
@@ -120,7 +125,7 @@ fn a_save_stores_the_file_without_the_name() {
     let storage = MemoryStorage::default();
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
 
     now(session.save(&storage)).unwrap();
@@ -177,7 +182,7 @@ fn a_competition_stored_without_what_its_log_replays_into_is_caught_up_with() {
     let mut following = now(Session::load(&storage, changing.key())).unwrap();
 
     changing
-        .report(numbered(&changing, 1), MatchResult::AWins)
+        .report(changing.first(), numbered(&changing, 1), MatchResult::AWins)
         .unwrap();
     now(changing.save(&storage)).unwrap();
 
@@ -226,19 +231,24 @@ fn a_session_catches_up_with_what_another_one_saved() {
     let mut following = now(Session::load(&storage, changing.key())).unwrap();
 
     changing
-        .report(numbered(&changing, 1), MatchResult::AWins)
+        .report(changing.first(), numbered(&changing, 1), MatchResult::AWins)
         .unwrap();
     changing
-        .report(numbered(&changing, 2), MatchResult::BWins)
+        .report(changing.first(), numbered(&changing, 2), MatchResult::BWins)
         .unwrap();
     // entries that undo an earlier one, which replay the log after it
-    changing.undo_report(numbered(&changing, 1)).unwrap();
+    changing
+        .undo_report(changing.first(), numbered(&changing, 1))
+        .unwrap();
     changing.undo().unwrap();
     now(changing.save(&storage)).unwrap();
 
     assert_eq!(now(following.catch_up(&storage)).unwrap(), 4);
     assert_eq!(matches(&following), matches(&changing));
-    assert_eq!(following.standings(), changing.standings());
+    assert_eq!(
+        following.standings(following.only()),
+        changing.standings(changing.only())
+    );
     assert!(!following.has_unsaved_changes());
     assert!(matches!(following.undo(), Err(UndoError::NothingToUndo)));
     assert_eq!(now(following.catch_up(&storage)).unwrap(), 0);
@@ -268,17 +278,23 @@ fn catching_up_drops_the_results_taken_back() {
     let mut session = Given::new()
         .match_format(PluginConfig::of::<Scored>())
         .started();
-    session.report_entered("1 21-17").unwrap();
-    session.undo_report(numbered(&session, 1)).unwrap();
+    session.report_entered(session.all(), "1 21-17").unwrap();
+    session
+        .undo_report(session.first(), numbered(&session, 1))
+        .unwrap();
     now(session.save(&storage)).unwrap();
     let mut other = now(Session::load(&storage, session.key())).unwrap();
-    other.report_entered("1 21-19").unwrap();
-    other.undo_report(numbered(&other, 1)).unwrap();
+    other.report_entered(other.all(), "1 21-19").unwrap();
+    other
+        .undo_report(other.first(), numbered(&other, 1))
+        .unwrap();
     now(other.save(&storage)).unwrap();
 
     now(session.catch_up(&storage)).unwrap();
 
-    let form = session.result_form(numbered(&session, 1)).unwrap();
+    let form = session
+        .result_form(session.first(), numbered(&session, 1))
+        .unwrap();
     assert_eq!(form.view().root.fields[0].values, Sides::new(None, None));
 }
 
@@ -296,12 +312,12 @@ fn undo_takes_back_the_session_s_own_result_and_not_one_caught_up_with() {
     let mut session = Given::new().started();
     let mut other = shared(&mut session, &storage);
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     now(session.save(&storage)).unwrap();
     now(other.catch_up(&storage)).unwrap();
     other
-        .report(numbered(&other, 2), MatchResult::BWins)
+        .report(other.first(), numbered(&other, 2), MatchResult::BWins)
         .unwrap();
     now(other.save(&storage)).unwrap();
     now(session.catch_up(&storage)).unwrap();
@@ -319,13 +335,13 @@ fn redo_brings_back_what_the_session_undid_after_catching_up() {
     let mut session = Given::new().started();
     let mut other = shared(&mut session, &storage);
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     session.undo().unwrap();
     now(session.save(&storage)).unwrap();
     now(other.catch_up(&storage)).unwrap();
     other
-        .report(numbered(&other, 2), MatchResult::BWins)
+        .report(other.first(), numbered(&other, 2), MatchResult::BWins)
         .unwrap();
     now(other.save(&storage)).unwrap();
     now(session.catch_up(&storage)).unwrap();
@@ -342,11 +358,13 @@ fn a_result_another_session_reopened_leaves_nothing_to_undo() {
     let mut session = Given::new().started();
     let mut other = shared(&mut session, &storage);
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     now(session.save(&storage)).unwrap();
     now(other.catch_up(&storage)).unwrap();
-    other.undo_report(numbered(&other, 1)).unwrap();
+    other
+        .undo_report(other.first(), numbered(&other, 1))
+        .unwrap();
     now(other.save(&storage)).unwrap();
     now(session.catch_up(&storage)).unwrap();
 
@@ -368,13 +386,17 @@ fn a_result_another_session_s_result_depends_on_is_not_undone_and_ends_undoing()
     let mut other = shared(&mut session, &storage);
     for number in [1, 2] {
         session
-            .report(numbered(&session, number), MatchResult::AWins)
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
             .unwrap();
     }
     now(session.save(&storage)).unwrap();
     now(other.catch_up(&storage)).unwrap();
     other
-        .report(numbered(&other, 3), MatchResult::AWins)
+        .report(other.first(), numbered(&other, 3), MatchResult::AWins)
         .unwrap();
     now(other.save(&storage)).unwrap();
     now(session.catch_up(&storage)).unwrap();
@@ -395,16 +417,16 @@ fn a_result_another_session_reported_again_leaves_nothing_to_redo() {
     let mut session = Given::new().started();
     let mut other = shared(&mut session, &storage);
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
     session
-        .report(numbered(&session, 2), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 2), MatchResult::AWins)
         .unwrap();
     session.undo().unwrap();
     now(session.save(&storage)).unwrap();
     now(other.catch_up(&storage)).unwrap();
     other
-        .report(numbered(&other, 2), MatchResult::BWins)
+        .report(other.first(), numbered(&other, 2), MatchResult::BWins)
         .unwrap();
     now(other.save(&storage)).unwrap();
     now(session.catch_up(&storage)).unwrap();
@@ -562,7 +584,7 @@ fn an_exported_competition_is_imported_as_a_new_one_as_it_was() {
     let storage = MemoryStorage::default();
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
 
     let mut imported = Session::import(&session.export(), "other", &[]).unwrap();
@@ -571,7 +593,10 @@ fn an_exported_competition_is_imported_as_a_new_one_as_it_was() {
     assert_ne!(imported.key(), session.key());
     assert_eq!(imported.entrants(), session.entrants());
     assert_eq!(matches(&imported), matches(&session));
-    assert_eq!(imported.standings(), session.standings());
+    assert_eq!(
+        imported.standings(imported.only()),
+        session.standings(session.only())
+    );
     assert!(matches!(imported.undo(), Err(UndoError::NothingToUndo)));
     assert!(imported.has_unsaved_changes(), "nothing of it is saved yet");
     now(imported.save(&storage)).unwrap();
@@ -585,7 +610,7 @@ fn an_exported_competition_is_imported_as_a_new_one_as_it_was() {
 fn an_exported_competition_holds_what_its_log_replays_into() {
     let mut session = Given::new().started();
     session
-        .report(numbered(&session, 1), MatchResult::AWins)
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
         .unwrap();
 
     let file: serde_json::Value = serde_json::from_str(&session.export()).unwrap();

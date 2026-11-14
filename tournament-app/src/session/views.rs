@@ -7,7 +7,8 @@ use std::{
 
 use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use tournament_engine::{
-    Annotated as _, Bye, Division, DivisionData, EntrantId, Match, Ranking, RankingId, TypeMap,
+    Annotated as _, Bye, Division, DivisionData, EntrantId, Match, PhaseId, Ranking, RankingId,
+    TypeMap,
     plugins::{
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
@@ -19,14 +20,15 @@ use super::Session;
 use crate::{
     storage::Progress,
     view::{
-        self, ByeRow, Column, Entered, EntrantRow, ListedMatch, MatchRow, Medal, Round,
-        RoundSummary, RoundsView, Shown, StageName, StandingCell, StandingRow, Standings,
-        TypedEntry,
+        self, ByeRow, Column, DivisionRef, Entered, EntrantRow, ListedMatch, MatchRow, MatchesOf,
+        Medal, Round, RoundSummary, RoundsView, Shown, StageName, StandingCell, StandingRow,
+        Standings, TypedEntry,
     },
 };
 
 impl Session {
-    /// How far the competition is, as its [`Listing`] keeps it.
+    /// How far the competition is, as its [`Listing`] keeps it: playing while a started phase has
+    /// a match without a result, the first such phase; won once the ranking is final.
     ///
     /// [`Listing`]: crate::storage::Listing
     pub fn progress(&self) -> Progress {
@@ -35,13 +37,20 @@ impl Session {
                 entrants: self.competition().entrants().len(),
             };
         }
-        if let Some(summary) = self.rounds().into_iter().find(|summary| summary.open > 0) {
+        let open = self.competition().phases().values().find_map(|phase| {
+            self.rounds(MatchesOf::phase(phase.id()))
+                .into_iter()
+                .find(|summary| summary.open > 0)
+        });
+        if let Some(summary) = open {
             return Progress::Playing {
                 round: summary.round,
                 open: summary.open,
             };
         }
-        let winners = self.winners().unwrap_or_default();
+        let Some(winners) = self.competition_winners() else {
+            return Progress::Finished;
+        };
         Progress::Won {
             winners: winners
                 .into_iter()
@@ -50,11 +59,11 @@ impl Session {
         }
     }
 
-    /// The teams ranked first once every match scheduled has a result, more than one if they are
-    /// tied, by the names of their entrants, each team by its entrants; `None` before the start or
-    /// while a match has no result.
-    pub fn winners(&self) -> Option<Vec<Vec<EntrantRow>>> {
-        let division = self.division()?;
+    /// The teams ranked first in the division `division` once every match it scheduled has a
+    /// result, more than one if they are tied, by the names of their entrants, each team by its
+    /// entrants; `None` before its phase starts or while a match has no result.
+    pub fn winners(&self, division: DivisionRef) -> Option<Vec<Vec<EntrantRow>>> {
+        let division = self.division(division)?;
         let data = division.data();
         if data
             .matches()
@@ -64,26 +73,36 @@ impl Session {
             return None;
         }
         let standings = division.standings();
-        let mut winners: Vec<_> = standings
-            .iter()
-            .filter(|standing| standing.rank() == NonZeroU32::MIN)
-            .map(|standing| self.team(data, &[standing.ranking().id()]))
-            .collect();
-        // tied teams are in no order of their own
-        winners.sort_by_cached_key(|team| {
-            team.iter()
-                .map(|entrant| entrant.name.as_deref().map(str::to_lowercase))
-                .collect::<Vec<_>>()
-        });
-        Some(winners)
+        Some(by_names(
+            standings
+                .iter()
+                .filter(|standing| standing.rank() == NonZeroU32::MIN)
+                .map(|standing| self.team(data, &[standing.ranking().id()]))
+                .collect(),
+        ))
     }
 
-    /// The rounds the phase has scheduled matches or byes in, in order; none before the start.
-    pub fn rounds(&self) -> Vec<RoundSummary> {
-        let Some(division) = self.division() else {
-            return Vec::new();
-        };
-        let data = division.data();
+    /// The teams placed first in the competition once its ranking is final (see
+    /// [`Self::ranking`]), more than one if they are tied, by the names of their entrants;
+    /// `None` before.
+    pub fn competition_winners(&self) -> Option<Vec<Vec<EntrantRow>>> {
+        let ranking = self.ranking();
+        ranking.is_final.then(|| {
+            by_names(
+                ranking
+                    .rows
+                    .into_iter()
+                    .filter(|row| row.place == NonZeroU32::MIN)
+                    .map(|row| row.entrants)
+                    .collect(),
+            )
+        })
+    }
+
+    /// The rounds the divisions of `of` have scheduled matches or byes in, in order, the same
+    /// round of every division as one; none before the start of the phase.
+    pub fn rounds(&self, of: MatchesOf) -> Vec<RoundSummary> {
+        let divisions = self.divisions_of(of);
         let empty = |round| RoundSummary {
             round,
             matches: 0,
@@ -93,8 +112,7 @@ impl Session {
         let mut rounds = BTreeMap::new();
         // the stage of each round, until a match or a bye of another one makes it `None`
         let mut stages: BTreeMap<NonZeroU32, Option<StageName>> = BTreeMap::new();
-        let mut note_stage = |round, annotations| {
-            let stage = stage(division, annotations);
+        let mut note_stage = |round, stage| {
             stages
                 .entry(round)
                 .and_modify(|kept| {
@@ -104,19 +122,22 @@ impl Session {
                 })
                 .or_insert(stage);
         };
-        for r#match in data.matches().values() {
-            let round = r#match.round();
-            let summary = rounds.entry(round).or_insert_with(|| empty(round));
-            summary.matches += 1;
-            if !r#match.is_finished() {
-                summary.open += 1;
+        for (_, division) in divisions {
+            let data = division.data();
+            for r#match in data.matches().values() {
+                let round = r#match.round();
+                let summary = rounds.entry(round).or_insert_with(|| empty(round));
+                summary.matches += 1;
+                if !r#match.is_finished() {
+                    summary.open += 1;
+                }
+                note_stage(round, stage(division, r#match.annotations()));
             }
-            note_stage(round, r#match.annotations());
-        }
-        for bye in data.byes().values() {
-            let round = bye.round();
-            rounds.entry(round).or_insert_with(|| empty(round));
-            note_stage(round, bye.annotations());
+            for bye in data.byes().values() {
+                let round = bye.round();
+                rounds.entry(round).or_insert_with(|| empty(round));
+                note_stage(round, stage(division, bye.annotations()));
+            }
         }
         rounds
             .into_values()
@@ -127,23 +148,38 @@ impl Session {
             .collect()
     }
 
-    /// The matches and byes of `round`, or `None` if it has neither, e.g. before the start.
-    pub fn round(&self, round: NonZeroU32) -> Option<Round> {
-        let division = self.division()?;
-        let data = division.data();
-        let mut matches: Vec<_> = data
-            .matches()
-            .values()
-            .filter(|r#match| r#match.round() == round)
-            .map(|r#match| self.match_row(division, r#match))
+    /// The matches and byes of `round` of the divisions of `of`, or `None` if they have neither,
+    /// e.g. before the start of the phase.
+    pub fn round(&self, of: MatchesOf, round: NonZeroU32) -> Option<Round> {
+        let divisions = self.divisions_of(of);
+        let mut matches: Vec<_> = divisions
+            .iter()
+            .flat_map(|&(index, division)| {
+                division
+                    .data()
+                    .matches()
+                    .values()
+                    .filter(|r#match| r#match.round() == round)
+                    .map(move |r#match| self.match_row(of.phase, index, division, r#match))
+            })
             .collect();
         // a bracket numbers its matches before it schedules them, in another order
         matches.sort_by_key(|row| row.number);
-        let byes_of_round: Vec<_> = data
-            .byes()
-            .values()
-            .filter(|bye| bye.round() == round)
-            .map(|bye| (bye, stage(division, bye.annotations())))
+        let byes_of_round: Vec<_> = divisions
+            .iter()
+            .flat_map(|&(_, division)| {
+                division
+                    .data()
+                    .byes()
+                    .values()
+                    .filter(|bye| bye.round() == round)
+                    .map(move |bye| {
+                        (
+                            self.team(division.data(), &[bye.ranking()]),
+                            stage(division, bye.annotations()),
+                        )
+                    })
+            })
             .collect();
         let stages: HashSet<_> = matches
             .iter()
@@ -153,8 +189,8 @@ impl Session {
         let several_stages = stages.len() > 1;
         let byes: Vec<_> = byes_of_round
             .into_iter()
-            .map(|(bye, stage)| ByeRow {
-                entrants: self.team(data, &[bye.ranking()]),
+            .map(|(entrants, stage)| ByeRow {
+                entrants,
                 stage: stage.filter(|_| several_stages),
             })
             .collect();
@@ -162,15 +198,23 @@ impl Session {
             round,
             matches,
             byes,
-            draws: division.format().allows_draws(),
+            draws: divisions
+                .iter()
+                .any(|(_, division)| division.format().allows_draws()),
         })
     }
 
-    /// The list of rounds showing what the operator `chose`, or the current round, or else the
-    /// matches a result typed in `entry` fits, see [`Self::read_entered`]: nothing typed, or only
-    /// spaces, shows the list chosen. `None` before the start.
-    pub fn rounds_view(&self, chosen: Option<Shown>, entry: &str) -> Option<RoundsView> {
-        let rounds = self.rounds();
+    /// The list of rounds of the matches of `of` showing what the operator `chose`, or the current
+    /// round, or else the matches a result typed in `entry` fits, see [`Self::read_entered`]:
+    /// nothing typed, or only spaces, shows the list chosen. `None` before the start of the
+    /// phase.
+    pub fn rounds_view(
+        &self,
+        of: MatchesOf,
+        chosen: Option<Shown>,
+        entry: &str,
+    ) -> Option<RoundsView> {
+        let rounds = self.rounds(of);
         let current = rounds
             .iter()
             .find(|summary| summary.open > 0)
@@ -198,10 +242,10 @@ impl Session {
         };
         let finished = rounds.iter().all(|summary| summary.open == 0);
         let entry = entry.trim();
-        let entered = (!finished && !entry.is_empty()).then(|| self.read_entered(entry));
-        let playable = self.playable();
+        let entered = (!finished && !entry.is_empty()).then(|| self.read_entered(of, entry));
+        let playable = self.playable(of);
         let playable_count = playable.len();
-        let current_round = self.round(current);
+        let current_round = self.round(of, current);
         let draws = current_round.as_ref().is_some_and(|round| round.draws);
         let scores = current_round
             .as_ref()
@@ -220,7 +264,7 @@ impl Session {
                 let round = if round == current {
                     current_round
                 } else {
-                    self.round(round)
+                    self.round(of, round)
                 };
                 let (matches, byes) = round
                     .map(|round| (round.matches, round.byes))
@@ -268,13 +312,19 @@ impl Session {
         })
     }
 
-    /// The matches that can be played now, in the order they were scheduled: those without a
-    /// result none of whose entrants still has to play a match of an earlier round. None before
-    /// the start.
-    pub fn playable(&self) -> Vec<MatchRow> {
-        let Some(division) = self.division() else {
-            return Vec::new();
-        };
+    /// The matches of `of` that can be played now, in the order they were scheduled: those without
+    /// a result none of whose entrants still has to play a match of an earlier round. None before
+    /// the start of the phase.
+    pub fn playable(&self, of: MatchesOf) -> Vec<MatchRow> {
+        self.divisions_of(of)
+            .into_iter()
+            .flat_map(|(index, division)| self.playable_in(of.phase, index, division))
+            .collect()
+    }
+
+    /// The matches of `division`, the division `index` of the phase `phase`, that can be played
+    /// now, see [`Self::playable`].
+    fn playable_in(&self, phase: PhaseId, index: usize, division: &Division) -> Vec<MatchRow> {
         let data = division.data();
         let open = || {
             data.matches()
@@ -304,14 +354,25 @@ impl Session {
                     .iter()
                     .all(|entrant| next_round[entrant] == r#match.round())
             })
-            .map(|r#match| self.match_row(division, r#match))
+            .map(|r#match| self.match_row(phase, index, division, r#match))
             .collect()
     }
 
-    /// The standings of the phase, with a column for every calculator that offers one; `None`
-    /// before the start.
-    pub fn standings(&self) -> Option<Standings> {
-        let division = self.division()?;
+    /// The overall standings of the phase `phase`: those of its only division, see
+    /// [`Self::standings`].
+    pub fn overall_standings(&self, phase: PhaseId) -> Option<Standings> {
+        self.standings(DivisionRef::first(phase))
+    }
+
+    /// The standings of the division `of`, with a column for every calculator that offers one;
+    /// `None` before the start of its phase.
+    pub fn standings(&self, of: DivisionRef) -> Option<Standings> {
+        let division = self.division(of)?;
+        let advancing = self.advancing(of.phase);
+        let first_place = self
+            .competition()
+            .first_place(&of.phase)
+            .map_or(1, NonZeroU32::get);
         let calculators = AnyAxis::of::<dyn MetricsCalculator>();
         // the calculators each criterion ranks by, in the order of the criteria
         let ranked_by: Vec<&str> = division
@@ -360,6 +421,9 @@ impl Session {
                 .iter()
                 .map(|standing| {
                     let ranking = standing.ranking();
+                    let advances = advancing(standing);
+                    // a medal is one of the competition, for the rows that stop here
+                    let place = NonZeroU32::new(first_place + standing.rank().get() - 1);
                     StandingRow {
                         rank: standing.rank(),
                         entrants: self.team(data, &[ranking.id()]),
@@ -370,7 +434,10 @@ impl Session {
                                 Some(standing_cell(division, ranking, column.cell(ranking)?))
                             })
                             .collect(),
-                        medal: finished.then(|| Medal::of(standing.rank())).flatten(),
+                        medal: (finished && advances.is_none())
+                            .then(|| place.and_then(Medal::of))
+                            .flatten(),
+                        advances,
                     }
                 })
                 .collect(),
@@ -392,11 +459,19 @@ impl Session {
             .collect()
     }
 
-    /// The row of `r#match`, a match of `division`.
-    pub(super) fn match_row(&self, division: &Division, r#match: &Match) -> MatchRow {
+    /// The row of `r#match`, a match of `division`, the division `index` of the phase `phase`.
+    pub(super) fn match_row(
+        &self,
+        phase: PhaseId,
+        index: usize,
+        division: &Division,
+        r#match: &Match,
+    ) -> MatchRow {
         let data = division.data();
         let root = division.match_format().template(data, r#match).root;
         MatchRow {
+            phase,
+            division: index,
             id: r#match.id(),
             number: number(r#match),
             round: r#match.round(),
@@ -409,6 +484,17 @@ impl Session {
             details: !root.fields.is_empty() || !matches!(root.parts, Parts::None),
         }
     }
+}
+
+/// `teams` in the order of the names of their entrants, which tied teams are in no order of their
+/// own.
+fn by_names(mut teams: Vec<Vec<EntrantRow>>) -> Vec<Vec<EntrantRow>> {
+    teams.sort_by_cached_key(|team| {
+        team.iter()
+            .map(|entrant| entrant.name.as_deref().map(str::to_lowercase))
+            .collect::<Vec<_>>()
+    });
+    teams
 }
 
 /// The number of `r#match`, as [`MatchRow::number`] shows it.

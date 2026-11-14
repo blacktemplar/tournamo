@@ -13,18 +13,19 @@ use std::collections::HashMap;
 
 use plugin_factory::config::Config;
 use tournament_engine::{
-    Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division, MatchId, Part,
-    Phase, Seed, SetCompetitionSeed, StartCompetition,
+    Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division, Match,
+    MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source, StartCompetition,
     transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
     uuid::Uuid,
+    vec1::Vec1,
 };
 
 use crate::{
     error::{NoPhase, Refusal, StartError},
     people::People,
     storage::CompetitionKey,
-    view::Actions,
+    view::{Actions, DivisionRef, MatchesOf},
 };
 
 /// The name of a competition imported from a file that names it by nothing but spaces, and whose
@@ -33,6 +34,14 @@ pub const UNNAMED: &str = "Competition";
 
 /// The most matches [`Session::scale`] plays out, far more than a day's play.
 pub const MOST_MATCHES: usize = 10_000;
+
+/// A phase whose adding was undone: its name, sources and configuration.
+#[derive(Debug, Clone)]
+struct UndonePhase {
+    name: Option<String>,
+    sources: Vec1<Source>,
+    config: Config,
+}
 
 /// A competition being run by an operator.
 ///
@@ -47,12 +56,12 @@ pub struct Session {
     people: People,
     /// What this session did, which `undo` and `redo` walk through.
     history: SessionHistory,
-    /// The configuration of the phase whose adding this session undid last, which the form of a
-    /// new phase starts out at.
-    undone_phase: Option<Config>,
+    /// The phase whose adding this session undid last, which the form of a new phase starts out
+    /// at.
+    undone_phase: Option<UndonePhase>,
     /// What was reported for each match whose result this session took back, as it was then, the
     /// latest of each, which the form of the match starts out at, see [`Self::result_form`].
-    reopened: HashMap<MatchId, Part>,
+    reopened: HashMap<(PhaseId, MatchId), Part>,
     /// How often the session changed the people: with the length of the log, which every other
     /// change makes longer, undo and redo included, it counts the changes, see [`Self::changes`].
     people_changes: usize,
@@ -140,12 +149,14 @@ impl Session {
             add_entrant: !started,
             remove_entrant: !started && !competition.entrants().is_empty(),
             rename_entrant: !competition.entrants().is_empty(),
-            add_phase: !started && !has_phase,
+            // after the start, a phase takes entrants from another one
+            add_phase: !started || has_phase,
             edit_phase: has_phase,
             start: self.start_refusal().is_none(),
-            report: self
-                .phase()
-                .is_some_and(|phase| phase.is_started() && !phase.is_finished()),
+            report: competition
+                .phases()
+                .values()
+                .any(|phase| phase.is_started() && !phase.is_finished()),
             undo: self.history.next_undo(&self.machine).is_some(),
             redo: self.history.next_redo(&self.machine).is_some(),
         }
@@ -155,17 +166,24 @@ impl Session {
     /// it.
     pub fn start_refusal(&self) -> Option<StartError> {
         let competition = self.competition();
+        let starting = || {
+            competition
+                .phases()
+                .values()
+                .filter(|phase| phase.is_fed_by_registration_alone())
+        };
         if competition.is_started() {
             Some(StartError::Started)
-        } else if competition.phases().is_empty() {
+        } else if starting().next().is_none() {
             Some(NoPhase.into())
         } else if competition.entrants().len() < 2 {
             Some(StartError::TooFewEntrants)
         } else {
-            self.phase()
-                .map(|phase| phase.plugins().format().min_entrants())
-                .filter(|needed| competition.entrants().len() < *needed)
-                .map(StartError::TooFewForFormat)
+            starting().find_map(|phase| {
+                let needed = phase.plugins().format().min_entrants();
+                (self.places_taken(phase.sources()) < needed)
+                    .then_some(StartError::TooFewForFormat(needed))
+            })
         }
     }
 
@@ -200,29 +218,64 @@ impl Session {
             .conflicts_of(change)?
             .iter()
             .filter_map(|conflict| {
-                let (_, division) = self
-                    .competition()
-                    .phase(&conflict.phase_id)?
-                    .division_of(&conflict.match_id)?;
-                division
-                    .data()
-                    .matches()
-                    .get(&conflict.match_id)
-                    .map(views::number)
+                let (_, _, r#match) = self.match_of(conflict.phase_id, conflict.match_id)?;
+                Some(views::number(r#match))
             })
             .collect();
         numbers.sort_unstable();
         Ok(numbers)
     }
 
-    /// The phase of the competition, whether started or not.
-    fn phase(&self) -> Option<&Phase> {
-        self.competition().only_phase()
+    /// The phase `id`, whether started or not.
+    fn phase(&self, id: PhaseId) -> Option<&Phase> {
+        self.competition().phase(&id)
     }
 
-    /// The division the phase is played in, once it is started.
-    fn division(&self) -> Option<&Division> {
-        self.phase()?.divisions().first()
+    /// The divisions whose matches `of` are, with their indices; none if the phase has not
+    /// started.
+    fn divisions_of(&self, of: MatchesOf) -> Vec<(usize, &Division)> {
+        self.phase(of.phase)
+            .into_iter()
+            .flat_map(|phase| phase.divisions().iter().enumerate())
+            .filter(|(index, _)| of.division.is_none_or(|division| division == *index))
+            .collect()
+    }
+
+    /// The division `division`, once its phase is started.
+    fn division(&self, division: DivisionRef) -> Option<&Division> {
+        self.phase(division.phase)?
+            .divisions()
+            .get(division.division)
+    }
+
+    /// The match `id` of the phase `phase`, with its division and the division's index.
+    fn match_of(&self, phase: PhaseId, id: MatchId) -> Option<(usize, &Division, &Match)> {
+        let (index, division) = self.phase(phase)?.division_of(&id)?;
+        Some((index, division, &division.data().matches()[&id]))
+    }
+
+    /// The number of places `sources` take, of the registration as it is now and of the phases as
+    /// many as they take in turn: what a phase of these sources starts with, or would.
+    fn places_taken(&self, sources: &[Source]) -> usize {
+        sources
+            .iter()
+            .map(|source| source.count(self.places_of(source.of())))
+            .sum()
+    }
+
+    /// The number of places of `of`: the entrants of the registration, or the rankings of a
+    /// started phase, or else the places its sources take.
+    fn places_of(&self, of: tournament_engine::SourceOf) -> usize {
+        match of {
+            tournament_engine::SourceOf::Registration => self.competition().entrants().len(),
+            tournament_engine::SourceOf::Phase(id) => self.phase(id).map_or(0, |phase| {
+                if phase.is_started() {
+                    phase.standings().len()
+                } else {
+                    self.places_taken(phase.sources())
+                }
+            }),
+        }
     }
 }
 
@@ -254,10 +307,11 @@ mod cross_table;
 mod entrants;
 mod entry;
 mod phase;
+mod phases;
 mod report;
 mod scale;
 mod storage;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 mod undo;
 mod views;

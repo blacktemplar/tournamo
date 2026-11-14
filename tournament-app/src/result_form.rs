@@ -33,8 +33,8 @@
 
 use plugin_factory::schema::{DecimalRange, IntegerRange, NumberRange};
 use tournament_engine::{
-    Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, ResultReason, Score, Sides, Team,
-    Values,
+    Decision, EnteredValue, FieldKey, MatchId, MatchResult, Part, PhaseId, ResultReason, Score,
+    Sides, Team, Values,
     plugins::{
         Phrase,
         match_format::{FieldSpec, Level, MatchFormat, Parts, Template, ValueKind},
@@ -51,6 +51,7 @@ use crate::{
 /// The result of a match being entered, see the [module](self).
 #[derive(Clone)]
 pub struct ResultForm {
+    phase: PhaseId,
     match_id: MatchId,
     format: Box<dyn MatchFormat>,
     template: Template,
@@ -300,10 +301,16 @@ pub struct QuickField {
 }
 
 impl ResultForm {
-    /// A form with nothing entered for the match `match_id`, whose result looks like `template`,
-    /// entered by `format`.
-    pub(crate) fn new(match_id: MatchId, format: Box<dyn MatchFormat>, template: Template) -> Self {
+    /// A form with nothing entered for the match `match_id` of the phase `phase`, whose result
+    /// looks like `template`, entered by `format`.
+    pub(crate) fn new(
+        phase: PhaseId,
+        match_id: MatchId,
+        format: Box<dyn MatchFormat>,
+        template: Template,
+    ) -> Self {
         Self {
+            phase,
             match_id,
             format,
             template,
@@ -315,6 +322,7 @@ impl ResultForm {
     /// `template`, entered by `format`: the result of a part is chosen where its values and parts
     /// do not suggest it.
     pub(crate) fn reported(
+        phase: PhaseId,
         match_id: MatchId,
         format: Box<dyn MatchFormat>,
         template: Template,
@@ -322,6 +330,7 @@ impl ResultForm {
     ) -> Self {
         let root = Entry::reported(&*format, &template.root, contest);
         Self {
+            phase,
             match_id,
             format,
             template,
@@ -330,6 +339,11 @@ impl ResultForm {
     }
 
     /// The match whose result this is.
+    /// The phase of the match.
+    pub fn phase(&self) -> PhaseId {
+        self.phase
+    }
+
     pub fn match_id(&self) -> MatchId {
         self.match_id
     }

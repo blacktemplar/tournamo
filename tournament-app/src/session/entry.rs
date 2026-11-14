@@ -1,27 +1,31 @@
 //! Reading and reporting a result typed as one line, see [`Session::read_entered`].
 
-use tournament_engine::{Division, EnteredValue, MatchResult, Sides, Team};
+use tournament_engine::{EnteredValue, MatchResult, Sides, Team};
 
 use super::Session;
 use crate::{
     error::{ReportEnteredError, ReportError},
     result_form::read_score,
-    view::{Entered, EntrantRow, MatchRow, NameSearch, Reported},
+    view::{Entered, EntrantRow, MatchRow, MatchesOf, NameSearch, Reported},
 };
 
 impl Session {
-    /// Reports the result `entry` says, see [`Self::read_entered`].
+    /// Reports the result `entry` says of a match of `of`, see [`Self::read_entered`].
     ///
     /// # Errors
     /// Returns an error if [`Self::read_entered`] reports none, or the result is not reported, see
     /// [`Self::report`].
-    pub fn report_entered(&mut self, entry: &str) -> Result<Reported, ReportEnteredError> {
-        let row = self.read_entered(entry).report?;
+    pub fn report_entered(
+        &mut self,
+        of: MatchesOf,
+        entry: &str,
+    ) -> Result<Reported, ReportEnteredError> {
+        let row = self.read_entered(of, entry).report?;
         let result = row.result.expect("an entry says a result");
         let reported = if row.scores.is_empty() {
-            self.report(row.id, result)
+            self.report(row.phase, row.id, result)
         } else {
-            let mut form = self.result_form(row.id)?;
+            let mut form = self.result_form(row.phase, row.id)?;
             let entered = form.enter_scores(&row.scores);
             debug_assert!(entered, "the scores of an entry fit its match");
             form.choose(&[], Some(result));
@@ -33,8 +37,9 @@ impl Session {
         })
     }
 
-    /// The matches `entry` fits, and the result it says, which [`Self::report_entered`] would
-    /// report. Spaces around it do not count. `entry` is either
+    /// The matches of `of` that `entry` fits, and the result it says, which
+    /// [`Self::report_entered`] would report: a match beyond `of` is never found. Spaces around it
+    /// do not count. `entry` is either
     ///
     /// - the number of a match, as [`MatchRow::number`], and its result, separated by whitespace
     ///   or a `-`: `1` for a win of side A, `2` for one of side B, and `X` (or `x`) for a draw,
@@ -56,7 +61,7 @@ impl Session {
     /// enters them. The result entered must be the one they say, if they say one: a result
     /// against them is entered in a [`ResultForm`].
     ///
-    /// The result is an error if the competition has not started, `entry` is empty, it is the
+    /// The result is an error if the phase has not started, `entry` is empty, it is the
     /// number of a match alone, there is no match of the number entered, it has a result already,
     /// its format has no draws while a draw is entered or scored, the name entered fits no open
     /// match, both sides of one, or several matches, the match does not take the scores entered,
@@ -64,13 +69,20 @@ impl Session {
     ///
     /// [`ResultForm`]: crate::result_form::ResultForm
     /// [`ResultForm::enter_scores`]: crate::result_form::ResultForm::enter_scores
-    pub fn read_entered(&self, entry: &str) -> Entered {
+    pub fn read_entered(&self, of: MatchesOf, entry: &str) -> Entered {
         let nothing = |error: ReportEnteredError| Entered {
             found: Vec::new(),
             report: Err(error),
         };
-        let Some(division) = self.division() else {
+        let divisions = self.divisions_of(of);
+        if divisions.is_empty() {
             return nothing(ReportError::NotStarted.into());
+        }
+        let draws = |row: &MatchRow| {
+            divisions
+                .iter()
+                .find(|(index, _)| *index == row.division)
+                .is_some_and(|(_, division)| division.format().allows_draws())
         };
         let entry = entry.trim();
         if entry.is_empty() {
@@ -82,34 +94,47 @@ impl Session {
             result,
         }) = read_entry(entry)
         else {
-            let mut open: Vec<_> = division
-                .data()
-                .matches()
-                .values()
-                .filter(|r#match| !r#match.is_finished())
-                .map(|r#match| self.match_row(division, r#match))
+            let mut open: Vec<_> = divisions
+                .iter()
+                .flat_map(|&(index, division)| {
+                    division
+                        .data()
+                        .matches()
+                        .values()
+                        .filter(|r#match| !r#match.is_finished())
+                        .map(move |r#match| self.match_row(of.phase, index, division, r#match))
+                })
                 .collect();
             open.sort_by_key(|row| row.number);
-            let Named { found, says } = read_named(&open, entry, division.format().allows_draws());
+            let any_draws = open.iter().any(draws);
+            let Named { found, says } = read_named(&open, entry, any_draws);
             let report = says.and_then(|Says { row, scores }| {
                 let result = row.result;
-                self.with_scores(division, row, &scores, result)
+                let draws = draws(&row);
+                self.with_scores(draws, row, &scores, result)
             });
             return Entered { found, report };
         };
-        let Some(r#match) = division
-            .data()
-            .matches()
-            .values()
-            .find(|r#match| super::views::number(r#match) == number)
-        else {
+        let Some((index, division, r#match)) = divisions.iter().find_map(|&(index, division)| {
+            division
+                .data()
+                .matches()
+                .values()
+                .find(|r#match| super::views::number(r#match) == number)
+                .map(|r#match| (index, division, r#match))
+        }) else {
             return nothing(ReportEnteredError::NoMatch(number));
         };
-        let row = self.match_row(division, r#match);
+        let row = self.match_row(of.phase, index, division, r#match);
         let report = match result {
             _ if r#match.is_finished() => Err(ReportEnteredError::AlreadyFinished(number)),
             None if scores.is_empty() => Err(ReportEnteredError::MissingResult(number)),
-            result => self.with_scores(division, row.clone(), &scores, result),
+            result => self.with_scores(
+                division.format().allows_draws(),
+                row.clone(),
+                &scores,
+                result,
+            ),
         };
         Entered {
             found: vec![row],
@@ -117,11 +142,11 @@ impl Session {
         }
     }
 
-    /// `row`, an open match of `division`, with the result `scores` (side A's first) and `result`
-    /// say, see [`Self::read_entered`].
+    /// `row`, an open match of a division that takes draws if `draws`, with the result `scores`
+    /// (side A's first) and `result` say, see [`Self::read_entered`].
     fn with_scores(
         &self,
-        division: &Division,
+        draws: bool,
         row: MatchRow,
         scores: &[Sides<EnteredValue>],
         result: Option<MatchResult>,
@@ -133,7 +158,7 @@ impl Session {
         let result = if scores.is_empty() {
             result
         } else {
-            let mut form = self.result_form(row.id)?;
+            let mut form = self.result_form(row.phase, row.id)?;
             if !form.enter_scores(&scores) {
                 return Err(ReportEnteredError::ScoresNotTaken(row.number));
             }
@@ -146,7 +171,7 @@ impl Session {
             }
         };
         let result = result.expect("a result entered or suggested");
-        if result == MatchResult::Draw && !division.format().allows_draws() {
+        if result == MatchResult::Draw && !draws {
             return Err(ReportError::DrawNotAllowed.into());
         }
         Ok(MatchRow {
@@ -417,7 +442,7 @@ impl<'a> NamedEntry<'a> {
 mod tests {
     use std::num::NonZeroU32;
 
-    use tournament_engine::{EntrantId, uuid::Uuid};
+    use tournament_engine::{EntrantId, PhaseId, uuid::Uuid};
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -481,6 +506,8 @@ mod tests {
         let id = serde_json::from_value(serde_json::json!(Uuid::from_u128(number as u128)))
             .expect("a match id is a UUID");
         MatchRow {
+            phase: PhaseId::new(Uuid::nil()),
+            division: 0,
             id,
             number,
             round: NonZeroU32::MIN,

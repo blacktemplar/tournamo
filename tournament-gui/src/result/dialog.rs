@@ -70,7 +70,7 @@ pub fn EnterResult(
             onclick: move |_| {
                 let form = match from {
                     Some(from) => from.peek().clone().ok_or(()),
-                    None => ctx.session.peek().result_form(id).map_err(drop),
+                    None => ctx.session.peek().result_form(row.phase, id).map_err(drop),
                 };
                 if let Ok(form) = form {
                     error.set(None);

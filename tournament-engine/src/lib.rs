@@ -25,4 +25,4 @@ pub use transitions::{
 };
 pub use type_map::{TypeMap, TypeMapValue};
 // the crates the API of this one is written in, so that a user does not have to depend on them
-pub use {plugin_factory, undoable_state_machine, uuid};
+pub use {plugin_factory, undoable_state_machine, uuid, vec1};

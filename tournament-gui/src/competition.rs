@@ -5,7 +5,7 @@
 //! channel [`SAVED`]. Another tab shows it read-only, catches up whenever told, and takes over
 //! once the lock is released, e.g. when the tab changing it is closed.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, num::NonZeroUsize, rc::Rc};
 
 use dioxus::{core::spawn_forever, prelude::*};
 use futures_util::{
@@ -17,13 +17,14 @@ use tournament_app::{
     i18n::{Message, Text, Translator},
     session::Session,
     storage::{CompetitionKey, Storage as _},
-    view::{Action, Actions, Chart, EntrantRow},
+    view::{Action, Actions, Chart, DivisionRef, EntrantRow, MatchesOf, PhaseState},
 };
 use tournament_browser::{
     channel::Broadcast,
     indexed_db::IndexedDb,
     lock::{self, Lock},
 };
+use tournament_engine::PhaseId;
 
 use crate::{
     Notices, Page,
@@ -32,10 +33,13 @@ use crate::{
     capitalized,
     components::dialog::{Dialog, DialogDescription, DialogTitle},
     cross_table::CrossTable,
-    download, go_to, icons,
-    phase::PhaseSummary,
+    download, go_to,
+    i18n::t,
+    icons,
+    phase::{PendingPhase, PhaseSummary},
+    phases::{PhaseLinks, Ranking, StartPhaseButton},
     play::{Rounds, Standings},
-    setup::{Entrants, Phase},
+    setup::{Entrants, Phases},
     winners_text,
 };
 
@@ -64,9 +68,27 @@ pub struct Ctx {
     announcement: Signal<Option<Announcement>>,
     /// When this tab last reported a result, in milliseconds since the epoch.
     reported_at: Signal<Option<f64>>,
+    /// The phase shown, as the URL names it, or else the one shown first; `None` while there is
+    /// none.
+    phase: Memo<Option<PhaseId>>,
 }
 
 impl Ctx {
+    /// The phase shown, see [`Self::phase`](Ctx#structfield.phase).
+    pub fn phase(&self) -> Option<PhaseId> {
+        *self.phase.read()
+    }
+
+    /// The matches of the phase shown.
+    pub fn matches_of(&self) -> Option<MatchesOf> {
+        self.phase().map(MatchesOf::phase)
+    }
+
+    /// The division of the phase shown, its only one.
+    pub fn division(&self) -> Option<DivisionRef> {
+        self.phase().map(DivisionRef::first)
+    }
+
     /// Whether this tab changes the competition, rather than showing what another tab does.
     pub fn changes(&self) -> bool {
         self.lock.read().is_some()
@@ -243,14 +265,25 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
             .borrow_mut()
             .take()
             .expect("a competition loaded is shown once");
+        let session = Signal::new(session);
         Ctx {
-            session: Signal::new(session),
+            session,
             lock: Signal::new(lock.map(Rc::new)),
             storage: page.storage,
             translator: page.translator,
             error: page.error,
             announcement: Signal::new(None),
             reported_at: Signal::new(None),
+            phase: Memo::new(move || {
+                let number = match *page.screen.read() {
+                    crate::Screen::Competition(_, Place::Phase(number, _)) => number,
+                    _ => None,
+                };
+                let session = session.read();
+                number
+                    .and_then(|number| session.phases().get(number.get() - 1).map(|phase| phase.id))
+                    .or_else(|| session.shown_first())
+            }),
         }
     });
     use_hook(move || ctx.save());
@@ -258,8 +291,20 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
     let mut shown = page.shown;
     use_effect(move || {
         let session = ctx.session.read();
-        if shown.peek().as_deref() != Some(session.name()) {
-            shown.set(Some(session.name().to_owned()));
+        let phase = if session.competition().is_started() && session.phases().len() > 1 {
+            match *page.screen.read() {
+                crate::Screen::Competition(_, Place::Ranking) => Some(ShownPhase::Ranking),
+                _ => ctx
+                    .phase()
+                    .and_then(|phase| session.name_of_phase(phase))
+                    .map(ShownPhase::Phase),
+            }
+        } else {
+            None
+        };
+        let heading = Some((session.name().to_owned(), phase));
+        if *shown.peek() != heading {
+            shown.set(heading);
         }
     });
     use_drop(move || shown.set(None));
@@ -292,7 +337,8 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                     if !actions.undo {
                         return;
                     }
-                    // leaving play, which is asked about first
+                    // leaving play, which is asked about first; the start of a phase is not, since
+                    // the page stays on the phase
                     if ctx.session.peek().next_undo() == Some(Action::Start) {
                         undoing_start.set(true);
                     } else {
@@ -345,11 +391,11 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                 div { key: "{text}", class: "toast", aria_hidden: "true", "{text}" }
             }
             if started {
-                Play {}
+                Started { competition }
             } else {
                 div { class: "columns setup",
                     Entrants {}
-                    Phase {}
+                    Phases {}
                 }
             }
         }
@@ -380,9 +426,107 @@ fn undo(ctx: Ctx) {
     }
 }
 
-/// What the screen after the start shows: the matches or the standings, both side by side where
-/// there is room for two columns, the chart of the phase, or how the phase is played. The URL
-/// names it, see [`Screen`](crate::Screen).
+/// What of the competition the URL names after its key, see [`Screen`](crate::Screen).
+#[derive(Clone, Copy, PartialEq)]
+pub enum Place {
+    /// A phase, by its number from 1, or else the one shown first, and the view of it.
+    Phase(Option<NonZeroUsize>, View),
+    /// The ranking of the competition.
+    Ranking,
+}
+
+impl Place {
+    /// The place `fragment`, what the URL holds after the key and a `/`, names: `ranking`, or the
+    /// number of a phase and its view, either left out, e.g. `2/standings`, `2` or `standings`.
+    pub fn in_fragment(fragment: &str) -> Option<Self> {
+        if fragment == RANKING {
+            return Some(Self::Ranking);
+        }
+        let (number, view) = match fragment.split_once('/') {
+            Some((number, view)) => (Some(number.parse().ok()?), view),
+            None => match fragment.parse() {
+                Ok(number) => (Some(number), ""),
+                Err(_) => (None, fragment),
+            },
+        };
+        let view = if view.is_empty() {
+            View::Matches
+        } else {
+            View::in_fragment(view)?
+        };
+        Some(Self::Phase(number, view))
+    }
+}
+
+/// What the URL names the ranking of the competition by.
+const RANKING: &str = "ranking";
+
+/// The fragment of the URL showing `view` of the phase `number`, from 1, of the competition `key`,
+/// which has `phases` phases: the number is left out where it has one.
+pub fn phase_fragment(
+    key: CompetitionKey,
+    number: usize,
+    phases: usize,
+    view: Option<&str>,
+) -> String {
+    let mut fragment = key.to_string();
+    if phases > 1 {
+        fragment.push_str(&format!("/{number}"));
+    }
+    if let Some(view) = view {
+        fragment.push_str(&format!("/{view}"));
+    }
+    fragment
+}
+
+/// The fragment of the URL showing the ranking of the competition `key`.
+pub fn ranking_fragment(key: CompetitionKey) -> String {
+    format!("{key}/{RANKING}")
+}
+
+/// What the bar says is shown after the name of the competition, see [`Page`].
+#[derive(Clone, PartialEq)]
+pub enum ShownPhase {
+    Phase(tournament_app::view::PhaseName),
+    Ranking,
+}
+
+/// The screen after the start: the links to the phases where there are several, then the phase
+/// shown, or the ranking.
+#[component]
+fn Started(competition: CompetitionKey) -> Element {
+    let ctx = use_context::<Ctx>();
+    let page = use_context::<Page>();
+    let ranking = matches!(
+        *page.screen.read(),
+        crate::Screen::Competition(_, Place::Ranking)
+    );
+    let phase = ctx.phase();
+    let state = phase.and_then(|phase| {
+        let phases = ctx.session.read().phases();
+        phases
+            .into_iter()
+            .find(|overview| overview.id == phase)
+            .map(|overview| overview.state)
+    });
+    rsx! {
+        PhaseLinks { competition, ranking }
+        if ranking {
+            Ranking {}
+        } else if let Some(phase) = phase {
+            if matches!(state, Some(PhaseState::NotStarted { .. })) {
+                PendingPhase { key: "{phase:?}", phase }
+            } else {
+                // made anew for another phase, so that what it shows starts out anew
+                Play { key: "{phase:?}" }
+            }
+        }
+    }
+}
+
+/// What the screen of a phase after its start shows: the matches or the standings, both side by
+/// side where there is room for two columns, the chart of the phase, or how the phase is played.
+/// The URL names it, see [`Screen`](crate::Screen).
 #[derive(Clone, Copy, PartialEq)]
 pub enum View {
     Matches,
@@ -428,18 +572,33 @@ fn Play() -> Element {
     let page = use_context::<Page>();
     // as the URL names it, so that a reload and going back and forth keep it
     let (key, shown) = match *page.screen.read() {
-        crate::Screen::Competition(key, view) => (key, view),
+        crate::Screen::Competition(key, Place::Phase(_, view)) => (key, view),
         _ => return rsx! {},
     };
-    let chart = ctx.session.read().chart();
+    let Some(division) = ctx.division() else {
+        return rsx! {};
+    };
+    let (number, phases) = {
+        let phases = ctx.session.read().phases();
+        let number = phases
+            .iter()
+            .position(|phase| phase.id == division.phase)
+            .map_or(1, |index| index + 1);
+        (number, phases.len())
+    };
+    let chart = ctx.session.read().chart(division);
     // a phase without a chart shows the matches, e.g. after the phase changed to one without
     let current = match shown {
         View::Chart if chart.is_none() => View::Matches,
         view => view,
     };
-    let show = move |view: View| match view.fragment_of(chart) {
-        Some(view) => go_to(&format!("{key}/{view}")),
-        None => go_to(&key.to_string()),
+    let show = move |view: View| {
+        go_to(&phase_fragment(
+            key,
+            number,
+            phases,
+            view.fragment_of(chart),
+        ))
     };
     let tr = ctx.translator.read();
     let column = |column| {
@@ -507,7 +666,53 @@ fn Play() -> Element {
             div { class: "column wide", hidden: current != View::Phase,
                 section { class: "card", aria_labelledby: "phase",
                     h2 { id: "phase", {tr.get("phase-heading")} }
-                    PhaseSummary {}
+                    PhaseSummary { phase: division.phase }
+                }
+            }
+        }
+    }
+}
+
+/// What the screen of a finished phase says: who won the competition, or who is tied for first,
+/// once its ranking is final, else that the phase is finished and the phases that can start now.
+#[component]
+pub fn PhaseFinished() -> Element {
+    let ctx = use_context::<Ctx>();
+    let Some(phase) = ctx.phase() else {
+        return rsx! {};
+    };
+    let session = ctx.session.read();
+    if let Some(winners) = session.competition_winners() {
+        return rsx! {
+            Finished { winners }
+        };
+    }
+    let phases = session.phases();
+    let Some(PhaseState::Finished { can_start }) = phases
+        .iter()
+        .find(|overview| overview.id == phase)
+        .map(|overview| overview.state.clone())
+    else {
+        return rsx! {};
+    };
+    let name = session.name_of_phase(phase);
+    drop(session);
+    let tr = ctx.translator.read();
+    rsx! {
+        section { class: "card winners-banner phase-finished", aria_labelledby: "finished",
+            icons::Check {}
+            div {
+                h2 { id: "finished", tabindex: "-1",
+                    if let Some(name) = &name {
+                        {t!(tr, "phase-finished", phase = tr.phase_name(name))}
+                    }
+                }
+                if ctx.changes() {
+                    div { class: "start-buttons",
+                        for next in can_start {
+                            StartPhaseButton { key: "{next:?}", phase: next, primary: true }
+                        }
+                    }
                 }
             }
         }

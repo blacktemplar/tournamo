@@ -115,6 +115,17 @@ medal-gold = Goldmedaille,
 medal-silver = Silbermedaille,
 medal-bronze = Bronzemedaille,
 add-phase = Phase hinzufügen
+add-phase-description = Die Phase nimmt ihre Teilnehmer aus der Anmeldung oder von Plätzen der Phasen vor ihr.
+new-phase = Neue Phase
+phases = Phasen
+remove-phase = Phase entfernen
+edit-phase-named = Phase bearbeiten: { $phase }
+remove-phase-named = Phase entfernen: { $phase }
+everyone-registered = alle Angemeldeten
+registration = die Anmeldung
+every-place-of = alle Plätze von { $phase }
+places-of = Plätze { $from }–{ $to } von { $phase }
+places-from-of = Plätze ab { $from } von { $phase }
 phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
 scale-rounds = { $count ->
         [one] eine Runde
@@ -129,6 +140,15 @@ scale-matches-range = { $least } bis { $most } Spielen
 start = Starten
 
 ## Configuring the phase
+
+phase-name = Name
+entrants-from = Teilnehmer aus
+source-of = Quelle { $number }
+from-place = ab Platz
+to-place = bis Platz
+to-last-place = letzter
+remove-source = Quelle { $number } entfernen
+add-source = Quelle hinzufügen
 
 choose-plugin = Auswählen …
 no-plugin = (keines)
@@ -152,6 +172,24 @@ save-changes = Änderungen speichern
 cancel = Abbrechen
 
 ## After the start
+
+phase-not-started = nicht begonnen:
+phase-running = läuft:
+phase-done = beendet:
+start-phase = { $phase } starten
+phase-finished = { $phase } ist beendet
+tie-at-cut-title = Mit einem Gleichstand starten, den das Los entscheidet?
+tie-at-cut-description = Um ihn anders zu entscheiden, brich ab und füge der Wertung der Phase zuerst ein Kriterium hinzu.
+start-anyway = Trotzdem starten
+ranking = Rangliste
+ranking-provisional = Vorläufig: nicht jede Phase ist beendet.
+place = Platz
+phase-reached = Erreichte Phase
+goes-on = Weiter
+advances-to = kommt weiter in { $phase }
+advances-to-for-now = kommt vorerst weiter in { $phase }, durch den Vergleich
+advances-by-place = kommt durch seinen Platz weiter in { $phase }
+advances-compared = teilt den Rang mit Zeilen, die nicht in { $phase } weiterkommen, daher entscheidet der Vergleich, zuletzt das Los
 
 matches = Spiele
 view = Ansicht
@@ -264,6 +302,12 @@ announce-removed-entrant = { $name } entfernt.
 announce-renamed-entrant = { $name } in { $new_name } umbenannt.
 announce-added-phase = Die Phase ist hinzugefügt.
 announce-edited-phase = Die Phase ist geändert.
+announce-removed-phase = Die Phase ist entfernt.
+announce-phase-finished = Jedes Spiel der Phase hat ein Ergebnis.
+announce-started-phase = { $phase } gestartet: { $count ->
+        [one] ein Spiel
+       *[other] { $count } Spiele
+    } zu spielen.
 announce-results-stay = { $count ->
         [one] Das gemeldete Ergebnis bleibt.
        *[other] Die { $count } gemeldeten Ergebnisse bleiben.
@@ -274,8 +318,10 @@ announce-started = Gestartet: { $count ->
     } zu spielen.
 action-add-entrant = Hinzufügen von { $name }
 action-remove-entrant = Entfernen von { $name }
-action-add-phase = Hinzufügen der Phase
-action-edit-phase = Bearbeiten der Phase
+action-add-phase = Hinzufügen von { $phase }
+action-edit-phase = Bearbeiten von { $phase }
+action-remove-phase = Entfernen von { $phase }
+action-start-phase = Start von { $phase }
 action-start = Start
 action-report = Ergebnis von Spiel { $number } ({ $result })
 action-reopen = Wiederöffnen von Spiel { $number }

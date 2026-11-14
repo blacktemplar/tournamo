@@ -184,6 +184,7 @@ async fn adding_a_phase_with_issues_moves_the_focus_to_them() {
 async fn a_number_not_taken_is_shown_with_why() {
     run_in_new_competition(async |gui| {
         gui.choose_format("Monster DYP").await?;
+        gui.scroll_to_field("format.rounds").await?;
 
         gui.enter("format.rounds", "0").await?;
 
@@ -236,6 +237,7 @@ async fn a_number_not_taken_keeps_the_phase_from_being_added() {
 async fn what_is_said_about_the_next_field_leaves_the_issue_in_sight() {
     run_in_new_competition(async |gui| {
         gui.choose_format("Monster DYP").await?;
+        gui.scroll_to_field("format.rounds").await?;
 
         gui.enter("format.rounds", "0").await?;
 

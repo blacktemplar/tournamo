@@ -1,10 +1,11 @@
 use plugin_factory::{PluginType as _, config::PluginConfig};
 use tournament_engine::{
-    Competition, Match,
+    Competition, Match, PhaseId,
     plugins::{
         match_format::{BestOf, Hints, Scored, WinnerOnly},
         phase_format::RoundRobin,
     },
+    uuid::Uuid,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -30,7 +31,9 @@ fn started(results: PluginConfig) -> (Session, MatchId) {
         .with("match_format", results)
         .and_then(|draft| draft.with_defaults())
         .unwrap();
-    session.add_phase(&draft).unwrap();
+    session
+        .add_phase(&crate::session::tests::form(draft.clone()))
+        .unwrap();
     session.start().unwrap();
     let id = the_match(session.competition()).id();
     (session, id)
@@ -58,7 +61,7 @@ fn score(form: &mut ResultForm, path: &[usize], a: u16, b: u16) {
 #[test]
 fn a_score_suggests_its_winner_and_is_reported_with_it() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     assert_eq!(form.result(), None);
 
     score(&mut form, &[], 17, 21);
@@ -76,7 +79,7 @@ fn a_score_suggests_its_winner_and_is_reported_with_it() {
 #[test]
 fn a_result_chosen_against_the_score_is_taken_with_a_warning() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 17, 21);
 
     form.choose(&[], Some(MatchResult::AWins));
@@ -97,7 +100,7 @@ fn a_result_chosen_against_the_score_is_taken_with_a_warning() {
 #[test]
 fn following_the_suggestions_again_drops_every_result_chosen() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 17);
     form.choose(&[0], Some(MatchResult::BWins));
     form.choose(&[], Some(MatchResult::BWins));
@@ -114,10 +117,21 @@ fn following_the_suggestions_again_drops_every_result_chosen() {
 #[test]
 fn only_a_part_without_values_or_parts_needs_a_choice() {
     let (session, id) = started(PluginConfig::of::<WinnerOnly>());
-    assert!(session.result_form(id).unwrap().view().root.needs_choice);
+    assert!(
+        session
+            .result_form(session.first(), id)
+            .unwrap()
+            .view()
+            .root
+            .needs_choice
+    );
 
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let root = session.result_form(id).unwrap().view().root;
+    let root = session
+        .result_form(session.first(), id)
+        .unwrap()
+        .view()
+        .root;
     assert!(!root.needs_choice, "its games suggest a result");
     assert!(!root.parts[0].needs_choice, "its score suggests a result");
 }
@@ -125,7 +139,7 @@ fn only_a_part_without_values_or_parts_needs_a_choice() {
 /// The warnings of the score `a` to `b` in a match to 21.
 fn warnings_of(a: u16, b: u16) -> Vec<Text> {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], a, b);
     form.view().root.fields[0].warnings.clone()
 }
@@ -140,7 +154,7 @@ fn a_score_a_winner_usually_has_is_taken_without_a_warning() {
 #[test]
 fn a_score_where_neither_side_has_the_winning_score_is_taken_with_a_warning() {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
 
     score(&mut form, &[], 12, 19);
 
@@ -165,7 +179,7 @@ fn a_score_from_the_winning_score_on_without_a_lead_of_one_or_two_is_taken_with_
 #[test]
 fn a_score_of_one_side_alone_is_not_warned_of() {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
 
     form.set_value(&[], &SCORE, Team::A, count(30));
 
@@ -175,7 +189,7 @@ fn a_score_of_one_side_alone_is_not_warned_of() {
 #[test]
 fn a_best_of_shows_the_games_that_may_decide_it_and_reports_those_played() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     let games = form.view().root.parts;
     assert_eq!(games.len(), 2);
     assert_eq!(games[1].path, [1]);
@@ -194,7 +208,7 @@ fn a_best_of_shows_the_games_that_may_decide_it_and_reports_those_played() {
 /// The number of games the form of a best of five shows once each of `games` is entered.
 fn games_shown(games: &[(u16, u16)]) -> usize {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     for (index, &(a, b)) in games.iter().enumerate() {
         score(&mut form, &[index], a, b);
     }
@@ -212,7 +226,7 @@ fn a_game_is_shown_once_every_game_before_it_is_decided_but_the_match_is_not() {
 #[test]
 fn a_game_entered_on_one_side_alone_shows_no_further_game() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 3);
     score(&mut form, &[1], 3, 21);
     form.set_value(&[2], &SCORE, Team::A, count(21));
@@ -223,7 +237,7 @@ fn a_game_entered_on_one_side_alone_shows_no_further_game() {
 #[test]
 fn a_match_decided_by_hand_shows_no_further_game() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 3);
     score(&mut form, &[1], 3, 21);
 
@@ -235,7 +249,7 @@ fn a_match_decided_by_hand_shows_no_further_game() {
 #[test]
 fn a_game_entered_after_the_match_was_decided_stays_with_a_warning() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 3);
     score(&mut form, &[1], 21, 3);
     score(&mut form, &[2], 3, 21);
@@ -256,7 +270,7 @@ fn a_game_entered_after_the_match_was_decided_stays_with_a_warning() {
 #[test]
 fn the_games_each_side_won_are_counted_once_one_is_decided() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     assert_eq!(form.view().root.parts_won, None);
 
     score(&mut form, &[0], 21, 3);
@@ -278,7 +292,7 @@ fn the_games_each_side_won_are_counted_once_one_is_decided() {
 #[test]
 fn a_result_neither_entered_nor_suggested_is_not_reported() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 17);
 
     assert!(matches!(
@@ -290,14 +304,14 @@ fn a_result_neither_entered_nor_suggested_is_not_reported() {
 #[test]
 fn a_winner_alone_is_chosen() {
     let (mut session, id) = started(PluginConfig::of::<WinnerOnly>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     assert!(form.view().root.fields.is_empty());
 
     form.choose(&[], Some(MatchResult::AWins));
 
     session.report_form(&form).unwrap();
     assert!(matches!(
-        session.result_form(id),
+        session.result_form(session.first(), id),
         Err(ReportError::AlreadyFinished)
     ));
 }
@@ -305,7 +319,7 @@ fn a_winner_alone_is_chosen() {
 #[test]
 fn a_value_cleared_on_both_sides_is_no_longer_entered() {
     let (session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 1, 0);
 
     form.set_value(&[], &SCORE, Team::A, None);
@@ -317,7 +331,7 @@ fn a_value_cleared_on_both_sides_is_no_longer_entered() {
 #[test]
 fn a_match_shows_its_score_or_else_those_of_its_games() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 3, 1);
     let row = session.report_form(&form).unwrap().row;
     assert_eq!(row.scores, [Sides::new(count(3), count(1))]);
@@ -325,7 +339,7 @@ fn a_match_shows_its_score_or_else_those_of_its_games() {
     assert_eq!(row.parts_won, None, "a score is no games");
 
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 17);
     score(&mut form, &[1], 19, 21);
     score(&mut form, &[2], 21, 15);
@@ -345,7 +359,9 @@ fn a_match_shows_its_score_or_else_those_of_its_games() {
 fn a_match_with_a_winner_alone_shows_no_score() {
     let (mut session, id) = started(PluginConfig::of::<WinnerOnly>());
 
-    let reported = session.report(id, MatchResult::AWins).unwrap();
+    let reported = session
+        .report(session.first(), id, MatchResult::AWins)
+        .unwrap();
 
     assert!(reported.row.scores.is_empty());
     assert!(
@@ -383,7 +399,7 @@ fn english(text: &Text) -> String {
 /// The field of the score of a match once `typed` is typed for the first side.
 fn after_typing(typed: &str) -> FieldView {
     let (session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.enter(&[], &SCORE, Team::A, typed);
     form.view().root.fields.remove(0)
 }
@@ -428,7 +444,7 @@ fn what_is_typed_as_no_count_stays_shown_with_why() {
 fn a_value_typed_or_cleared_replaces_what_was_not_taken() {
     for (typed, value) in [("7", count(7)), ("", None)] {
         let (session, id) = started(PluginConfig::of::<Scored>());
-        let mut form = session.result_form(id).unwrap();
+        let mut form = session.result_form(session.first(), id).unwrap();
         form.enter(&[], &SCORE, Team::A, "70000");
 
         form.enter(&[], &SCORE, Team::A, typed);
@@ -443,7 +459,7 @@ fn a_value_typed_or_cleared_replaces_what_was_not_taken() {
 #[test]
 fn why_values_in_one_row_are_not_taken_is_said_once() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.enter(&[0], &SCORE, Team::A, "70000");
     form.enter(&[1], &SCORE, Team::B, "80000");
 
@@ -468,7 +484,7 @@ fn why_values_in_one_row_are_not_taken_is_said_once() {
 #[test]
 fn a_game_holding_only_what_was_not_taken_stays_shown() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 17);
     score(&mut form, &[1], 21, 15);
     form.enter(&[2], &SCORE, Team::A, "7");
@@ -481,7 +497,7 @@ fn a_game_holding_only_what_was_not_taken_stays_shown() {
 #[test]
 fn a_match_with_a_value_not_taken_is_not_reported() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 17);
     score(&mut form, &[1], 21, 15);
     form.enter(&[2], &SCORE, Team::A, "70000");
@@ -501,7 +517,7 @@ fn a_match_with_a_value_not_taken_is_not_reported() {
 #[test]
 fn a_score_is_entered_in_one_row() {
     let (session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 3, 1);
 
     let quick = form.quick_entry().unwrap();
@@ -516,7 +532,7 @@ fn a_score_is_entered_in_one_row() {
 #[test]
 fn the_games_of_a_best_of_are_entered_in_one_row() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     for game in 0..3 {
         score(&mut form, &[game], 21, 17);
     }
@@ -543,7 +559,7 @@ fn a_warning_of_several_fields_in_one_row_is_said_once() {
             .with("games", 3)
             .with("winning_score", 21),
     );
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 11, 7);
     score(&mut form, &[1], 11, 9);
 
@@ -559,13 +575,24 @@ fn a_warning_of_several_fields_in_one_row_is_said_once() {
 fn a_winner_alone_is_not_entered_in_a_row() {
     let (session, id) = started(PluginConfig::of::<WinnerOnly>());
 
-    assert_eq!(session.result_form(id).unwrap().quick_entry(), None);
+    assert_eq!(
+        session
+            .result_form(session.first(), id)
+            .unwrap()
+            .quick_entry(),
+        None
+    );
 }
 
 /// A form of a match whose result looks like `root`.
 fn form_of(root: Level) -> ResultForm {
     let (_, id) = started(PluginConfig::of::<WinnerOnly>());
-    ResultForm::new(id, Box::new(WinnerOnly), Template { root })
+    ResultForm::new(
+        PhaseId::new(Uuid::nil()),
+        id,
+        Box::new(WinnerOnly),
+        Template { root },
+    )
 }
 
 /// A level called `name` with a score.
@@ -649,15 +676,19 @@ fn a_form_makes_entries_only_as_far_as_parts_are_entered() {
 #[test]
 fn a_finished_match_shows_its_result_as_reported() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 5));
-    assert_eq!(session.reported_result(id), None, "not finished yet");
-    let mut form = session.result_form(id).unwrap();
+    assert_eq!(
+        session.reported_result(session.first(), id),
+        None,
+        "not finished yet"
+    );
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[0], 21, 17);
     score(&mut form, &[1], 15, 21);
     score(&mut form, &[2], 21, 9);
     score(&mut form, &[3], 21, 19);
     session.report_form(&form).unwrap();
 
-    let root = session.reported_result(id).unwrap().root;
+    let root = session.reported_result(session.first(), id).unwrap().root;
 
     assert_eq!(root.parts.len(), 4);
     assert_eq!(
@@ -675,8 +706,10 @@ fn a_finished_match_shows_its_result_as_reported() {
 #[test]
 fn the_parts_of_a_finished_match_are_a_table() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    session.report_entered("1 21-17 19-21 21-15").unwrap();
-    let root = session.reported_result(id).unwrap().root;
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    let root = session.reported_result(session.first(), id).unwrap().root;
 
     let table = root.parts_table().unwrap();
 
@@ -713,12 +746,12 @@ fn the_parts_of_a_finished_match_are_a_table() {
 #[test]
 fn a_result_reported_against_the_score_shows_as_chosen() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 3, 1);
     form.choose(&[], Some(MatchResult::BWins));
     session.report_form(&form).unwrap();
 
-    let root = session.reported_result(id).unwrap().root;
+    let root = session.reported_result(session.first(), id).unwrap().root;
 
     assert_eq!(root.result, Some(MatchResult::BWins));
     assert!(root.chosen);
@@ -730,17 +763,25 @@ fn a_result_reported_against_the_score_shows_as_chosen() {
 #[test]
 fn a_reopened_match_starts_out_at_its_result() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    session.report_entered("1 21-17 19-21 21-15").unwrap();
-    let reported = session.reported_result(id).unwrap();
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    let reported = session.reported_result(session.first(), id).unwrap();
 
-    session.undo_report(id).unwrap();
+    session.undo_report(session.first(), id).unwrap();
 
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     assert_eq!(form.view(), reported);
     score(&mut form, &[2], 21, 19);
     session.report_form(&form).unwrap();
     assert_eq!(
-        session.reported_result(id).unwrap().root.parts[2].fields[0].values,
+        session
+            .reported_result(session.first(), id)
+            .unwrap()
+            .root
+            .parts[2]
+            .fields[0]
+            .values,
         Sides::new(count(21), count(19))
     );
 }
@@ -753,7 +794,7 @@ fn score_shown(form: &ResultForm) -> Sides<Option<EnteredValue>> {
 /// Reports `a` to `b` for the match `id` of `session` from the form of the match, whatever it
 /// starts out at.
 fn report_score(session: &mut Session, id: MatchId, a: u16, b: u16) {
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], a, b);
     session.report_form(&form).unwrap();
 }
@@ -764,12 +805,12 @@ fn report_score(session: &mut Session, id: MatchId, a: u16, b: u16) {
 fn undo_and_redo_take_a_result_back_as_reopening_does() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
     report_score(&mut session, id, 21, 17);
-    session.undo_report(id).unwrap();
+    session.undo_report(session.first(), id).unwrap();
     report_score(&mut session, id, 21, 19);
 
     session.undo().unwrap();
     assert_eq!(
-        score_shown(&session.result_form(id).unwrap()),
+        score_shown(&session.result_form(session.first(), id).unwrap()),
         Sides::new(count(21), count(19)),
         "the result of the report undone"
     );
@@ -777,7 +818,7 @@ fn undo_and_redo_take_a_result_back_as_reopening_does() {
     session.undo().unwrap();
     session.redo().unwrap();
     assert_eq!(
-        score_shown(&session.result_form(id).unwrap()),
+        score_shown(&session.result_form(session.first(), id).unwrap()),
         Sides::new(count(21), count(17)),
         "the result reopened again"
     );
@@ -786,18 +827,22 @@ fn undo_and_redo_take_a_result_back_as_reopening_does() {
 #[test]
 fn a_result_the_match_format_no_longer_takes_is_not_where_the_form_starts_out() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    session.report_entered("1 21-17 21-15").unwrap();
-    session.undo_report(id).unwrap();
+    session
+        .report_entered(session.all(), "1 21-17 21-15")
+        .unwrap();
+    session.undo_report(session.first(), id).unwrap();
 
     let draft = session
-        .phase_draft_to_edit()
+        .phase_draft_to_edit(session.first())
         .unwrap()
         .with("match_format", PluginConfig::of::<Scored>())
         .and_then(|draft| draft.with_defaults())
         .unwrap();
-    session.edit_phase(&draft).unwrap();
+    session
+        .edit_phase(session.first(), &crate::session::tests::form(draft.clone()))
+        .unwrap();
 
-    let form = session.result_form(id).unwrap();
+    let form = session.result_form(session.first(), id).unwrap();
     assert_eq!(score_shown(&form), Sides::new(None, None));
     assert_eq!(form.result(), None);
 }
@@ -805,23 +850,31 @@ fn a_result_the_match_format_no_longer_takes_is_not_where_the_form_starts_out() 
 #[test]
 fn the_template_of_a_match_is_that_of_its_form() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let best_of = session.result_template(id).unwrap();
-    assert_eq!(&best_of, session.result_form(id).unwrap().template());
+    let best_of = session.result_template(session.first(), id).unwrap();
+    assert_eq!(
+        &best_of,
+        session.result_form(session.first(), id).unwrap().template()
+    );
 
     let draft = session
-        .phase_draft_to_edit()
+        .phase_draft_to_edit(session.first())
         .unwrap()
         .with("match_format", PluginConfig::of::<Scored>())
         .and_then(|draft| draft.with_defaults())
         .unwrap();
-    session.edit_phase(&draft).unwrap();
+    session
+        .edit_phase(session.first(), &crate::session::tests::form(draft.clone()))
+        .unwrap();
 
-    let scored = session.result_template(id).unwrap();
+    let scored = session.result_template(session.first(), id).unwrap();
     assert_ne!(scored, best_of);
-    assert_eq!(&scored, session.result_form(id).unwrap().template());
-    session.report_entered("1 21-17").unwrap();
+    assert_eq!(
+        &scored,
+        session.result_form(session.first(), id).unwrap().template()
+    );
+    session.report_entered(session.all(), "1 21-17").unwrap();
     assert!(matches!(
-        session.result_template(id),
+        session.result_template(session.first(), id),
         Err(ReportError::AlreadyFinished)
     ));
 }
@@ -831,14 +884,14 @@ fn the_template_of_a_match_is_that_of_its_form() {
 #[test]
 fn a_result_chosen_by_hand_stays_chosen_once_reopened_and_takes_no_row() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 3, 1);
     form.choose(&[], Some(MatchResult::BWins));
     session.report_form(&form).unwrap();
 
-    session.undo_report(id).unwrap();
+    session.undo_report(session.first(), id).unwrap();
 
-    let form = session.result_form(id).unwrap();
+    let form = session.result_form(session.first(), id).unwrap();
     assert!(form.is_chosen());
     assert_eq!(form.result(), Some(MatchResult::BWins));
     assert_eq!(form.quick_entry(), None);
@@ -847,7 +900,7 @@ fn a_result_chosen_by_hand_stays_chosen_once_reopened_and_takes_no_row() {
 #[test]
 fn scores_entered_replace_everything_entered() {
     let (session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[2], 21, 15);
     form.choose(&[0], Some(MatchResult::BWins));
 
@@ -869,10 +922,15 @@ fn scores_entered_replace_everything_entered() {
 #[test]
 fn scores_typed_in_replace_the_result_a_reopened_match_starts_out_at() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    session.report_entered("1 21-17 19-21 21-15").unwrap();
-    session.undo_report(id).unwrap();
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    session.undo_report(session.first(), id).unwrap();
 
-    let row = session.report_entered("1 21-17 21-19").unwrap().row;
+    let row = session
+        .report_entered(session.all(), "1 21-17 21-19")
+        .unwrap()
+        .row;
 
     assert_eq!(
         row.scores,
@@ -887,7 +945,7 @@ fn scores_typed_in_replace_the_result_a_reopened_match_starts_out_at() {
 /// to 21, with `other` already entered for the second: whether it completed it, and the score.
 fn completed(entered: u16, other: Option<EnteredValue>) -> (bool, Sides<Option<EnteredValue>>) {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.set_value(&[], &SCORE, Team::B, other);
     form.set_value(&[], &SCORE, Team::A, count(entered));
 
@@ -929,7 +987,7 @@ fn a_score_entered_on_both_sides_is_not_completed() {
 #[test]
 fn a_score_without_a_winning_score_is_not_completed() {
     let (session, id) = started(PluginConfig::of::<Scored>());
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.set_value(&[], &SCORE, Team::B, count(3));
 
     assert!(!form.complete_score(&[], &SCORE, Team::B));
@@ -942,7 +1000,7 @@ fn a_score_without_a_winning_score_is_not_completed() {
 #[test]
 fn what_was_typed_and_not_taken_completes_nothing() {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.enter(&[], &SCORE, Team::A, "4294967295");
 
     assert!(!form.complete_score(&[], &SCORE, Team::A));
@@ -952,7 +1010,7 @@ fn what_was_typed_and_not_taken_completes_nothing() {
 #[test]
 fn no_score_is_completed_onto_what_was_typed_and_not_taken() {
     let (session, id) = started(PluginConfig::of::<Scored>().with("winning_score", 21));
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.enter(&[], &SCORE, Team::B, "70000");
     form.enter(&[], &SCORE, Team::A, "15");
 
@@ -969,7 +1027,7 @@ fn the_score_of_a_game_is_completed_in_its_game() {
             .with("games", 3)
             .with("winning_score", 11),
     );
-    let mut form = session.result_form(id).unwrap();
+    let mut form = session.result_form(session.first(), id).unwrap();
     form.set_value(&[1], &SCORE, Team::B, count(4));
 
     assert!(form.complete_score(&[1], &SCORE, Team::B));

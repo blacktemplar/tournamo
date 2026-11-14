@@ -65,12 +65,12 @@ impl Session {
     /// see [`Self::entrant_like`], or the competition has started.
     pub fn add_named_entrants(
         &mut self,
-        names: &[String],
+        names: &[impl AsRef<str>],
     ) -> Result<Vec<EntrantId>, AddEntrantError> {
-        self.check_names(names.iter().map(String::as_str))?;
+        self.check_names(names.iter().map(AsRef::as_ref))?;
         names
             .iter()
-            .map(|name| self.add_named_entrant(name))
+            .map(|name| self.add_named_entrant(name.as_ref()))
             .collect()
     }
 
@@ -128,24 +128,7 @@ impl Session {
         if names.is_empty() {
             return Err(AddEntrantError::EmptyName);
         }
-        if self.competition().is_started() {
-            return Err(AddEntrantError::Started);
-        }
-        let mut earlier = HashMap::new();
-        for name in &names {
-            if let Some(entered) = self.entrant_like(name) {
-                return Err(AddEntrantError::DuplicateName(entered));
-            }
-            if let Some(earlier) = earlier.insert(folded(name), *name) {
-                return Err(AddEntrantError::DuplicateName(earlier.to_owned()));
-            }
-        }
-        // what `add_entrant` refuses is checked above, so none of them is refused after another
-        // was added
-        names
-            .into_iter()
-            .map(|name| self.add_entrant(name))
-            .collect()
+        self.add_named_entrants(&names)
     }
 
     /// Removes the entrant `id`. Its name is kept, in case the removal is undone.

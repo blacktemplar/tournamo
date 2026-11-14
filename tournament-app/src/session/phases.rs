@@ -5,8 +5,8 @@ use std::num::NonZeroU32;
 
 use plugin_factory::catalog::AnyAxis;
 use tournament_engine::{
-    AddPhase, CompetitionStateMachineExt as _, CompetitionTransition, Phase, PhaseId, SourceOf,
-    Standing, StartPhase,
+    AddPhase, CompetitionStateMachineExt as _, CompetitionTransition, Phase, PhaseId,
+    PhaseStanding, SourceOf, Standing, StartPhase,
     plugins::phase_format::PhaseFormat,
     transitions::{RemovePhaseError as EngineRemovePhaseError, StartPhaseError as Engine},
     undoable_state_machine::TransitionId,
@@ -253,7 +253,7 @@ impl Session {
                 continue;
             };
             let standings = from_phase.standings();
-            let rows: Vec<Standing> = standings.iter().copied().collect();
+            let rows: Vec<PhaseStanding> = standings.iter().copied().collect();
             let cuts = [
                 source.from().get().checked_sub(1).and_then(NonZeroU32::new),
                 source.to(),
@@ -267,15 +267,11 @@ impl Session {
                     continue;
                 }
                 let rank = above.rank();
-                let team = |standing: &Standing| {
-                    let data = from_phase
-                        .divisions()
-                        .first()
-                        .expect("a phase with standings has a division")
-                        .data();
+                let team = |standing: &PhaseStanding| {
+                    let data = from_phase.divisions()[standing.division()].data();
                     self.team(data, &[standing.ranking().id()])
                 };
-                let tied = |range: &[Standing]| -> Vec<_> {
+                let tied = |range: &[PhaseStanding]| -> Vec<_> {
                     range
                         .iter()
                         .filter(|standing| standing.rank() == rank)

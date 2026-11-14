@@ -137,6 +137,7 @@ pub mod monster_dyp;
 pub mod round_robin;
 pub mod single_elimination;
 
+pub(crate) use bracket::seeding_order;
 pub use bracket::{Advance, Bracket, BracketPairing, BracketSide, PairingId, Seat};
 pub use double_elimination::{DoubleElimination, DoubleEliminationRound};
 pub use monster_dyp::MonsterDyp;

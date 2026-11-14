@@ -362,6 +362,9 @@ mod v4 {
 /// as an `AddPhase` has. A started competition holds its `"lots"`, the order its phase started
 /// in, and every ranking its `"lot"`, its initial unique rank; the competition holds the
 /// `"highest_number"` of a match or of a pairing of a bracket, a division the `"number_base"` 0.
+/// The plugins of a phase, of a division and of an `AddPhase` are played in one division
+/// (`"divisions"`), dealt in order (`"draw"`) and compared across divisions by nothing
+/// (`"across"`).
 mod v5 {
     use serde_json::{Map, Value, json};
 
@@ -375,7 +378,24 @@ mod v5 {
         };
         if let Some(Value::Object(add_phase)) = entry.pointer_mut(transition) {
             name_and_sources(add_phase);
+            if let Some(Value::Object(plugins)) = add_phase.get_mut("plugins") {
+                one_division(plugins);
+            }
         }
+    }
+
+    /// Plugins without the fields of divisions are played in one, dealt in order, compared across
+    /// divisions by nothing.
+    fn one_division(plugins: &mut Map<String, Value>) {
+        if plugins.contains_key("divisions") {
+            return;
+        }
+        plugins.insert("divisions".to_owned(), 1.into());
+        plugins.insert(
+            "draw".to_owned(),
+            json!({ "type": "tournament_engine::in_order", "value": null }),
+        );
+        plugins.insert("across".to_owned(), json!([]));
     }
 
     pub(super) fn competition(competition: &mut Value) {
@@ -454,6 +474,9 @@ mod v5 {
             return false;
         }
         let data = phase.remove("data").unwrap_or_default();
+        if let Some(Value::Object(plugins)) = phase.get_mut("plugins") {
+            one_division(plugins);
+        }
         let divisions = if started {
             json!([{ "plugins": phase["plugins"].clone(), "data": data, "number_base": 0 }])
         } else {
@@ -808,6 +831,18 @@ mod tests {
         session
     }
 
+    /// `plugins`, played in one division, dealt in order, as plugins of format 4 are: without the
+    /// fields of divisions.
+    fn without_divisions(plugins: &mut Value) {
+        let plugins = plugins.as_object_mut().unwrap();
+        assert_eq!(plugins.remove("divisions"), Some(json!(1)));
+        assert_eq!(
+            plugins.remove("draw"),
+            Some(json!({ "type": "tournament_engine::in_order", "value": null }))
+        );
+        assert_eq!(plugins.remove("across"), Some(json!([])));
+    }
+
     /// `competition`, as this version writes it, as a file of format 4 holds it: a phase holds the
     /// plugins and data of its only division, or else its plugins and the data of a phase not
     /// started.
@@ -854,6 +889,7 @@ mod tests {
                 }
             };
             phase.insert("data".to_owned(), data);
+            without_divisions(&mut phase["plugins"]);
         }
     }
 
@@ -1046,17 +1082,22 @@ mod tests {
         assert_eq!(serde_json::to_value(read).unwrap(), competition);
     }
 
-    /// A phase added, or added in place of another, takes the whole registration, without a name.
+    /// A phase added, or added in place of another, takes the whole registration, without a name,
+    /// and is played in one division.
     #[test]
-    fn a_phase_added_gets_no_name_and_the_whole_registration_in_format_5() {
-        let plugins =
-            json!({ "format": { "type": "tournament_engine::round_robin", "value": null } });
-        let added = json!({ "id": "phase", "plugins": plugins });
+    fn a_phase_added_gets_no_name_the_whole_registration_and_one_division_in_format_5() {
+        let round_robin = json!({ "type": "tournament_engine::round_robin", "value": null });
+        let added = json!({ "id": "phase", "plugins": { "format": round_robin } });
         let converted = json!({
             "id": "phase",
             "name": null,
             "sources": [{ "of": "Registration", "from": 1, "to": null }],
-            "plugins": plugins,
+            "plugins": {
+                "format": round_robin,
+                "divisions": 1,
+                "draw": { "type": "tournament_engine::in_order", "value": null },
+                "across": [],
+            },
         });
         let apply =
             |phase: &Value| json!({ "id": "add", "kind": { "Apply": { "AddPhase": phase } } });

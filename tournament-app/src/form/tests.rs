@@ -96,7 +96,18 @@ fn a_new_phase_is_answered_as_its_format_recommends() {
     let view = new_form().view();
 
     let names: Vec<_> = view.fields.iter().map(|field| field.name).collect();
-    assert_eq!(names, ["format", "match_format", "ranking", "metrics"]);
+    assert_eq!(
+        names,
+        [
+            "format",
+            "divisions",
+            "draw",
+            "match_format",
+            "ranking",
+            "metrics",
+            "across"
+        ]
+    );
     assert_eq!(chosen(&view, "format"), RoundRobin::ID);
     assert_eq!(
         items(&view, "ranking"),

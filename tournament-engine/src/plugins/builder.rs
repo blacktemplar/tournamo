@@ -1,8 +1,11 @@
+use std::num::NonZeroU32;
+
 use plugin_factory::schema::DependencyOrderedSetError;
 
 use crate::{
     PhasePlugins,
     plugins::{
+        draw::{Draw, InOrder},
         match_format::{self, MatchFormat},
         metrics_calculator::MetricsCalculator,
         phase_format::{PhaseFormat, RoundRobin},
@@ -11,7 +14,8 @@ use crate::{
 };
 
 /// Builds [`PhasePlugins`] directly. Without a format, the phase is a [`RoundRobin`]; without a
-/// ranking, it leaves every entrant tied; without metrics, it calculates none.
+/// ranking, it leaves every entrant tied; without metrics, it calculates none; it is played in one
+/// division, dealt [`InOrder`], and ranked across divisions by nothing but the rank in them.
 ///
 /// Nothing else is added: unlike a draft, the builder adds no plugin the others imply. Nor are the
 /// plugins checked against each other, so a fact one of them requires may be missing; adding them
@@ -53,6 +57,9 @@ pub struct PhasePluginsBuilder {
     match_format: Option<Box<dyn MatchFormat>>,
     ranking: Vec<Box<dyn SliceRanker>>,
     metrics: Vec<Box<dyn MetricsCalculator>>,
+    divisions: Option<NonZeroU32>,
+    draw: Option<Box<dyn Draw>>,
+    across: Vec<Box<dyn SliceRanker>>,
 }
 
 impl PhasePluginsBuilder {
@@ -81,6 +88,28 @@ impl PhasePluginsBuilder {
         self
     }
 
+    /// Plays the phase in `divisions` divisions instead of one.
+    ///
+    /// # Panics
+    /// Panics if `divisions` is 0.
+    pub fn divisions(mut self, divisions: u32) -> Self {
+        self.divisions = Some(NonZeroU32::new(divisions).expect("at least one division"));
+        self
+    }
+
+    /// Deals the field to the divisions by `draw` instead of [`InOrder`].
+    pub fn draw(mut self, draw: impl Draw) -> Self {
+        self.draw = Some(Box::new(draw));
+        self
+    }
+
+    /// Ranks the rankings of one rank in parallel divisions by `criterion` after the criteria
+    /// given before.
+    pub fn add_across(mut self, criterion: impl SliceRanker) -> Self {
+        self.across.push(Box::new(criterion));
+        self
+    }
+
     /// Calculates the metric of `calculator` as well.
     pub fn add_metric(mut self, calculator: impl MetricsCalculator) -> Self {
         self.metrics.push(Box::new(calculator));
@@ -98,7 +127,14 @@ impl PhasePluginsBuilder {
     pub fn build(self) -> Result<PhasePlugins, DependencyOrderedSetError> {
         let format = self.format.unwrap_or_else(|| Box::new(RoundRobin));
         let match_format = self.match_format.unwrap_or_else(match_format::default);
-        PhasePlugins::from_parts(format, match_format, self.ranking, self.metrics)
+        Ok(
+            PhasePlugins::from_parts(format, match_format, self.ranking, self.metrics)?
+                .with_divisions(
+                    self.divisions.unwrap_or(NonZeroU32::MIN),
+                    self.draw.unwrap_or_else(|| Box::new(InOrder)),
+                    self.across,
+                ),
+        )
     }
 }
 

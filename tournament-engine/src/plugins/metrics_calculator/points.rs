@@ -158,5 +158,103 @@ impl Calculator for PointsCalculator {
 
 crate::register_calculator!(PointsCalculator);
 
+/// The [`Points`] of a ranking divided by the number of its matches with a result and byes it
+/// reached; 0 before it has any.
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub struct PointsPerMatch(pub Score);
+
+#[typetag::serde(name = "tournament_engine::points_per_match")]
+impl TypeMapValue for PointsPerMatch {}
+
+impl ToCell for PointsPerMatch {
+    fn to_cell(&self) -> Cell {
+        Cell::Number(self.0)
+    }
+}
+
+/// Ranks by the [`PointsPerMatch`], where more are better.
+#[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::more_points_per_match",
+    label = "more points per match",
+    description = "compares entrants who played different numbers of matches, e.g. in groups of \
+                   different sizes",
+    declare_static = requires_metric::<Self>
+)]
+pub struct MorePointsPerMatch;
+
+impl RankingCriterion for MorePointsPerMatch {
+    type Metric = PointsPerMatch;
+
+    fn compare(&self, first: &PointsPerMatch, second: &PointsPerMatch) -> Comparison {
+        Comparison::greater_is_better(first.0.cmp(&second.0))
+    }
+}
+
+crate::register_criterion!(MorePointsPerMatch);
+
+/// Calculates the [`PointsPerMatch`] of a ranking from its [`Points`] and its
+/// [`WinsDrawsLosses`], which therefore have to be calculated before.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "tournament_engine::points_per_match",
+    label = "points per match",
+    description = "the points divided by the matches played and the byes",
+    declare_static = Self::declare_static
+)]
+pub struct PointsPerMatchCalculator;
+
+impl PointsPerMatchCalculator {
+    fn of(ranking_id: RankingId, phase_data: &DivisionData) -> (RankingId, PointsPerMatch) {
+        let ranking = &phase_data.rankings()[&ranking_id];
+        let Points(points) = *ranking.metric::<Points>().unwrap();
+        let record = ranking.metric::<WinsDrawsLosses>().unwrap();
+        let counted = record.wins + record.draws + record.losses + record.byes;
+        let per_match = if counted == 0 {
+            Score::ZERO
+        } else {
+            Score::new(points.get() / f64::from(counted))
+        };
+        (ranking_id, PointsPerMatch(per_match))
+    }
+
+    fn declare_static(declaration: &mut Declaration) {
+        provides_metric::<Self>(declaration);
+        declaration.require::<CalculatesMetric<Points>>("the points");
+        declaration.require::<CalculatesMetric<WinsDrawsLosses>>("the wins, draws and losses");
+    }
+}
+
+impl Calculator for PointsPerMatchCalculator {
+    type Metric = PointsPerMatch;
+
+    fn after_match(
+        &mut self,
+        phase_data: &DivisionData,
+        r#match: &Match,
+        _: &OldMetrics,
+    ) -> Vec<(RankingId, PointsPerMatch)> {
+        r#match
+            .rankings()
+            .map(|ranking_id| Self::of(*ranking_id, phase_data))
+            .collect()
+    }
+
+    fn after_bye(
+        &mut self,
+        phase_data: &DivisionData,
+        bye: &Bye,
+        _: &OldMetrics,
+    ) -> Vec<(RankingId, PointsPerMatch)> {
+        vec![Self::of(bye.ranking(), phase_data)]
+    }
+
+    fn column(&self) -> Option<MetricColumn> {
+        Some(MetricColumn::new::<PointsPerMatch>("points per match"))
+    }
+}
+
+crate::register_calculator!(PointsPerMatchCalculator);
+
 #[cfg(test)]
 mod tests;

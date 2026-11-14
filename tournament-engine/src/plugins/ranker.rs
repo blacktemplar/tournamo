@@ -10,8 +10,8 @@ use crate::{
     type_map::TypeMapValue,
 };
 
-/// Ranks the rankings of a phase by its slice rankers in order, each one breaking the ties of the
-/// ones before it.
+/// Ranks rankings by slice rankers in order, each one breaking the ties of the ones before it:
+/// those of a division by its ranking, or those of parallel divisions by the ranking across them.
 #[derive(Debug, Clone, Copy)]
 pub struct HierarchicalRanker<'a>(&'a [Box<dyn SliceRanker>]);
 
@@ -21,24 +21,31 @@ impl<'a> HierarchicalRanker<'a> {
         Self(slice_rankers)
     }
 
-    /// Every ranking of `phase_data` with its rank, ordered by rank.
+    /// Every ranking of `data` with its rank, ordered by rank.
     ///
     /// The ranks satisfy the following invariant: ordered by rank, the first ranking has rank 1 and
     /// every following one has either the rank of its predecessor or rank `index + 1`. Equal ranks
     /// are therefore ties, and the rank after a tie skips the tied ranks.
-    pub(crate) fn rank<'d>(&self, phase_data: &'d DivisionData) -> Vec<(&'d Ranking, NonZeroU32)> {
-        let mut ranked: Vec<(&Ranking, NonZeroU32)> = phase_data
+    pub(crate) fn rank<'d>(&self, data: &'d DivisionData) -> Vec<(&'d Ranking, NonZeroU32)> {
+        let mut ranked: Vec<(&Ranking, NonZeroU32)> = data
             .rankings()
             .values()
             .map(|ranking| (ranking, NonZeroU32::MIN))
             .collect();
+        self.rank_tied(RankingScope::Division(data), &mut ranked);
+        ranked
+    }
 
-        let mut slices = vec![ranked.as_mut_slice()];
+    /// Reorders `slice`, whose rankings all come in with the same rank `r`, by the slice rankers
+    /// in order and assigns the new ranks, as [`SliceRanker::rank`] does, each slice ranker
+    /// seeing `scope`.
+    pub(crate) fn rank_tied(&self, scope: RankingScope<'_>, slice: &mut [(&Ranking, NonZeroU32)]) {
+        let mut slices = vec![slice];
         for slice_ranker in self.0 {
             slices = slices
                 .drain(..)
                 .flat_map(|slice| {
-                    slice_ranker.rank(phase_data, slice);
+                    slice_ranker.rank(scope, slice);
                     slice
                         .chunk_by_mut(|(_, r1), (_, r2)| r1 == r2)
                         .filter(|s| s.len() > 1)
@@ -48,9 +55,18 @@ impl<'a> HierarchicalRanker<'a> {
                 break;
             }
         }
-
-        ranked
     }
+}
+
+/// What a [`SliceRanker`] ranks rankings within.
+#[derive(Debug, Clone, Copy)]
+pub enum RankingScope<'a> {
+    /// The rankings of one division, which holds them with their matches and byes.
+    Division(&'a DivisionData),
+    /// Rankings of different parallel divisions of a phase that share their rank in their
+    /// divisions, see [`Phase::standings`](crate::Phase::standings). A slice ranker comparing
+    /// rankings by what they did against each other leaves them tied.
+    AcrossDivisions,
 }
 
 /// Ranks rankings that are tied so far, as one step of a [`HierarchicalRanker`].
@@ -64,7 +80,7 @@ pub trait SliceRanker: Plugin + DynClone {
     /// All rankings of `slice` come in with the same rank `r`. Afterwards, ordered as the slice
     /// is, the first ranking must have rank `r` and every following one either the rank of its
     /// predecessor or rank `r + index`.
-    fn rank(&self, phase_data: &DivisionData, slice: &mut [(&Ranking, NonZeroU32)]);
+    fn rank(&self, scope: RankingScope<'_>, slice: &mut [(&Ranking, NonZeroU32)]);
 }
 
 dyn_clone::clone_trait_object!(SliceRanker);
@@ -126,7 +142,7 @@ macro_rules! register_criterion {
         impl $crate::plugins::ranker::SliceRanker for $criterion {
             fn rank(
                 &self,
-                _: &$crate::DivisionData,
+                _: $crate::plugins::ranker::RankingScope<'_>,
                 slice: &mut [(&$crate::Ranking, ::std::num::NonZeroU32)],
             ) {
                 $crate::plugins::ranker::rank_by(self, slice);

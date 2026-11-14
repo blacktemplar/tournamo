@@ -22,11 +22,14 @@ use tournament_engine::{
     ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
     StartCompetition, StartPhase, TypeMapValue,
     plugins::{
+        draw::{Blocks, Draw, GroupWinnersApart, InOrder, Random},
         metrics_calculator::{
-            BuchholzCalculator, LaterFirstLoss, MorePoints, Points, PointsCalculator,
-            RoundOfFirstLossCalculator, WinsDrawsLossesCalculator,
+            BuchholzCalculator, LaterFirstLoss, MetricsCalculator, MorePoints, MorePointsPerMatch,
+            Points, PointsCalculator, PointsPerMatchCalculator, RoundOfFirstLossCalculator,
+            WinsDrawsLossesCalculator,
         },
         phase_format::SingleElimination,
+        ranker::SliceRanker,
     },
     undoable_state_machine::{LogEntry, LogEntryKind, SessionHistory, TransitionId},
     uuid::Uuid,
@@ -547,6 +550,43 @@ fn every_plugin_is_serialized_under_its_id() {
             "tournament_engine::points",
             "tournament_engine::buchholz",
         ]
+    );
+    assert_eq!(plugins["divisions"], 1);
+    assert_eq!(plugins["draw"]["type"], "tournament_engine::in_order");
+    assert_eq!(plugins["across"], json!([]));
+}
+
+/// The plugins no phase of [`played_competition`] has, pinned like those it has.
+#[test]
+fn the_plugins_of_divisions_are_serialized_under_their_ids() {
+    let id = |plugin: Value| plugin["type"].as_str().unwrap().to_owned();
+    let draws: [Box<dyn Draw>; 4] = [
+        Box::new(InOrder),
+        Box::new(Random),
+        Box::new(Blocks),
+        Box::new(GroupWinnersApart),
+    ];
+
+    assert_eq!(
+        draws
+            .map(|draw| id(serde_json::to_value(draw).unwrap()))
+            .as_slice(),
+        [
+            "tournament_engine::in_order",
+            "tournament_engine::random",
+            "tournament_engine::blocks",
+            "tournament_engine::group_winners_apart",
+        ]
+    );
+    let calculator: Box<dyn MetricsCalculator> = Box::new(PointsPerMatchCalculator);
+    assert_eq!(
+        id(serde_json::to_value(calculator).unwrap()),
+        "tournament_engine::points_per_match"
+    );
+    let criterion: Box<dyn SliceRanker> = Box::new(MorePointsPerMatch);
+    assert_eq!(
+        id(serde_json::to_value(criterion).unwrap()),
+        "tournament_engine::more_points_per_match"
     );
 }
 

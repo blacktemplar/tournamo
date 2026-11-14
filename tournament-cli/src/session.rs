@@ -1095,6 +1095,7 @@ mod tests {
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))
+            .and_then(|draft| draft.with_defaults())
             .and_then(|draft| draft.with("match_format", plugin::<WinnerOnly>()))
             .unwrap()
     }

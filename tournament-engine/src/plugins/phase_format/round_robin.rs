@@ -51,8 +51,8 @@ impl PhaseFormat for RoundRobin {
 
     fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let phase_data = phase.data();
-        // all rounds are scheduled at once
-        if phase_data.has_schedule() {
+        // all rounds are scheduled at once, and nothing for fewer than two
+        if phase_data.has_schedule() || phase_data.rankings().len() < 2 {
             return Schedule::default();
         }
         let circle = Circle::new(phase_data);

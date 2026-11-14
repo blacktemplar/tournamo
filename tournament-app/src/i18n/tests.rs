@@ -10,6 +10,7 @@ use tournament_engine::{
     EnteredValue, PhasePlugins, Score, Sides,
     plugins::{
         Phrase,
+        draw::Draw,
         match_format::MatchFormat,
         metrics_calculator::{
             Cell, GamesBalance, GamesBalanceCalculator, MetricsCalculator, PointsBalance,
@@ -303,6 +304,7 @@ fn a_cell_is_said_in_the_language_or_else_as_its_code_says() {
 fn engine_plugins() -> Vec<&'static PluginEntry> {
     [
         AnyAxis::of::<dyn PhaseFormat>(),
+        AnyAxis::of::<dyn Draw>(),
         AnyAxis::of::<dyn SliceRanker>(),
         AnyAxis::of::<dyn MetricsCalculator>(),
         AnyAxis::of::<dyn MatchFormat>(),

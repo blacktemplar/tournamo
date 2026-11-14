@@ -11,9 +11,10 @@ use tournament_engine::{
     PhasePluginsBuilder, RankingId, ReportMatchResult, Score, Seed, SetCompetitionSeed, Source,
     SourceOf, StartCompetition, StartPhase,
     plugins::{
+        draw::{Blocks, GroupWinnersApart},
         metrics_calculator::{
-            LaterFirstLoss, MorePoints, PointsCalculator, RoundOfFirstLossCalculator,
-            WinsDrawsLossesCalculator,
+            LaterFirstLoss, MorePoints, MorePointsPerMatch, PointsCalculator,
+            PointsPerMatchCalculator, RoundOfFirstLossCalculator, WinsDrawsLossesCalculator,
         },
         phase_format::SingleElimination,
     },
@@ -744,4 +745,364 @@ fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on()
             (3, phase(QUALIFICATION)),
         ]
     );
+}
+
+const GROUPS: u128 = 7;
+const KNOCKOUT: u128 = 8;
+
+/// Round robins in `groups` groups, dealt in order, ranked by points, compared across the groups
+/// by points per match, then points.
+fn groups(groups: u32) -> PhasePlugins {
+    PhasePluginsBuilder::new()
+        .divisions(groups)
+        .add_ranking(MorePoints)
+        .add_metric(WinsDrawsLossesCalculator)
+        .add_metric(PointsCalculator::new(Score::ONE, Score::new(0.5)))
+        .add_metric(PointsPerMatchCalculator)
+        .add_across(MorePointsPerMatch)
+        .add_across(MorePoints)
+        .build()
+        .unwrap()
+}
+
+/// Scenario 2: 11 entrants in 3 groups, then a knockout of the best 8 by the overall standings,
+/// seeded so that entrants of one group meet late.
+fn groups_then_a_knockout() -> CompetitionStateMachine {
+    let mut machine = registered(11);
+    add(&mut machine, AddPhase::new(phase(GROUPS), groups(3)));
+    let knockout = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .draw(GroupWinnersApart)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(KNOCKOUT),
+            vec1![places(phase(GROUPS), 1, Some(8))],
+            knockout,
+        ),
+    );
+    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+}
+
+/// The entrants of each division of the phase `phase_id`, in seeding order.
+fn divisions(machine: &CompetitionStateMachine, phase_id: PhaseId) -> Vec<Vec<EntrantId>> {
+    machine.current().phases()[&phase_id]
+        .divisions()
+        .iter()
+        .map(|division| {
+            division
+                .data()
+                .rankings()
+                .values()
+                .map(|ranking| ranking.entrants()[0])
+                .collect()
+        })
+        .collect()
+}
+
+/// Checks that in the overall standings of the phase `phase_id` no ranking stands before another
+/// of its division that stands before it there.
+#[track_caller]
+fn assert_never_against_a_division(machine: &CompetitionStateMachine, phase_id: PhaseId) {
+    let standings = machine.current().phases()[&phase_id].standings();
+    for [first, second] in standings.iter().array_combinations() {
+        if first.division() != second.division() {
+            continue;
+        }
+        let (in_first, in_second) = (first.in_division(), second.in_division());
+        if in_first.rank() < in_second.rank() {
+            assert!(first.rank() < second.rank() && first.unique_rank() < second.unique_rank());
+        }
+        if in_second.rank() < in_first.rank() {
+            assert!(second.rank() < first.rank() && second.unique_rank() < first.unique_rank());
+        }
+    }
+}
+
+#[test]
+fn the_groups_are_dealt_the_registration_back_and_forth() {
+    let machine = groups_then_a_knockout();
+    let lots = machine.current().lots();
+
+    assert_eq!(
+        divisions(&machine, phase(GROUPS)),
+        [
+            vec![lots[0], lots[5], lots[6]],
+            vec![lots[1], lots[4], lots[7], lots[10]],
+            vec![lots[2], lots[3], lots[8], lots[9]],
+        ]
+    );
+    let phase = &machine.current().phases()[&phase(GROUPS)];
+    let seeds = phase
+        .divisions()
+        .iter()
+        .map(|division| division.data().seed())
+        .collect_vec();
+    assert!(seeds.iter().all_unique());
+}
+
+#[test]
+fn the_overall_standings_of_groups_never_go_against_a_group() {
+    let mut machine = groups_then_a_knockout();
+    assert_never_against_a_division(&machine, phase(GROUPS));
+
+    while !open_matches(&machine, phase(GROUPS)).is_empty() {
+        report_one(&mut machine, phase(GROUPS));
+        assert_never_against_a_division(&machine, phase(GROUPS));
+    }
+}
+
+/// Group A has three entrants, so everyone of it had a bye, worth no points, and is compared with
+/// the same places of the groups of four by points per match.
+#[test]
+fn the_places_of_groups_of_different_sizes_are_compared_per_match() {
+    let mut machine = groups_then_a_knockout();
+    play_out(&mut machine, phase(GROUPS));
+    let groups = divisions(&machine, phase(GROUPS));
+
+    let phase = &machine.current().phases()[&phase(GROUPS)];
+    let rows = phase
+        .standings()
+        .iter()
+        .map(|row| {
+            (
+                row.ranking().entrants()[0],
+                row.division(),
+                row.rank().get(),
+                row.unique_rank().get(),
+            )
+        })
+        .collect_vec();
+
+    // every group ends in the order it was dealt, the lots deciding every match; the bye costs
+    // everyone of group A a third of a point per match, and the lot breaks the ties
+    let [a, b, c] = &groups[..] else {
+        unreachable!("three groups")
+    };
+    let expected = [
+        (b[0], 1),
+        (c[0], 1),
+        (a[0], 3),
+        (c[1], 4),
+        (b[1], 4),
+        (a[1], 6),
+        (b[2], 7),
+        (c[2], 7),
+        (a[2], 9),
+        (c[3], 10),
+        (b[3], 10),
+    ];
+    assert_eq!(
+        rows.iter().map(|row| (row.0, row.2)).collect_vec(),
+        expected
+    );
+    assert_eq!(
+        rows.iter().map(|row| row.3).collect_vec(),
+        (1..=11).collect_vec()
+    );
+}
+
+#[test]
+fn a_knockout_of_the_best_of_groups_keeps_groups_apart_and_places_everyone() {
+    let mut machine = groups_then_a_knockout();
+    play_out(&mut machine, phase(GROUPS));
+    let groups = divisions(&machine, phase(GROUPS));
+    let group_of = |entrant: EntrantId| {
+        groups
+            .iter()
+            .position(|group| group.contains(&entrant))
+            .unwrap()
+    };
+    start(&mut machine, phase(KNOCKOUT));
+
+    let knockout = &machine.current().phases()[&phase(KNOCKOUT)];
+    let division = knockout.divisions()[0].data();
+    let first_round = division
+        .matches()
+        .values()
+        .filter(|r#match| r#match.round().get() == 1)
+        .collect_vec();
+    assert_eq!(first_round.len(), 4);
+    for r#match in first_round {
+        let entrant = |team: &Vec1<RankingId>| division.rankings()[&team[0]].entrants()[0];
+        assert_ne!(
+            group_of(entrant(r#match.team_a())),
+            group_of(entrant(r#match.team_b()))
+        );
+    }
+
+    play_out(&mut machine, phase(KNOCKOUT));
+    let places = machine
+        .current()
+        .ranking()
+        .iter()
+        .map(|placed| (placed.place.get(), placed.phase))
+        .collect_vec();
+    let knockout = |place| (place, phase(KNOCKOUT));
+    let groups = |place| (place, phase(GROUPS));
+    assert_eq!(
+        places,
+        [
+            knockout(1),
+            knockout(2),
+            knockout(3),
+            knockout(3),
+            knockout(5),
+            knockout(5),
+            knockout(5),
+            knockout(5),
+            groups(9),
+            groups(10),
+            groups(10),
+        ]
+    );
+}
+
+/// Scenario 3: a qualification, then knockouts A, B and C for its places in blocks of four.
+#[test]
+fn knockouts_in_blocks_play_for_places_of_their_own() {
+    let mut machine = registered(12);
+    add(
+        &mut machine,
+        AddPhase::new(phase(QUALIFICATION), round_robin()),
+    );
+    let knockouts = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .divisions(3)
+        .draw(Blocks)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(KNOCKOUT),
+            vec1![places(phase(QUALIFICATION), 1, None)],
+            knockouts,
+        ),
+    );
+    machine.apply_new(StartCompetition.into()).unwrap();
+    play_out(&mut machine, phase(QUALIFICATION));
+    let qualified = standings(&machine, phase(QUALIFICATION));
+    start(&mut machine, phase(KNOCKOUT));
+
+    assert_eq!(
+        divisions(&machine, phase(KNOCKOUT)),
+        [&qualified[..4], &qualified[4..8], &qualified[8..]]
+    );
+    let numbers = machine.current().phases()[&phase(KNOCKOUT)]
+        .divisions()
+        .iter()
+        .flat_map(|division| division.data().matches().values())
+        .map(|r#match| r#match.number())
+        .collect_vec();
+    assert!(numbers.iter().all_unique());
+
+    play_out(&mut machine, phase(KNOCKOUT));
+    let rows = machine.current().phases()[&phase(KNOCKOUT)]
+        .standings()
+        .iter()
+        .map(|row| (row.division(), row.rank().get()))
+        .collect_vec();
+    assert_eq!(
+        rows,
+        [
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (0, 3),
+            (1, 5),
+            (1, 6),
+            (1, 7),
+            (1, 7),
+            (2, 9),
+            (2, 10),
+            (2, 11),
+            (2, 11),
+        ]
+    );
+    let places = machine
+        .current()
+        .ranking()
+        .iter()
+        .map(|placed| placed.place.get())
+        .collect_vec();
+    assert_eq!(places, [1, 2, 3, 3, 5, 6, 7, 7, 9, 10, 11, 11]);
+}
+
+/// Two knockouts of the registration: the better half of the lots plays for places 1 to 4.
+#[test]
+fn two_knockouts_in_blocks_of_the_registration() {
+    let mut machine = registered(8);
+    let knockouts = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .divisions(2)
+        .draw(Blocks)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(&mut machine, AddPhase::new(phase(KNOCKOUT), knockouts));
+    machine.apply_new(StartCompetition.into()).unwrap();
+    let lots = machine.current().lots().to_vec();
+
+    assert_eq!(
+        divisions(&machine, phase(KNOCKOUT)),
+        [&lots[..4], &lots[4..]]
+    );
+    play_out(&mut machine, phase(KNOCKOUT));
+    let ranking = machine.current().ranking();
+    assert_eq!(
+        ranking
+            .iter()
+            .map(|placed| placed.place.get())
+            .collect_vec(),
+        [1, 2, 3, 3, 5, 6, 7, 7]
+    );
+    assert!(
+        ranking[..4]
+            .iter()
+            .all(|placed| lots[..4].contains(&placed.entrant))
+    );
+}
+
+#[test]
+fn a_phase_has_no_more_divisions_than_leave_each_the_entrants_its_format_needs() {
+    let mut machine = registered(5);
+    add(&mut machine, AddPhase::new(phase(GROUPS), groups(3)));
+    machine.apply_new(StartCompetition.into()).unwrap();
+
+    assert_eq!(
+        divisions(&machine, phase(GROUPS))
+            .iter()
+            .map(Vec::len)
+            .collect_vec(),
+        [3, 2]
+    );
+}
+
+#[test]
+fn a_competition_of_divisions_round_trips_as_its_log_and_as_a_snapshot() {
+    let mut machine = groups_then_a_knockout();
+    play_out(&mut machine, phase(GROUPS));
+    start(&mut machine, phase(KNOCKOUT));
+    report_one(&mut machine, phase(KNOCKOUT));
+    let expected = serde_json::to_value(machine.current()).unwrap();
+
+    let json: CompetitionStateMachine =
+        serde_json::from_str(&serde_json::to_string(&machine).unwrap()).unwrap();
+    let binary: CompetitionStateMachine =
+        postcard::from_bytes(&postcard::to_stdvec(&machine).unwrap()).unwrap();
+    let snapshot: Competition =
+        postcard::from_bytes(&postcard::to_stdvec(machine.current()).unwrap()).unwrap();
+
+    assert_eq!(serde_json::to_value(json.current()).unwrap(), expected);
+    assert_eq!(serde_json::to_value(binary.current()).unwrap(), expected);
+    assert_eq!(serde_json::to_value(snapshot).unwrap(), expected);
 }

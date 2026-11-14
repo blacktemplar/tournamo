@@ -440,7 +440,7 @@ mod pair {
 /// The seeds of a full bracket of `2^rounds`, counted from 0, in the order they are placed into
 /// its first round, two neighbours each forming a match. The best seed meets the worst, and the
 /// best two seeds can meet in the final at the earliest.
-fn seeding_order(rounds: u32) -> Vec<usize> {
+pub(crate) fn seeding_order(rounds: u32) -> Vec<usize> {
     let mut order = vec![0];
     for _ in 0..rounds {
         let size = 2 * order.len();

@@ -37,11 +37,7 @@ fn started(results: PluginConfig) -> (Session, MatchId) {
 }
 
 fn the_match(competition: &Competition) -> &Match {
-    competition
-        .phases()
-        .values()
-        .next()
-        .unwrap()
+    competition.phases().values().next().unwrap().divisions()[0]
         .data()
         .matches()
         .values()

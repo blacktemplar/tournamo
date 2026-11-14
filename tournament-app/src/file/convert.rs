@@ -37,6 +37,10 @@ const CONVERTERS: &[Converter] = &[
         log_entry: v4::log_entry,
         competition: v4::competition,
     },
+    Converter {
+        log_entry: |_| {},
+        competition: v5::competition,
+    },
 ];
 
 const _: () = assert!(
@@ -351,6 +355,46 @@ mod v4 {
     }
 }
 
+/// Format 4 to 5: a phase holds its divisions, each with its own copy of the phase's plugins,
+/// once it has started: what a phase held as its `"plugins"` and `"data"` is its only division,
+/// and the phase keeps the plugins, the `"seed"` of its data and whether it has `"started"`, as
+/// the competition has.
+mod v5 {
+    use serde_json::{Map, Value, json};
+
+    pub(super) fn competition(competition: &mut Value) {
+        let Some(started) = competition.get("started").and_then(Value::as_bool) else {
+            return;
+        };
+        let Some(Value::Array(phases)) = competition.get_mut("phases") else {
+            return;
+        };
+        for phase in phases.iter_mut().filter_map(Value::as_object_mut) {
+            divisions(phase, started);
+        }
+    }
+
+    /// A phase holding its plugins and data holds them as its only division if `started`, else
+    /// none.
+    fn divisions(phase: &mut Map<String, Value>, started: bool) {
+        let Some(seed) = phase.get("data").and_then(|data| data.get("seed")).cloned() else {
+            return;
+        };
+        if phase.contains_key("divisions") || !phase.contains_key("plugins") {
+            return;
+        }
+        let data = phase.remove("data").unwrap_or_default();
+        let divisions = if started {
+            json!([{ "plugins": phase["plugins"].clone(), "data": data }])
+        } else {
+            json!([])
+        };
+        phase.insert("seed".to_owned(), seed);
+        phase.insert("started".to_owned(), started.into());
+        phase.insert("divisions".to_owned(), divisions);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use plugin_factory::PluginType as _;
@@ -535,7 +579,7 @@ mod tests {
         let upgraded = upgraded_competition(competition);
 
         assert_eq!(
-            upgraded["phases"][0]["data"]["matches"],
+            upgraded["phases"][0]["divisions"][0]["data"]["matches"],
             json!([
                 {
                     "id": "decided",
@@ -584,7 +628,10 @@ mod tests {
 
         let upgraded = upgraded_competition(competition);
 
-        assert_eq!(upgraded["phases"][0]["data"]["matches"][0], contest);
+        assert_eq!(
+            upgraded["phases"][0]["divisions"][0]["data"]["matches"][0],
+            contest
+        );
     }
 
     #[test]
@@ -669,10 +716,44 @@ mod tests {
         session
     }
 
+    /// `competition`, as this version writes it, as a file of format 4 holds it: a phase holds the
+    /// plugins and data of its only division, or else its plugins and the data of a phase not
+    /// started.
+    fn as_of_format_4(competition: &mut Value) {
+        for phase in competition["phases"].as_array_mut().unwrap() {
+            let phase = phase.as_object_mut().unwrap();
+            let seed = phase.remove("seed").unwrap();
+            let started = phase.remove("started").unwrap();
+            let Some(Value::Array(divisions)) = phase.remove("divisions") else {
+                panic!("a phase holds its divisions");
+            };
+            assert_eq!(started, json!(!divisions.is_empty()));
+            let data = match <[Value; 1]>::try_from(divisions) {
+                Ok([mut division]) => {
+                    assert_eq!(division["data"]["seed"], seed);
+                    phase.insert("plugins".to_owned(), division["plugins"].take());
+                    division["data"].take()
+                }
+                Err(divisions) => {
+                    assert!(divisions.is_empty(), "a phase of format 4 has one division");
+                    json!({
+                        "rankings": [],
+                        "ranking_ids_ordered_by_unique_rank": [],
+                        "matches": [],
+                        "byes": [],
+                        "seed": seed,
+                    })
+                }
+            };
+            phase.insert("data".to_owned(), data);
+        }
+    }
+
     /// `competition`, as this version writes it, as a file of format 3 holds it: its phases hold
     /// their plugins one by one, and the pairings of a bracket hold no number. Returns how many
     /// pairings had one.
     fn as_of_format_3(competition: &mut Value) -> usize {
+        as_of_format_4(competition);
         let mut numbered = 0;
         for phase in competition["phases"].as_array_mut().unwrap() {
             let phase = phase.as_object_mut().unwrap();
@@ -801,9 +882,83 @@ mod tests {
         upgrade_competition(&mut held, Format(3));
 
         assert!(numbered > 0, "the bracket numbers its pairings");
-        assert_eq!(held, competition);
+        // the phase keeps its plugins with the state of the bracket until it is read
+        assert_eq!(
+            held["phases"][0]["divisions"],
+            competition["phases"][0]["divisions"]
+        );
         let read: Competition = serde_json::from_value(held).unwrap();
         assert_eq!(serde_json::to_value(read).unwrap(), competition);
+    }
+
+    /// A started competition of format 4 is read into the competition it was: its phase holds what
+    /// it held as its only division, and keeps its plugins without the state of the bracket.
+    #[test]
+    fn a_started_competition_of_format_4_is_read_with_its_phase_as_one_division() {
+        let session = knockout_before_its_final();
+        let competition = serde_json::to_value(session.competition()).unwrap();
+        let mut held = competition.clone();
+        as_of_format_4(&mut held);
+        let bracket = "/phases/0/plugins/format/value/bracket";
+        assert!(
+            held.pointer(bracket)
+                .is_some_and(|bracket| !bracket.is_null())
+        );
+
+        upgrade_competition(&mut held, Format(4));
+
+        assert_eq!(
+            held["phases"][0]["divisions"],
+            competition["phases"][0]["divisions"]
+        );
+        let read: Competition = serde_json::from_value(held).unwrap();
+        assert_eq!(serde_json::to_value(read).unwrap(), competition);
+    }
+
+    /// A competition of format 4 that has not started is read with its phase holding no division.
+    #[test]
+    fn a_competition_of_format_4_not_started_is_read_with_its_phase_without_divisions() {
+        let mut session = Session::new("cup");
+        for name in ["Alice", "Bob"] {
+            session.add_entrant(name).unwrap();
+        }
+        let draft = session.phase_draft(SingleElimination::ID).unwrap();
+        session.add_phase(&draft).unwrap();
+        let competition = serde_json::to_value(session.competition()).unwrap();
+        let mut held = competition.clone();
+        as_of_format_4(&mut held);
+
+        upgrade_competition(&mut held, Format(4));
+
+        assert_eq!(held, competition);
+        assert_eq!(held["phases"][0]["divisions"], json!([]));
+        let read: Competition = serde_json::from_value(held).unwrap();
+        assert_eq!(serde_json::to_value(read).unwrap(), competition);
+    }
+
+    /// A phase of an unexpected shape, or holding its divisions already, stays as it is.
+    #[test]
+    fn a_phase_of_an_unexpected_shape_stays_as_it_is_in_format_5() {
+        let plugins =
+            json!({ "format": { "type": "tournament_engine::round_robin", "value": null } });
+        let shapes = [
+            json!({ "phases": [{ "plugins": plugins, "data": {} }], "started": true }),
+            json!({ "phases": [{ "plugins": plugins, "data": { "seed": [] } }] }),
+            json!({ "phases": [{ "data": { "seed": [] } }], "started": true }),
+            json!({ "phases": [{
+                "plugins": plugins,
+                "data": { "seed": [] },
+                "divisions": [],
+            }], "started": false }),
+            json!({ "phases": [3], "started": true }),
+        ];
+
+        for shape in shapes {
+            let mut upgraded = shape.clone();
+            upgrade_competition(&mut upgraded, Format(4));
+
+            assert_eq!(upgraded, shape);
+        }
     }
 
     /// A bracket of an unexpected shape, or already numbered, stays as it is.

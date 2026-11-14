@@ -3,7 +3,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{MatchResult, Phase, PhaseBuilder},
+    entities::{Division, DivisionBuilder, MatchResult},
     plugins::metrics_calculator::{
         test_utils::{self, MatchSpec, match_id},
         wins_draws_losses::WinsDrawsLossesCalculator,
@@ -27,9 +27,9 @@ fn points(text: &str) -> Points {
 ///
 /// [`PointsCalculator`] derives its metric from [`WinsDrawsLosses`], so the phase has to
 /// update that metric first.
-fn phase_with(num_players: u32, matches: Vec<MatchSpec>, calculator: PointsCalculator) -> Phase {
+fn phase_with(num_players: u32, matches: Vec<MatchSpec>, calculator: PointsCalculator) -> Division {
     test_utils::phase_with(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(num_players)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(calculator),
@@ -37,12 +37,12 @@ fn phase_with(num_players: u32, matches: Vec<MatchSpec>, calculator: PointsCalcu
     )
 }
 
-fn metric_of(phase: &Phase, ranking_index: usize) -> Points {
+fn metric_of(phase: &Division, ranking_index: usize) -> Points {
     test_utils::metric_of(phase, ranking_index)
 }
 
 /// Plays all of [`SCENARIO`](test_utils::SCENARIO), scoring with `calculator`.
-fn play_scenario(calculator: PointsCalculator) -> Phase {
+fn play_scenario(calculator: PointsCalculator) -> Division {
     test_utils::play_scenario(
         phase_with(4, test_utils::scenario_matches(), calculator),
         0..test_utils::SCENARIO.len(),
@@ -146,9 +146,9 @@ fn every_ranking_of_a_team_gets_the_points_of_the_team() {
 
 /// Builds a phase with three rankings, in which `2` has a bye in round 1 and `0` beats `1`
 /// in round 2, scoring with `calculator`.
-fn phase_with_a_bye(calculator: PointsCalculator) -> Phase {
+fn phase_with_a_bye(calculator: PointsCalculator) -> Division {
     let mut phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(3)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(calculator),
@@ -179,7 +179,7 @@ fn a_bye_is_worth_the_points_for_a_bye() {
 #[test]
 fn the_points_of_a_bye_add_to_those_of_matches() {
     let mut phase = test_utils::phase_with_byes(
-        PhaseBuilder::new()
+        DivisionBuilder::new()
             .add_players(2)
             .add_metric(WinsDrawsLossesCalculator)
             .add_metric(THREE_ONE.with_points_for_bye(Score::new(2.0))),
@@ -198,7 +198,7 @@ fn the_points_of_a_bye_add_to_those_of_matches() {
 #[should_panic(expected = "called `Option::unwrap()` on a `None` value")]
 fn scoring_without_the_wins_draws_losses_metric_panics() {
     let mut phase = test_utils::phase_with(
-        PhaseBuilder::new().add_players(2).add_metric(THREE_ONE),
+        DivisionBuilder::new().add_players(2).add_metric(THREE_ONE),
         vec![(1, vec![0], vec![1])],
     );
     let match_id = match_id(&phase, 1, &[0], &[1]);

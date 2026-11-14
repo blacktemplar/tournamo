@@ -6,7 +6,8 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     entities::{
-        Annotated, Match, MatchId, MatchResult, Phase, PhaseBuilder, RankingId, details::Sides,
+        Annotated, Division, DivisionBuilder, Match, MatchId, MatchResult, RankingId,
+        details::Sides,
     },
     plugins::{
         metrics_calculator::{
@@ -98,8 +99,8 @@ fn a_stage_is_keyed_by_its_bracket_and_whether_it_is_the_final() {
 
 /// A double elimination between `num_players` entrants with its first matches scheduled,
 /// ranked by the round of elimination and then by the losses.
-fn bracket(format: DoubleElimination, num_players: u32) -> Phase {
-    let mut phase = PhaseBuilder::new()
+fn bracket(format: DoubleElimination, num_players: u32) -> Division {
+    let mut phase = DivisionBuilder::new()
         .format(format)
         .add_players(num_players)
         .add_ranking(LaterElimination)
@@ -111,7 +112,7 @@ fn bracket(format: DoubleElimination, num_players: u32) -> Phase {
     phase
 }
 
-fn seed_of(phase: &Phase, ranking_id: &RankingId) -> u32 {
+fn seed_of(phase: &Division, ranking_id: &RankingId) -> u32 {
     phase.data().rankings()[ranking_id]
         .initial_unique_rank()
         .get()
@@ -119,7 +120,7 @@ fn seed_of(phase: &Phase, ranking_id: &RankingId) -> u32 {
 
 /// Every match as its round, its stage and the seeds of its two sides, in the order the
 /// matches were scheduled in.
-fn schedule(phase: &Phase) -> Vec<(u32, DoubleEliminationRound, (u32, u32))> {
+fn schedule(phase: &Division) -> Vec<(u32, DoubleEliminationRound, (u32, u32))> {
     phase
         .data()
         .matches()
@@ -139,7 +140,7 @@ fn schedule(phase: &Phase) -> Vec<(u32, DoubleEliminationRound, (u32, u32))> {
 
 /// Reports the open matches one at a time, in the order they were scheduled in, as won by the
 /// side `winner` picks given the match and the seeds of its sides, until none is left.
-fn play_out(phase: &mut Phase, winner: impl Fn(&Match, u32, u32) -> Team) {
+fn play_out(phase: &mut Division, winner: impl Fn(&Match, u32, u32) -> Team) {
     while let Some(r#match) = phase.data().matches().values().find(|m| !m.is_finished()) {
         let seeds = (
             seed_of(phase, &r#match.team_a()[0]),
@@ -166,7 +167,7 @@ fn underdog_wins_the_grand_final(r#match: &Match, seed_a: u32, seed_b: u32) -> T
 }
 
 /// The rank and the round of elimination of every entrant, ordered by seed.
-fn standings(phase: &Phase) -> Vec<(u32, Option<u32>)> {
+fn standings(phase: &Division) -> Vec<(u32, Option<u32>)> {
     phase
         .standings()
         .iter()

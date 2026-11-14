@@ -222,7 +222,7 @@ pub trait CompetitionStateMachineExt {
     /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
     /// # machine.apply_new(StartCompetition.into())?;
     /// // a round robin between four entrants, with the first and the last match reported
-    /// let matches: Vec<_> = machine.current().phases()[&phase_id]
+    /// let matches: Vec<_> = machine.current().phases()[&phase_id].divisions()[0]
     ///     .data()
     ///     .matches()
     ///     .keys()
@@ -237,7 +237,7 @@ pub trait CompetitionStateMachineExt {
     /// let mut history = SessionHistory::new();
     /// machine.undo_match_result(&mut history, phase_id, matches[0])?;
     ///
-    /// let phase = machine.current().phases()[&phase_id].data();
+    /// let phase = machine.current().phases()[&phase_id].divisions()[0].data();
     /// assert_eq!(phase.matches()[&matches[0]].result(), None);
     /// assert_eq!(
     ///     phase.matches()[&matches[5]].result(),
@@ -304,15 +304,15 @@ pub trait CompetitionStateMachineExt {
     /// // the phase was started in its new format: two rounds of two matches
     /// let phase = &machine.current().phases()[&phase_id];
     /// assert_eq!(
-    ///     format!("{:?}", phase.format()),
+    ///     format!("{:?}", phase.plugins().format()),
     ///     "RandomRounds { rounds: 2 }"
     /// );
-    /// assert_eq!(phase.data().matches().len(), 4);
+    /// assert_eq!(phase.divisions()[0].data().matches().len(), 4);
     ///
     /// // undoing the reconfiguration plays the phase as a round robin again
     /// history.undo_last(&mut machine)?;
     /// let phase = &machine.current().phases()[&phase_id];
-    /// assert_eq!(format!("{:?}", phase.format()), "RoundRobin");
+    /// assert_eq!(format!("{:?}", phase.plugins().format()), "RoundRobin");
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     fn reconfigure_phase(
@@ -368,7 +368,7 @@ pub trait CompetitionStateMachineExt {
     /// # machine.apply_new(StartCompetition.into())?;
     /// # let matches = |machine: &CompetitionStateMachine| -> Vec<MatchId> {
     /// #     let phase = &machine.current().phases()[&phase_id];
-    /// #     phase.data().matches().keys().copied().collect()
+    /// #     phase.divisions()[0].data().matches().keys().copied().collect()
     /// # };
     /// // a knockout between four entrants: both semifinals reported, then the final
     /// let semifinals = matches(&machine);
@@ -558,7 +558,7 @@ mod tests {
 
     /// The matches of the phase, in the order they were scheduled in.
     fn matches(machine: &CompetitionStateMachine) -> Vec<MatchId> {
-        machine.current().phases()[&phase_id()]
+        machine.current().phases()[&phase_id()].divisions()[0]
             .data()
             .matches()
             .keys()
@@ -567,7 +567,10 @@ mod tests {
     }
 
     fn result_of(machine: &CompetitionStateMachine, match_id: MatchId) -> Option<MatchResult> {
-        machine.current().phases()[&phase_id()].data().matches()[&match_id].result()
+        machine.current().phases()[&phase_id()].divisions()[0]
+            .data()
+            .matches()[&match_id]
+            .result()
     }
 
     #[track_caller]
@@ -758,8 +761,9 @@ mod tests {
         let phase = &machine.current().phases()[&phase_id()];
         assert_eq!(phase.plugins().metrics().len(), 1);
         assert_eq!(result_of(&machine, first), Some(MatchResult::AWins));
-        let winner = phase.data().matches()[&first].team_a()[0];
-        let record = phase.data().rankings()[&winner].metric::<WinsDrawsLosses>();
+        let data = phase.divisions()[0].data();
+        let winner = data.matches()[&first].team_a()[0];
+        let record = data.rankings()[&winner].metric::<WinsDrawsLosses>();
         assert_eq!(record.map(|record| record.wins), Some(1));
     }
 
@@ -917,7 +921,7 @@ mod tests {
         let mut machine = knockout_of(8);
         let reports = play_out(&mut machine);
         let quarterfinal = matches(&machine)[0];
-        let data = machine.current().phases()[&phase_id()].data();
+        let data = machine.current().phases()[&phase_id()].divisions()[0].data();
         let winner = data.matches()[&quarterfinal].team_a()[0];
         let later = |round: u32| {
             data.matches()

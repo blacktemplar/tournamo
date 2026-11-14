@@ -204,7 +204,7 @@ at `StartCompetition`. All of it runs once per phase; the hot path pays nothing.
 
 **Tests build plugins directly**, behind the `test-util` feature: constructors
 of plugins with fields, `PhasePluginsBuilder` (defaults: round robin, empty
-ranking, no metrics: a phase that can be played) and `PhaseBuilder`. A consumer
+ranking, no metrics: a phase that can be played) and `DivisionBuilder`. A consumer
 enables the feature only in dev-dependencies, so production code cannot skip
 configuration. Tests of configuration still use drafts.
 

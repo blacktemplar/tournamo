@@ -2,6 +2,7 @@ mod annotated;
 mod bye;
 mod competition;
 pub mod details;
+mod division;
 mod entrant;
 mod ids;
 mod r#match;
@@ -13,11 +14,12 @@ pub mod standings;
 pub use annotated::Annotated;
 pub use bye::Bye;
 pub use competition::Competition;
+#[cfg(feature = "test-util")]
+pub use division::builder::DivisionBuilder;
+pub use division::{Division, DivisionData, DivisionView};
 pub use entrant::Entrant;
 pub use ids::{ByeId, EntrantId, MatchId, PhaseId, RankingId};
 pub use r#match::{Match, MatchResult, NewMatch, ResultOfTeam, Team};
-#[cfg(feature = "test-util")]
-pub use phase::builder::PhaseBuilder;
-pub use phase::{DivisionData, DivisionView, Phase};
+pub use phase::Phase;
 pub use ranking::Ranking;
 pub use seed::Seed;

@@ -124,7 +124,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        entities::{Phase, PhaseBuilder, details::Decision},
+        entities::{Division, DivisionBuilder, details::Decision},
         plugins::metrics_calculator::test_utils::{match_id, phase_with},
     };
 
@@ -137,9 +137,9 @@ mod tests {
     }
 
     /// A phase of two players, with one match in round 1, its results entered by `format`.
-    fn phase(format: Scored) -> Phase {
+    fn phase(format: Scored) -> Division {
         phase_with(
-            PhaseBuilder::new().match_format(format).add_players(2),
+            DivisionBuilder::new().match_format(format).add_players(2),
             vec![(1, vec![0], vec![1])],
         )
     }

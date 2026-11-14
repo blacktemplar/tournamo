@@ -208,7 +208,7 @@ mod tests {
     use super::*;
     use crate::{
         entities::{
-            MatchResult, Phase, PhaseBuilder,
+            Division, DivisionBuilder, MatchResult,
             details::{EnteredValue, FieldKey, Part, Sides},
         },
         plugins::{
@@ -221,9 +221,9 @@ mod tests {
         type_map::TypeMap,
     };
 
-    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Phase {
+    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Division {
         phase_with_byes(
-            PhaseBuilder::new()
+            DivisionBuilder::new()
                 .match_format(Scored::default())
                 .add_metric(PointsBalanceCalculator)
                 .add_metric(PointsDifferenceCalculator)
@@ -233,7 +233,7 @@ mod tests {
         )
     }
 
-    fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], score: (u16, u16)) {
+    fn report(phase: &mut Division, round: u32, a: &[usize], b: &[usize], score: (u16, u16)) {
         let id = match_id(phase, round, a, b);
         let values = Sides::new(
             Some(EnteredValue::Count(score.0)),

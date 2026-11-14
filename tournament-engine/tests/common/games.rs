@@ -117,7 +117,7 @@ pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
         .apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
     machine.apply_new(StartCompetition.into()).unwrap();
-    let open = machine.current().phases()[&phase_id()]
+    let open = machine.current().phases()[&phase_id()].divisions()[0]
         .data()
         .matches()
         .values()

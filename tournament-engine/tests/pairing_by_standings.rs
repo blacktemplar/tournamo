@@ -59,7 +59,7 @@ fn phase_id() -> PhaseId {
 /// Every match of the phase as its round and the ranking of each side, in the order they were
 /// scheduled in.
 fn matches(sm: &CompetitionStateMachine) -> Vec<(u32, RankingId, RankingId)> {
-    sm.current().phases()[&phase_id()]
+    sm.current().phases()[&phase_id()].divisions()[0]
         .data()
         .matches()
         .values()
@@ -89,7 +89,7 @@ fn a_format_pairs_by_the_standings_and_a_replay_pairs_the_same() {
     sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
     sm.apply_new(StartCompetition.into()).unwrap();
-    let data = sm.current().phases()[&phase_id()].data();
+    let data = sm.current().phases()[&phase_id()].divisions()[0].data();
     let rankings: Vec<_> = data.rankings().keys().copied().collect();
     let [first, second, third, fourth] = rankings[..] else {
         unreachable!("four entrants are four rankings")

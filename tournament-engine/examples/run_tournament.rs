@@ -97,7 +97,7 @@ fn main() {
     let sm = black_box(tournament::run_tournament(entrants));
     let elapsed = start.elapsed();
     // the finished competition is huge, so it is dropped after the time is taken
-    let matches = sm.current().phases()[&tournament::phase_id()]
+    let matches = sm.current().phases()[&tournament::phase_id()].divisions()[0]
         .data()
         .matches()
         .len();

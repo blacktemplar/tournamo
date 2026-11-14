@@ -56,7 +56,7 @@ fn a_report_not_fitting_the_match_format_is_refused() {
 fn a_decided_match_holds_the_tallies_of_its_rules() {
     let (mut machine, open) = games::competition_entering_games();
     let tally = |machine: &CompetitionStateMachine| {
-        machine.current().phases()[&games::phase_id()]
+        machine.current().phases()[&games::phase_id()].divisions()[0]
             .data()
             .matches()[&open]
             .tally::<GamesWon>()

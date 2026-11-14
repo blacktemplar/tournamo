@@ -5,12 +5,12 @@ use itertools::Itertools;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::entities::{Bye, DivisionData, Match, PhaseBuilder};
+use crate::entities::{Bye, DivisionBuilder, DivisionData, Match};
 
 /// A format asking for no numbers gets its matches numbered in the order it scheduled them.
 #[test]
 fn matches_are_numbered_as_scheduled_unless_the_format_numbers_them() {
-    let mut phase = PhaseBuilder::new()
+    let mut phase = DivisionBuilder::new()
         .format(RoundRobin)
         .add_players(4)
         .build();
@@ -54,7 +54,7 @@ fn assert_every_pair_played_exactly_once(phase: &DivisionData) {
 
 #[test]
 fn round_robin_schedules_every_pair_exactly_once_for_even_number_of_players() {
-    let mut phase = PhaseBuilder::new().add_players(6).build();
+    let mut phase = DivisionBuilder::new().add_players(6).build();
 
     phase.create_new_matches();
 
@@ -67,7 +67,7 @@ fn round_robin_schedules_every_pair_exactly_once_for_even_number_of_players() {
 
 #[test]
 fn round_robin_schedules_every_pair_exactly_once_for_odd_number_of_players() {
-    let mut phase = PhaseBuilder::new().add_players(7).build();
+    let mut phase = DivisionBuilder::new().add_players(7).build();
 
     phase.create_new_matches();
 
@@ -80,7 +80,7 @@ fn round_robin_schedules_every_pair_exactly_once_for_odd_number_of_players() {
 
 #[test]
 fn every_ranking_has_one_bye_in_a_round_robin_of_an_odd_number_of_players() {
-    let mut phase = PhaseBuilder::new().add_players(7).build();
+    let mut phase = DivisionBuilder::new().add_players(7).build();
 
     phase.create_new_matches();
 
@@ -92,7 +92,7 @@ fn every_ranking_has_one_bye_in_a_round_robin_of_an_odd_number_of_players() {
 
 #[test]
 fn nobody_has_a_bye_in_a_round_robin_of_an_even_number_of_players() {
-    let mut phase = PhaseBuilder::new().add_players(6).build();
+    let mut phase = DivisionBuilder::new().add_players(6).build();
 
     phase.create_new_matches();
 

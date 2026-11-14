@@ -5,7 +5,7 @@ use itertools::Itertools;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::entities::{Bye, DivisionData, Match, PhaseBuilder};
+use crate::entities::{Bye, DivisionBuilder, DivisionData, Match};
 
 fn assert_every_pair_played_at_most_once(phase: &DivisionData) {
     assert!(phase.matches().values().all(|m| m.team_a().len() == 1));
@@ -21,7 +21,7 @@ fn assert_every_pair_played_at_most_once(phase: &DivisionData) {
 
 #[test]
 fn random_rounds_schedules_number_of_rounds_with_no_match_overlaps() {
-    let mut phase = PhaseBuilder::new()
+    let mut phase = DivisionBuilder::new()
         .format(RandomRounds::new(3))
         .add_players(6)
         .build();
@@ -39,7 +39,7 @@ fn random_rounds_schedules_number_of_rounds_with_no_match_overlaps() {
 
 #[test]
 fn random_rounds_schedules_number_of_rounds_with_no_match_overlaps_with_odd_players() {
-    let mut phase = PhaseBuilder::new()
+    let mut phase = DivisionBuilder::new()
         .format(RandomRounds::new(3))
         .add_players(7)
         .build();
@@ -57,7 +57,7 @@ fn random_rounds_schedules_number_of_rounds_with_no_match_overlaps_with_odd_play
 
 #[test]
 fn random_rounds_with_odd_players_give_a_different_ranking_a_bye_every_round() {
-    let mut phase = PhaseBuilder::new()
+    let mut phase = DivisionBuilder::new()
         .format(RandomRounds::new(3))
         .add_players(7)
         .build();
@@ -79,7 +79,7 @@ fn random_rounds_with_odd_players_give_a_different_ranking_a_bye_every_round() {
 
 #[test]
 fn random_rounds_if_rounds_is_larger_than_players_does_full_round_robin() {
-    let mut phase = PhaseBuilder::new()
+    let mut phase = DivisionBuilder::new()
         .format(RandomRounds::new(8))
         .add_players(7)
         .build();
@@ -100,7 +100,7 @@ fn random_rounds_if_rounds_is_larger_than_players_does_full_round_robin() {
 #[test]
 fn more_rounds_keep_the_rounds_drawn_for_fewer() {
     let drawn = |rounds| {
-        let mut phase = PhaseBuilder::new()
+        let mut phase = DivisionBuilder::new()
             .format(RandomRounds::new(rounds))
             .add_players(8)
             .build();

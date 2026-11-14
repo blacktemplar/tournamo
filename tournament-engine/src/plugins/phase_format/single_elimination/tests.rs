@@ -4,7 +4,9 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Annotated, Match, MatchResult, Phase, PhaseBuilder, RankingId, details::Sides},
+    entities::{
+        Annotated, Division, DivisionBuilder, Match, MatchResult, RankingId, details::Sides,
+    },
     plugins::phase_format::{Advance, Seat},
 };
 
@@ -56,8 +58,8 @@ fn a_stage_is_keyed_by_its_fraction_of_the_final() {
 }
 
 /// A knockout between `num_players` entrants with its first round already scheduled.
-fn knockout(format: SingleElimination, num_players: u32) -> Phase {
-    let mut phase = PhaseBuilder::new()
+fn knockout(format: SingleElimination, num_players: u32) -> Division {
+    let mut phase = DivisionBuilder::new()
         .format(format)
         .add_players(num_players)
         .build();
@@ -67,7 +69,7 @@ fn knockout(format: SingleElimination, num_players: u32) -> Phase {
 
 /// The matches of `round`, each as the pair of initial unique ranks it is played between, in
 /// ascending order so that the pairings of a round can be compared as a whole.
-fn pairings(phase: &Phase, round: u32) -> Vec<(u32, u32)> {
+fn pairings(phase: &Division, round: u32) -> Vec<(u32, u32)> {
     phase
         .data()
         .matches()
@@ -79,14 +81,14 @@ fn pairings(phase: &Phase, round: u32) -> Vec<(u32, u32)> {
 }
 
 /// The initial unique ranks of the two sides of `match`.
-fn pairing_of(phase: &Phase, r#match: &Match) -> (u32, u32) {
+fn pairing_of(phase: &Division, r#match: &Match) -> (u32, u32) {
     let rank_of = |id: &RankingId| phase.data().rankings()[id].initial_unique_rank().get();
     (rank_of(&r#match.team_a()[0]), rank_of(&r#match.team_b()[0]))
 }
 
 /// Reports every match of `round` as won by the side that entered the bracket higher, i.e.
 /// lets the favourites advance, and schedules whatever follows from that.
-fn play_round(phase: &mut Phase, round: u32) {
+fn play_round(phase: &mut Division, round: u32) {
     let match_ids = phase
         .data()
         .matches()
@@ -166,7 +168,7 @@ fn three_entrants_do_not_play_for_third_place() {
 }
 
 /// The stages of the matches of `round`, in the order the pairings of [`pairings`] list them.
-fn stages(phase: &Phase, round: u32) -> Vec<KnockoutRound> {
+fn stages(phase: &Division, round: u32) -> Vec<KnockoutRound> {
     let rank_of = |id: &RankingId| phase.data().rankings()[id].initial_unique_rank().get();
     phase
         .data()
@@ -270,7 +272,7 @@ fn two_byes_meeting_next_play_right_away() {
 }
 
 /// The bracket of `phase`.
-fn bracket_of(phase: &Phase) -> &Bracket {
+fn bracket_of(phase: &Division) -> &Bracket {
     phase
         .format()
         .bracket()
@@ -353,7 +355,7 @@ fn a_larger_bracket_only_gains_the_one_match() {
 }
 
 /// The number of each match, by its pairing in the bracket, whether scheduled or not.
-fn numbers(phase: &Phase) -> Vec<Option<u32>> {
+fn numbers(phase: &Division) -> Vec<Option<u32>> {
     bracket_of(phase)
         .pairings()
         .iter()

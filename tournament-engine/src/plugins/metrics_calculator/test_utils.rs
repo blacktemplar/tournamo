@@ -1,5 +1,5 @@
 //! Shared test-only helpers for unit testing [`MetricsCalculator`] implementations against a
-//! standalone [`Phase`] with a fixed, hand written schedule of matches.
+//! standalone [`Division`] with a fixed, hand written schedule of matches.
 //!
 //! [`MetricsCalculator`]: super::MetricsCalculator
 
@@ -12,8 +12,8 @@ use vec1::Vec1;
 
 use crate::{
     entities::{
-        Annotated, Bye, DivisionData, DivisionView, Match, MatchId, MatchResult, NewMatch, Phase,
-        PhaseBuilder, RankingId,
+        Annotated, Bye, Division, DivisionBuilder, DivisionData, DivisionView, Match, MatchId,
+        MatchResult, NewMatch, RankingId,
     },
     plugins::phase_format::{PhaseFormat, Schedule},
     type_map::TypeMap,
@@ -98,17 +98,17 @@ impl PhaseFormat for FixedMatches {
 
 /// Builds the phase of `builder`, which gives its players and calculators, with all matches of
 /// `matches` already scheduled.
-pub(crate) fn phase_with(builder: PhaseBuilder, matches: Vec<MatchSpec>) -> Phase {
+pub(crate) fn phase_with(builder: DivisionBuilder, matches: Vec<MatchSpec>) -> Division {
     phase_with_byes(builder, matches, vec![])
 }
 
 /// Like [`phase_with`], with the byes of `byes` scheduled as well: those of a round once every
 /// match of the rounds before it is reported, so the byes of the first round right away.
 pub(crate) fn phase_with_byes(
-    builder: PhaseBuilder,
+    builder: DivisionBuilder,
     matches: Vec<MatchSpec>,
     byes: Vec<ByeSpec>,
-) -> Phase {
+) -> Division {
     let matches = matches
         .into_iter()
         .map(|r#match| (r#match, TypeMap::new()))
@@ -119,10 +119,10 @@ pub(crate) fn phase_with_byes(
 /// Like [`phase_with_byes`], where every match carries the annotations given next to its schedule,
 /// which is what a calculator reading a match annotation needs.
 pub(crate) fn phase_with_annotated_matches(
-    builder: PhaseBuilder,
+    builder: DivisionBuilder,
     matches: Vec<AnnotatedMatchSpec>,
     byes: Vec<ByeSpec>,
-) -> Phase {
+) -> Division {
     let mut phase = builder.format(FixedMatches { matches, byes }).build();
     phase.create_new_matches();
     phase
@@ -145,7 +145,12 @@ fn team(phase_data: &DivisionData, ranking_indices: &[usize]) -> Vec1<RankingId>
 
 /// The id of the scheduled match between the two given teams, recomputed from the fact that
 /// [`NewMatch::new`] derives ids deterministically from the teams and the round.
-pub(crate) fn match_id(phase: &Phase, round: u32, team_a: &[usize], team_b: &[usize]) -> MatchId {
+pub(crate) fn match_id(
+    phase: &Division,
+    round: u32,
+    team_a: &[usize],
+    team_b: &[usize],
+) -> MatchId {
     let match_id = NewMatch::new(
         team(phase.data(), team_a),
         team(phase.data(), team_b),
@@ -177,7 +182,10 @@ pub(crate) fn scenario_matches() -> Vec<MatchSpec> {
 
 /// Plays [`SCENARIO`] in `phase`, which has to be a phase of four players scheduled with
 /// [`scenario_matches`], reporting its matches in the given order.
-pub(crate) fn play_scenario(mut phase: Phase, report_order: impl Iterator<Item = usize>) -> Phase {
+pub(crate) fn play_scenario(
+    mut phase: Division,
+    report_order: impl Iterator<Item = usize>,
+) -> Division {
     for index in report_order {
         let (round, team_a, team_b, result) = SCENARIO[index];
         let match_id = match_id(&phase, round, team_a, team_b);
@@ -188,12 +196,12 @@ pub(crate) fn play_scenario(mut phase: Phase, report_order: impl Iterator<Item =
 
 /// The metric of type `M` of the ranking with the given index in the ordering by initial unique
 /// rank.
-pub(crate) fn metric_of<M: Copy + 'static>(phase: &Phase, ranking_index: usize) -> M {
+pub(crate) fn metric_of<M: Copy + 'static>(phase: &Division, ranking_index: usize) -> M {
     *metric_ref_of(phase, ranking_index)
 }
 
 /// Like [`metric_of`], but for metrics that are not [`Copy`].
-pub(crate) fn metric_ref_of<M: 'static>(phase: &Phase, ranking_index: usize) -> &M {
+pub(crate) fn metric_ref_of<M: 'static>(phase: &Division, ranking_index: usize) -> &M {
     phase.data().rankings()[&ranking_ids(phase.data())[ranking_index]]
         .metric::<M>()
         .expect("the metric must be initialized")

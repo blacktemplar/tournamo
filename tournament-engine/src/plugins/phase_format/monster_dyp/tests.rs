@@ -3,13 +3,13 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{DivisionData, Match, MatchResult, Phase, PhaseBuilder, RankingId},
+    entities::{Division, DivisionBuilder, DivisionData, Match, MatchResult, RankingId},
     map::Map,
     plugins::metrics_calculator::wins_draws_losses::{WinsDrawsLosses, WinsDrawsLossesCalculator},
 };
 
-fn phase(rounds: u32, num_players: u32) -> Phase {
-    let mut phase = PhaseBuilder::new()
+fn phase(rounds: u32, num_players: u32) -> Division {
+    let mut phase = DivisionBuilder::new()
         .format(MonsterDyp::new(rounds))
         .add_metric(WinsDrawsLossesCalculator)
         .add_players(num_players)

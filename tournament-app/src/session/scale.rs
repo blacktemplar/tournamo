@@ -48,7 +48,13 @@ impl Session {
             .ok()?;
         machine.apply_new(StartCompetition.into()).ok()?;
         for _ in 0..=MOST_MATCHES {
-            let data = machine.current().phases().get(&phase)?.data();
+            let data = machine
+                .current()
+                .phases()
+                .get(&phase)?
+                .divisions()
+                .first()?
+                .data();
             let open = data
                 .matches()
                 .values()

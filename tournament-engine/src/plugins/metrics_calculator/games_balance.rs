@@ -206,7 +206,7 @@ mod tests {
     use super::*;
     use crate::{
         entities::{
-            MatchResult, Phase, PhaseBuilder,
+            Division, DivisionBuilder, MatchResult,
             details::{EnteredValue, FieldKey, Part, Sides},
         },
         plugins::{
@@ -219,9 +219,9 @@ mod tests {
         type_map::TypeMap,
     };
 
-    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Phase {
+    fn phase(players: u32, matches: Vec<MatchSpec>, byes: Vec<(u32, usize)>) -> Division {
         phase_with_byes(
-            PhaseBuilder::new()
+            DivisionBuilder::new()
                 .match_format(BestOf::new(5))
                 .add_metric(GamesBalanceCalculator)
                 .add_metric(GamesDifferenceCalculator)
@@ -232,7 +232,7 @@ mod tests {
     }
 
     /// Reports the match of `a` and `b` in `round` as games, each won by side A if `true`.
-    fn report(phase: &mut Phase, round: u32, a: &[usize], b: &[usize], games: &[bool]) {
+    fn report(phase: &mut Division, round: u32, a: &[usize], b: &[usize], games: &[bool]) {
         let id = match_id(phase, round, a, b);
         let game = |a_wins: bool| {
             let (result, score) = if a_wins {

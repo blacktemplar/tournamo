@@ -4,18 +4,18 @@ use vec1::vec1;
 #[cfg(doc)]
 use crate::Competition;
 use crate::{
-    EntrantId, Phase, PhaseId, Seed,
+    Division, EntrantId, Seed,
     plugins::{
         PhasePluginsBuilder, match_format::MatchFormat, metrics_calculator::MetricsCalculator,
         phase_format::PhaseFormat, ranker::SliceRanker,
     },
 };
 
-/// Builds a standalone [`Phase`] with rankings of single players, without a [`Competition`]
-/// around it, for unit tests of plugins.
+/// Builds a standalone [`Division`] with rankings of single players, without a [`Competition`]
+/// or phase around it, for unit tests of plugins.
 ///
 /// Its plugins are given as to a [`PhasePluginsBuilder`], with the same defaults: a round robin,
-/// neither ranked by anything nor calculating any metrics. Without players, the phase has no
+/// neither ranked by anything nor calculating any metrics. Without players, the division has no
 /// rankings.
 ///
 /// Requires the `test-util` feature.
@@ -23,45 +23,45 @@ use crate::{
 /// # Examples
 /// ```
 /// use tournament_engine::{
-///     PhaseBuilder,
+///     DivisionBuilder,
 ///     plugins::{metrics_calculator::WinsDrawsLossesCalculator, phase_format::SingleElimination},
 /// };
 ///
-/// let phase = PhaseBuilder::new()
+/// let division = DivisionBuilder::new()
 ///     .format(SingleElimination::new())
 ///     .add_metric(WinsDrawsLossesCalculator)
 ///     .add_players(4)
 ///     .build();
 ///
-/// assert_eq!(phase.data().rankings().len(), 4);
+/// assert_eq!(division.data().rankings().len(), 4);
 /// ```
 #[derive(Debug, Clone, Default)]
-pub struct PhaseBuilder {
+pub struct DivisionBuilder {
     plugins: PhasePluginsBuilder,
     players: u32,
 }
 
-impl PhaseBuilder {
+impl DivisionBuilder {
     /// A builder with nothing given, i.e. of a round robin without rankings, neither ranked by
     /// anything nor calculating any metrics.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Plays the phase in `format`, see [`PhasePluginsBuilder::format`].
+    /// Plays the division in `format`, see [`PhasePluginsBuilder::format`].
     pub fn format(mut self, format: impl PhaseFormat) -> Self {
         self.plugins = self.plugins.format(format);
         self
     }
 
-    /// Ranks the phase by `criterion` as well, see [`PhasePluginsBuilder::add_ranking`].
+    /// Ranks the division by `criterion` as well, see [`PhasePluginsBuilder::add_ranking`].
     pub fn add_ranking(mut self, criterion: impl SliceRanker) -> Self {
         self.plugins = self.plugins.add_ranking(criterion);
         self
     }
 
     /// Calculates the metric of `calculator` as well, see [`PhasePluginsBuilder::add_metric`].
-    /// Its metric is initialized for every ranking when the phase is built.
+    /// Its metric is initialized for every ranking when the division is built.
     pub fn add_metric(mut self, calculator: impl MetricsCalculator) -> Self {
         self.plugins = self.plugins.add_metric(calculator);
         self
@@ -80,21 +80,21 @@ impl PhaseBuilder {
         self
     }
 
-    /// The phase, with the metrics of its rankings initialized and nothing scheduled yet.
+    /// The division, with the metrics of its rankings initialized and nothing scheduled yet.
     ///
     /// # Panics
     /// Panics if building its plugins fails, see [`PhasePluginsBuilder::build`].
-    pub fn build(self) -> Phase {
+    pub fn build(self) -> Division {
         let plugins = self
             .plugins
             .build()
-            .expect("the plugins of the phase can be ordered");
-        let mut phase = Phase::new(PhaseId::new(Uuid::nil()), plugins, Seed::default());
-        phase.set_rankings(
+            .expect("the plugins of the division can be ordered");
+        let mut division = Division::new(plugins, Seed::default());
+        division.set_rankings(
             (0..self.players)
                 .map(|index| vec1![EntrantId::new(Uuid::from_u128(index.into()))])
                 .collect(),
         );
-        phase
+        division
     }
 }

@@ -1,0 +1,291 @@
+/* The bracket: in place of the columns, across both */
+
+/* as narrow as the screen, the bracket scrolling inside it */
+.columns.play > .wide {
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
+.bracket-section + .bracket-section {
+  margin-top: var(--space-4);
+}
+
+/* Columns of the same height, each a list of slots of the same height, a pairing in the middle of
+ * each. A column of half as many pairings as the one before has slots twice as high, so each
+ * pairing is level with the middle of the two it follows from, whatever the screen. */
+.bracket {
+  --gap: var(--space-6);
+
+  display: flex;
+  width: max-content;
+  padding-bottom: var(--space-2);
+  gap: var(--gap);
+}
+
+.bracket-column {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Where more of the bracket is out of sight, its edge fades out (bracket.rs): over the pairings,
+ * which would cover a shadow behind them, and within the box, whose focus ring stays clear */
+.bracket-frame {
+  position: relative;
+}
+
+.bracket-frame[data-more-left]::before,
+.bracket-frame[data-more-right]::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 2.5rem;
+  content: "";
+  pointer-events: none;
+}
+
+.bracket-frame[data-more-left]::before {
+  left: 0;
+  background: linear-gradient(to right, var(--surface), transparent);
+}
+
+.bracket-frame[data-more-right]::after {
+  right: 0;
+  background: linear-gradient(to left, var(--surface), transparent);
+}
+
+/* At most as high as the screen below the bar and the view switch, so that a bracket higher than
+ * that scrolls within it, its stages on top, rather than the page, which would take them away */
+.bracket-scroll {
+  max-height: calc(100dvh - var(--bar-height) - var(--control) - 2 * var(--space-2) - var(--space-4));
+  overflow-y: auto;
+}
+
+.bracket-stage {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding-bottom: var(--space-2);
+  margin: 0;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.9em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bracket-slots {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+/* rows of equal height whatever their content, e.g. a name of two lines: as high as the highest
+ * where the column sets the height of the bracket, else its share of that */
+.bracket-slots ol {
+  display: grid;
+  flex: 1;
+  padding: 0;
+  margin: 0;
+  grid-auto-rows: 1fr;
+  list-style: none;
+}
+
+/* The stage below the column's, the match for third place below the final: in the bottom quarter
+ * of the column, a little below the middle of the second semifinal, which is at three quarters,
+ * so that it clears the semifinal's box. It does not make the column higher, which would move the
+ * pairings of every column, so the bracket keeps room for it below the pairings where the bottom
+ * quarter is too low for it, i.e. where the first column has fewer than 8 pairings. */
+.below {
+  position: absolute;
+  top: calc(75% + 2.25rem);
+  left: 0;
+}
+
+.below .slot {
+  padding: 0;
+}
+
+.bracket:has(.below) {
+  padding-bottom: 6rem;
+}
+
+.bracket:has(.bracket-column:first-child li:nth-child(8)) {
+  padding-bottom: var(--space-2);
+}
+
+.slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: var(--space-1) 0;
+}
+
+/* two pairings whose winners meet in the next column, in a row of a column folded into the rows
+ * of the next one (bracket.rs), each in a slot of half its height */
+.slots {
+  display: flex;
+}
+
+/* the side of a pairing that moved on by a bye, in place of a pairing against nobody; beside the
+ * button of a side, whose name says only who wins */
+.pairing .tagged {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  grid-column: 2;
+}
+
+.pairing .tagged > button.side {
+  flex: 1;
+}
+
+.pairing .tag {
+  padding: 0 var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.8em;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+/* The lines: from the middle of a slot halfway across the gap to the next column, there down or
+ * up to the middle between the two slots that meet, which is where the slot they meet in has its
+ * middle, and on from there. */
+.slot.line-straight::after,
+.slot.line-down::after,
+.slot.line-up::after,
+.slot.line-in::before {
+  position: absolute;
+  width: calc(var(--gap) / 2);
+  border: 0 solid var(--border-strong);
+  content: "";
+}
+
+.slot.line-straight::after {
+  top: 50%;
+  right: calc(var(--gap) / -2);
+  border-top-width: 1px;
+}
+
+.slot.line-down::after {
+  top: 50%;
+  right: calc(var(--gap) / -2);
+  height: 50%;
+  border-top-width: 1px;
+  border-right-width: 1px;
+}
+
+.slot.line-up::after {
+  top: 0;
+  right: calc(var(--gap) / -2);
+  height: 50%;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+.slot.line-in::before {
+  top: 50%;
+  left: calc(var(--gap) / -2);
+  border-top-width: 1px;
+}
+
+/* as wide as its column, so that the lines, drawn at the column's edges, reach it */
+.pairing {
+  display: grid;
+  min-width: 10rem;
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  column-gap: var(--space-2);
+  grid-template-columns: auto 1fr;
+}
+
+.pairing.finished {
+  border-style: dashed;
+  background: var(--background);
+}
+
+/* as wide as two digits, so that the names of a column line up */
+.pairing .number {
+  min-width: 2ch;
+  color: var(--text-muted);
+  text-align: right;
+  font-size: 0.9em;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+/* a long name wraps rather than widening its column */
+.pairing .side {
+  max-width: 14rem;
+  grid-column: 2;
+}
+
+/* the side of a match without a result, a button reporting that it won: the name as the others,
+ * its row tinted under the pointer, its padding taken from the pairing's so that the pairing keeps
+ * its size */
+.pairing button.side {
+  min-height: 0;
+  justify-content: flex-start;
+  padding: 0 var(--space-1);
+  border: 0;
+  margin: 0 calc(-1 * var(--space-1));
+  background: transparent;
+  color: var(--text);
+  justify-self: stretch;
+  text-align: left;
+}
+
+.pairing button.side:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--accent-subtle);
+}
+
+/* where a side comes from: wrapping within the narrowest column, rather than widening its column
+ * for a long stage ("Winner of Quarterfinals (1)"), so that a knockout of 16 fits a tablet */
+.pairing .side.pending {
+  max-width: 7rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.pairing .side.nobody {
+  color: var(--text-muted);
+}
+
+.pairing .winner {
+  font-weight: 600;
+}
+
+.pairing .winner::before {
+  color: var(--accent);
+  content: "✓ ";
+}
+
+.pairing .if-needed {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  grid-column: 2;
+}
+
+/* never played (bracket.rs): its place kept, only an outline, and nothing at all for two byes */
+.pairing.unplayed {
+  align-content: center;
+  border-style: dashed;
+  background: transparent;
+}
+
+.slot[aria-hidden="true"] > .pairing.unplayed {
+  visibility: hidden;
+}
+
+/* the scores of a finished match in the bracket, below its pairing */
+.pairing .scores {
+  color: var(--text-muted);
+  grid-column: 2;
+  font-size: 0.9em;
+}

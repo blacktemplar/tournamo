@@ -19,6 +19,7 @@ mod competition;
 mod competitions;
 mod components;
 mod cross_table;
+mod focus;
 mod help;
 mod i18n;
 mod icons;
@@ -52,7 +53,26 @@ use crate::{
 
 /// The variables the styles of the [`components`] are built from.
 const COMPONENTS_THEME: Asset = asset!("/assets/dx-components-theme.css");
-const STYLE: Asset = asset!("/assets/style.css");
+/// The page's own style, by screen (`assets/style/`), in the order of the cascade: where two rules
+/// of the same specificity meet, the later one wins.
+const STYLES: [Asset; 16] = [
+    asset!("/assets/style/tokens.css"),
+    asset!("/assets/style/page.css"),
+    asset!("/assets/style/controls.css"),
+    asset!("/assets/style/bar.css"),
+    asset!("/assets/style/help.css"),
+    asset!("/assets/style/notices.css"),
+    asset!("/assets/style/layout.css"),
+    asset!("/assets/style/competitions.css"),
+    asset!("/assets/style/setup.css"),
+    asset!("/assets/style/toggletip.css"),
+    asset!("/assets/style/phase.css"),
+    asset!("/assets/style/matches.css"),
+    asset!("/assets/style/result.css"),
+    asset!("/assets/style/bracket.css"),
+    asset!("/assets/style/standings.css"),
+    asset!("/assets/style/cross-table.css"),
+];
 
 /// The database of IndexedDB the competitions are stored in.
 const DATABASE: &str = "tournamo";
@@ -228,7 +248,9 @@ fn App() -> Element {
     rsx! {
         // in this order, so that the page's own style comes last
         document::Stylesheet { href: COMPONENTS_THEME }
-        document::Stylesheet { href: STYLE }
+        for (index, style) in STYLES.into_iter().enumerate() {
+            document::Stylesheet { key: "{index}", href: style }
+        }
         // the same for every screen, so that its elements stay while the screens change
         Header {}
         // the help also where nothing can be stored

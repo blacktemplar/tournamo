@@ -36,8 +36,8 @@ use crate::{
     storage::{CompetitionKey, Listing, MemoryStorage, Progress, Save, Storage, Stored},
     view::{
         Action, BracketColumn, BracketEntry, BracketLine, BracketPart, BracketSection,
-        BracketSource, Column, Count, EntrantRow, MatchRow, Medal, NameSearch, Outcome, Plugin,
-        RoundSummary, RoundsView, Scale, Shown, StageName, StandingCell, Unplayed,
+        BracketSource, Chart, Column, Count, EntrantRow, MatchRow, Medal, NameSearch, Outcome,
+        Plugin, RoundSummary, RoundsView, Scale, Shown, StageName, StandingCell, Unplayed,
     },
 };
 

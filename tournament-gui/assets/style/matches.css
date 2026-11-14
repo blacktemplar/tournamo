@@ -1,0 +1,391 @@
+/* The matches */
+
+/* the heading of a card with a control on its right, e.g. the one showing the entry of results;
+ * as high without it, so that the finish, which hides that one, moves nothing */
+.card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 2.25rem;
+  margin-bottom: var(--space-3);
+  gap: var(--space-2);
+}
+
+@media (pointer: coarse) {
+  .card-heading {
+    min-height: var(--control);
+  }
+}
+
+.card-heading h2 {
+  margin: 0;
+}
+
+/* quiet while the entry of results is hidden, since most results are reported by the buttons of
+ * the matches; while it is shown, tinted and bold as what is chosen, its chevron turned up */
+#result-entry-toggle {
+  color: var(--text-muted);
+}
+
+#result-entry-toggle[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+#result-entry-toggle .icon {
+  transition: transform 100ms ease-out;
+}
+
+#result-entry-toggle[aria-expanded="true"] .icon {
+  transform: rotate(180deg);
+}
+
+.result-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.result-entry input {
+  flex: 1 1 8rem;
+}
+
+.result-entry .hint,
+.result-entry .preview,
+.result-entry .error[role="alert"] {
+  width: 100%;
+  margin: 0;
+}
+
+/* what the entry would report, in the accent, as it is what Enter does */
+.result-entry .preview {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* no room, and no gap, while it says nothing */
+.result-entry .preview:empty,
+.result-entry .error[role="alert"]:empty {
+  display: contents;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--space-4);
+  gap: var(--space-2);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.stepper button {
+  padding: 0 var(--space-2);
+}
+
+/* the columns of a finished match, shared by every finished match of the list, so that their
+ * pairings line up whatever their scores, as in a table; a match still to play has its own */
+#match-list {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  container: match-list / inline-size;
+  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  list-style: none;
+}
+
+/* A card: the pairing around the number, then each side's button below its name. The columns
+ * are the same in every card, whether or not a match may end in a draw. */
+.match {
+  position: relative;
+  display: grid;
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  gap: var(--space-2);
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+/* the pairing on the first line, whatever the order of its elements */
+.match .side,
+.match .number {
+  grid-row: 1;
+}
+
+/* the match whose result Enter in the entry of results reports, as the entry says too */
+.match.to-report {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.match .side {
+  font-weight: 600;
+}
+
+.match .side.a {
+  grid-column: 1;
+  text-align: right;
+}
+
+.match .number {
+  min-width: 2.5rem;
+  grid-column: 2;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.match .side.b {
+  grid-column: 3;
+}
+
+.match .winner::before {
+  color: var(--accent);
+  content: "✓ ";
+}
+
+/* the loser recedes behind the winner */
+.match:has(.winner) .side:not(.winner) {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* a match with a result recedes, so that those still to play stand out; still a card with a
+ * solid border, where a dashed one would be a placeholder, as in the bracket */
+.match:has(.result) {
+  background: var(--background);
+}
+
+.match .meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9em;
+  gap: 0 var(--space-3);
+  grid-column: 1 / -1;
+}
+
+.match .report {
+  display: grid;
+  align-items: center;
+  gap: var(--space-2);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.match .win {
+  width: min(100%, 12rem);
+}
+
+.match .win.a {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.match .draw {
+  grid-column: 2;
+}
+
+.match .win.b {
+  grid-column: 3;
+  justify-self: start;
+}
+
+/* a match whose result is entered in a dialog: one button below the pairing */
+.match .enter-result {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+/* a result entered below the pairing: the values of each part side by side, wrapping where they do
+ * not fit, then the buttons, and what they say below them */
+.match .quick-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  grid-column: 1 / -1;
+}
+
+/* a match with a result on one line, so that the list of a round is mostly those still to play:
+ * the pairing, then a draw said and the button reopening it */
+.match.finished {
+  padding-block: var(--space-2);
+  grid-template-columns: subgrid;
+}
+
+/* the buttons in line at the end, the scores beside them */
+.match.finished .report {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: var(--space-2);
+  grid-column: 4;
+  grid-row: 1;
+}
+
+/* the button reopening a finished match, above the one showing its details */
+.finished-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: var(--space-2);
+}
+
+/* where the list is too narrow for the scores of every game on the line, the games won alone; the
+ * scores of the games are still read out */
+@container match-list (width < 40rem) {
+  .match .game-scores {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* On a phone the sides are stacked, so that each name has the line beside the number to itself
+ * and breaks only between words, unless a word is wider than the line: the number, then each
+ * side's name with its button, the draw below them; once played, the button reopening it beside
+ * both names, the draw said below them. */
+@media (width < 30rem) {
+  .match,
+  .match.finished {
+    padding: var(--space-2);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .match button {
+    padding-inline: var(--space-3);
+  }
+
+  .match .number {
+    min-width: 1.5rem;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .match .side {
+    overflow-wrap: break-word;
+  }
+
+  .match .side.a,
+  .match .side.b {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .match .side.b {
+    grid-row: 2;
+  }
+
+  .match .meta {
+    justify-content: start;
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .match .report,
+  .match.finished .report {
+    display: contents;
+  }
+
+  .match .win,
+  .match .win.a,
+  .match .win.b {
+    width: auto;
+    grid-column: 3;
+    justify-self: stretch;
+  }
+
+  .match .win.a {
+    grid-row: 1;
+  }
+
+  .match .win.b {
+    grid-row: 2;
+  }
+
+  .match .draw {
+    grid-column: 3;
+    grid-row: 3;
+  }
+
+  .match .enter-result {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  /* below the pairing, across the card */
+  .match .quick-result {
+    grid-column: 1 / -1;
+  }
+
+  /* the names on the whole line, which no button takes once the match is played */
+  .match.finished .side.a,
+  .match.finished .side.b {
+    grid-column: 2 / -1;
+  }
+
+  .match.finished .result {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .match.finished .meta {
+    grid-row: 4;
+  }
+
+  .match.finished .finished-actions {
+    grid-column: 3;
+    grid-row: 3;
+  }
+}
+
+/* the narrowest phones, where a wide font leaves a longer word no room beside the buttons unless
+ * the card and the buttons give up some of their padding */
+@media (width < 23rem) {
+  .card {
+    padding-inline: var(--space-2);
+  }
+
+  .match button {
+    padding-inline: var(--space-2);
+  }
+}
+
+.match .result {
+  color: var(--text-muted);
+}
+
+/* the room of a draw said, kept by a win, so that the pairings of finished matches line up */
+.match .result-room {
+  visibility: hidden;
+}
+
+/* on a phone the result is below the pairing, which needs no room kept */
+@media (width < 30rem) {
+  .match .result-room {
+    display: none;
+  }
+}
+
+.bye {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+}

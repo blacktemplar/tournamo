@@ -19,8 +19,8 @@ use tournament_engine::MatchResult;
 use crate::{
     announcement::Announcement,
     competition::Ctx,
+    focus::{move_focus, use_focus},
     i18n::t,
-    play::{move_focus, use_focus},
     result::ResultDetails,
     result_text, scores_text, team_name,
 };

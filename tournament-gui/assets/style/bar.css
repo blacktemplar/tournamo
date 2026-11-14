@@ -1,0 +1,128 @@
+/* The bar */
+
+/* on top while the page scrolls, so that undo is always at hand; above the toggletips */
+.bar {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  height: var(--bar-height);
+  align-items: center;
+  /* its content where the page's is, which `main` centres at most 90rem wide */
+  padding: var(--space-1) max(var(--space-4), calc((100cqw - 90rem) / 2 + var(--space-4)));
+  border-bottom: 1px solid var(--border);
+  background: var(--bar);
+  gap: var(--space-2);
+}
+
+header.bar {
+  min-width: 0;
+}
+
+/* the actions follow in the same bar */
+header.bar:has(+ .bar-actions) {
+  padding-right: var(--space-2);
+}
+
+.bar-actions {
+  padding-left: 0;
+}
+
+.bar h1 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.back {
+  display: inline-flex;
+  min-height: var(--control);
+  align-items: center;
+  padding-right: var(--space-2);
+  color: inherit;
+  gap: var(--space-1);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.back:hover {
+  text-decoration: underline;
+}
+
+/* only the icons where the bar is narrow, so that the competition's name keeps room in longer
+ * languages too: first that of the way back, then on a phone those of the actions; the texts stay
+ * for screen readers */
+@media (width < 60rem) {
+  .back .bar-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .bar-actions button {
+    padding: 0 var(--space-2);
+  }
+}
+
+/* on a phone, the name on up to two smaller lines rather than cut off on one */
+@media (width < 38rem) {
+  .bar-actions .bar-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .bar h1 {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
+}
+
+/* German's labels are half as long again */
+@media (width < 50rem) {
+  :root:lang(de) .bar-actions .bar-label {
+    position: absolute;
+    overflow: hidden;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  color: var(--text-muted);
+  gap: var(--space-2) var(--space-6);
+}
+
+footer select {
+  margin-left: var(--space-2);
+}
+
+/* the help and the source code, with their icons; as high as a control, so that they are easy to
+ * tap */
+footer a,
+.help a {
+  display: inline-flex;
+  min-height: var(--control);
+  align-items: center;
+  color: var(--accent);
+  gap: var(--space-1);
+}

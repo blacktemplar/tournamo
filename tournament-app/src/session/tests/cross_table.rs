@@ -173,3 +173,25 @@ fn a_cross_table_is_only_of_teams_that_stay_the_same_without_a_bracket() {
     let session = Given::new().format(RandomRounds::ID).started();
     assert!(session.cross_table().is_some());
 }
+
+/// The chart a phase shows is the one it has, without building it.
+#[test]
+fn the_chart_is_the_bracket_or_else_the_cross_table() {
+    assert_eq!(Given::new().added().chart(), None, "before the start");
+    for format in [
+        RoundRobin::ID,
+        RandomRounds::ID,
+        SingleElimination::ID,
+        DoubleElimination::ID,
+        MonsterDyp::ID,
+    ] {
+        let session = Given::new().format(format).started();
+
+        let has = if session.bracket().is_some() {
+            Some(Chart::Bracket)
+        } else {
+            session.cross_table().map(|_| Chart::CrossTable)
+        };
+        assert_eq!(session.chart(), has, "{format}");
+    }
+}

@@ -1,0 +1,125 @@
+/* Cards and columns */
+
+.card {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.card + .card {
+  margin-top: var(--space-4);
+}
+
+.empty,
+.count {
+  color: var(--text-muted);
+}
+
+.count {
+  font-weight: normal;
+}
+
+/* one column unless there is room for two; never wider than the screen, so that what is wider
+ * (e.g. the standings) scrolls inside its card instead of the page */
+.columns {
+  display: grid;
+  align-items: start;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.columns > .card + .card {
+  margin-top: 0;
+}
+
+/* the entrants beside the phase only where their third leaves room for a name next to its button */
+@media (width >= 64rem) {
+  .columns.setup {
+    grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr);
+  }
+}
+
+/* the matches, the standings or the bracket where there is room for one column only, else both
+ * columns or the bracket, and only for a knockout */
+/* right below the bar, on the page's background, so that nothing shows between them while the page
+ * scrolls under both; the room above it in the page's flow is its own; each view on one line, the
+ * switch scrolling sideways rather than the page where they do not fit */
+.view-switch {
+  position: sticky;
+  z-index: 15;
+  top: var(--bar-height);
+  display: flex;
+  overflow-x: auto;
+  /* room for the focus ring, which the scrolling would cut off */
+  padding: var(--space-2) var(--space-1);
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-1)) var(--space-2);
+  background: var(--background);
+}
+
+/* tabs: on a line, the chosen one underlined in the accent, unlike the joined buttons of a card */
+.view-switch {
+  box-shadow: inset 0 -1px var(--border);
+}
+
+.view-switch button,
+.view-switch button:first-child,
+.view-switch button:last-child {
+  flex: 1 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  margin-left: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.view-switch button[aria-pressed="true"],
+.view-switch button[aria-pressed="true"]:hover:not(:disabled) {
+  border-bottom-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+
+@media (width < 60rem) {
+  .hidden-narrow,
+  .wide-only {
+    display: none;
+  }
+
+  /* up to four views on a phone: the matches, the standings, the bracket and the phase */
+  .view-switch button {
+    padding: 0 var(--space-2);
+  }
+}
+
+/* the narrowest phones, where the scroll bar of the switch would cover the page */
+@media (width < 23rem) {
+  .view-switch {
+    scrollbar-width: none;
+  }
+
+  .view-switch button {
+    padding: 0 var(--space-1);
+    font-size: 0.875rem;
+  }
+}
+
+@media (width >= 60rem) {
+  .narrow-only {
+    display: none;
+  }
+
+  .columns.play {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/* Names are never cut: they wrap, even within a word. */
+.name,
+.side {
+  overflow-wrap: anywhere;
+}

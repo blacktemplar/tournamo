@@ -2,15 +2,34 @@
 
 use std::collections::HashMap;
 
-use tournament_engine::{MatchResult, RankingId, Score, Sides};
+use tournament_engine::{Match, MatchResult, RankingId, Score, Sides};
 
 use super::{Session, bracket::plays_bracket};
-use crate::view::{self, CrossMatch, CrossRow, CrossTable, Outcome};
+use crate::view::{self, Chart, CrossMatch, CrossRow, CrossTable, Outcome};
 
 /// What a draw adds to the total of a row.
 const HALF: Score = Score::new(0.5);
 
 impl Session {
+    /// What the phase shows of all its matches at once: its [`bracket`](Self::bracket), else its
+    /// [`cross table`](Self::cross_table), if it has either; `None` before the start. It builds
+    /// neither.
+    pub fn chart(&self) -> Option<Chart> {
+        let phase = self.started_phase()?;
+        if plays_bracket(phase) {
+            Some(Chart::Bracket)
+        } else if phase
+            .data()
+            .matches()
+            .values()
+            .all(|r#match| pair(r#match).is_some())
+        {
+            Some(Chart::CrossTable)
+        } else {
+            None
+        }
+    }
+
     /// The cross table of the phase, if each of its matches is played by two teams of one
     /// ranking each and its format plays no bracket (see [`Self::bracket`]), e.g. a round robin
     /// or random rounds; `None` before the start, and for teams drawn anew each round, as in a
@@ -23,10 +42,8 @@ impl Session {
         let data = phase.data();
         let mut pairs: Vec<(RankingId, RankingId, &_)> = Vec::new();
         for r#match in data.matches().values() {
-            let ([a], [b]) = (r#match.team_a().as_slice(), r#match.team_b().as_slice()) else {
-                return None;
-            };
-            pairs.push((*a, *b, r#match));
+            let (a, b) = pair(r#match)?;
+            pairs.push((a, b, r#match));
         }
         // in the order of the standings
         let ranked: Vec<_> = phase
@@ -79,5 +96,13 @@ impl Session {
             }
         }
         Some(CrossTable { rows })
+    }
+}
+
+/// The ranking of each side of `r#match`, if each side is a team of one ranking.
+fn pair(r#match: &Match) -> Option<(RankingId, RankingId)> {
+    match (r#match.team_a().as_slice(), r#match.team_b().as_slice()) {
+        ([a], [b]) => Some((*a, *b)),
+        _ => None,
     }
 }

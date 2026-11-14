@@ -201,6 +201,67 @@ pub struct PartView {
     pub parts: Vec<PartView>,
 }
 
+impl PartView {
+    /// Its parts as a table, a row each, if it has any: the columns are the values of each side of
+    /// each field of the first part, which every part at one level shares.
+    pub fn parts_table(&self) -> Option<PartsTable> {
+        let first = self.parts.first()?;
+        let fields: Vec<_> = first
+            .fields
+            .iter()
+            .map(|field| field.label.clone())
+            .collect();
+        let rows = self
+            .parts
+            .iter()
+            .enumerate()
+            .map(|(index, part)| PartsRow {
+                number: index + 1,
+                values: first
+                    .fields
+                    .iter()
+                    .map(|column| {
+                        part.fields
+                            .iter()
+                            .find(|field| field.key == column.key)
+                            .map_or(Sides::new(None, None), |field| field.values)
+                    })
+                    .collect(),
+                result: part.result,
+                warnings: part.warnings.clone(),
+            })
+            .collect();
+        Some(PartsTable {
+            name: first.name.clone(),
+            fields,
+            rows,
+        })
+    }
+}
+
+/// The parts of a part of a match as a table, see [`PartView::parts_table`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartsTable {
+    /// What the parts are called, e.g. `game`.
+    pub name: Phrase,
+    /// The labels of the fields whose values make up the columns, a column for each side.
+    pub fields: Vec<Phrase>,
+    pub rows: Vec<PartsRow>,
+}
+
+/// A part in a [`PartsTable`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartsRow {
+    /// Its number among the parts, from 1.
+    pub number: usize,
+    /// The values of each field of [`PartsTable::fields`], in their order; none for a field the
+    /// part lacks.
+    pub values: Vec<Sides<Option<EnteredValue>>>,
+    pub result: Option<MatchResult>,
+    /// What looks wrong about its result, though it is taken.
+    pub warnings: Vec<Text>,
+}
+
 /// A field of a part in a [`ResultView`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldView {

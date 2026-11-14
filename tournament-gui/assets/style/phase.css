@@ -1,0 +1,299 @@
+/* The form of a phase */
+
+.field {
+  margin: var(--space-3) 0;
+}
+
+/* no box in the card, but room above, its label heading it */
+.field.list {
+  margin-top: var(--space-6);
+}
+
+/* a text, read by the form (phase/fields.rs) */
+.field input.number {
+  width: 8rem;
+}
+
+/* the labels in a column wide enough for most, so that the inputs of a plugin's fields line up;
+ * the numbers a field takes below its input; one column on a phone */
+.number-field {
+  display: grid;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  grid-template-columns: minmax(0, 15rem) auto;
+}
+
+.number-field > .hint {
+  grid-column: 2;
+}
+
+.number-field > :not(.number-label, input, .hint) {
+  grid-column: 1 / -1;
+}
+
+@media (width < 30rem) {
+  .number-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .number-field > .hint {
+    grid-column: 1;
+  }
+}
+
+.chosen-description {
+  margin: var(--space-1) 0 0;
+}
+
+.field .label {
+  margin-right: var(--space-2);
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+/* how long the phase takes (phase/mod.rs): no room while it says nothing, staying a live region */
+#phase-scale:empty {
+  display: contents;
+}
+
+.plugin-fields,
+.plugin-list .field,
+.plugin-set .field {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--border);
+  margin-left: var(--space-1);
+}
+
+.plugin-list,
+.plugin-set {
+  padding-left: var(--space-6);
+}
+
+.plugin-set {
+  padding-left: 0;
+  list-style: none;
+}
+
+.plugin-list li,
+.plugin-set li {
+  margin: var(--space-1) 0;
+}
+
+/* an item of an ordered list: its number, its name, what is said about it, and its buttons at the
+ * end of the line, the name wrapping rather than the buttons on a phone; its fields below */
+.plugin-list {
+  padding-left: 0;
+  counter-reset: item;
+  list-style: none;
+}
+
+.plugin-list li {
+  display: grid;
+  align-items: center;
+  counter-increment: item;
+  gap: var(--space-1) var(--space-2);
+  grid-template-columns: 1.5em minmax(0, max-content) auto 1fr auto;
+}
+
+.plugin-list li::before {
+  content: counter(item) ".";
+}
+
+.plugin-list li > .name {
+  overflow-wrap: anywhere;
+}
+
+.item-buttons {
+  display: inline-flex;
+  gap: var(--space-1);
+  grid-column: -2;
+}
+
+.plugin-list li > .field,
+.plugin-list li > .issues {
+  grid-column: 1 / -1;
+}
+
+.implied {
+  font-style: italic;
+}
+
+.issues {
+  margin: var(--space-1) 0;
+  color: var(--error);
+}
+
+/* what the phase can be played with, but the operator may not want */
+.warnings {
+  margin: var(--space-1) 0;
+  color: var(--warning);
+}
+
+.option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.recommended {
+  font-size: 0.9em;
+}
+
+/* big enough to be tapped, without making the option taller */
+.option-info {
+  display: inline-flex;
+  padding: var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0;
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.option-info .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* The description of an option (PluginChoice in phase/fields.rs), shown while the option is under
+ * the pointer or has the focus of the keyboard: beside the list, level with the option, which a list
+ * reaching the bottom of the screen would hide below it. Its padding is transparent, so that the
+ * pointer moving onto it stays on the option. */
+[role="option"] {
+  position: relative;
+}
+
+.option-description {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 100%;
+  display: none;
+  width: max-content;
+  max-width: 20rem;
+  padding-left: var(--space-2);
+}
+
+.option-description-text {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  white-space: normal;
+}
+
+/* below the list on a narrow screen, as wide as it, since there is no room beside it */
+@media (max-width: 40rem) {
+  [role="option"] {
+    position: static;
+  }
+
+  .option-description {
+    top: 100%;
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: none;
+    padding-top: var(--space-1);
+    padding-left: 0;
+  }
+}
+
+/* tapped open: in the option, below its label, as a touch screen has no pointer that hovers;
+ * wrapped at the width of the list rather than widening it */
+.option-description[data-tapped] {
+  position: static;
+  display: block;
+  width: auto;
+  max-width: none;
+  flex-basis: 100%;
+  padding: 0;
+  contain: inline-size;
+}
+
+.option-description[data-tapped] .option-description-text {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+/* that of the option under the pointer, rather than both where it and the focus differ */
+[role="option"]:hover .option-description,
+[role="listbox"]:not(:has([role="option"]:hover)) [role="option"]:focus .option-description {
+  display: block;
+}
+
+/* the button adding the phase; not sticky, which would hide the field with the focus behind it */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-4);
+  background: var(--surface);
+  gap: var(--space-2);
+}
+
+/* at the bottom of the dialog while its form scrolls, over the dialog's own padding */
+.dialog-buttons {
+  position: sticky;
+  bottom: -24px;
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) 0 24px;
+  border-top: 1px solid var(--border);
+  margin-bottom: -24px;
+  background: var(--surface);
+  gap: var(--space-2);
+}
+
+dl.summary {
+  display: grid;
+  margin: 0 0 var(--space-3);
+  gap: var(--space-1) var(--space-4);
+  /* a value never narrower than its longest word, so that a long label wraps instead */
+  grid-template-columns: auto minmax(min-content, 1fr);
+}
+
+dl.summary dt {
+  color: var(--text-muted);
+}
+
+dl.summary dd {
+  margin: 0;
+}
+
+/* each label above its answer on a phone, where two columns leave each too little */
+@media (width < 30rem) {
+  dl.summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  dl.summary dd + dt {
+    margin-top: var(--space-2);
+  }
+}
+
+/* the fields of a plugin, set off below it */
+dl.summary dl.summary {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
+
+ul.summary-items {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: var(--space-1);
+  list-style: none;
+}

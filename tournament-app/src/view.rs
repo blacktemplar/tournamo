@@ -262,6 +262,16 @@ pub struct StageName {
     pub stage: Stage,
 }
 
+/// What a phase shows of all its matches at once, see
+/// [`Session::chart`](crate::session::Session::chart).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Chart {
+    /// Its [`Bracket`], e.g. of a knockout.
+    Bracket,
+    /// Its [`CrossTable`], e.g. of a round robin.
+    CrossTable,
+}
+
 /// The bracket of a knockout phase, every pairing in it from the start, in sections of columns.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Bracket {

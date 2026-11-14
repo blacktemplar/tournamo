@@ -1,0 +1,87 @@
+/* The page as a whole, and what every screen shares: headings, text for screen readers only */
+
+/* what moves, e.g. the components opening, does not where the system asks for less motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* what the keyboard or a script scrolls to stays clear of the bar, and of the view switch below it,
+ * which stay on top; the room of the scroll bar is kept whether the page scrolls or not, so that
+ * the bar does not shift between screens */
+html {
+  scroll-padding-top: calc(var(--bar-height) + var(--space-4));
+  scrollbar-gutter: stable;
+}
+
+html:has(.view-switch) {
+  scroll-padding-top: calc(var(--bar-height) + var(--control) + 2 * var(--space-2) + var(--space-4));
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--background);
+  /* checkboxes and the like */
+  accent-color: var(--accent);
+  font: 16px/1.5 system-ui, sans-serif;
+}
+
+/* the page: the bar on top (the header, and after it the competition's actions), then the screen,
+ * then the footer */
+#main {
+  display: grid;
+  /* its width, `cqw`, without the scroll bar's, for the bar to line up with the page */
+  container-type: inline-size;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr auto;
+}
+
+#main > :not(.bar),
+#main > header.bar {
+  grid-column: 1 / -1;
+}
+
+#main > header.bar:has(+ .bar-actions) {
+  grid-column: 1;
+}
+
+main {
+  width: 100%;
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+main.narrow {
+  max-width: 48rem;
+}
+
+h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 1.2rem;
+}
+
+h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: 1rem;
+}
+
+/* hidden from the eye, but read by screen readers */
+.visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -675,6 +675,45 @@ fn a_finished_match_shows_its_result_as_reported() {
     assert_eq!(root.warnings, []);
 }
 
+/// The games of a finished match are a table: a row each, the score of each side in a column.
+#[test]
+fn the_parts_of_a_finished_match_are_a_table() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    session.report_entered("1 21-17 19-21 21-15").unwrap();
+    let root = session.reported_result(id).unwrap().root;
+
+    let table = root.parts_table().unwrap();
+
+    assert_eq!(table.name.key(), "game");
+    assert_eq!(table.fields, [root.parts[0].fields[0].label.clone()]);
+    let rows: Vec<_> = table
+        .rows
+        .iter()
+        .map(|row| (row.number, row.values.clone(), row.result))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                1,
+                vec![Sides::new(count(21), count(17))],
+                Some(MatchResult::AWins)
+            ),
+            (
+                2,
+                vec![Sides::new(count(19), count(21))],
+                Some(MatchResult::BWins)
+            ),
+            (
+                3,
+                vec![Sides::new(count(21), count(15))],
+                Some(MatchResult::AWins)
+            ),
+        ]
+    );
+    assert_eq!(root.parts[0].parts_table(), None, "a game has no parts");
+}
+
 #[test]
 fn a_result_reported_against_the_score_shows_as_chosen() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());

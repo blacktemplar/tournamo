@@ -1,0 +1,202 @@
+/* Controls */
+
+button,
+.button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+.button {
+  display: inline-flex;
+  min-height: var(--control);
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  gap: var(--space-2);
+  transition:
+    background-color 100ms ease-out,
+    border-color 100ms ease-out;
+}
+
+button:hover:not(:disabled, [aria-disabled="true"]),
+.button:hover {
+  background: var(--hover);
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+button.primary:hover:not(:disabled, [aria-disabled="true"]) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+button.quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* receding behind the buttons beside it, e.g. deleting next to renaming */
+button.muted {
+  color: var(--text-muted);
+}
+
+/* what cannot be undone, e.g. deleting a competition */
+button.primary.danger,
+button.primary.danger:hover:not(:disabled, [aria-disabled="true"]) {
+  border-color: var(--error);
+  background: var(--error);
+  color: var(--on-error);
+}
+
+button.small,
+.button.small {
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+}
+
+button.icon-only {
+  min-width: 2.25rem;
+  padding: 0;
+}
+
+/* big enough to be tapped where the pointer is a finger (WCAG's 44 pixels) */
+@media (pointer: coarse) {
+  button.small,
+  .button.small {
+    min-height: var(--control);
+  }
+
+  button.icon-only {
+    min-width: var(--control);
+  }
+
+  /* a box a finger finds, on a row as high as a control */
+  input[type="checkbox"] {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: 0;
+  }
+
+  label:has(> input[type="checkbox"]) {
+    display: inline-flex;
+    min-height: var(--control);
+    align-items: center;
+    gap: var(--space-2);
+  }
+}
+
+/* also one that stays focusable while unavailable, so that the focus is not lost */
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* chosen: tinted, and bold, so that it does not depend on the colour alone; above its neighbours,
+ * so that its border shows on both sides */
+button[aria-pressed="true"],
+button[aria-pressed="true"]:hover:not(:disabled) {
+  position: relative;
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+input:not([type="checkbox"], [type="radio"]),
+select {
+  min-width: 0;
+  min-height: var(--control);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* a native list looks like the choices of the phase (components/select): its own arrow, drawn in
+ * the text's colour by two halves of a square */
+select {
+  padding-right: 2rem;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentcolor 50%),
+    linear-gradient(135deg, currentcolor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.05rem) 50%,
+    calc(100% - 0.75rem) 50%;
+  background-repeat: no-repeat;
+  background-size: 0.3rem 0.3rem;
+  cursor: pointer;
+}
+
+input::placeholder {
+  color: var(--text-muted);
+}
+
+:focus-visible,
+.file-button:has(input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+}
+
+/* a line of controls, the input taking what the buttons leave */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* room for a name beside the button, or else the whole line above it */
+.row input {
+  flex: 1 1 12rem;
+}
+
+/* why the field was refused, below it and its button; no room, and no gap, while it says nothing,
+ * staying a live region all the same */
+.row > .error[role="alert"] {
+  width: 100%;
+  margin: 0;
+}
+
+.row > .error[role="alert"]:empty {
+  display: contents;
+}
+
+/* buttons that belong together, joined */
+.segmented {
+  display: inline-flex;
+}
+
+.segmented button {
+  border-radius: 0;
+}
+
+.segmented button + button {
+  margin-left: -1px;
+}
+
+.segmented button:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+.segmented button:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}

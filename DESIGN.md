@@ -973,7 +973,7 @@ separate app, not built on it.
 - **Fast where it matters**: updating long lists was 1.5–2× faster than Leptos
   (see [Performance](#performance)).
 - Desktop and mobile stay possible with the same components (a PWA for now).
-- **Plain CSS** (`assets/style.css`), no Tailwind: no extra tool, a small page.
+- **Plain CSS** (`assets/style/`, a file per screen), no Tailwind: no extra tool, a small page.
 
 Rejected: **Leptos** 0.8 (spiked alongside Dioxus on a shared core, commit
 `0902482`): loaded slightly faster, but reporting a result took 160–200 ms
@@ -1191,7 +1191,7 @@ rather than snapshotting fields before they have been chosen.
   why, the answer unchanged. A `type=number` hands over nothing for what the
   browser cannot read (`0,5`).
 - **The focus stays with the operator's work** after a change moves or removes
-  what had it (`phase::focus_later`); buttons that become unavailable while
+  what had it (`focus::focus_later`); buttons that become unavailable while
   focused are `aria-disabled`.
 - **Once added, the phase is a summary** edited in a dialog starting at its
   config; a refusal shows in the dialog.
@@ -1380,7 +1380,7 @@ entrants, but any number and format.
   played.
 - **Matches are a list, not a table**: tables laid out as cards lose their
   semantics in some browsers.
-- **Colours are tokens** named by role at the top of `style.css`, each
+- **Colours are tokens** named by role in `style/tokens.css`, each
   `light-dark(light, dark)`, following `color-scheme`: the system's or the one
   chosen (`theme.rs`, `<html data-theme>`, applied by an inline script before
   the first paint). No rule names a colour. Neutral greys and one navy accent.

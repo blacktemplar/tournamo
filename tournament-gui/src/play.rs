@@ -5,8 +5,6 @@
 //! buttons, which are gone then, the focus moves on to where the next one is reported, so that the
 //! results of a round can be entered by keyboard alone.
 
-use std::rc::Rc;
-
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::{Message as _, PluginText, Text, Translator},
@@ -15,12 +13,12 @@ use tournament_app::{
     },
 };
 use tournament_engine::{MatchId, MatchResult};
-use wasm_bindgen::JsCast as _;
 
 use crate::{
     announcement::Announcement,
     capitalized,
     competition::{Ctx, Finished},
+    focus::{move_focus, use_focus},
     i18n::t,
     icons,
     phase::answer,
@@ -37,47 +35,6 @@ pub enum Focus {
     Report(MatchId),
     /// The heading of the matches shown, once none of them is left without a result.
     Heading,
-}
-
-/// Focuses the element mounted with the handler it returns whenever `focus` asks for `target`,
-/// and then asks for nothing.
-pub fn use_focus<T: Copy + PartialEq + 'static>(
-    mut focus: Signal<Option<T>>,
-    target: T,
-) -> impl FnMut(MountedEvent) {
-    let mut element = use_signal(|| None::<Rc<MountedData>>);
-    use_effect(move || {
-        if focus() == Some(target)
-            && let Some(element) = element()
-        {
-            focus.set(None);
-            if let Some(element) = element
-                .downcast::<web_sys::Element>()
-                .and_then(|element| element.dyn_ref::<web_sys::HtmlElement>())
-            {
-                focus_in_sight(element);
-            }
-        }
-    });
-    move |event: MountedEvent| element.set(Some(event.data()))
-}
-
-/// Focuses `element`, scrolling only as far as it takes to show it, in either direction, e.g. not
-/// sideways in a bracket whose next match is in sight already.
-fn focus_in_sight(element: &web_sys::HtmlElement) {
-    let options = web_sys::FocusOptions::new();
-    options.set_prevent_scroll(true);
-    // fails only if the element cannot take the focus
-    _ = element.focus_with_options(&options);
-    let options = web_sys::ScrollIntoViewOptions::new();
-    options.set_block(web_sys::ScrollLogicalPosition::Nearest);
-    options.set_inline(web_sys::ScrollLogicalPosition::Nearest);
-    element.scroll_into_view_with_scroll_into_view_options(&options);
-}
-
-/// Asks for `target` to get the focus, see [`use_focus`].
-pub fn move_focus<T: 'static>(mut focus: Signal<Option<T>>, target: T) {
-    focus.set(Some(target));
 }
 
 #[component]

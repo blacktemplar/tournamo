@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::PluginText,
-    result_form::{FieldView, PartView, ResultView},
+    result_form::{PartView, ResultView},
     view::MatchRow,
 };
 use tournament_engine::{EnteredValue, MatchResult, plugins::Phrase};
@@ -82,12 +82,8 @@ fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String
     let level_name = |phrase: &Phrase| {
         capitalized(&tr.plugin_phrase(match_format, PluginText::Level(phrase.key()), phrase))
     };
-    let field_label = |field: &FieldView| {
-        capitalized(&tr.plugin_phrase(
-            match_format,
-            PluginText::EnteredValue(field.label.key()),
-            &field.label,
-        ))
+    let field_label = |label: &Phrase| {
+        capitalized(&tr.plugin_phrase(match_format, PluginText::EnteredValue(label.key()), label))
     };
     let said = |result: Option<MatchResult>| match result {
         Some(MatchResult::AWins) => t!(tr, "wins", team = a.as_str()),
@@ -100,76 +96,70 @@ fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String
         Some(EnteredValue::Decimal(decimal)) => tr.number(decimal.get()),
         None => "–".to_owned(),
     };
-    // the columns of the parts: those of the fields of the first, which every part at one level
-    // shares, each side's value in a column of its own, named by the side, and by the field if
-    // there are several
-    let fields: Vec<FieldView> = part
-        .parts
-        .first()
-        .map(|first| first.fields.clone())
-        .unwrap_or_default();
-    let several = fields.len() > 1;
-    let column = |field: &FieldView, name: &str| {
-        if several {
-            format!("{} {name}", field_label(field))
-        } else {
-            name.to_owned()
+    let parts = part.parts_table();
+    // each side's value in a column of its own, named by the side, and by the field if there are
+    // several; without values, who won a part is said in a column of its own
+    let (heading, headers, result_column) = match &parts {
+        Some(table) => {
+            let several = table.fields.len() > 1;
+            let column = |label: &Phrase, name: &str| {
+                if several {
+                    format!("{} {name}", field_label(label))
+                } else {
+                    name.to_owned()
+                }
+            };
+            let headers: Vec<String> = table
+                .fields
+                .iter()
+                .flat_map(|label| [column(label, &a), column(label, &b)])
+                .collect();
+            (level_name(&table.name), headers, table.fields.is_empty())
         }
+        None => (String::new(), Vec::new(), false),
     };
-    let headers: Vec<String> = fields
+    // each part's name, its values in the columns' order, each marked if it is of the winner, who
+    // won it and its warnings
+    let rows: Vec<ReportedRow> = parts
         .iter()
-        .flat_map(|field| [column(field, &a), column(field, &b)])
-        .collect();
-    // each part's name, its values in the columns' order, who won it and its warnings
-    // without values, who won a part is said in a column of its own
-    let result_column = fields.is_empty();
-    let rows: Vec<ReportedRow> = part
-        .parts
-        .iter()
-        .enumerate()
-        .map(|(index, child)| {
-            let name = t!(
-                tr,
-                "part-numbered",
-                name = level_name(&child.name),
-                number = index + 1
-            );
-            let (a_won, b_won) = (
-                child.result == Some(MatchResult::AWins),
-                child.result == Some(MatchResult::BWins),
-            );
-            let values = fields
-                .iter()
-                .flat_map(|field| {
-                    let values = child
-                        .fields
-                        .iter()
-                        .find(|of_child| of_child.key == field.key)
-                        .map(|of_child| of_child.values);
-                    [
-                        (value(values.and_then(|values| values.a)), a_won),
-                        (value(values.and_then(|values| values.b)), b_won),
-                    ]
-                })
-                .collect();
-            let warnings = child
-                .warnings
-                .iter()
-                .map(|warning| {
-                    t!(
-                        tr,
-                        "part-warning",
-                        part = name.as_str(),
-                        warning = tr.sentence(warning)
-                    )
-                })
-                .collect();
-            ReportedRow {
-                result: said(child.result),
-                name,
-                values,
-                warnings,
-            }
+        .flat_map(|table| {
+            table.rows.iter().map(|row| {
+                let name = t!(
+                    tr,
+                    "part-numbered",
+                    name = level_name(&table.name),
+                    number = row.number
+                );
+                let won = |result| row.result == Some(result);
+                let values = row
+                    .values
+                    .iter()
+                    .flat_map(|values| {
+                        [
+                            (value(values.a), won(MatchResult::AWins)),
+                            (value(values.b), won(MatchResult::BWins)),
+                        ]
+                    })
+                    .collect();
+                let warnings = row
+                    .warnings
+                    .iter()
+                    .map(|warning| {
+                        t!(
+                            tr,
+                            "part-warning",
+                            part = name.as_str(),
+                            warning = tr.sentence(warning)
+                        )
+                    })
+                    .collect();
+                ReportedRow {
+                    result: said(row.result),
+                    name,
+                    values,
+                    warnings,
+                }
+            })
         })
         .collect();
     let warnings: Vec<String> = rows
@@ -180,11 +170,11 @@ fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String
     let name = level_name(&part.name);
     let outcome = with_parts_won(&tr, said(part.result), part.parts_won);
     rsx! {
-        if let Some(first) = part.parts.first() {
+        if parts.is_some() {
             table { class: "reported-parts",
                 thead {
                     tr {
-                        th { scope: "col", {level_name(&first.name)} }
+                        th { scope: "col", {heading} }
                         for header in headers {
                             th { scope: "col", class: "value", {header} }
                         }
@@ -219,8 +209,8 @@ fn ReportedPart(part: PartView, match_format: &'static str, a: String, b: String
             p { class: "reported-field",
                 {
                     t!(
-                        tr, "reported-value", value = field_label(field), a = a.as_str(), b = b
-                        .as_str(), score = tr.scores(&[field.values])
+                        tr, "reported-value", value = field_label(&field.label), a = a.as_str(), b =
+                        b.as_str(), score = tr.scores(&[field.values])
                     )
                 }
             }

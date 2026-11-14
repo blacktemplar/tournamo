@@ -12,8 +12,8 @@ use vec1::Vec1;
 
 use crate::{
     entities::{
-        Annotated, Bye, Match, MatchId, MatchResult, NewMatch, Phase, PhaseBuilder, PhaseData,
-        PhaseView, RankingId,
+        Annotated, Bye, DivisionData, DivisionView, Match, MatchId, MatchResult, NewMatch, Phase,
+        PhaseBuilder, RankingId,
     },
     plugins::phase_format::{PhaseFormat, Schedule},
     type_map::TypeMap,
@@ -53,7 +53,7 @@ struct FixedMatches {
 
 #[register]
 impl PhaseFormat for FixedMatches {
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let phase_data = phase.data();
         let all_matches: Vec<_> = self
             .matches
@@ -128,7 +128,7 @@ pub(crate) fn phase_with_annotated_matches(
     phase
 }
 
-fn ranking_ids(phase_data: &PhaseData) -> Vec<RankingId> {
+fn ranking_ids(phase_data: &DivisionData) -> Vec<RankingId> {
     phase_data
         .rankings()
         .values()
@@ -137,7 +137,7 @@ fn ranking_ids(phase_data: &PhaseData) -> Vec<RankingId> {
         .collect()
 }
 
-fn team(phase_data: &PhaseData, ranking_indices: &[usize]) -> Vec1<RankingId> {
+fn team(phase_data: &DivisionData, ranking_indices: &[usize]) -> Vec1<RankingId> {
     let ranking_ids = ranking_ids(phase_data);
     Vec1::try_from_vec(ranking_indices.iter().map(|i| ranking_ids[*i]).collect())
         .expect("a team must consist of at least one ranking")

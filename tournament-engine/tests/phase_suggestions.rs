@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    Competition, PhasePlugins, PhaseView,
+    Competition, DivisionView, PhasePlugins,
     plugin_factory::{
         Plugin,
         config::{Path, PluginConfig},
@@ -37,7 +37,7 @@ impl PhaseFormat for Custom {
         }
     }
 
-    fn create_new_matches(&mut self, _: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, _: &DivisionView<'_>) -> Schedule {
         Schedule::default()
     }
 }

@@ -6,8 +6,8 @@ use std::num::NonZeroU32;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, Match, MatchResult,
-    NewMatch, PhaseId, PhasePluginsBuilder, PhaseView, RankingId, ReportMatchResult,
+    AddEntrant, AddPhase, CompetitionStateMachine, DivisionView, Entrant, EntrantId, Match,
+    MatchResult, NewMatch, PhaseId, PhasePluginsBuilder, RankingId, ReportMatchResult,
     StartCompetition,
     plugin_factory::{Plugin, register},
     plugins::{
@@ -28,7 +28,7 @@ struct ByStandings;
 
 #[register]
 impl PhaseFormat for ByStandings {
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let matches = phase.data().matches();
         if matches.values().any(|r#match| !r#match.is_finished()) {
             return Schedule::default();

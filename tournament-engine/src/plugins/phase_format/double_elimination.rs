@@ -7,7 +7,7 @@ use plugin_factory::{Plugin, compatibility::Declaration, config::PluginConfig, r
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{PhaseData, PhaseView, Team},
+    entities::{DivisionData, DivisionView, Team},
     plugins::{
         facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
@@ -186,7 +186,7 @@ impl PhaseFormat for DoubleElimination {
         }
     }
 
-    fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule {
+    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
         let phase_data = phase.data();
         let reset = self.grand_final_reset;
         self.bracket
@@ -208,7 +208,7 @@ impl PhaseFormat for DoubleElimination {
 }
 
 /// The whole double elimination between the rankings of `phase_data`, see [`DoubleElimination`].
-fn bracket(phase_data: &PhaseData, grand_final_reset: bool) -> Bracket {
+fn bracket(phase_data: &DivisionData, grand_final_reset: bool) -> Bracket {
     let mut bracket = BracketBuilder::default();
     let winners = bracket.add_knockout(phase_data, winner_bracket_slot, |round, rounds| {
         TypeMap::new().with(DoubleEliminationRound::Winners { round, rounds })

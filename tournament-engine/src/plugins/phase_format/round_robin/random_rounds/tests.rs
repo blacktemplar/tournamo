@@ -5,9 +5,9 @@ use itertools::Itertools;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::entities::{Bye, Match, PhaseBuilder, PhaseData};
+use crate::entities::{Bye, DivisionData, Match, PhaseBuilder};
 
-fn assert_every_pair_played_at_most_once(phase: &PhaseData) {
+fn assert_every_pair_played_at_most_once(phase: &DivisionData) {
     assert!(phase.matches().values().all(|m| m.team_a().len() == 1));
     assert!(phase.matches().values().all(|m| m.team_b().len() == 1));
     assert!(

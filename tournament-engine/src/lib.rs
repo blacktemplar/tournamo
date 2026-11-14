@@ -8,8 +8,8 @@ pub mod type_map;
 #[cfg(feature = "test-util")]
 pub use entities::PhaseBuilder;
 pub use entities::{
-    Annotated, Bye, ByeId, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, NewMatch,
-    Phase, PhaseData, PhaseId, PhaseView, Ranking, RankingId, ResultOfTeam, Seed, Team,
+    Annotated, Bye, ByeId, Competition, DivisionData, DivisionView, Entrant, EntrantId, Match,
+    MatchId, MatchResult, NewMatch, Phase, PhaseId, Ranking, RankingId, ResultOfTeam, Seed, Team,
     details::{Decision, EnteredValue, FieldKey, Part, ResultReason, Sides, Values},
     standings::{Standing, Standings},
 };

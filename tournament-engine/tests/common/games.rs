@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, EnteredValue, Entrant, EntrantId, FieldKey,
-    Match, MatchId, MatchResult, Part, PhaseData, PhaseId, PhasePluginsBuilder, ResultReason, Seed,
+    AddEntrant, AddPhase, CompetitionStateMachine, DivisionData, EnteredValue, Entrant, EntrantId,
+    FieldKey, Match, MatchId, MatchResult, Part, PhaseId, PhasePluginsBuilder, ResultReason, Seed,
     SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue,
     plugin_factory::{Plugin, compatibility::Declaration, register},
     plugins::{
@@ -38,7 +38,7 @@ impl Games {
 
 #[register]
 impl MatchFormat for Games {
-    fn template(&self, _: &PhaseData, _: &Match) -> Template {
+    fn template(&self, _: &DivisionData, _: &Match) -> Template {
         let points = FieldSpec {
             key: FieldKey::new("points"),
             label: Phrase::new("points", "points"),
@@ -71,7 +71,7 @@ impl MatchFormat for Games {
         }
     }
 
-    fn tally(&self, _: &PhaseData, r#match: &Match) -> TypeMap {
+    fn tally(&self, _: &DivisionData, r#match: &Match) -> TypeMap {
         let mut won = Sides::new(0, 0);
         for game in r#match.contest().parts() {
             match game.decision().map(|decision| decision.result()) {

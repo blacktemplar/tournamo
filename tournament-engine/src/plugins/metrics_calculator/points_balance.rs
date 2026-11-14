@@ -5,7 +5,7 @@ use plugin_factory::{Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, DivisionData, Match, RankingId},
     plugins::{
         Phrase,
         facts::{CalculatesMetric, MatchTally},
@@ -127,7 +127,7 @@ impl Calculator for PointsBalanceCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         _: &OldMetrics,
     ) -> Vec<(RankingId, PointsBalance)> {
@@ -142,7 +142,7 @@ impl Calculator for PointsBalanceCalculator {
     /// A bye has no score.
     fn after_bye(
         &mut self,
-        _: &PhaseData,
+        _: &DivisionData,
         _: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, PointsBalance)> {
@@ -177,7 +177,7 @@ impl Calculator for PointsDifferenceCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, PointsDifference)> {
@@ -186,7 +186,7 @@ impl Calculator for PointsDifferenceCalculator {
 
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, PointsDifference)> {

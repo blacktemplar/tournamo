@@ -34,13 +34,13 @@ use crate::{
 pub struct Phase {
     id: PhaseId,
     plugins: PhasePlugins,
-    data: PhaseData,
+    data: DivisionData,
 }
 
 /// Everything a [`Phase`] holds but its plugins: its rankings, matches, byes and seed. Where the
 /// rankings stand depends on how the phase ranks them, see [`Phase::standings`].
 #[derive(Debug)]
-pub struct PhaseData {
+pub struct DivisionData {
     rankings: IdMap<Ranking>,
     matches: IdMap<Match>,
     byes: IdMap<Bye>,
@@ -55,7 +55,7 @@ impl IdAble for Phase {
     }
 }
 
-impl PhaseData {
+impl DivisionData {
     /// The rankings of this phase, ordered by their [`Ranking::initial_unique_rank`].
     pub fn rankings(&self) -> &IdMap<Ranking> {
         &self.rankings
@@ -87,7 +87,7 @@ impl PhaseData {
     }
 }
 
-impl PhaseData {
+impl DivisionData {
     /// `matches` numbered as they ask, or else each with the number after the highest one so far.
     fn number(&self, matches: Vec<NewMatch>) -> Vec<Match> {
         // looked for only if a match asks for no number, since a bracket schedules after every
@@ -169,17 +169,17 @@ impl PhaseData {
 
 /// A phase as its format sees it when scheduling: its data, and its standings when asked for.
 #[derive(Debug, Clone, Copy)]
-pub struct PhaseView<'a> {
-    data: &'a PhaseData,
+pub struct DivisionView<'a> {
+    data: &'a DivisionData,
     ranker: HierarchicalRanker<'a>,
 }
 
-impl<'a> PhaseView<'a> {
-    pub(crate) fn new(data: &'a PhaseData, ranker: HierarchicalRanker<'a>) -> Self {
+impl<'a> DivisionView<'a> {
+    pub(crate) fn new(data: &'a DivisionData, ranker: HierarchicalRanker<'a>) -> Self {
         Self { data, ranker }
     }
 
-    pub fn data(&self) -> &'a PhaseData {
+    pub fn data(&self) -> &'a DivisionData {
         self.data
     }
 
@@ -194,7 +194,7 @@ impl Phase {
     pub(super) fn new(id: PhaseId, plugins: PhasePlugins, seed: Seed) -> Self {
         Self {
             id,
-            data: PhaseData {
+            data: DivisionData {
                 rankings: IdMap::new(),
                 matches: IdMap::new(),
                 byes: IdMap::new(),
@@ -209,14 +209,14 @@ impl Phase {
     }
 
     /// The rankings, matches and seed of this phase, i.e. everything but its plugins.
-    pub fn data(&self) -> &PhaseData {
+    pub fn data(&self) -> &DivisionData {
         &self.data
     }
 
     /// The standings of this phase, sorted on every call: a caller reading them more than once
     /// keeps them.
     pub fn standings(&self) -> Standings<'_> {
-        PhaseView::new(&self.data, self.plugins.ranker()).standings()
+        DivisionView::new(&self.data, self.plugins.ranker()).standings()
     }
 
     /// The plugins this phase is played with: its format, match format, ranking and metrics.
@@ -375,7 +375,7 @@ impl Phase {
         &mut self,
         mut updates_of: impl FnMut(
             &mut dyn MetricsCalculator,
-            &PhaseData,
+            &DivisionData,
             &OldMetrics,
         ) -> Vec<(RankingId, Metric)>,
     ) {
@@ -527,7 +527,7 @@ impl<'de> Deserialize<'de> for Phase {
         Ok(Phase {
             id: saved.id,
             plugins: saved.plugins,
-            data: PhaseData {
+            data: DivisionData {
                 rankings,
                 matches: saved.data.matches,
                 byes: saved.data.byes,

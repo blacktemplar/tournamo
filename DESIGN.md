@@ -64,8 +64,8 @@ bracket, a structure it would otherwise rebuild on every reported result).
 following the phase's progress take `&mut self` and the phase's data:
 
 ```rust
-fn create_new_matches(&mut self, phase: &PhaseView<'_>) -> Schedule;       // PhaseFormat
-fn update_after_match_result(&mut self, phase_data: &PhaseData, /* ... */)
+fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule;       // PhaseFormat
+fn update_after_match_result(&mut self, phase_data: &DivisionData, /* ... */)
     -> Vec<(RankingId, Metric)>;                                           // MetricsCalculator
 ```
 
@@ -75,12 +75,12 @@ progress: it ranks whenever the standings are read (see
 [Metrics](#metrics-plugin-produced-ranking-data)), so `SliceRanker::rank` takes
 `&self`.
 
-- **`PhaseData` is everything in a `Phase` but its plugins** (rankings, matches,
+- **`DivisionData` is everything in a `Phase` but its plugins** (rankings, matches,
   byes, seed). A phase holds its `PhasePlugins` whole, as it was added with
   them, next to its `data`: a call borrows a plugin mutably and `data`
   immutably, disjoint fields, so no plugin is moved out. A plugin therefore
   does not see the other plugins; what it needs of them reaches it through
-  `PhaseData` (metrics, annotations). The format gets a `PhaseView`: the data,
+  `DivisionData` (metrics, annotations). The format gets a `DivisionView`: the data,
   and the standings on request, ranked by the slice rankers, a field of the
   plugins beside the format, borrowed immutably. `data` is a nested field, not `#[serde(flatten)]`, which postcard
   cannot read.
@@ -91,12 +91,12 @@ progress: it ranks whenever the standings are read (see
   dropped.
 - **Undo needs nothing extra.** The plugin is part of the state, so a replay
   rebuilds it from its configuration through the same calls. The contract is
-  determinism: its state depends only on the `PhaseData` and calls it has seen.
+  determinism: its state depends only on the `DivisionData` and calls it has seen.
 
 Rejected:
 - Stateless plugins recomputing from `&Phase` on every call: cost grows with the
   phase on the hot path.
-- State in a `TypeMap` of `PhaseData`: exposed to every plugin, and two plugins
+- State in a `TypeMap` of `DivisionData`: exposed to every plugin, and two plugins
   of one type collide.
 - Interior mutability: hides the mutation the replay contract governs.
 - Passing `&Phase` with the plugin taken out: the plugin sees a phase that
@@ -291,9 +291,9 @@ where the `typetag` tag is used. A `Ranking` stores its metrics in a `TypeMap`
 #[axis]
 pub trait MetricsCalculator: Plugin + DynClone {
     fn default_metric_value(&self) -> Metric;
-    fn update_after_match_result(&mut self, phase_data: &PhaseData, r#match: &Match,
+    fn update_after_match_result(&mut self, phase_data: &DivisionData, r#match: &Match,
                                  old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)>;
-    fn update_after_bye(&mut self, phase_data: &PhaseData, bye: &Bye,
+    fn update_after_bye(&mut self, phase_data: &DivisionData, bye: &Bye,
                         old_metrics: &OldMetrics) -> Vec<(RankingId, Metric)>;
 }
 ```
@@ -301,7 +301,7 @@ pub trait MetricsCalculator: Plugin + DynClone {
 `default_metric_value()` seeds every ranking and names the metric the
 calculator owns. A calculator depending on another (Buchholz on points) reads
 the pre-update values through `OldMetrics::of::<M>()` and the new ones in
-`PhaseData`, which is why calculators run in dependency order.
+`DivisionData`, which is why calculators run in dependency order.
 
 **A calculator states its metric as a type.** It implements `Calculator`, whose
 associated `Metric` (with its `Default` as the starting value) is what
@@ -329,7 +329,7 @@ stored. `Phase::standings` ranks the rankings by the phase's slice rankers on
 every call and returns them best first, each with its rank and its unique rank
 (the rank, ties broken by the initial unique rank). The standings borrow the
 phase, so they are never stale; a reader asks once and keeps them. A format
-asks through the `PhaseView` it schedules with, as a Swiss system will once per
+asks through the `DivisionView` it schedules with, as a Swiss system will once per
 round; the standings count every result reported and every bye reached.
 Sorting after every result made each replay (undo, redo, loading, editing a
 phase) sort once per result in the log, about 90% of its time. Natively, on the
@@ -436,7 +436,7 @@ entities (below).
 `Competition<E, M, R>` with the library working through traits is the natural
 idea, and fails on three blockers verified against `typetag` 0.2.23's source:
 
-1. Generic entities make `PhaseData<M, R>` and so every plugin trait generic,
+1. Generic entities make `DivisionData<M, R>` and so every plugin trait generic,
    and `typetag` rejects generic traits for deserialization
    (`tagged_trait.rs:7`), so `Box<dyn PhaseFormat>` would lose `Deserialize`.
 2. Reusable third-party plugins need generic impls

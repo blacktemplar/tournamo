@@ -18,6 +18,6 @@ pub use ids::{ByeId, EntrantId, MatchId, PhaseId, RankingId};
 pub use r#match::{Match, MatchResult, NewMatch, ResultOfTeam, Team};
 #[cfg(feature = "test-util")]
 pub use phase::builder::PhaseBuilder;
-pub use phase::{Phase, PhaseData, PhaseView};
+pub use phase::{DivisionData, DivisionView, Phase};
 pub use ranking::Ranking;
 pub use seed::Seed;

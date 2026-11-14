@@ -6,8 +6,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tournament_engine::{
-    AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine, Entrant, EntrantId,
-    Match, MatchId, MatchResult, PhaseData, PhaseId, PhasePluginsBuilder, Ranking,
+    AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine, DivisionData, Entrant,
+    EntrantId, Match, MatchId, MatchResult, PhaseId, PhasePluginsBuilder, Ranking,
     ReportMatchResult, Score, Seed, SetCompetitionSeed, StartCompetition, TypeMapValue,
     plugins::{
         metrics_calculator::{
@@ -111,7 +111,7 @@ fn competition_in_the_final() -> CompetitionStateMachine {
 /// The matches of `round`, ordered by the initial unique rank of the first ranking of their team
 /// A, which is unique within a round and unaffected by any reported result, so that the order does
 /// not depend on the iteration order of the match map.
-fn matches_of_round(phase: &PhaseData, round: u32) -> Vec<MatchId> {
+fn matches_of_round(phase: &DivisionData, round: u32) -> Vec<MatchId> {
     phase
         .matches()
         .values()

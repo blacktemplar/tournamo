@@ -13,7 +13,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    entities::{Bye, Competition, Match, PhaseData, RankingId},
+    entities::{Bye, Competition, DivisionData, Match, RankingId},
     plugins::{
         facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
         match_format::{BestOf, Scored, WinnerOnly},
@@ -618,7 +618,7 @@ macro_rules! calculates_nothing {
 
             fn after_match(
                 &mut self,
-                _: &PhaseData,
+                _: &DivisionData,
                 _: &Match,
                 _: &OldMetrics,
             ) -> Vec<(RankingId, $metric)> {
@@ -627,7 +627,7 @@ macro_rules! calculates_nothing {
 
             fn after_bye(
                 &mut self,
-                _: &PhaseData,
+                _: &DivisionData,
                 _: &Bye,
                 _: &OldMetrics,
             ) -> Vec<(RankingId, $metric)> {

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Cell, MetricColumn, OldMetrics, ToCell};
 use crate::{
-    entities::{Bye, Match, MatchResult, PhaseData, RankingId, ResultOfTeam, Team},
+    entities::{Bye, DivisionData, Match, MatchResult, RankingId, ResultOfTeam, Team},
     map::Map,
     plugins::{
         facts::{CalculatesMetric, NoDraws},
@@ -79,7 +79,7 @@ impl Calculator for BuchholzCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Buchholz)> {
@@ -95,7 +95,7 @@ impl Calculator for BuchholzCalculator {
     /// ranking.
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Buchholz)> {
@@ -176,7 +176,7 @@ impl Calculator for BuchholzOfBuchholzCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, BuchholzOfBuchholz)> {
@@ -192,7 +192,7 @@ impl Calculator for BuchholzOfBuchholzCalculator {
     /// opponents of that ranking.
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, BuchholzOfBuchholz)> {
@@ -317,7 +317,7 @@ impl Calculator for SonnebornBergerCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, SonnebornBerger)> {
@@ -333,7 +333,7 @@ impl Calculator for SonnebornBergerCalculator {
     /// its ranking or played it to a draw.
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         _: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, SonnebornBerger)> {
@@ -361,7 +361,7 @@ fn played(r#match: &Match) -> MatchResult {
 /// multiplied by the `weight` of the result the ranking achieved against that opponent, after the
 /// result of `match` was reported, or, without a match, after a bye was scheduled.
 fn weighted_opponent_sum_changes<M, B>(
-    phase_data: &PhaseData,
+    phase_data: &DivisionData,
     r#match: Option<&Match>,
     old_metrics: &OldMetrics,
     weight: impl Fn(ResultOfTeam) -> Score,

@@ -5,7 +5,7 @@ use itertools::Itertools;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::entities::{Bye, Match, PhaseBuilder, PhaseData};
+use crate::entities::{Bye, DivisionData, Match, PhaseBuilder};
 
 /// A format asking for no numbers gets its matches numbered in the order it scheduled them.
 #[test]
@@ -28,7 +28,7 @@ fn matches_are_numbered_as_scheduled_unless_the_format_numbers_them() {
 
 /// Asserts that every unordered pair of ranking ids in the phase played against each other
 /// in exactly one scheduled match.
-fn assert_every_pair_played_exactly_once(phase: &PhaseData) {
+fn assert_every_pair_played_exactly_once(phase: &DivisionData) {
     let mut expected_pairs = phase
         .rankings()
         .keys()

@@ -7,7 +7,7 @@ use std::{
 
 use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use tournament_engine::{
-    Annotated as _, Bye, EntrantId, Match, Phase, PhaseData, Ranking, RankingId, TypeMap,
+    Annotated as _, Bye, DivisionData, EntrantId, Match, Phase, Ranking, RankingId, TypeMap,
     plugins::{
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
@@ -384,7 +384,7 @@ impl Session {
         }
     }
 
-    pub(super) fn team(&self, phase: &PhaseData, rankings: &[RankingId]) -> Vec<EntrantRow> {
+    pub(super) fn team(&self, phase: &DivisionData, rankings: &[RankingId]) -> Vec<EntrantRow> {
         rankings
             .iter()
             .flat_map(|id| phase.rankings()[id].entrants())

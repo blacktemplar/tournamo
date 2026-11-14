@@ -2,7 +2,7 @@ use plugin_factory::Plugin;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{Bye, Match, PhaseData, RankingId, ResultOfTeam},
+    entities::{Bye, DivisionData, Match, RankingId, ResultOfTeam},
     plugins::{
         Phrase,
         metrics_calculator::{
@@ -155,7 +155,7 @@ impl Calculator for WinsDrawsLossesCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         _: &OldMetrics,
     ) -> Vec<(RankingId, WinsDrawsLosses)> {
@@ -173,7 +173,7 @@ impl Calculator for WinsDrawsLossesCalculator {
 
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         bye: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, WinsDrawsLosses)> {

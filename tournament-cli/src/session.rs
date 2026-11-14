@@ -27,8 +27,8 @@ use tournament_app::{
     view,
 };
 use tournament_engine::{
-    Annotated as _, Competition, Entrant, EntrantId, Match, MatchId, MatchResult, Phase, PhaseData,
-    PhasePlugins, RankingId, Sides, TypeMap,
+    Annotated as _, Competition, DivisionData, Entrant, EntrantId, Match, MatchId, MatchResult,
+    Phase, PhasePlugins, RankingId, Sides, TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
@@ -664,7 +664,7 @@ impl Session {
         Ok(output)
     }
 
-    fn team_name(&self, phase: &PhaseData, rankings: &[RankingId]) -> String {
+    fn team_name(&self, phase: &DivisionData, rankings: &[RankingId]) -> String {
         rankings
             .iter()
             .flat_map(|id| phase.rankings()[id].entrants())
@@ -673,7 +673,7 @@ impl Session {
             .join(" & ")
     }
 
-    fn result_text(&self, phase: &PhaseData, r#match: &Match) -> String {
+    fn result_text(&self, phase: &DivisionData, r#match: &Match) -> String {
         let a = self.team_name(phase, r#match.team_a());
         let b = self.team_name(phase, r#match.team_b());
         let text = match r#match.result() {

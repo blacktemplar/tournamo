@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 pub use crate::plugins::builder::PhasePluginsBuilder;
 pub use crate::plugins::phrase::Phrase;
 use crate::{
-    entities::{PhaseData, PhaseView},
+    entities::{DivisionData, DivisionView},
     plugins::{
         match_format::MatchFormat,
         metrics_calculator::MetricsCalculator,
@@ -234,8 +234,8 @@ impl PhasePlugins {
 
     /// The matches and byes the format schedules next in the phase of `data` played with these
     /// plugins, see [`PhaseFormat::create_new_matches`].
-    pub(crate) fn schedule(&mut self, data: &PhaseData) -> Schedule {
-        let view = PhaseView::new(data, HierarchicalRanker::new(&self.ranking));
+    pub(crate) fn schedule(&mut self, data: &DivisionData) -> Schedule {
+        let view = DivisionView::new(data, HierarchicalRanker::new(&self.ranking));
         self.format.create_new_matches(&view)
     }
 

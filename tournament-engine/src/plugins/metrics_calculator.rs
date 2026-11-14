@@ -10,7 +10,7 @@ use plugin_factory::{Plugin, axis, compatibility::Declaration};
 
 use crate::{
     Score,
-    entities::{Bye, Match, PhaseData, Ranking, RankingId, Team},
+    entities::{Bye, DivisionData, Match, Ranking, RankingId, Team},
     map::Map,
     plugins::{Phrase, facts::CalculatesMetric},
     type_map::{TypeMapValue, downcast_unchecked_ref},
@@ -107,7 +107,7 @@ pub trait MetricsCalculator: Plugin + DynClone {
     /// see [`Calculator::after_match`].
     fn update_after_match_result(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Metric)>;
@@ -116,7 +116,7 @@ pub trait MetricsCalculator: Plugin + DynClone {
     /// [`Calculator::after_bye`].
     fn update_after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         bye: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Metric)>;
@@ -142,7 +142,7 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 /// use plugin_factory::Plugin;
 /// use serde::{Deserialize, Serialize};
 /// use tournament_engine::{
-///     Bye, Match, PhaseData, RankingId, TypeMapValue,
+///     Bye, DivisionData, Match, RankingId, TypeMapValue,
 ///     plugins::metrics_calculator::{Calculator, OldMetrics, provides_metric},
 ///     register_calculator,
 /// };
@@ -168,7 +168,7 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 ///
 ///     fn after_match(
 ///         &mut self,
-///         phase_data: &PhaseData,
+///         phase_data: &DivisionData,
 ///         r#match: &Match,
 ///         _: &OldMetrics,
 ///     ) -> Vec<(RankingId, MatchesPlayed)> {
@@ -184,7 +184,7 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 ///     /// A bye is not a match.
 ///     fn after_bye(
 ///         &mut self,
-///         _: &PhaseData,
+///         _: &DivisionData,
 ///         _: &Bye,
 ///         _: &OldMetrics,
 ///     ) -> Vec<(RankingId, MatchesPlayed)> {
@@ -205,7 +205,7 @@ pub trait Calculator: Debug + Clone {
     /// calculator deriving its metric from another one can see what changed there.
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Self::Metric)>;
@@ -219,7 +219,7 @@ pub trait Calculator: Debug + Clone {
     /// `old_metrics` is as for [`Self::after_match`].
     fn after_bye(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         bye: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Self::Metric)>;
@@ -269,7 +269,7 @@ macro_rules! register_calculator {
 
             fn update_after_match_result(
                 &mut self,
-                phase_data: &$crate::PhaseData,
+                phase_data: &$crate::DivisionData,
                 r#match: &$crate::Match,
                 old_metrics: &$crate::plugins::metrics_calculator::OldMetrics,
             ) -> ::std::vec::Vec<(
@@ -288,7 +288,7 @@ macro_rules! register_calculator {
 
             fn update_after_bye(
                 &mut self,
-                phase_data: &$crate::PhaseData,
+                phase_data: &$crate::DivisionData,
                 bye: &$crate::Bye,
                 old_metrics: &$crate::plugins::metrics_calculator::OldMetrics,
             ) -> ::std::vec::Vec<(
@@ -316,7 +316,7 @@ macro_rules! register_calculator {
 
 /// The metric `M` of every ranking of `match`, as `update` changes it for the ranking's team.
 fn updated_for_each_team<M: TypeMapValue + Copy>(
-    phase_data: &PhaseData,
+    phase_data: &DivisionData,
     r#match: &Match,
     update: impl Fn(&mut M, Team),
 ) -> Vec<(RankingId, M)> {
@@ -334,7 +334,7 @@ fn updated_for_each_team<M: TypeMapValue + Copy>(
 /// The metric `D`, as `derive` makes it of the metric `M`, of every ranking whose `M` the
 /// calculators that ran before changed.
 fn derived<M: TypeMapValue, D>(
-    phase_data: &PhaseData,
+    phase_data: &DivisionData,
     old_metrics: &OldMetrics,
     derive: impl Fn(&M) -> D,
 ) -> Vec<(RankingId, D)> {

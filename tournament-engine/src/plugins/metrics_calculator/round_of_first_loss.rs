@@ -4,7 +4,7 @@ use plugin_factory::Plugin;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::{Bye, Match, PhaseData, RankingId},
+    entities::{Bye, DivisionData, Match, RankingId},
     plugins::{
         Phrase,
         metrics_calculator::{Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric},
@@ -63,7 +63,7 @@ impl Calculator for RoundOfFirstLossCalculator {
 
     fn after_match(
         &mut self,
-        phase_data: &PhaseData,
+        phase_data: &DivisionData,
         r#match: &Match,
         _: &OldMetrics,
     ) -> Vec<(RankingId, RoundOfFirstLoss)> {
@@ -90,7 +90,7 @@ impl Calculator for RoundOfFirstLossCalculator {
     /// A bye is never lost.
     fn after_bye(
         &mut self,
-        _: &PhaseData,
+        _: &DivisionData,
         _: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, RoundOfFirstLoss)> {

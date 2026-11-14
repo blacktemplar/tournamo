@@ -5,7 +5,7 @@ use itertools::Itertools;
 use plugin_factory::{Plugin, axis, compatibility::Declaration};
 
 use crate::{
-    entities::{PhaseData, Ranking},
+    entities::{DivisionData, Ranking},
     plugins::facts::CalculatesMetric,
     type_map::TypeMapValue,
 };
@@ -26,7 +26,7 @@ impl<'a> HierarchicalRanker<'a> {
     /// The ranks satisfy the following invariant: ordered by rank, the first ranking has rank 1 and
     /// every following one has either the rank of its predecessor or rank `index + 1`. Equal ranks
     /// are therefore ties, and the rank after a tie skips the tied ranks.
-    pub(crate) fn rank<'d>(&self, phase_data: &'d PhaseData) -> Vec<(&'d Ranking, NonZeroU32)> {
+    pub(crate) fn rank<'d>(&self, phase_data: &'d DivisionData) -> Vec<(&'d Ranking, NonZeroU32)> {
         let mut ranked: Vec<(&Ranking, NonZeroU32)> = phase_data
             .rankings()
             .values()
@@ -64,7 +64,7 @@ pub trait SliceRanker: Plugin + DynClone {
     /// All rankings of `slice` come in with the same rank `r`. Afterwards, ordered as the slice
     /// is, the first ranking must have rank `r` and every following one either the rank of its
     /// predecessor or rank `r + index`.
-    fn rank(&self, phase_data: &PhaseData, slice: &mut [(&Ranking, NonZeroU32)]);
+    fn rank(&self, phase_data: &DivisionData, slice: &mut [(&Ranking, NonZeroU32)]);
 }
 
 dyn_clone::clone_trait_object!(SliceRanker);
@@ -126,7 +126,7 @@ macro_rules! register_criterion {
         impl $crate::plugins::ranker::SliceRanker for $criterion {
             fn rank(
                 &self,
-                _: &$crate::PhaseData,
+                _: &$crate::DivisionData,
                 slice: &mut [(&$crate::Ranking, ::std::num::NonZeroU32)],
             ) {
                 $crate::plugins::ranker::rank_by(self, slice);

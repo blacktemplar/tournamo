@@ -725,8 +725,7 @@ A competition is played in phases (issue #6). A phase is one configuration of
 plugins, played by one or more divisions: the groups of a group phase, the
 knockouts A, B and C of a phase of knockouts. Each phase takes its entrants
 from its **sources**: ranges of places of the registration or of the overall
-standings of earlier phases. *Planned*: a draw dealing the field to several
-divisions. So far every phase has one division.
+standings of earlier phases; its **draw** deals the field to its divisions.
 
 - **Sources are typed data of `AddPhase`**, next to an optional name, not
   fields of the schema: the schema has no kind for a reference to a phase, and
@@ -801,8 +800,56 @@ divisions. So far every phase has one division.
   `IdMap` of each division: k lookups on the result path, no scan of matches.
   A division is addressed by its index.
 - **Seeds.** Division 0 has the seed of its phase, so an old log replays into
-  the same competition. (*Planned*: a later division derives its seed from the
-  phase's and its index.)
+  the same competition; a later division derives its seed from the phase's and
+  its index (`Entropy::Division`), the draw its random stream from the phase's
+  (`Entropy::Draw`).
+- **Divisions and the draw are fields of `PhasePlugins`**: `divisions` (at
+  least 1, a `NonZeroU32`), `draw` (the axis `Draw`) and `across` (slice
+  rankers), so forms, questionnaire, compatibility and translation cover them
+  as every field. One configuration per phase: differently configured parallel
+  units are separate phases. The restriction lives only in the data of
+  `AddPhase`, so a converter can loosen it.
+- **The draw hands each division an ordered list; the format interprets the
+  order** (a knockout seeds its bracket by it). `Draw::draw` gets a `DrawView`
+  (the field, the number of divisions, the entrants with their annotations, a
+  random stream), which can grow without breaking third-party draws, and
+  returns for each division the positions of its qualifiers; the engine checks
+  the result with debug assertions. A phase starts as many divisions as
+  configured, but no more than give each the entrants its format needs
+  (`PhaseFormat::min_entrants`), so a draw dealing evenly never leaves a
+  division too small. The engine's draws: `in_order` (one division keeps the
+  field, several get it as a snake), `random`, `blocks` (consecutive places,
+  as even in size as they can be, the first one larger) and
+  `group_winners_apart` (ordered by rank in the group, then, changing that
+  order as little as it takes, found by a bounded depth-first search, so that
+  no two of a group meet in the first round of the bracket the order seeds and
+  the best two of a group are in opposite halves where every group sends two).
+- **How the divisions stand to each other is declared by the draw**
+  (`Draw::order`): **parallel**, as groups (the default), or **levels**, as
+  knockouts A/B/C. The overall standings (`Phase::standings`, a
+  `PhaseStandings` of rows each with its division's `Standing`, its division
+  and its overall ranks) of levels are the divisions' standings one after the
+  other. Of parallel divisions they are by rank in the division; the rankings
+  of one rank form a slice ranked on by the `across` rankers, which see
+  `RankingScope::AcrossDivisions` instead of a division's data (no ranker read
+  the data before; one by direct encounters leaves such a slice tied); what
+  stays tied shares an overall rank, the lot breaking it for the unique rank.
+  The rank in the division is not a criterion the operator could move or drop:
+  a ranking with a better rank than another in their division has a better
+  overall rank and unique rank (tested as a property), which the markers of who
+  advances by place rely on. With one division the overall standings are its
+  standings. Sources and the competition ranking read the overall standings;
+  a qualifier's `Origin` names its division and both ranks.
+- **Who advances, seen from a division.** The app works it out on the overall
+  standings and shows it in each division's: of parallel divisions, the rows of
+  one rank in their divisions go on by their place if all of them are taken,
+  else those taken go on by comparison, and `Session::compared` lists the rows
+  of each rank a cut goes through with the columns of the `across` criteria
+  ("the third places compared"). There is no table of the overall standings in
+  the GUI; the cards of the groups and of the comparison say it all. Medals
+  follow the overall ranks.
+- **Points per match** compare groups of different sizes: the points divided
+  by the matches played and the byes reached.
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",
   "seed", "started", "divisions": [{"plugins", "data", "number_base"}]}`
   (format 5), a division's data in the layout a phase's had, each ranking with
@@ -814,7 +861,9 @@ divisions. So far every phase has one division.
   a bracket, a division the base 0. The converter from
   format 4 moves a started phase's `plugins` and `data` into its only division
   and leaves the phase its plugins whole: knowing no plugin, it cannot tell
-  their state from their configuration. The typed read of a phase drops the
+  their state from their configuration. It also gives plugins of format 4 one
+  division dealt in order and compared across divisions by nothing. The typed
+  read of a phase drops the
   state (`PhasePlugins::without_state`, each plugin built again from its
   answer in the config), since `#[serde(default)]` fills a state that is
   missing but keeps one that is there.
@@ -834,6 +883,17 @@ Rejected:
   name the wrong level.
 - Addressing a match by its division too: changes the saved `ReportMatchResult`
   for what k lookups give.
+- Breaking a slice of parallel divisions by the divisions' unique ranks
+  instead of their ranks: rows tied in a group would no longer be tied
+  overall, so a cut through that tie would go unnoticed.
+- The order of the divisions as a plugin axis: two ways are known; should more
+  turn up, it becomes one, the rule against going against a division part of
+  its contract.
+- Refusing to start a phase with more divisions than its field fills: the
+  operator would be stuck once the sources are finished; fewer divisions play
+  the same phase.
+- Hiding `across` by a fact: facts come from plugins, not from a number
+  answered; the form hides it while there is one division and it is empty.
 
 ## Persistence
 

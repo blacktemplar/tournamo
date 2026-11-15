@@ -20,9 +20,20 @@ later one: a file whose `"format"` changes is migrated, not refused.
   standings mark who goes on, and the ranking of the competition places
   everyone by the phase they reached. Match numbers are unique in the whole
   competition.
+- A phase can be played in several groups (divisions) of one configuration,
+  dealt by a draw: in order, at random, in blocks (knockouts A/B/C playing for
+  places of their own) or keeping groups apart (seeding a knockout of the best
+  of several groups so that entrants of one group meet as late as possible).
+  Entrants of the same place in different groups are compared by criteria of
+  their own, e.g. the new points per match, which compares groups of different
+  sizes. The page filters the matches by group, shows the standings of each
+  group and, where the cut of the next phase goes through a place, how that
+  place compares across the groups; a bracket or cross table per group.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
-  `ranking` and `edit-phase`.
+  `ranking` and `edit-phase`; `--division <letter>` for `matches` and
+  `ranking`; `add-phase` answers the phase's own fields too, e.g.
+  `divisions=3 draw=in-blocks`.
 
 ### Changed
 
@@ -45,8 +56,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `"started"`. A phase and the change adding it hold their `"name"` and
   `"sources"`, the competition its `"lots"` and `"highest_number"`, a division
   its `"number_base"`, a ranking its `"lot"`; the log can hold the new change
-  `"StartPhase"`. Competitions of formats 1 to 4 open unchanged; earlier
-  versions refuse format 5.
+  `"StartPhase"`. The plugins of a phase, of a division and of the change adding
+  a phase hold their `"divisions"`, `"draw"` and `"across"` (one division,
+  dealt in order, compared by nothing in a competition of an earlier format).
+  Competitions of formats 1 to 4 open unchanged; earlier versions refuse
+  format 5.
 - Ties in the standings left by every criterion are broken by lot, which an
   existing competition gets as the order it started in, so nothing changes in
   it.
@@ -75,6 +89,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `AddPhaseError::PhaseAlreadyAdded` is gone. In the app, `Session` takes the
   phase (`PhaseId`, `MatchesOf`, `DivisionRef`) every view and action is
   about, `add_phase` and `edit_phase` take a `PhaseForm`.
+- Library users: `Phase::standings` returns the overall `PhaseStandings`;
+  `SliceRanker::rank` takes a `RankingScope` instead of the `DivisionData`;
+  `PhasePlugins` has `divisions`, `draw` and `across`, and the plugin axis
+  `plugins::draw::Draw` is new. In the app, `Session::compared`,
+  `StandingRow::division` and `PhaseOverview::{configured_divisions, order}`.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time.

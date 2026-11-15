@@ -187,11 +187,12 @@ ranking = Rangliste
 ranking-provisional = Vorläufig: nicht jede Phase ist beendet.
 place = Platz
 phase-reached = Erreichte Phase
-goes-on = Weiter
-advances-to = kommt weiter in { $phase }
-advances-to-for-now = kommt vorerst weiter in { $phase }, durch den Vergleich
-advances-by-place = kommt durch seinen Platz weiter in { $phase }
-advances-compared = teilt den Rang mit Zeilen, die nicht in { $phase } weiterkommen, daher entscheidet der Vergleich, zuletzt das Los
+cut-by-place = { $count ->
+    [one] Platz { $from } kommt
+   *[other] Plätze { $from }–{ $through } kommen
+} weiter in { $phase }
+cut-compared = Platz { $place } kommt nach jetzigem Stand weiter in { $phase }, im Vergleich der Gruppen
+cut-comparison = Kommen nach jetzigem Stand weiter in { $phase }
 
 matches = Spiele
 view = Ansicht
@@ -347,5 +348,3 @@ all-divisions = Alle
 divisions-shown = Gezeigte Gruppen
 compared-heading = Platz { $rank } im Vergleich der Gruppen
 compared-hint = Derselbe Platz aller Gruppen wird durch den Vergleich der Gruppen gereiht, zuletzt durch das Los.
-advances-compared-across = hat denselben Gruppenplatz wie Zeilen anderer Gruppen, die nicht in { $phase } weiterkommen, daher entscheidet der Vergleich der Gruppen, zuletzt das Los
-advances-tied-in-group = teilt den Rang in seiner Gruppe mit Zeilen, die nicht in { $phase } weiterkommen, daher entscheidet das Los

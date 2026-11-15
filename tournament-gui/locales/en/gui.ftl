@@ -233,13 +233,14 @@ ranking = Ranking
 ranking-provisional = As things stand: not every phase is finished.
 place = Place
 phase-reached = Phase reached
-# a row of the standings going on to another phase: by its place, or for now by a comparison
-# the column of the standings saying where a row goes on to
-goes-on = Goes on
-advances-to = goes on to { $phase }
-advances-to-for-now = goes on to { $phase } for now, by comparison
-advances-by-place = goes on to { $phase } by its place
-advances-compared = shares its rank with rows that do not go on to { $phase }, so the comparison decides, in the end the lot
+# the line below the rows of the standings going on to another phase: by their place, or the
+# place going on as things stand by the comparison of the groups; and in that comparison
+cut-by-place = { $count ->
+    [one] Place { $from } goes
+   *[other] Places { $from }–{ $through } go
+} on to { $phase }
+cut-compared = Place { $place } goes on to { $phase } as things stand, compared across the groups
+cut-comparison = Go on to { $phase } as things stand
 
 matches = Matches
 # what a narrow screen shows: the matches or the standings (or a knockout's bracket); a wide screen
@@ -453,5 +454,3 @@ all-divisions = All
 divisions-shown = Groups shown
 compared-heading = Place { $rank } compared across the groups
 compared-hint = The same place of every group is ranked by the comparison across the groups, in the end by lot.
-advances-compared-across = has the place in its group that rows of other groups have that do not go on to { $phase }, so the comparison across the groups decides, in the end the lot
-advances-tied-in-group = shares its rank in its group with rows that do not go on to { $phase }, so the lot decides

@@ -11,7 +11,7 @@ use super::*;
 use crate::{
     error::{StartError, StartPhaseError},
     form::End,
-    view::{Advance, Advancing, division_letter},
+    view::{Advance, Advancing, Cut, division_letter},
 };
 
 const SIX: [&str; 6] = ["Alice", "Bob", "Carol", "Dave", "Erin", "Frank"];
@@ -266,8 +266,8 @@ fn of_parallel_divisions_each_takes_its_share_of_a_cut_by_place() {
     assert_eq!(compared[0].rows.len(), 3);
 }
 
-/// Every match drawn, everyone of a group is tied, so the lot of each group decides who of it
-/// goes on: every row going on says so, and the start is warned of the ties in the groups.
+/// Every match drawn, everyone of a group is tied, yet its places decide as ever, the lot of each
+/// group having set them apart: the start is warned of the ties in the groups.
 #[test]
 fn of_parallel_divisions_a_cut_through_a_tie_in_a_group_is_decided_by_its_lot() {
     let (mut session, groups, knockout) = three_groups_and_a_knockout_of_eight();
@@ -275,10 +275,11 @@ fn of_parallel_divisions_a_cut_through_a_tie_in_a_group_is_decided_by_its_lot() 
         session.report(groups, open.id, MatchResult::Draw).unwrap();
     }
 
-    let tied = Some(Advancing::TiedInDivision);
+    let by_place = Some(Advancing::ByPlace);
+    let compared = Some(Advancing::Compared);
     for group in advancing_by_group(&session, groups) {
-        assert_eq!(group[..2], [tied, tied]);
-        assert!(group[2] == tied || group[2].is_none());
+        assert_eq!(group[..2], [by_place, by_place]);
+        assert!(group[2] == compared || group[2].is_none());
         assert_eq!(group[3], None);
     }
     let Some(StartPhaseError::CutThroughTie(ties)) = session.start_phase_refusal(knockout) else {
@@ -292,6 +293,49 @@ fn of_parallel_divisions_a_cut_through_a_tie_in_a_group_is_decided_by_its_lot() 
             .filter(|tie| tie.division.is_some())
             .all(|tie| { tie.rank.get() == 1 && tie.favoured.len() + tie.others.len() == 4 })
     );
+}
+
+/// A line follows the places going on by their place, and one the place going on for now by
+/// the comparison; in the comparison, one follows the rows going on.
+#[test]
+fn a_line_follows_the_rows_going_on() {
+    let (mut session, groups, knockout) = three_groups_and_a_knockout_of_eight();
+    play_out_by_lot(&mut session, groups);
+
+    let cut = |how, from, through| {
+        Some(Cut {
+            to: knockout,
+            how,
+            from: NonZeroU32::new(from).unwrap(),
+            through: NonZeroU32::new(through).unwrap(),
+        })
+    };
+    let mut thirds_going_on = 0;
+    for division in 0..3 {
+        let cuts: Vec<_> = session
+            .standings(DivisionRef {
+                phase: groups,
+                division,
+            })
+            .unwrap()
+            .rows
+            .iter()
+            .map(|row| row.cut)
+            .collect();
+        assert_eq!(cuts[..2], [None, cut(Advancing::ByPlace, 1, 2)]);
+        assert_eq!(cuts[3], None);
+        if cuts[2].is_some() {
+            assert_eq!(cuts[2], cut(Advancing::Compared, 3, 3));
+            thirds_going_on += 1;
+        }
+    }
+    assert_eq!(thirds_going_on, 2);
+    let compared: Vec<_> = session.compared(groups)[0]
+        .rows
+        .iter()
+        .map(|row| row.cut)
+        .collect();
+    assert_eq!(compared, [None, cut(Advancing::Compared, 3, 3), None]);
 }
 
 /// Medals are of the competition, so the firsts of two groups going on win none.

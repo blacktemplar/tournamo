@@ -6,7 +6,7 @@ use super::*;
 use crate::{
     error::{RemovePhaseError, StartPhaseError},
     form::End,
-    view::{Advance, Advancing, PhaseState, SourceProgress, SourceRow},
+    view::{Advance, Advancing, Cut, PhaseState, SourceProgress, SourceRow},
 };
 
 /// A round robin of Alice, Bob, Carol and Dave, then a knockout of its places 1–2, added through
@@ -166,13 +166,22 @@ fn the_rows_that_go_on_are_marked_with_the_phase_they_go_to() {
 
     let standings = session.overall_standings(first).unwrap();
 
-    // before any result everyone is tied, so the first two advance only by the lot
+    // before any result everyone is tied, yet the lot has set them apart: the first two go on
+    // by their place, and a line follows them
     let advances: Vec<_> = standings.rows.iter().map(|row| row.advances).collect();
-    let compared = Some(Advance {
+    let by_place = Some(Advance {
         to: last,
-        how: Advancing::Compared,
+        how: Advancing::ByPlace,
     });
-    assert_eq!(advances, [compared, compared, None, None]);
+    assert_eq!(advances, [by_place, by_place, None, None]);
+    let cuts: Vec<_> = standings.rows.iter().map(|row| row.cut).collect();
+    let cut = Some(Cut {
+        to: last,
+        how: Advancing::ByPlace,
+        from: NonZeroU32::MIN,
+        through: NonZeroU32::new(2).unwrap(),
+    });
+    assert_eq!(cuts, [None, cut, None, None]);
     assert!(standings.rows.iter().all(|row| row.medal.is_none()));
 }
 

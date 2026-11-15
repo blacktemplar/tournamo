@@ -409,13 +409,11 @@ impl Session {
     }
 
     /// Where each row of the standings of the phase `phase` goes on to, as they are now: a
-    /// function of the ranking of a row, worked out on the overall standings.
+    /// function of the ranking of a row, worked out on the overall standings, by unique rank.
     ///
-    /// A row advances [`ByPlace`](Advancing::ByPlace) if every row it is compared with goes there
-    /// too, else [`Compared`](Advancing::Compared): of parallel divisions, the rows of its place
-    /// (unique rank) in their divisions; else the rows of its overall rank. Of parallel
-    /// divisions, a row sharing its rank in its division with rows that go elsewhere advances
-    /// [`TiedInDivision`](Advancing::TiedInDivision), whatever it is compared with.
+    /// A row advances [`ByPlace`](Advancing::ByPlace) unless the phase has parallel divisions and
+    /// rows of its place (unique rank) in other divisions go elsewhere: then it advances
+    /// [`Compared`](Advancing::Compared).
     pub(super) fn advancing(&self, phase: PhaseId) -> impl Fn(RankingId) -> Option<Advance> {
         let competition = self.competition();
         // the sources of other phases taking places of this one, with the phase taking them
@@ -436,34 +434,20 @@ impl Session {
                 .find(|(_, source)| source.takes(unique_rank))
                 .map(|(taker, _)| *taker)
         };
-        // for every ranking, the rows it is compared with, the rows it is tied with in its
-        // division (of parallel divisions) and its overall unique rank
-        type Tied = Option<(usize, NonZeroU32)>;
-        let mut compared_by: HashMap<RankingId, (NonZeroU32, Tied, NonZeroU32)> = HashMap::new();
-        // for every place compared by and every tie in a division, the phases its rows go to
+        // for every ranking, its place in its division where it is compared across parallel
+        // divisions, and its overall unique rank
+        let mut compared_by: HashMap<RankingId, (Option<NonZeroU32>, NonZeroU32)> = HashMap::new();
+        // for every place compared by, the phases its rows go to
         let mut goes_to: HashMap<NonZeroU32, Vec<Option<PhaseId>>> = HashMap::new();
-        let mut tied_go_to: HashMap<(usize, NonZeroU32), Vec<Option<PhaseId>>> = HashMap::new();
         if let Some(phase) = competition.phase(&phase) {
             let across = phase.divisions().len() > 1
                 && phase.plugins().draw().order() == DivisionOrder::Parallel;
             for row in phase.standings().iter() {
-                let (by, tied) = if across {
-                    let in_division = row.in_division();
-                    (
-                        in_division.unique_rank(),
-                        Some((row.division(), in_division.rank())),
-                    )
-                } else {
-                    (row.rank(), None)
-                };
-                compared_by.insert(row.ranking().id(), (by, tied, row.unique_rank()));
-                let to = taker_of(row.unique_rank());
-                let phases = goes_to.entry(by).or_default();
-                if !phases.contains(&to) {
-                    phases.push(to);
-                }
-                if let Some(tied) = tied {
-                    let phases = tied_go_to.entry(tied).or_default();
+                let by = across.then(|| row.in_division().unique_rank());
+                compared_by.insert(row.ranking().id(), (by, row.unique_rank()));
+                if let Some(by) = by {
+                    let to = taker_of(row.unique_rank());
+                    let phases = goes_to.entry(by).or_default();
                     if !phases.contains(&to) {
                         phases.push(to);
                     }
@@ -471,11 +455,9 @@ impl Session {
             }
         }
         move |ranking: RankingId| {
-            let &(by, tied, unique_rank) = compared_by.get(&ranking)?;
+            let &(by, unique_rank) = compared_by.get(&ranking)?;
             let to = taker_of(unique_rank)?;
-            let how = if tied.is_some_and(|tied| tied_go_to[&tied].len() > 1) {
-                Advancing::TiedInDivision
-            } else if goes_to[&by].len() > 1 {
+            let how = if by.is_some_and(|by| goes_to[&by].len() > 1) {
                 Advancing::Compared
             } else {
                 Advancing::ByPlace

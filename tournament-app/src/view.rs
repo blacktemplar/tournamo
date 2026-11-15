@@ -481,10 +481,25 @@ pub struct StandingRow {
     pub medal: Option<Medal>,
     /// Where the row goes on to from here, as the standings are now; `None` if no phase takes it.
     pub advances: Option<Advance>,
+    /// The line drawn below the row where the rows going on alike end, see [`Cut`].
+    pub cut: Option<Cut>,
+}
+
+/// A line below the last of the rows that go on alike, from the row after the line before (or
+/// the first): to the phase `to`, all by their place or all compared across the divisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Cut {
+    pub to: PhaseId,
+    pub how: Advancing,
+    /// The places in their divisions (unique ranks) of the first and the last of the rows, the
+    /// same for rows compared across the divisions.
+    pub from: NonZeroU32,
+    pub through: NonZeroU32,
 }
 
 /// That a row of the standings goes on to the phase `to`, and how sure that is as the standings
-/// are now: neither says that a place can no longer be lost while matches are left.
+/// are now: neither says that a place can no longer be lost while matches are left. Ties are
+/// broken by lot, as the next phase takes them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Advance {
     pub to: PhaseId,
@@ -496,14 +511,9 @@ pub struct Advance {
 pub enum Advancing {
     /// Its place alone takes it there.
     ByPlace,
-    /// It shares its rank with rows on the other side of the cut, so what decides is the
-    /// comparison, in the end the lot; of parallel divisions, its place in its division, which
-    /// rows of other divisions on the other side of the cut have as well, so what decides is the
-    /// comparison across the divisions.
+    /// Of parallel divisions: rows of other divisions with its place in their division go
+    /// elsewhere, so what decides is the comparison across the divisions, in the end the lot.
     Compared,
-    /// Of parallel divisions: it shares its rank in its division with rows on the other side of
-    /// the cut, so the lot of its division decides.
-    TiedInDivision,
 }
 
 /// The rows of one rank in parallel divisions that a cut goes through, compared across the

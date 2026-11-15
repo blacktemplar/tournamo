@@ -10,8 +10,8 @@ use tournament_app::{
     i18n::{Message as _, PluginText, Text, Translator},
     session::Session,
     view::{
-        Advancing, Compared, DivisionRef, ListedMatch, MatchRow, MatchesOf, Medal, RoundSummary,
-        RoundsView, Shown, StandingCell, TypedEntry, division_letter,
+        Advancing, Compared, Cut, DivisionRef, ListedMatch, MatchRow, MatchesOf, Medal,
+        RoundSummary, RoundsView, Shown, StandingCell, TypedEntry, division_letter,
     },
 };
 use tournament_engine::{MatchId, MatchResult, PhaseId, plugins::draw::DivisionOrder};
@@ -742,17 +742,10 @@ pub fn Standings() -> Element {
     let Some(phase) = ctx.phase() else {
         return rsx! {};
     };
-    let (divisions, compared, parallel) = {
+    let (divisions, compared) = {
         let session = ctx.session.read();
         let tr = ctx.translator.read();
-        let divisions = divisions_of(&session, &tr, phase);
-        let compared = session.compared(phase);
-        let parallel = divisions.len() > 1
-            && session
-                .phases()
-                .iter()
-                .any(|overview| overview.id == phase && overview.order == DivisionOrder::Parallel);
-        (divisions, compared, parallel)
+        (divisions_of(&session, &tr, phase), session.compared(phase))
     };
     rsx! {
         // above the standings rather than above the matches, which it would push down below the
@@ -763,7 +756,6 @@ pub fn Standings() -> Element {
                 key: "{division.division}",
                 division,
                 heading,
-                parallel,
             }
         }
         for compared in compared {
@@ -772,10 +764,10 @@ pub fn Standings() -> Element {
     }
 }
 
-/// The standings of `division`, under `heading` if the phase has several, of a phase of
-/// `parallel` divisions if so.
+/// The standings of `division`, under `heading` if the phase has several, with a line below the
+/// rows going on alike.
 #[component]
-fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: bool) -> Element {
+fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element {
     let ctx = use_context::<Ctx>();
     let suffix = id_suffix(division, &heading);
     let Some(standings) = ctx.session.read().standings(division) else {
@@ -826,13 +818,8 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: b
             (header, about, id)
         })
         .collect();
-    // the phases the rows go on to, which the legend names
-    let mut going_to: Vec<(PhaseId, Advancing)> = Vec::new();
-    for advance in standings.rows.iter().filter_map(|row| row.advances) {
-        if !going_to.contains(&(advance.to, advance.how)) {
-            going_to.push((advance.to, advance.how));
-        }
-    }
+    // rank, name, metrics, matches played
+    let span = standings.columns.len() + 3;
     let name_of = |phase: PhaseId| {
         phases
             .iter()
@@ -858,9 +845,6 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: b
                         tr {
                             th { class: "rank", scope: "col", {tr.get("rank")} }
                             th { class: "name", scope: "col", {tr.get("name")} }
-                            if !going_to.is_empty() {
-                                th { scope: "col", {tr.get("goes-on")} }
-                            }
                             // named by the header alone, which the cells are read with, rather
                             // than with the toggletip's button too; what ranks first right after
                             // the names, the matches played last
@@ -892,16 +876,6 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: b
                                     }
                                 }
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
-                                if !going_to.is_empty() {
-                                    td { class: "goes-on",
-                                        if let Some(advance) = row.advances {
-                                            AdvanceMarker {
-                                                how: advance.how,
-                                                to: name_of(advance.to),
-                                            }
-                                        }
-                                    }
-                                }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
                                     td { class: "metric",
                                         {
@@ -918,24 +892,13 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: b
                                 }
                                 td { class: "played", "{row.played}" }
                             }
-                        }
-                    }
-                }
-            }
-            if !going_to.is_empty() {
-                ul { class: "legend",
-                    for (to, how) in going_to {
-                        li {
-                            AdvanceMarker { how, to: name_of(to) }
-                            " "
-                            {
-                                let key = match how {
-                                    Advancing::ByPlace => "advances-by-place",
-                                    Advancing::Compared if parallel => "advances-compared-across",
-                                    Advancing::Compared => "advances-compared",
-                                    Advancing::TiedInDivision => "advances-tied-in-group",
-                                };
-                                tr.text(&Text::new(key).with("phase", name_of(to)))
+                            if let Some(cut) = row.cut {
+                                CutLine {
+                                    cut,
+                                    phase: name_of(cut.to),
+                                    span,
+                                    comparison: false,
+                                }
                             }
                         }
                     }
@@ -945,8 +908,8 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: b
     }
 }
 
-/// The rows of one rank in parallel divisions a cut goes through, compared across the divisions:
-/// their overall rank, division, whether they go on, and the metrics compared by.
+/// The rows of one place in parallel divisions a cut goes through, compared across the
+/// divisions: their division and the metrics compared by, with a line below those going on.
 #[component]
 fn ComparedStandings(compared: Compared) -> Element {
     let ctx = use_context::<Ctx>();
@@ -960,6 +923,8 @@ fn ComparedStandings(compared: Compared) -> Element {
             .unwrap_or_default()
     };
     let id = format!("compared-{}", compared.rank);
+    // name, division, metrics, matches played
+    let span = compared.columns.len() + 3;
     let headers: Vec<_> = compared
         .columns
         .iter()
@@ -977,10 +942,8 @@ fn ComparedStandings(compared: Compared) -> Element {
                 table { class: "standing-list compared-list",
                     thead {
                         tr {
-                            th { class: "rank", scope: "col", {tr.get("rank")} }
                             th { class: "name", scope: "col", {tr.get("name")} }
                             th { scope: "col", {tr.get("division")} }
-                            th { scope: "col", {tr.get("goes-on")} }
                             for header in headers {
                                 th { scope: "col", "{header}" }
                             }
@@ -990,19 +953,8 @@ fn ComparedStandings(compared: Compared) -> Element {
                     tbody {
                         for row in compared.rows {
                             tr {
-                                td { class: "rank",
-                                    span { class: "place", "{row.rank}" }
-                                }
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
                                 td { class: "division", {division_letter(row.division)} }
-                                td { class: "goes-on",
-                                    if let Some(advance) = row.advances {
-                                        AdvanceMarker {
-                                            how: advance.how,
-                                            to: name_of(advance.to),
-                                        }
-                                    }
-                                }
                                 for (column , cell) in compared.columns.iter().zip(row.cells) {
                                     td { class: "metric",
                                         {
@@ -1019,6 +971,14 @@ fn ComparedStandings(compared: Compared) -> Element {
                                 }
                                 td { class: "played", "{row.played}" }
                             }
+                            if let Some(cut) = row.cut {
+                                CutLine {
+                                    cut,
+                                    phase: name_of(cut.to),
+                                    span,
+                                    comparison: true,
+                                }
+                            }
                         }
                     }
                 }
@@ -1027,30 +987,33 @@ fn ComparedStandings(compared: Compared) -> Element {
     }
 }
 
-/// The marker of a row of the standings going on to the phase `to`, in a shape and a text of its
-/// own for each way it advances, see [`Advancing`].
+/// The line below the rows of a table of standings going on alike to the phase named `phase`,
+/// across `span` columns, saying where they go and how: solid for places going on by their place,
+/// dashed for those compared across the divisions, in the `comparison` itself too.
 #[component]
-fn AdvanceMarker(how: Advancing, to: String) -> Element {
+fn CutLine(cut: Cut, phase: String, span: usize, comparison: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    let (class, text) = match how {
-        Advancing::ByPlace => (
-            "advance by-place",
-            t!(tr, "advances-to", phase = to.as_str()),
+    let phase = phase.as_str();
+    let text = match cut.how {
+        _ if comparison => t!(tr, "cut-comparison", phase = phase),
+        Advancing::ByPlace => t!(
+            tr,
+            "cut-by-place",
+            from = cut.from.get(),
+            through = cut.through.get(),
+            count = cut.through.get() - cut.from.get() + 1,
+            phase = phase,
         ),
-        Advancing::Compared | Advancing::TiedInDivision => (
-            "advance compared",
-            t!(tr, "advances-to-for-now", phase = to.as_str()),
-        ),
+        Advancing::Compared => t!(tr, "cut-compared", place = cut.from.get(), phase = phase),
     };
     rsx! {
-        span { class, title: "{text}",
-            icons::ArrowRight {}
-            span { class: "visually-hidden", "{text}" }
-            span { class: "advance-to", aria_hidden: "true",
-                "{to}"
-                if how != Advancing::ByPlace {
-                    "?"
+        tr { class: if cut.how == Advancing::ByPlace { "cut" } else { "cut compared" },
+            td { colspan: "{span}",
+                // in sight while the table scrolls sideways
+                span { class: "cut-text",
+                    icons::ArrowUp {}
+                    "{text}"
                 }
             }
         }

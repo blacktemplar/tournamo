@@ -37,9 +37,8 @@ async fn a_competition_of_two_phases_is_played_through() {
         gui.expect_phase_links(&["1 · Round robin", "Final", "Ranking"], "1 · Round robin")
             .await?;
         gui.expect_bar_phase(Some("1 · Round robin")).await?;
-        // tied, the first two go on to the final for now, by the lot
-        let for_now = "goes on to Final for now, by comparison\nFinal?";
-        gui.expect_going_on(&[for_now, for_now, "", ""]).await?;
+        // tied, yet the lot has set the first two apart
+        gui.expect_cuts(&["Places 1–2 go on to Final"]).await?;
 
         draw_round_robin(&gui).await?;
         gui.click("Start Final").await?;

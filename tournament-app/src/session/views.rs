@@ -21,9 +21,9 @@ use super::Session;
 use crate::{
     storage::Progress,
     view::{
-        self, ByeRow, Column, DivisionRef, Entered, EntrantRow, ListedMatch, MatchRow, MatchesOf,
-        Medal, Round, RoundSummary, RoundsView, Shown, StageName, StandingCell, StandingRow,
-        Standings, TypedEntry,
+        self, ByeRow, Column, Cut, DivisionRef, Entered, EntrantRow, ListedMatch, MatchRow,
+        MatchesOf, Medal, Round, RoundSummary, RoundsView, Shown, StageName, StandingCell,
+        StandingRow, Standings, TypedEntry,
     },
 };
 
@@ -478,7 +478,11 @@ impl Session {
                 .unwrap_or(usize::MAX)
         });
         let finished = of.is_finished();
-        Some(Standings {
+        let places: Vec<NonZeroU32> = rows
+            .iter()
+            .map(|(_, standing, _)| standing.unique_rank())
+            .collect();
+        let mut standings = Standings {
             columns: columns
                 .iter()
                 .map(|(calculator, column)| {
@@ -516,10 +520,13 @@ impl Session {
                             .then(|| place.and_then(Medal::of))
                             .flatten(),
                         advances,
+                        cut: None,
                     }
                 })
                 .collect(),
-        })
+        };
+        cut(&mut standings.rows, &places);
+        Some(standings)
     }
 
     pub(super) fn entrant_row(&self, id: &EntrantId) -> EntrantRow {
@@ -623,4 +630,30 @@ pub(super) fn stage(division: &Division, annotations: &TypeMap) -> Option<StageN
         format: plugin_factory::id_of(format),
         stage: format.stage(annotations)?,
     })
+}
+
+/// Draws the [`Cut`]s below `rows`, whose places in their divisions are `places`: below the last
+/// of each run of rows going on alike.
+fn cut(rows: &mut [StandingRow], places: &[NonZeroU32]) {
+    let mut from = 0;
+    for index in 0..rows.len() {
+        let advances = rows[index].advances;
+        if index > 0 && advances != rows[index - 1].advances {
+            from = index;
+        }
+        let Some(advance) = advances else {
+            continue;
+        };
+        if rows
+            .get(index + 1)
+            .is_none_or(|next| next.advances != advances)
+        {
+            rows[index].cut = Some(Cut {
+                to: advance.to,
+                how: advance.how,
+                from: places[from],
+                through: places[index],
+            });
+        }
+    }
 }

@@ -842,21 +842,24 @@ standings of earlier phases; its **draw** deals the field to its divisions.
   stays tied shares an overall rank, the lot breaking it for the unique rank.
   The rank in the division is not a criterion the operator could move or drop:
   a ranking with a better rank than another in their division has a better
-  overall rank and unique rank (tested as a property), which the markers of who
+  overall rank and unique rank (tested as a property), which the lines of who
   advances by place rely on. With one division the overall standings are its
   standings. Sources and the competition ranking read the overall standings;
   a qualifier's `Origin` names its division and both ranks.
 - **Who advances, seen from a division.** The app works it out on the overall
-  standings and shows it in each division's: of parallel divisions, the rows of
-  one place in their divisions go on by their place if all of them are taken,
-  else those taken go on by comparison, and `Session::compared` lists the rows
-  of each place a cut goes through with the columns of the `across` criteria
-  ("the third places compared"). A row sharing its rank in its division with
-  rows on the other side of the cut goes on by the division's lot, which its
-  marker says and the start of the next phase warns of, as of a tie of the
-  overall rank. There is no table of the overall standings in
-  the GUI; the cards of the groups and of the comparison say it all. Medals
-  follow the overall ranks.
+  standings by unique rank, ties broken by lot as the next phase takes them,
+  and shows it in each division's: the first `k` places going on are sure (as
+  things stand), so a solid line follows them ("Places 1–2 go on to
+  Knockout"), not a column of markers. Of parallel divisions, where a cut
+  goes through a place, the rows of it taken go on by comparison: a dashed
+  line follows such a row in its division, and `Session::compared` lists the
+  rows of the place with the columns of the `across` criteria ("the third
+  places compared"), a line below those taken, without a rank, since every
+  other rank shown is one in a division. A tie in a division or of the
+  overall rank that the cut goes through shows only in the warning on
+  starting the next phase. There is no table of the overall standings in the
+  GUI; the cards of the groups and of the comparison say it all. Medals follow
+  the overall ranks.
 - **Points per match** compare groups of different sizes: the points divided
   by the matches played and the byes reached.
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",

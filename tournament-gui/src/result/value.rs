@@ -6,7 +6,7 @@ use tournament_engine::{EnteredValue, FieldKey, Team, plugins::match_format::Val
 
 /// The input of `team`'s value of `field` of the part at `path` of `form`, with the id made of
 /// `prefix` ([`value_id`]), named `aria_label`, and described by the element `issues` while what
-/// was typed is not taken. Once left, it completes the score ([`complete_score`]).
+/// was typed is not taken. Once left, or on Enter, it completes the score ([`complete_score`]).
 #[component]
 pub(super) fn ValueInput(
     form: Signal<Option<ResultForm>>,
@@ -52,6 +52,9 @@ pub(super) fn ValueInput(
             onkeydown: move |event: KeyboardEvent| {
                 if is_tab(&event) && complete(true) {
                     event.prevent_default();
+                } else if event.key() == Key::Enter {
+                    // the form is submitted after this, without the input being left
+                    complete(false);
                 }
             },
             onmounted: move |event| {

@@ -168,6 +168,21 @@ async fn a_score_far_below_the_winning_score_completes_the_other_in_the_row() {
     .await;
 }
 
+/// Enter in the score reports it completed, as the button does.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn enter_in_a_score_far_below_the_winning_score_reports_it_completed() {
+    run_in_new_competition(async |gui| {
+        start_to_21(&gui).await?;
+
+        gui.enter_first_in_row(1, "7").await?;
+        gui.press(Key::Enter).await?;
+
+        gui.expect_scores_either_way("7–21").await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_winning_score_completed_is_replaced_by_what_is_typed() {

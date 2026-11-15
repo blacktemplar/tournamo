@@ -111,6 +111,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   elsewhere keeps it from being undone (or redone), and nothing more can be
   undone (or redone); what this tab did stays undoable as long as no other tab
   touched it.
+- Pressing Enter in a score completes it as leaving it does (7 becomes 7–21
+  where 21 is the winning score), so the match is reported, as by the button.
 
 ## [0.4.0] - 2026-11-09
 

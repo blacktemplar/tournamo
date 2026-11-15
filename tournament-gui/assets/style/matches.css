@@ -389,3 +389,13 @@
   margin: var(--space-3) 0 0;
   color: var(--text-muted);
 }
+
+/* the division of the match, where the phase has several: its letter in the corner of the card */
+.match .division-tag {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-2);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}

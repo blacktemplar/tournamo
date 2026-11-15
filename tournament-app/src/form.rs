@@ -21,7 +21,7 @@ use plugin_factory::{
     draft::{Draft, FieldNode, Issue, Problem},
     schema::{DecimalRange, FieldKind, IntegerRange, NumberRange},
 };
-use tournament_engine::PhasePlugins;
+use tournament_engine::{PhasePlugins, plugins::draw::InOrder};
 
 use crate::{
     i18n::{Arg, Text},
@@ -75,6 +75,32 @@ impl FormView {
     /// ```
     pub fn fields_of(&self, id: &str) -> Option<&[FormField]> {
         fields_of(&self.fields, id)
+    }
+
+    /// The fields a summary of the phase shows: all but those of divisions where it is played in
+    /// one dealt in order, so that it reads as a phase without divisions.
+    pub fn summary(&self) -> Vec<FormField> {
+        let one_division = self.fields.iter().any(|field| {
+            field.name == PhasePlugins::DIVISIONS
+                && matches!(field.input, Input::Integer { value: Some(1), .. })
+        });
+        let in_order = self.fields.iter().any(|field| {
+            field.name == PhasePlugins::DRAW
+                && matches!(
+                    &field.input,
+                    Input::Plugin(PluginInput { chosen: Some(chosen), .. })
+                        if chosen.plugin.id == <InOrder as plugin_factory::PluginType>::ID
+                )
+        });
+        self.fields
+            .iter()
+            .filter(|field| {
+                !(one_division
+                    && (field.name == PhasePlugins::DIVISIONS
+                        || in_order && field.name == PhasePlugins::DRAW))
+            })
+            .cloned()
+            .collect()
     }
 }
 
@@ -327,9 +353,22 @@ impl PhaseForm {
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
         let completed_nodes = completed.fields();
+        let mut irrelevant = self.draft.irrelevant();
+        // comparing across divisions only matters with several, and is shown while it compares by
+        // something, so that it can be emptied
+        let answers = self.draft.answers();
+        let one_division = answers
+            .get(PhasePlugins::DIVISIONS)
+            .is_none_or(|divisions| divisions.as_u64() == Some(1));
+        let compares_by_nothing = answers
+            .get(PhasePlugins::ACROSS)
+            .is_none_or(|across| across.as_array().is_none_or(Vec::is_empty));
+        if one_division && compares_by_nothing {
+            irrelevant.push(Path::ROOT.field(PhasePlugins::ACROSS));
+        }
         let whole = Whole {
             completed: &completed_nodes,
-            irrelevant: &self.draft.irrelevant(),
+            irrelevant: &irrelevant,
         };
         let mut fields = self.fields(&nodes, None, &completed_nodes, &whole);
         let mut unplaced = Vec::new();

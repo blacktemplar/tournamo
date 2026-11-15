@@ -214,3 +214,54 @@ fn more_points_are_better() {
     assert_eq!(compare("1.5", "1"), Comparison::Better);
     assert_eq!(compare("1.5", "1.5"), Comparison::Equal);
 }
+
+fn per_match(text: &str) -> PointsPerMatch {
+    PointsPerMatch(text.parse().unwrap())
+}
+
+#[test]
+fn points_per_match_divide_the_points_by_the_matches_and_byes() {
+    let mut phase = test_utils::phase_with_byes(
+        DivisionBuilder::new()
+            .add_players(3)
+            .add_metric(WinsDrawsLossesCalculator)
+            .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
+            .add_metric(PointsPerMatchCalculator),
+        vec![(2, vec![0], vec![1]), (3, vec![0], vec![2])],
+        vec![(1, 2)],
+    );
+    // only the bye of `2` is reached so far
+    assert_eq!(
+        test_utils::metric_of::<PointsPerMatch>(&phase, 0),
+        per_match("0")
+    );
+    assert_eq!(
+        test_utils::metric_of::<PointsPerMatch>(&phase, 2),
+        per_match("3")
+    );
+
+    phase.report_match_result(match_id(&phase, 2, &[0], &[1]), MatchResult::Draw);
+    phase.report_match_result(match_id(&phase, 3, &[0], &[2]), MatchResult::BWins);
+
+    // 1 point in 2 matches, 1 in 1, 6 in a bye and a match
+    assert_eq!(
+        test_utils::metric_of::<PointsPerMatch>(&phase, 0),
+        per_match("0.5")
+    );
+    assert_eq!(
+        test_utils::metric_of::<PointsPerMatch>(&phase, 1),
+        per_match("1")
+    );
+    assert_eq!(
+        test_utils::metric_of::<PointsPerMatch>(&phase, 2),
+        per_match("3")
+    );
+}
+
+#[test]
+fn more_points_per_match_are_better() {
+    let compare = |first, second| MorePointsPerMatch.compare(&per_match(first), &per_match(second));
+    assert_eq!(compare("1.5", "1"), Comparison::Better);
+    assert_eq!(compare("1", "1.5"), Comparison::Worse);
+    assert_eq!(compare("2", "2"), Comparison::Equal);
+}

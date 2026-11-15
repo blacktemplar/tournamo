@@ -178,9 +178,12 @@ fn the_field_names_are_those_of_the_schema() {
         names,
         [
             PhasePlugins::FORMAT,
+            PhasePlugins::DIVISIONS,
+            PhasePlugins::DRAW,
             PhasePlugins::MATCH_FORMAT,
             PhasePlugins::RANKING,
             PhasePlugins::METRICS,
+            PhasePlugins::ACROSS,
         ]
     );
 }

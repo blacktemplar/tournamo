@@ -136,6 +136,12 @@ pub enum StartPhaseError {
     Waiting(Vec<(PhaseName, usize, usize)>),
     /// The format of the phase needs at least this many entrants, more than its sources take.
     TooFewForFormat(usize),
+    /// The groups (divisions) the phase is configured with need at least `needed` entrants, the
+    /// entrants its format needs in each, more than its sources take.
+    TooFewForDivisions {
+        divisions: usize,
+        needed: usize,
+    },
     /// Not a refusal but a warning: the phase starts all the same. A cut of its sources goes
     /// through rows sharing a rank, so the lot decides who of them is taken.
     CutThroughTie(Vec<Tie>),
@@ -178,6 +184,12 @@ pub enum StartError {
     TooFewEntrants,
     /// The format of the phase needs at least this many entrants, as its `min_entrants` says.
     TooFewForFormat(usize),
+    /// The groups (divisions) a phase is configured with need at least `needed` entrants, the
+    /// entrants its format needs in each.
+    TooFewForDivisions {
+        divisions: usize,
+        needed: usize,
+    },
     /// The engine refused the start for a reason this crate does not know.
     Rejected(TransitionError),
 }
@@ -479,6 +491,11 @@ impl Message for StartPhaseError {
             Self::TooFewForFormat(needed) => {
                 Text::new("error-too-few-for-format").with("count", *needed)
             }
+            Self::TooFewForDivisions { divisions, needed } => {
+                Text::new("error-too-few-for-divisions")
+                    .with("divisions", *divisions)
+                    .with("count", *needed)
+            }
             Self::CutThroughTie(ties) => {
                 let tie = ties.first().expect("a tie at a cut is one at least");
                 Text::new("warning-cut-through-tie")
@@ -552,6 +569,11 @@ impl Message for StartError {
             Self::TooFewEntrants => Text::new("error-too-few-entrants"),
             Self::TooFewForFormat(needed) => {
                 Text::new("error-too-few-for-format").with("count", *needed)
+            }
+            Self::TooFewForDivisions { divisions, needed } => {
+                Text::new("error-too-few-for-divisions")
+                    .with("divisions", *divisions)
+                    .with("count", *needed)
             }
             Self::Rejected(error) => rejected(error),
         }

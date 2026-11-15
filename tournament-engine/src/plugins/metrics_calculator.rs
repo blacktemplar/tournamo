@@ -34,7 +34,10 @@ pub use games_balance::{
     GamesBalance, GamesBalanceCalculator, GamesDifference, GamesDifferenceCalculator,
     HigherGamesDifference, MoreGamesWon,
 };
-pub use points::{MorePoints, Points, PointsCalculator};
+pub use points::{
+    MorePoints, MorePointsPerMatch, Points, PointsCalculator, PointsPerMatch,
+    PointsPerMatchCalculator,
+};
 pub use points_balance::{
     HigherPointsDifference, MorePointsScored, PointsBalance, PointsBalanceCalculator,
     PointsDifference, PointsDifferenceCalculator,

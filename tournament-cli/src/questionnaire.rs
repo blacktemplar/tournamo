@@ -1154,6 +1154,8 @@ mod tests {
             script.asked,
             [
                 "Format",
+                "Groups",
+                "Draw",
                 "Match format",
                 "Ranked by",
                 "Ranked by, then",
@@ -1164,6 +1166,7 @@ mod tests {
                 "Points: points for a bye",
                 "Sonneborn-Berger: weight of a beaten opponent",
                 "Sonneborn-Berger: weight of an opponent played to a draw",
+                "Compared across groups by",
             ]
         );
         assert_eq!(
@@ -1197,7 +1200,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            script.options[2][..4],
+            script.options[3][..4],
             [
                 "more points",
                 "more Sonneborn-Berger",
@@ -1206,7 +1209,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            script.options[5][..4],
+            script.options[6][..4],
             [
                 "win-draw-loss record",
                 "points",
@@ -1256,6 +1259,8 @@ mod tests {
         let mut script = Script::new([
             Step::Pick("round robin"),
             Step::Accept,
+            Step::Accept,
+            Step::Accept,
             Step::Pick("more Buchholz"),
             Step::Pick(NO_FURTHER_ONE),
         ]);
@@ -1278,9 +1283,12 @@ mod tests {
         let mut script = Script::new([
             Step::Pick("round robin"),
             Step::Accept,
+            Step::Accept,
+            Step::Accept,
             Step::Pick("later elimination"),
             Step::Pick(NO_FURTHER_ONE),
             Step::Many(&["round of elimination"]),
+            Step::Accept,
             Step::Retry,
             Step::Pick("double elimination"),
         ]);
@@ -1288,7 +1296,7 @@ mod tests {
         fill(&mut draft, &mut script).unwrap();
         assert_eq!(script.retries, 1);
         assert_eq!(
-            &script.asked[5..],
+            &script.asked[8..],
             ["Format", "Double elimination: grand final reset"]
         );
         assert!(draft.build().is_ok());
@@ -1299,16 +1307,19 @@ mod tests {
         let mut script = Script::new([
             Step::Pick("round robin"),
             Step::Accept,
+            Step::Accept,
+            Step::Accept,
             Step::Pick("more points"),
             Step::Pick(NO_FURTHER_ONE),
             Step::Many(&[]),
+            Step::Accept,
             Step::Retry,
             Step::Many(&["points"]),
         ]);
         let mut draft = phase_draft();
         fill(&mut draft, &mut script).unwrap();
         assert_eq!(script.retries, 1);
-        assert_eq!(script.asked[5], "Metrics");
+        assert_eq!(script.asked[6], "Metrics");
         assert_eq!(ids(&draft, "metrics"), ["points"]);
         draft.add_implied();
         assert!(draft.build().is_ok());
@@ -1335,7 +1346,7 @@ mod tests {
                 "Format",
                 "Random rounds: rounds",
                 "Random rounds: rounds",
-                "Match format"
+                "Groups"
             ]
         );
         assert_eq!(
@@ -1363,6 +1374,8 @@ mod tests {
             &mut Script::new([
                 Step::Pick("Monster DYP"),
                 Step::Integer(7),
+                Step::Accept,
+                Step::Accept,
                 Step::Accept,
                 Step::Pick("more wins"),
             ]),

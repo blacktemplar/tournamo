@@ -46,6 +46,7 @@ use crate::{
 
 mod bracket;
 mod cross_table;
+mod divisions;
 mod entrants;
 mod entry;
 mod phase;
@@ -99,6 +100,7 @@ struct Given {
     format: &'static str,
     /// The format's suggestion if `None`.
     match_format: Option<PluginConfig>,
+    divisions: u32,
 }
 
 impl Given {
@@ -107,7 +109,13 @@ impl Given {
             entrants: vec!["Alice", "Bob", "Carol", "Dave"],
             format: RoundRobin::ID,
             match_format: None,
+            divisions: 1,
         }
+    }
+
+    /// The phase played in `divisions` divisions, dealt in order.
+    fn divisions(self, divisions: u32) -> Self {
+        Self { divisions, ..self }
     }
 
     fn entrants(self, entrants: &[&'static str]) -> Self {
@@ -141,6 +149,7 @@ impl Given {
                 .and_then(|draft| draft.with_defaults())
                 .unwrap();
         }
+        let draft = draft.with(PhasePlugins::DIVISIONS, self.divisions).unwrap();
         session.add_phase(&form(draft)).unwrap();
         session
     }

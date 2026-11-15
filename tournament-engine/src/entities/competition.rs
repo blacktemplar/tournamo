@@ -157,13 +157,13 @@ impl Competition {
                     .map(|entrant| self.lot(entrant).expect("every entrant has a lot"))
                     .min()
                     .expect("a qualifier has entrants");
-                (qualifier.entrants, lot)
+                (qualifier, lot)
             })
             .collect();
         self.phases
             .get_mut(&phase_id)
             .expect("the phase exists")
-            .start(field, &mut self.highest_number);
+            .start(field, &self.entrants, &mut self.highest_number);
     }
 
     /// The field of the phase `phase_id`, what it starts with as things stand: its sources in
@@ -192,7 +192,6 @@ impl Competition {
                     let Some(from) = self.phase(&from) else {
                         continue;
                     };
-                    let division = 0;
                     field.extend(
                         from.standings()
                             .iter()
@@ -201,9 +200,9 @@ impl Competition {
                                 entrants: standing.ranking().entrants().clone(),
                                 origin: Origin::Phase {
                                     phase: from.id(),
-                                    division,
-                                    rank: standing.rank(),
-                                    unique_rank: standing.unique_rank(),
+                                    division: standing.division(),
+                                    rank: standing.in_division().rank(),
+                                    unique_rank: standing.in_division().unique_rank(),
                                     overall_rank: standing.rank(),
                                     overall_unique_rank: standing.unique_rank(),
                                 },

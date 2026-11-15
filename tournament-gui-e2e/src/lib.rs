@@ -1149,6 +1149,55 @@ impl Gui {
             .await
     }
 
+    /// Waits until the matches listed are tagged with the letters of their divisions `letters`,
+    /// in order, as they are where the phase has several divisions.
+    ///
+    /// # Panics
+    /// Panics if they are not in time.
+    pub async fn expect_division_tags(&self, letters: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(
+                By::Css("#match-list .division-tag > [aria-hidden]"),
+                letters,
+            )
+            .await
+    }
+
+    /// Waits until the standings shown are under the headings `headings`, one card per
+    /// division, e.g. `"Group A"`, or `"Standings"` for a phase of one division.
+    ///
+    /// # Panics
+    /// Panics if they are not in time.
+    pub async fn expect_standings_headings(&self, headings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("h2[id^='standings']"), headings)
+            .await
+    }
+
+    /// Waits until the cards comparing a place across the groups are those under `headings`,
+    /// each listing as many rows as `rows` says.
+    ///
+    /// # Panics
+    /// Panics if they are not in time.
+    pub async fn expect_compared(&self, headings: &[&str], rows: usize) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".compared h2"), headings)
+            .await?;
+        self.page
+            .expect(
+                By::Css(".compared-list tbody tr"),
+                |query| query.and_displayed(),
+                "the rows compared",
+            )
+            .await?;
+        let found = self
+            .driver
+            .find_all(By::Css(".compared-list tbody tr"))
+            .await?;
+        assert_eq!(found.len(), rows, "the rows compared");
+        Ok(())
+    }
+
     /// Waits until the ranking of the competition lists `rows`, best first, each its place, names
     /// and the phase reached, e.g. `"1 Alice Final"`.
     ///

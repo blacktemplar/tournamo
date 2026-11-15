@@ -8,12 +8,13 @@
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::{Message as _, PluginText, Text, Translator},
+    session::Session,
     view::{
-        Advancing, ListedMatch, MatchRow, Medal, RoundSummary, RoundsView, Shown, StandingCell,
-        TypedEntry,
+        Advancing, Compared, DivisionRef, ListedMatch, MatchRow, MatchesOf, Medal, RoundSummary,
+        RoundsView, Shown, StandingCell, TypedEntry, division_letter,
     },
 };
-use tournament_engine::{MatchId, MatchResult, PhaseId};
+use tournament_engine::{MatchId, MatchResult, PhaseId, plugins::draw::DivisionOrder};
 
 use crate::{
     announcement::Announcement,
@@ -54,12 +55,23 @@ pub fn Rounds() -> Element {
     } else {
         String::new()
     };
-    let Some(of) = ctx.matches_of() else {
+    // the division whose matches alone are shown, all of them if `None`
+    let mut only = use_signal(|| None::<usize>);
+    let Some(phase) = ctx.phase() else {
         return rsx! {};
     };
+    let divisions = divisions_of(&ctx.session.read(), &ctx.translator.read(), phase);
+    // a division no longer there, e.g. after the phase was changed, shows them all
+    let division = only().filter(|index| *index < divisions.len());
+    let of = MatchesOf { phase, division };
     let Some(view) = ctx.session.read().rounds_view(of, chosen(), &typed) else {
         return rsx! {};
     };
+    // the heading of each division, by which a match is tagged where there are several
+    let headings: Vec<Option<String>> = divisions
+        .iter()
+        .map(|(_, heading)| heading.clone())
+        .collect();
     let heading_round = view.shown_round().cloned();
     let RoundsView {
         rounds,
@@ -98,6 +110,7 @@ pub fn Rounds() -> Element {
             }
             if typing() && !finished {
                 ResultEntry {
+                    of,
                     draws,
                     scores,
                     entry,
@@ -111,6 +124,27 @@ pub fn Rounds() -> Element {
                 class: "toolbar",
                 aria_label: tr.get("rounds"),
                 hidden: entered.is_some(),
+                if divisions.len() > 1 {
+                    div {
+                        class: "segmented divisions",
+                        role: "group",
+                        aria_label: tr.get("divisions-shown"),
+                        button {
+                            aria_pressed: division.is_none(),
+                            onclick: move |_| only.set(None),
+                            {tr.get("all-divisions")}
+                        }
+                        for (index , (shown , heading)) in divisions.iter().cloned().enumerate() {
+                            button {
+                                key: "{index}",
+                                aria_pressed: division == Some(index),
+                                aria_label: heading,
+                                onclick: move |_| only.set(Some(index)),
+                                {shown.letter()}
+                            }
+                        }
+                    }
+                }
                 div {
                     class: "segmented",
                     role: "group",
@@ -202,6 +236,7 @@ pub fn Rounds() -> Element {
                     for ListedMatch { row, next_open } in matches {
                         MatchLine {
                             key: "{row.id:?}",
+                            division: headings.get(row.division).cloned().flatten(),
                             with_round,
                             with_stage,
                             draws,
@@ -266,6 +301,8 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
 /// hint folds behind a toggletip once a result typed in was reported in this browser.
 #[component]
 fn ResultEntry(
+    /// The matches a result typed in is looked for among.
+    of: MatchesOf,
     draws: bool,
     scores: bool,
     entry: Signal<String>,
@@ -308,9 +345,6 @@ fn ResultEntry(
             onsubmit: move |event| {
                 event.prevent_default();
                 let entered = entry.peek().clone();
-                let Some(of) = ctx.matches_of() else {
-                    return;
-                };
                 match ctx.try_act(|session| session.report_entered(of, &entered)) {
                     Ok(reported) => {
                         ctx.announce(Announcement::Reported(reported));
@@ -411,6 +445,8 @@ fn local_storage() -> Option<web_sys::Storage> {
 #[component]
 fn MatchLine(
     row: MatchRow,
+    /// The heading of the division of the match, which tags it, where the phase has several.
+    division: Option<String>,
     with_round: bool,
     with_stage: bool,
     draws: bool,
@@ -442,6 +478,12 @@ fn MatchLine(
             class: if to_report { "to-report" },
             span { class: "visually-hidden", {tr.get("match")} }
             span { class: "number", "{row.number}" }
+            if let Some(division) = division {
+                span { class: "division-tag",
+                    span { aria_hidden: "true", {division_letter(row.division)} }
+                    span { class: "visually-hidden", "{division}" }
+                }
+            }
             span { class: "side a {winner(Side::A)}", {team_name(&tr, &row.a)} }
             span { class: "visually-hidden", {tr.get("versus")} }
             span { class: "side b {winner(Side::B)}", {team_name(&tr, &row.b)} }
@@ -644,12 +686,98 @@ pub fn MedalOf(medal: Medal, rank: u32) -> Element {
     }
 }
 
+/// The divisions of the phase `phase` with the heading each is shown under, `None` while it has
+/// one: "Group A" where they are parallel, the format and the letter where they are levels, e.g.
+/// "Single elimination A". None before its start.
+pub fn divisions_of(
+    session: &Session,
+    tr: &Translator,
+    phase: PhaseId,
+) -> Vec<(DivisionRef, Option<String>)> {
+    let Some(overview) = session
+        .phases()
+        .into_iter()
+        .find(|overview| overview.id == phase)
+    else {
+        return Vec::new();
+    };
+    let several = overview.divisions.len() > 1;
+    overview
+        .divisions
+        .iter()
+        .map(|division| {
+            let letter = division.division.letter();
+            let heading = several.then(|| match overview.order {
+                DivisionOrder::Parallel => t!(tr, "division-group", letter = letter.as_str()),
+                DivisionOrder::Levels => t!(
+                    tr,
+                    "division-of-format",
+                    format = capitalized(&tr.plugin(
+                        overview.name.format.id,
+                        PluginText::Label,
+                        overview.name.format.label
+                    )),
+                    letter = letter.as_str()
+                ),
+            });
+            (division.division, heading)
+        })
+        .collect()
+}
+
+/// What an id of an element of the division `division` ends in, so that the elements of several
+/// divisions differ: nothing for the only division of a phase, else `-` and its letter.
+pub fn id_suffix(division: DivisionRef, heading: &Option<String>) -> String {
+    match heading {
+        Some(_) => format!("-{}", division.letter().to_lowercase()),
+        None => String::new(),
+    }
+}
+
+/// What a finished phase says, then the standings of each division of the phase shown, then for
+/// each rank of parallel divisions a cut goes through, its rows compared across the divisions.
 #[component]
 pub fn Standings() -> Element {
     let ctx = use_context::<Ctx>();
-    let Some(division) = ctx.division() else {
+    let Some(phase) = ctx.phase() else {
         return rsx! {};
     };
+    let (divisions, compared, parallel) = {
+        let session = ctx.session.read();
+        let tr = ctx.translator.read();
+        let divisions = divisions_of(&session, &tr, phase);
+        let compared = session.compared(phase);
+        let parallel = divisions.len() > 1
+            && session
+                .phases()
+                .iter()
+                .any(|overview| overview.id == phase && overview.order == DivisionOrder::Parallel);
+        (divisions, compared, parallel)
+    };
+    rsx! {
+        // above the standings rather than above the matches, which it would push down below the
+        // tap that finished them
+        PhaseFinished {}
+        for (division , heading) in divisions {
+            DivisionStandings {
+                key: "{division.division}",
+                division,
+                heading,
+                parallel,
+            }
+        }
+        for compared in compared {
+            ComparedStandings { key: "{compared.rank}", compared }
+        }
+    }
+}
+
+/// The standings of `division`, under `heading` if the phase has several, of a phase of
+/// `parallel` divisions if so.
+#[component]
+fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: bool) -> Element {
+    let ctx = use_context::<Ctx>();
+    let suffix = id_suffix(division, &heading);
     let Some(standings) = ctx.session.read().standings(division) else {
         return rsx! {};
     };
@@ -691,7 +819,10 @@ pub fn Standings() -> Element {
                 None => Some(settings.join(", ")),
             };
             // ids of plugins are namespaced by `::`
-            let id = format!("standings-about-{}", column.calculator.replace("::", "-"));
+            let id = format!(
+                "standings-about-{}{suffix}",
+                column.calculator.replace("::", "-")
+            );
             (header, about, id)
         })
         .collect();
@@ -709,21 +840,20 @@ pub fn Standings() -> Element {
             .map(|overview| tr.phase_name(&overview.name))
             .unwrap_or_default()
     };
+    let heading_id = format!("standings{suffix}");
+    let title = heading.clone().unwrap_or_else(|| tr.get("standings"));
     rsx! {
-        // above the standings rather than above the matches, which it would push down below the
-        // tap that finished them
-        PhaseFinished {}
-        section { class: "card", aria_labelledby: "standings",
-            h2 { id: "standings", {tr.get("standings")} }
+        section { class: "card", aria_labelledby: "{heading_id}",
+            h2 { id: "{heading_id}", {title.clone()} }
             // scrolls sideways if its columns do not fit, the names staying in sight
             div {
                 class: "scroll",
                 role: "group",
                 tabindex: "0",
-                aria_labelledby: "standings",
-                table { id: "standing-list",
+                aria_labelledby: "{heading_id}",
+                table { id: "standing-list{suffix}", class: "standing-list",
                     // the heading of the card shows it
-                    caption { class: "visually-hidden", {tr.get("standings")} }
+                    caption { class: "visually-hidden", {title} }
                     thead {
                         tr {
                             th { class: "rank", scope: "col", {tr.get("rank")} }
@@ -801,9 +931,92 @@ pub fn Standings() -> Element {
                             {
                                 let key = match how {
                                     Advancing::ByPlace => "advances-by-place",
+                                    Advancing::Compared if parallel => "advances-compared-across",
                                     Advancing::Compared => "advances-compared",
                                 };
                                 tr.text(&Text::new(key).with("phase", name_of(to)))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The rows of one rank in parallel divisions a cut goes through, compared across the divisions:
+/// their overall rank, division, whether they go on, and the metrics compared by.
+#[component]
+fn ComparedStandings(compared: Compared) -> Element {
+    let ctx = use_context::<Ctx>();
+    let phases = ctx.session.read().phases();
+    let tr = ctx.translator.read();
+    let name_of = |phase: PhaseId| {
+        phases
+            .iter()
+            .find(|overview| overview.id == phase)
+            .map(|overview| tr.phase_name(&overview.name))
+            .unwrap_or_default()
+    };
+    let id = format!("compared-{}", compared.rank);
+    let headers: Vec<_> = compared
+        .columns
+        .iter()
+        .map(|column| capitalized(&tr.plugin(column.calculator, PluginText::Column, column.header)))
+        .collect();
+    rsx! {
+        section { class: "card compared", aria_labelledby: "{id}",
+            h2 { id: "{id}", {t!(tr, "compared-heading", rank = compared.rank.get())} }
+            p { class: "hint", {tr.get("compared-hint")} }
+            div {
+                class: "scroll",
+                role: "group",
+                tabindex: "0",
+                aria_labelledby: "{id}",
+                table { class: "standing-list compared-list",
+                    thead {
+                        tr {
+                            th { class: "rank", scope: "col", {tr.get("rank")} }
+                            th { class: "name", scope: "col", {tr.get("name")} }
+                            th { scope: "col", {tr.get("division")} }
+                            th { scope: "col", {tr.get("goes-on")} }
+                            for header in headers {
+                                th { scope: "col", "{header}" }
+                            }
+                            th { scope: "col", {tr.get("played")} }
+                        }
+                    }
+                    tbody {
+                        for row in compared.rows {
+                            tr {
+                                td { class: "rank",
+                                    span { class: "place", "{row.rank}" }
+                                }
+                                th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
+                                td { class: "division", {division_letter(row.division)} }
+                                td { class: "goes-on",
+                                    if let Some(advance) = row.advances {
+                                        AdvanceMarker {
+                                            how: advance.how,
+                                            to: name_of(advance.to),
+                                        }
+                                    }
+                                }
+                                for (column , cell) in compared.columns.iter().zip(row.cells) {
+                                    td { class: "metric",
+                                        {
+                                            cell.map(|cell| match cell {
+                                                StandingCell::Metric(cell) => {
+                                                    capitalized(&tr.cell(column.calculator, &cell))
+                                                }
+                                                StandingCell::Stage(stage) => {
+                                                    capitalized(&tr.stage(&stage))
+                                                }
+                                            })
+                                        }
+                                    }
+                                }
+                                td { class: "played", "{row.played}" }
                             }
                         }
                     }

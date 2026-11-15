@@ -19,7 +19,7 @@ impl Seed {
 
     /// The random stream of this seed mixed with `entropy`: different values give independent
     /// streams, the same value always gives the same one.
-    pub(super) fn rng(self, entropy: impl Hash) -> StdRng {
+    pub(crate) fn rng(self, entropy: impl Hash) -> StdRng {
         Seeder::from((self.0, entropy)).into_rng()
     }
 }
@@ -27,7 +27,11 @@ impl Seed {
 /// What the random streams of a competition are told apart by, see [`Seed::rng`].
 // the discriminants are hashed, so reordering the variants changes every random stream
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub(super) enum Entropy {
+pub(crate) enum Entropy {
     CompetitionStart,
     PhaseFormat,
+    /// The draw dealing the field of a phase to its divisions.
+    Draw,
+    /// The seed of a division of a phase other than the first, with its index.
+    Division(usize),
 }

@@ -1,16 +1,28 @@
 use std::num::NonZeroU32;
 
+use itertools::Itertools;
 use plugin_factory::config::Config;
 #[cfg(doc)]
 use plugin_factory::draft::Draft;
+use rand::RngExt;
 use serde::{Deserialize, Deserializer, Serialize};
 use vec1::Vec1;
 
 #[cfg(doc)]
-use crate::Competition;
 use crate::{
-    Division, EntrantId, MatchId, Part, PhaseId, Seed, Source, Standings, map::IdAble,
-    plugins::PhasePlugins,
+    Competition,
+    plugins::{draw::Draw, phase_format::PhaseFormat},
+};
+use crate::{
+    Division, Entrant, MatchId, Part, PhaseId, PhaseStandings, Qualifier, RankingId, Seed, Source,
+    Standing, Standings,
+    entities::Entropy,
+    map::{IdAble, IdMap, Map},
+    plugins::{
+        PhasePlugins,
+        draw::{DivisionOrder, DrawView},
+        ranker::RankingScope,
+    },
 };
 
 /// A phase of a competition: where its entrants come from, one configuration of plugins, played
@@ -111,14 +123,86 @@ impl Phase {
             .find(|(_, division)| division.data().matches().contains_key(match_id))
     }
 
-    /// The overall standings of this phase: those of its only division, empty before it is
-    /// started. Sorted on every call: a caller reading them more than once keeps them.
-    pub fn standings(&self) -> Standings<'_> {
-        self.divisions
-            .first()
-            .map_or_else(|| Standings::new(Vec::new()), Division::standings)
+    /// The overall standings of this phase, empty before it is started. Sorted on every call: a
+    /// caller reading them more than once keeps them.
+    ///
+    /// With one division they are its standings. Otherwise they depend on how its draw sets the
+    /// divisions against each other ([`Draw::order`]), but never against a division: a ranking
+    /// with a better rank than another in their division has a better overall rank and unique
+    /// rank too.
+    ///
+    /// - [`DivisionOrder::Levels`]: the standings of the divisions one after the other.
+    /// - [`DivisionOrder::Parallel`]: by rank in the division; the rankings of one rank in their
+    ///   divisions are ranked against each other by the slice rankers of
+    ///   [`PhasePlugins::across`], with [`RankingScope::AcrossDivisions`], and what stays tied
+    ///   shares an overall rank.
+    ///
+    /// Ties of the overall rank are broken by [lot](crate::Ranking::lot).
+    pub fn standings(&self) -> PhaseStandings<'_> {
+        let mut divisions = self.divisions.iter().map(Division::standings);
+        let rows = match (self.divisions.len(), self.plugins.draw().order()) {
+            (0 | 1, _) => divisions
+                .next()
+                .map(|standings| {
+                    standings
+                        .iter()
+                        .map(|&standing| (standing, 0, standing.rank()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            (_, DivisionOrder::Levels) => {
+                let mut rows = Vec::new();
+                for (division, standings) in divisions.enumerate() {
+                    let before = rows.len() as u32;
+                    rows.extend(standings.iter().map(|&standing| {
+                        let rank = standing
+                            .rank()
+                            .checked_add(before)
+                            .expect("fewer rankings than u32::MAX");
+                        (standing, division, rank)
+                    }));
+                }
+                rows
+            }
+            (_, DivisionOrder::Parallel) => self.parallel_rows(divisions.collect()),
+        };
+        PhaseStandings::new(rows)
     }
 
+    /// The rows of the overall standings of parallel divisions with the `standings` of each: by
+    /// rank in the division, then by the ranking across divisions.
+    fn parallel_rows<'a>(
+        &'a self,
+        standings: Vec<Standings<'a>>,
+    ) -> Vec<(Standing<'a>, usize, NonZeroU32)> {
+        let mut rows: Vec<(Standing, usize)> = standings
+            .iter()
+            .enumerate()
+            .flat_map(|(division, standings)| {
+                standings.iter().map(move |&standing| (standing, division))
+            })
+            .collect();
+        rows.sort_by_key(|&(standing, _)| standing.rank());
+        let row_of: Map<RankingId, (Standing, usize)> = rows
+            .iter()
+            .map(|&(standing, division)| (standing.ranking().id(), (standing, division)))
+            .collect();
+        let across = self.plugins.across_ranker();
+        let mut ranked = Vec::with_capacity(rows.len());
+        for slice in rows.chunk_by(|(s1, _), (s2, _)| s1.rank() == s2.rank()) {
+            let start = NonZeroU32::new(ranked.len() as u32 + 1).expect("one more than a count");
+            let mut slice: Vec<_> = slice
+                .iter()
+                .map(|(standing, _)| (standing.ranking(), start))
+                .collect();
+            across.rank_tied(RankingScope::AcrossDivisions, &mut slice);
+            ranked.extend(slice.into_iter().map(|(ranking, rank)| {
+                let (standing, division) = row_of[&ranking.id()];
+                (standing, division, rank)
+            }));
+        }
+        ranked
+    }
     /// Whether this phase is started and none of its divisions has a match left to play.
     pub fn is_finished(&self) -> bool {
         self.started
@@ -131,13 +215,56 @@ impl Phase {
             })
     }
 
-    /// Starts this phase with one division of a ranking of each of `field`, its entrants and
-    /// their best lot, ranked initially in this order; its matches are numbered after `highest`,
-    /// see [`Division::start`].
-    pub(crate) fn start(&mut self, field: Vec<(Vec1<EntrantId>, NonZeroU32)>, highest: &mut u32) {
-        let mut division = Division::new(self.plugins.clone(), self.seed);
-        division.start(field, highest);
-        self.divisions = vec![division];
+    /// Starts this phase with `field`, each qualifier with the best lot of its entrants: its draw
+    /// deals the field to its divisions, each starting with a ranking of each of its qualifiers in
+    /// the order dealt. It deals to as many divisions as the phase is configured with, but no more
+    /// than leave each the entrants its format needs (see [`PhaseFormat::min_entrants`]): a
+    /// consumer refuses to start a phase with too few for its divisions, this only keeps a start
+    /// it does not refuse, e.g. of a log written elsewhere, from leaving a division too small.
+    /// The first division has the seed of the phase, every other one a seed derived from it.
+    /// Their matches are numbered after `highest`, see [`Division::start`].
+    pub(crate) fn start(
+        &mut self,
+        field: Vec<(Qualifier, NonZeroU32)>,
+        entrants: &IdMap<Entrant>,
+        highest: &mut u32,
+    ) {
+        let needed = self.plugins.format().min_entrants().max(1);
+        let count = (self.plugins.divisions().get() as usize).min((field.len() / needed).max(1));
+        let (qualifiers, lots): (Vec<_>, Vec<_>) = field.into_iter().unzip();
+        let dealt =
+            self.plugins
+                .draw()
+                .draw(&DrawView::new(&qualifiers, count, entrants, self.seed));
+        debug_assert!(
+            dealt.len() == count
+                && dealt
+                    .iter()
+                    .flatten()
+                    .copied()
+                    .sorted()
+                    .eq(0..qualifiers.len())
+                && (qualifiers.is_empty() || dealt.iter().all(|positions| !positions.is_empty())),
+            "a draw deals every qualifier to one of the divisions, none empty"
+        );
+        self.divisions = dealt
+            .into_iter()
+            .enumerate()
+            .map(|(index, positions)| {
+                let seed = if index == 0 {
+                    self.seed
+                } else {
+                    Seed::new(self.seed.rng(Entropy::Division(index)).random())
+                };
+                let mut division = Division::new(self.plugins.clone(), seed);
+                let field = positions
+                    .into_iter()
+                    .map(|position| (qualifiers[position].entrants.clone(), lots[position]))
+                    .collect();
+                division.start(field, highest);
+                division
+            })
+            .collect();
         self.started = true;
     }
 

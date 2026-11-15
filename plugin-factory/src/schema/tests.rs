@@ -597,3 +597,13 @@ fn an_unanswered_field_is_no_error_unless_the_config_is_to_be_complete() {
         })
     );
 }
+
+#[test]
+fn a_non_zero_integer_takes_the_whole_numbers_from_1() {
+    let FieldKind::Integer(range) = <std::num::NonZeroU32 as FieldType>::kind() else {
+        panic!("a non-zero integer takes an integer");
+    };
+
+    assert_eq!(range.min(), 1);
+    assert_eq!(range.max(), i64::from(u32::MAX));
+}

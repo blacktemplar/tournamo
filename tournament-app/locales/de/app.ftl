@@ -37,6 +37,7 @@ error-phase-change-does-not-fit = so kann die Phase nicht geändert werden, da e
 error-started-already = das Turnier hat schon begonnen
 error-too-few-entrants = ein Turnier braucht mindestens zwei Teilnehmer
 error-too-few-for-format = das Format braucht mindestens { $count } Teilnehmer
+error-too-few-for-divisions = { $divisions } Gruppen brauchen mindestens { $count } Teilnehmer: verringere die Zahl der Gruppen
 error-not-started = das Turnier hat noch nicht begonnen
 error-unknown-match = dieses Spiel gibt es nicht
 error-match-finished-already = das Spiel hat schon ein Ergebnis

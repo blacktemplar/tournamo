@@ -93,13 +93,13 @@ pub trait Configurable: Sized + DeserializeOwned + 'static {
 /// A type a field of a derived plugin can have, see [`derive@Plugin`]: what kind of answer it
 /// takes.
 ///
-/// Implemented for `bool`, the integer and floating point types, `Box<dyn Trait>` for the trait of
-/// a plugin axis, `Option` of any of them, and `Vec<Box<dyn Trait>>` and
-/// [`DependencyOrderedSet`]`<dyn Trait>` for lists of plugins: a `Vec` takes an ordered list, a
-/// `DependencyOrderedSet` an unordered one. An integer type takes the whole numbers it holds, a
-/// floating point type every number. A type that deserializes from one of these answers, such as
-/// a newtype checking its value, implements it to be a field, with the range of numbers it takes
-/// if it is a number.
+/// Implemented for `bool`, the integer types (the non-zero unsigned ones too) and floating point
+/// types, `Box<dyn Trait>` for the trait of a plugin axis, `Option` of any of them, and
+/// `Vec<Box<dyn Trait>>` and [`DependencyOrderedSet`]`<dyn Trait>` for lists of plugins: a `Vec`
+/// takes an ordered list, a `DependencyOrderedSet` an unordered one. An integer type takes the
+/// whole numbers it holds, a floating point type every number. A type that deserializes from one
+/// of these answers, such as a newtype checking its value, implements it to be a field, with the
+/// range of numbers it takes if it is a number.
 pub trait FieldType {
     /// The kind of answer a field of this type takes.
     fn kind() -> FieldKind;
@@ -134,6 +134,34 @@ macro_rules! integer_types {
 }
 
 integer_types!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
+
+/// Implements [`FieldType`] for each of the non-zero unsigned integer types, taking the whole
+/// numbers it holds, at least 1, as far as an `i64` holds them.
+macro_rules! non_zero_types {
+    ($($type:ty),*) => {
+        $(
+            impl FieldType for $type {
+                fn kind() -> FieldKind {
+                    FieldKind::Integer(
+                        IntegerRange::limits(
+                            0,
+                            i64::try_from(<$type>::MAX.get()).unwrap_or(i64::MAX),
+                        )
+                        .at_least(1),
+                    )
+                }
+            }
+        )*
+    };
+}
+
+non_zero_types!(
+    std::num::NonZeroU8,
+    std::num::NonZeroU16,
+    std::num::NonZeroU32,
+    std::num::NonZeroU64,
+    std::num::NonZeroUsize
+);
 
 impl FieldType for f32 {
     fn kind() -> FieldKind {

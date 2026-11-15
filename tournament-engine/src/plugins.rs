@@ -1,7 +1,8 @@
 //! The plugin axes of a phase and the plugins of this crate, built on `plugin_factory`.
 //!
-//! A phase is played in one [`PhaseFormat`], ranked by a list of [`SliceRanker`]s and calculates
-//! the metrics of a list of [`MetricsCalculator`]s; [`PhasePlugins`] is that composite. Every
+//! A phase is played in one [`PhaseFormat`] by divisions its [`Draw`] deals the field
+//! to, ranked by a list of [`SliceRanker`]s and calculates the metrics of a list of
+//! [`MetricsCalculator`]s; [`PhasePlugins`] is that composite. Every
 //! plugin registers itself in the catalog of its axis, see [`plugin_factory::catalog`], so a
 //! consumer configuring a phase finds them there, and declares what it provides to and requires of
 //! its phase, see [`facts`] and [`plugin_factory::compatibility`].
@@ -40,6 +41,8 @@
 //! Labels and descriptions are English. A consumer may translate them, finding them by the
 //! plugin's id and the field's name, and shows the English where it has no translation.
 
+use std::num::NonZeroU32;
+
 use plugin_factory::{
     catalog::Axis,
     config::{Config, ConfigError, Path, PluginConfig, Value},
@@ -54,6 +57,7 @@ pub use crate::plugins::phrase::Phrase;
 use crate::{
     entities::{DivisionData, DivisionView},
     plugins::{
+        draw::Draw,
         match_format::MatchFormat,
         metrics_calculator::MetricsCalculator,
         phase_format::{PhaseFormat, Schedule},
@@ -63,6 +67,7 @@ use crate::{
 
 #[cfg(feature = "test-util")]
 mod builder;
+pub mod draw;
 pub mod facts;
 pub mod match_format;
 pub mod metrics_calculator;
@@ -70,8 +75,9 @@ pub mod phase_format;
 mod phrase;
 pub mod ranker;
 
-/// The plugins of one phase: the format its matches are scheduled by, the slice rankers it is
-/// ranked by and the calculators of its metrics.
+/// The plugins of one phase: the format its matches are scheduled by, how many divisions it is
+/// played in and the draw dealing its field to them, the slice rankers each division is ranked
+/// by, the calculators of its metrics, and the slice rankers comparing parallel divisions.
 ///
 /// It is configured as a composite of `plugin_factory`, through the
 /// [`Competition::phase_draft`](crate::Competition::phase_draft) of the competition it is added to,
@@ -121,6 +127,18 @@ pub struct PhasePlugins {
     )]
     format: Box<dyn PhaseFormat>,
     #[plugin(
+        label = "groups",
+        description = "how many parts the phase is played in, each on its own",
+        default = NonZeroU32::MIN
+    )]
+    divisions: NonZeroU32,
+    #[plugin(
+        label = "draw",
+        description = "how the entrants are dealt to the groups and seeded",
+        default = Box::new(draw::InOrder)
+    )]
+    draw: Box<dyn Draw>,
+    #[plugin(
         label = "match format",
         description = "what is entered for a match",
         default = match_format::default()
@@ -135,6 +153,14 @@ pub struct PhasePlugins {
     #[serde(default)]
     #[plugin(label = "metrics", description = "calculated for every entrant")]
     metrics: DependencyOrderedSet<dyn MetricsCalculator>,
+    #[serde(default)]
+    #[plugin(
+        label = "compared across groups by",
+        description = "after the place in the group: how entrants of the same place in different \
+                       groups are ranked against each other",
+        default = Vec::new()
+    )]
+    across: Vec<Box<dyn SliceRanker>>,
 }
 
 impl PhasePlugins {
@@ -197,14 +223,47 @@ impl PhasePlugins {
     ) -> Result<Self, plugin_factory::schema::DependencyOrderedSetError> {
         Ok(Self {
             format,
+            divisions: NonZeroU32::MIN,
+            draw: Box::new(draw::InOrder),
             match_format,
             ranking,
             metrics: DependencyOrderedSet::new(metrics)?,
+            across: Vec::new(),
         })
+    }
+
+    /// These plugins played in `divisions` divisions, dealt by `draw`, ranked across them by
+    /// `across`.
+    pub(crate) fn with_divisions(
+        mut self,
+        divisions: NonZeroU32,
+        draw: Box<dyn Draw>,
+        across: Vec<Box<dyn SliceRanker>>,
+    ) -> Self {
+        self.divisions = divisions;
+        self.draw = draw;
+        self.across = across;
+        self
     }
 
     pub fn format(&self) -> &dyn PhaseFormat {
         &*self.format
+    }
+
+    /// How many divisions the phase is played in.
+    pub fn divisions(&self) -> NonZeroU32 {
+        self.divisions
+    }
+
+    /// How the field of the phase is dealt to its divisions.
+    pub fn draw(&self) -> &dyn Draw {
+        &*self.draw
+    }
+
+    /// The slice rankers ranking the rankings of one rank in their parallel divisions against each
+    /// other, best first, see [`Phase::standings`](crate::Phase::standings).
+    pub fn across(&self) -> &[Box<dyn SliceRanker>] {
+        &self.across
     }
 
     /// The slice rankers, best first.
@@ -249,11 +308,22 @@ impl PhasePlugins {
             list(Self::METRICS).iter().map(built).collect(),
         )
         .expect("the calculators were in order")
+        .with_divisions(
+            self.divisions,
+            built(answer(Self::DRAW)),
+            list(Self::ACROSS).iter().map(built).collect(),
+        )
     }
 
-    /// The ranker of a phase with these plugins: its slice rankers in order.
+    /// The ranker of a division with these plugins: its slice rankers in order.
     pub(crate) fn ranker(&self) -> HierarchicalRanker<'_> {
         HierarchicalRanker::new(&self.ranking)
+    }
+
+    /// The ranker across the parallel divisions of a phase with these plugins: the slice rankers
+    /// of [`Self::across`] in order.
+    pub(crate) fn across_ranker(&self) -> HierarchicalRanker<'_> {
+        HierarchicalRanker::new(&self.across)
     }
 
     /// The matches and byes the format schedules next in the phase of `data` played with these

@@ -2,8 +2,9 @@ use plugin_factory::PluginType;
 use tournament_engine::plugins::{
     metrics_calculator::{
         BuchholzCalculator, FewerLosses, LaterElimination, LaterFirstLoss, MoreBuchholz,
-        MorePoints, MoreSonnebornBerger, MoreWins, PointsCalculator, RoundOfEliminationCalculator,
-        RoundOfFirstLossCalculator, SonnebornBergerCalculator, WinsDrawsLossesCalculator,
+        MorePoints, MorePointsPerMatch, MoreSonnebornBerger, MoreWins, PointsCalculator,
+        RoundOfEliminationCalculator, RoundOfFirstLossCalculator, SonnebornBergerCalculator,
+        WinsDrawsLossesCalculator,
     },
     phase_format::{DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination},
 };
@@ -96,7 +97,17 @@ fn a_new_phase_is_answered_as_its_format_recommends() {
     let view = new_form().view();
 
     let names: Vec<_> = view.fields.iter().map(|field| field.name).collect();
-    assert_eq!(names, ["format", "match_format", "ranking", "metrics"]);
+    assert_eq!(
+        names,
+        [
+            "format",
+            "divisions",
+            "draw",
+            "match_format",
+            "ranking",
+            "metrics"
+        ]
+    );
     assert_eq!(chosen(&view, "format"), RoundRobin::ID);
     assert_eq!(
         items(&view, "ranking"),
@@ -839,5 +850,56 @@ fn a_range_is_said_in_the_language() {
     assert_eq!(
         say(NumberRange::Decimal(DecimalRange::ALL.multiples_of(0.5))),
         "eine Zahl, die ein Vielfaches von 0,5 ist"
+    );
+}
+
+/// Comparing across groups only matters with several groups, so it shows only then, or while it
+/// compares by something.
+#[test]
+fn comparing_across_groups_shows_with_several_groups() {
+    let mut form = new_form();
+    let shown = |form: &PhaseForm| find(&form.view().fields, &path("across")).is_some();
+    assert!(!shown(&form));
+
+    form.enter(&path("divisions"), "3").unwrap();
+    assert!(shown(&form));
+    form.add(&path("across"), MorePointsPerMatch::ID).unwrap();
+    form.enter(&path("divisions"), "1").unwrap();
+
+    assert!(shown(&form));
+    form.remove(&path("across[0]")).unwrap();
+    assert!(!shown(&form));
+}
+
+/// A phase of one division dealt in order reads as one without divisions; otherwise its summary
+/// says how many and how they are dealt.
+#[test]
+fn a_summary_leaves_out_one_division_dealt_in_order() {
+    let mut form = new_form();
+    let names = |form: &PhaseForm| -> Vec<&str> {
+        form.view()
+            .summary()
+            .iter()
+            .map(|field| field.name)
+            .collect()
+    };
+    assert_eq!(
+        names(&form),
+        ["format", "match_format", "ranking", "metrics"]
+    );
+
+    form.enter(&path("divisions"), "2").unwrap();
+
+    assert_eq!(
+        names(&form),
+        [
+            "format",
+            "divisions",
+            "draw",
+            "match_format",
+            "ranking",
+            "metrics",
+            "across"
+        ]
     );
 }

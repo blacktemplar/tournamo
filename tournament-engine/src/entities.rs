@@ -23,5 +23,6 @@ pub use ids::{ByeId, EntrantId, MatchId, PhaseId, RankingId};
 pub use r#match::{Match, MatchResult, NewMatch, ResultOfTeam, Team};
 pub use phase::Phase;
 pub use ranking::Ranking;
+pub(crate) use seed::Entropy;
 pub use seed::Seed;
 pub use source::{Origin, Qualifier, Source, SourceOf};

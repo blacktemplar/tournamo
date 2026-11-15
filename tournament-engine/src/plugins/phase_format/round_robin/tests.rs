@@ -98,3 +98,18 @@ fn nobody_has_a_bye_in_a_round_robin_of_an_even_number_of_players() {
 
     assert!(phase.data().byes().is_empty());
 }
+
+/// A round robin of one entrant has no one to play, so it schedules nothing, as with none.
+#[test]
+fn fewer_than_two_schedule_nothing() {
+    for players in [0, 1] {
+        let mut phase = DivisionBuilder::new()
+            .format(RoundRobin)
+            .add_players(players)
+            .build();
+
+        phase.create_new_matches();
+
+        assert!(!phase.data().has_schedule());
+    }
+}

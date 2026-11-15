@@ -17,6 +17,7 @@ use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{Config, ConfigError, Path as ConfigPath, PluginConfig, Value},
     draft::{Draft, Issue},
+    schema::{Configurable as _, Field, FieldKind},
 };
 use thiserror::Error;
 use tournament_app::{
@@ -25,11 +26,12 @@ use tournament_app::{
     form::PhaseForm,
     i18n::{Language, Translator},
     session::Session as AppSession,
-    view,
+    view::{self, division_letter},
 };
 use tournament_engine::{
     Annotated as _, Competition, Division, DivisionData, Entrant, EntrantId, Match, MatchId,
-    MatchResult, Phase, PhaseId, PhasePlugins, RankingId, Sides, Source, SourceOf, TypeMap,
+    MatchResult, Phase, PhaseId, PhasePlugins, RankingId, Sides, Source, SourceOf, Standing,
+    TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
 
@@ -126,6 +128,8 @@ pub enum Error {
     NotStarted,
     #[error("there is no match number {0}")]
     UnknownMatch(NonZeroUsize),
+    #[error("the phase has no division {0}")]
+    UnknownDivision(String),
     #[error("enter the scores first, then the result if it is not the one they give")]
     ResultBeforeScores,
     #[error("#{0} does not take the scores entered")]
@@ -271,9 +275,12 @@ impl Session {
             Command::Start => self.start()?,
             Command::StartPhase { phase } => self.start_phase(phase)?,
             Command::Phases => self.phases(),
-            Command::Matches { open, round, phase } => {
-                self.matches(self.played_phase(phase)?, open, round)?
-            }
+            Command::Matches {
+                open,
+                round,
+                phase,
+                division,
+            } => self.matches(self.played_phase(phase)?, division, open, round)?,
             Command::Report {
                 phase,
                 number,
@@ -285,7 +292,9 @@ impl Session {
             Command::Ranking {
                 competition: true, ..
             } => self.competition_ranking(),
-            Command::Ranking { phase, .. } => self.ranking(self.played_phase(phase)?)?,
+            Command::Ranking {
+                phase, division, ..
+            } => self.ranking(self.played_phase(phase)?, division)?,
             Command::Undo => self.undo()?,
             Command::Redo => self.redo()?,
             Command::Save { name } => self.save(name)?,
@@ -505,17 +514,40 @@ impl Session {
             .ok_or_else(|| Error::UnknownFormat(format.to_owned()))?;
         let schema = entry.schema();
         let mut config = PluginConfig::new(entry.id());
+        let phase_schema = PhasePlugins::schema();
+        // the answers to the phase's own fields, e.g. `divisions=3` or `draw=blocks`
+        let mut own = Vec::new();
         for answer in answers {
             let (field, value) = answer
                 .split_once('=')
                 .ok_or_else(|| Error::NotAnAnswer(answer.clone()))?;
-            let kind = schema
-                .field_named(field)
-                .ok_or_else(|| Error::UnknownField {
-                    format: entry.label(),
+            let unknown = || Error::UnknownField {
+                format: entry.label(),
+                field: field.to_owned(),
+            };
+            let Some(kind) = schema.field_named(field).map(Field::kind) else {
+                let kind = phase_schema
+                    .field_named(field)
+                    .filter(|field| field.name() != PhasePlugins::FORMAT)
+                    .ok_or_else(unknown)?
+                    .kind();
+                let invalid = || Error::InvalidAnswer {
                     field: field.to_owned(),
-                })?
-                .kind();
+                    value: value.to_owned(),
+                };
+                let answer = match kind {
+                    FieldKind::Plugin(axis) => axis
+                        .entries()
+                        .find(|entry| {
+                            entry.id() == value || format_name(entry).eq_ignore_ascii_case(value)
+                        })
+                        .map(|entry| Value::from(PluginConfig::new(entry.id())))
+                        .ok_or_else(invalid)?,
+                    kind => questionnaire::parse_answer(kind, value).ok_or_else(invalid)?,
+                };
+                own.push((field, answer));
+                continue;
+            };
             let value =
                 questionnaire::parse_answer(kind, value).ok_or_else(|| Error::InvalidAnswer {
                     field: field.to_owned(),
@@ -525,6 +557,9 @@ impl Session {
         }
         let mut draft = self.competition().phase_draft();
         draft.set(&ConfigPath::ROOT.field(PhasePlugins::FORMAT), config)?;
+        for (field, answer) in own {
+            draft.set(&ConfigPath::ROOT.field(field), answer)?;
+        }
         questionnaire::fill_phase(&mut draft, &mut AcceptDefaults)?;
         self.apply_phase(&configuring, &draft)
     }
@@ -555,7 +590,10 @@ impl Session {
         self.session.start_phase(id)?;
         Ok(format!(
             "phase {phase} started, {} match(es) scheduled{warning}",
-            self.division(id)?.data().matches().len()
+            self.divisions(id, None)?
+                .iter()
+                .map(|(_, division)| division.data().matches().len())
+                .sum::<usize>()
         ))
     }
 
@@ -613,53 +651,90 @@ impl Session {
         table(&["#", "name", "from", "state"], &rows)
     }
 
-    /// The first division of the phase `phase`, once started.
-    fn division(&self, phase: PhaseId) -> Result<&Division, Error> {
+    /// The divisions of the phase `phase` with their indices, once started: every one, or the
+    /// one of index `only`.
+    fn divisions(
+        &self,
+        phase: PhaseId,
+        only: Option<usize>,
+    ) -> Result<Vec<(usize, &Division)>, Error> {
         if !self.competition().is_started() {
             return Err(Error::NotStarted);
         }
-        self.phase(phase)?
-            .divisions()
-            .first()
-            .ok_or(Error::PhaseNotStarted)
+        let divisions = self.phase(phase)?.divisions();
+        if divisions.is_empty() {
+            return Err(Error::PhaseNotStarted);
+        }
+        match only {
+            None => Ok(divisions.iter().enumerate().collect()),
+            Some(index) => divisions
+                .get(index)
+                .map(|division| vec![(index, division)])
+                .ok_or(Error::UnknownDivision(division_letter(index))),
+        }
     }
 
-    /// Lists the matches of the phase `phase`, numbered the way [`Self::report`] addresses them
-    /// and independently of the filters applied, followed by the byes unless only open matches are
-    /// asked for.
+    /// Lists the matches of the phase `phase`, of all its divisions or of the one of index
+    /// `division`, numbered the way [`Self::report`] addresses them and independently of the
+    /// filters applied, followed by the byes unless only open matches are asked for. A phase of
+    /// several divisions gets a column for the division of each.
     fn matches(
         &self,
         phase: PhaseId,
+        division: Option<usize>,
         only_open: bool,
         only_round: Option<NonZeroU32>,
     ) -> Result<String, Error> {
-        let format = self.division(phase)?.format();
-        let stage_of = |entity: &TypeMap| format.stage(entity).map(|stage| stage.to_string());
-        let division = self.division(phase)?;
-        let division = division.data();
+        let several = self.phase(phase)?.divisions().len() > 1;
+        let divisions = self.divisions(phase, division)?;
+        let stage_of = |division: &Division, entity: &TypeMap| {
+            division
+                .format()
+                .stage(entity)
+                .map(|stage| stage.to_string())
+        };
+        let all_matches = || {
+            divisions.iter().flat_map(|&(index, division)| {
+                division
+                    .data()
+                    .matches()
+                    .values()
+                    .map(move |r#match| (index, division, r#match))
+            })
+        };
+        let all_byes = || {
+            divisions.iter().flat_map(|&(index, division)| {
+                division
+                    .data()
+                    .byes()
+                    .values()
+                    .map(move |bye| (index, division, bye))
+            })
+        };
         // only a format that names its stages gets a column for them
-        let has_stages = division
-            .matches()
-            .values()
-            .any(|r#match| stage_of(r#match.annotations()).is_some());
-        let mut listed: Vec<&Match> = division
-            .matches()
-            .values()
-            .filter(|r#match| !(only_open && r#match.is_finished()))
-            .filter(|r#match| only_round.is_none_or(|round| r#match.round() == round))
+        let has_stages = all_matches()
+            .any(|(_, division, r#match)| stage_of(division, r#match.annotations()).is_some());
+        let mut listed: Vec<_> = all_matches()
+            .filter(|(.., r#match)| !(only_open && r#match.is_finished()))
+            .filter(|(.., r#match)| only_round.is_none_or(|round| r#match.round() == round))
             .collect();
         // by number, which a bracket gives its matches before it schedules them
-        listed.sort_by_key(|r#match| r#match.number());
+        listed.sort_by_key(|(.., r#match)| r#match.number());
         let rows: Vec<_> = listed
             .into_iter()
-            .map(|r#match| {
+            .map(|(index, division, r#match)| {
+                let data = division.data();
                 [r#match.number().to_string(), r#match.round().to_string()]
                     .into_iter()
-                    .chain(has_stages.then(|| stage_of(r#match.annotations()).unwrap_or_default()))
+                    .chain(several.then(|| division_letter(index)))
+                    .chain(
+                        has_stages
+                            .then(|| stage_of(division, r#match.annotations()).unwrap_or_default()),
+                    )
                     .chain([
-                        self.team_name(division, r#match.team_a()),
+                        self.team_name(data, r#match.team_a()),
                         "vs".to_owned(),
-                        self.team_name(division, r#match.team_b()),
+                        self.team_name(data, r#match.team_b()),
                         self.result_text(phase, r#match),
                     ])
                     .collect()
@@ -668,40 +743,43 @@ impl Session {
         // a bye is named by its stage only if its round has several, e.g. one of the loser
         // bracket in a round of the winner bracket
         let mut stages_of_round: HashMap<NonZeroU32, HashSet<Option<String>>> = HashMap::new();
-        let all_stages = (division.matches().values())
-            .map(|r#match| (r#match.round(), stage_of(r#match.annotations())))
+        let all_stages = all_matches()
+            .map(|(_, division, r#match)| {
+                (r#match.round(), stage_of(division, r#match.annotations()))
+            })
             .chain(
-                (division.byes().values()).map(|bye| (bye.round(), stage_of(bye.annotations()))),
+                all_byes()
+                    .map(|(_, division, bye)| (bye.round(), stage_of(division, bye.annotations()))),
             );
         for (round, stage) in all_stages {
             stages_of_round.entry(round).or_default().insert(stage);
         }
         // a bye is never open: it has nothing to report
-        let byes: Vec<_> = division
-            .byes()
-            .values()
+        let byes: Vec<_> = all_byes()
             .filter(|_| !only_open)
-            .filter(|bye| only_round.is_none_or(|round| bye.round() == round))
-            .map(|bye| {
+            .filter(|(.., bye)| only_round.is_none_or(|round| bye.round() == round))
+            .map(|(index, division, bye)| {
                 let stage = (stages_of_round[&bye.round()].len() > 1)
-                    .then(|| stage_of(bye.annotations()))
+                    .then(|| stage_of(division, bye.annotations()))
                     .flatten();
-                (bye, stage)
+                (index, division, bye, stage)
             })
             .collect();
-        let byes_have_stages = byes.iter().any(|(_, stage)| stage.is_some());
+        let byes_have_stages = byes.iter().any(|(.., stage)| stage.is_some());
         let bye_rows: Vec<_> = byes
             .into_iter()
-            .map(|(bye, stage)| {
+            .map(|(index, division, bye, stage)| {
                 [bye.round().to_string()]
                     .into_iter()
+                    .chain(several.then(|| division_letter(index)))
                     .chain(byes_have_stages.then(|| stage.unwrap_or_default()))
-                    .chain([self.team_name(division, &[bye.ranking()])])
+                    .chain([self.team_name(division.data(), &[bye.ranking()])])
                     .collect()
             })
             .collect();
         let bye_header = ["round"]
             .into_iter()
+            .chain(several.then_some("division"))
             .chain(byes_have_stages.then_some("stage"))
             .chain(["bye"])
             .collect::<Vec<_>>();
@@ -715,6 +793,7 @@ impl Session {
         // naming the two sides `A` and `B` is what `report <number> a|b` reports a win for
         let header = ["#", "round"]
             .into_iter()
+            .chain(several.then_some("division"))
             .chain(has_stages.then_some("stage"))
             .chain(["A", "vs", "B", "result"])
             .collect::<Vec<_>>();
@@ -735,11 +814,10 @@ impl Session {
     /// # Errors
     /// Returns an error if the phase has not started or has no such match.
     fn match_numbered(&self, phase: PhaseId, number: NonZeroUsize) -> Result<MatchId, Error> {
-        let division = self.division(phase)?;
-        let match_id = division
-            .data()
-            .matches()
-            .values()
+        let divisions = self.divisions(phase, None)?;
+        let match_id = divisions
+            .iter()
+            .flat_map(|(_, division)| division.data().matches().values())
             .find(|r#match| usize::try_from(r#match.number().get()) == Ok(number.get()))
             .map(Match::id)
             .ok_or(Error::UnknownMatch(number))?;
@@ -818,7 +896,11 @@ impl Session {
                 error @ app_error::UndoReportError::PhaseStarted(_) => Error::UndoReport(error),
             })?;
 
-        let division = self.division(phase)?.data();
+        let (_, division) = self
+            .phase(phase)?
+            .division_of(&match_id)
+            .expect("the match reopened is of the phase");
+        let division = division.data();
         let r#match = &division.matches()[&match_id];
         let mut output = format!(
             "#{number} is open again: {} vs {}",
@@ -866,38 +948,57 @@ impl Session {
         format!("{}{note}", table(&["#", "name", "phase"], &rows))
     }
 
-    /// The standings of the phase `phase`.
-    fn ranking(&self, phase: PhaseId) -> Result<String, Error> {
-        let division = self.division(phase)?;
-        let columns: Vec<_> = division
+    /// The standings of the division of index `division` of the phase `phase`, or else its
+    /// overall standings, with a column for the division of each row if it has several.
+    fn ranking(&self, phase: PhaseId, division: Option<usize>) -> Result<String, Error> {
+        let divisions = self.divisions(phase, division)?;
+        let several = division.is_none() && divisions.len() > 1;
+        let columns: Vec<_> = divisions[0]
+            .1
             .plugins()
             .metrics()
             .iter()
             .filter_map(|calculator| calculator.column())
             .collect();
-        let standings = division.standings();
-        let division = division.data();
-        let header: Vec<_> = ["#", "name"]
+        let of = self.phase(phase)?;
+        let overall = of.standings();
+        let standings;
+        let rows: Vec<(usize, Standing, NonZeroU32)> = match division {
+            Some(index) => {
+                standings = divisions[0].1.standings();
+                standings
+                    .iter()
+                    .map(|&standing| (index, standing, standing.rank()))
+                    .collect()
+            }
+            None => overall
+                .iter()
+                .map(|row| (row.division(), row.in_division(), row.rank()))
+                .collect(),
+        };
+        let header: Vec<_> = ["#"]
             .into_iter()
+            .chain(several.then_some("division"))
+            .chain(["name"])
             .chain(columns.iter().map(MetricColumn::header))
             .collect();
-        let rows: Vec<_> = standings
-            .iter()
-            .map(|standing| {
+        let rows: Vec<_> = rows
+            .into_iter()
+            .map(|(index, standing, rank)| {
                 let ranking = standing.ranking();
-                [
-                    standing.rank().to_string(),
-                    self.team_name(division, &[ranking.id()]),
-                ]
-                .into_iter()
-                // a column of a metric its calculator does not calculate is left empty
-                .chain(columns.iter().map(|column| {
-                    column
-                        .cell(ranking)
-                        .map(|cell| cell.to_string())
-                        .unwrap_or_default()
-                }))
-                .collect()
+                let data = of.divisions()[index].data();
+                [rank.to_string()]
+                    .into_iter()
+                    .chain(several.then(|| division_letter(index)))
+                    .chain([self.team_name(data, &[ranking.id()])])
+                    // a column of a metric its calculator does not calculate is left empty
+                    .chain(columns.iter().map(|column| {
+                        column
+                            .cell(ranking)
+                            .map(|cell| cell.to_string())
+                            .unwrap_or_default()
+                    }))
+                    .collect()
             })
             .collect();
         Ok(table(&header, &rows))
@@ -1095,6 +1196,7 @@ mod tests {
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))
+            .and_then(|draft| draft.with_defaults())
             .and_then(|draft| draft.with("match_format", plugin::<WinnerOnly>()))
             .unwrap()
     }
@@ -2566,5 +2668,48 @@ mod tests {
             table(&["#", "name", "points"], &rows),
             "#   name   points\n--  -----  ------\n1   Alice  3\n10  Bo     0"
         );
+    }
+
+    /// A phase of several divisions lists the division of each match and row, and is narrowed
+    /// down to one by its letter.
+    #[test]
+    fn the_divisions_of_a_phase_are_named_by_their_letters() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob Carol Dave");
+        output(
+            &mut session,
+            "add-phase round-robin divisions=2 draw=in-order",
+        );
+        output(&mut session, "start");
+
+        let all = output(&mut session, "matches");
+        let of_b = output(&mut session, "matches --division b");
+
+        assert!(all.lines().next().unwrap().contains("division"));
+        assert_eq!(
+            all.lines().count(),
+            4,
+            "a header, a rule and a match of each group"
+        );
+        assert_eq!(of_b.lines().count(), 3);
+        assert!(of_b.lines().nth(2).unwrap().contains(" B "));
+        let number = of_b
+            .lines()
+            .nth(2)
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap();
+        output(&mut session, &format!("report {number} a"));
+        let ranking = output(&mut session, "ranking");
+        assert!(ranking.lines().next().unwrap().contains("division"));
+        assert_eq!(ranking.lines().count(), 6);
+        let of_a = output(&mut session, "ranking --division a");
+        assert!(!of_a.lines().next().unwrap().contains("division"));
+        assert_eq!(of_a.lines().count(), 4);
+        assert!(matches!(
+            execute(&mut session, "ranking --division c"),
+            Err(Error::UnknownDivision(letter)) if letter == "C"
+        ));
     }
 }

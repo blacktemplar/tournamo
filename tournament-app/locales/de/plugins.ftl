@@ -5,12 +5,18 @@
 phase =
     .field-format = Format
     .field-format-description = wie die Spiele angesetzt werden
+    .field-divisions = Gruppen
+    .field-divisions-description = in wie vielen Teilen die Phase gespielt wird, jeder für sich
+    .field-draw = Auslosung
+    .field-draw-description = wie die Teilnehmer auf die Gruppen verteilt und gesetzt werden
     .field-match_format = Spielformat
     .field-match_format-description = was zu einem Spiel eingetragen wird
     .field-ranking = Reihenfolge der Tabelle
     .field-ranking-description = die Besten zuerst; jedes Kriterium entscheidet nur, wo die vor ihm gleich sind
     .field-metrics = Kennzahlen
     .field-metrics-description = für jeden Teilnehmer berechnet
+    .field-across = gruppenübergreifend verglichen nach
+    .field-across-description = nach dem Platz in der Gruppe: wie Teilnehmer desselben Platzes in verschiedenen Gruppen gegeneinander gereiht werden
 
 ## Match formats
 
@@ -78,6 +84,21 @@ plugin-tournament_engine-monster_dyp =
     .field-rounds = Runden
     .field-rounds-description = alle werden zu Beginn gelost
 
+## Draws
+
+plugin-tournament_engine-in_order =
+    .label = der Reihe nach
+    .description = behält die Reihenfolge des Teilnehmerfelds; mehrere Gruppen bekommen es abwechselnd, hin und zurück
+plugin-tournament_engine-random =
+    .label = zufällig
+    .description = jeder Teilnehmer in eine Gruppe und auf einen Setzplatz nach Los
+plugin-tournament_engine-blocks =
+    .label = in Blöcken
+    .description = die Besten in die erste Gruppe, die Nächsten in die zweite und so weiter; jede Gruppe spielt um eigene Plätze
+plugin-tournament_engine-group_winners_apart =
+    .label = Gruppen getrennt
+    .description = für ein K.-o.-System der Besten mehrerer Gruppen: Teilnehmer derselben Gruppe treffen so spät wie möglich aufeinander
+
 ## Metrics calculators
 
 plugin-tournament_engine-points =
@@ -88,6 +109,10 @@ plugin-tournament_engine-points =
     .field-points_for_draw = Punkte für ein Unentschieden
     .field-points_for_bye = Punkte für ein Freilos
     .field-points_for_bye-description = eine Runde ohne Spiel, z. B. bei einer ungeraden Zahl an Teilnehmern
+plugin-tournament_engine-points_per_match =
+    .label = Punkte pro Spiel
+    .description = die Punkte geteilt durch die gespielten Spiele und die Freilose
+    .column = Punkte pro Spiel
 plugin-tournament_engine-wins_draws_losses =
     .label = Bilanz aus Siegen, Unentschieden und Niederlagen
     .description = wie viele Spiele gewonnen, unentschieden gespielt und verloren wurden
@@ -156,6 +181,9 @@ plugin-tournament_engine-more_games_won =
 plugin-tournament_engine-more_points =
     .label = mehr Punkte
     .description = meist das erste Kriterium; die Punkte legen fest, was jedes Ergebnis wert ist
+plugin-tournament_engine-more_points_per_match =
+    .label = mehr Punkte pro Spiel
+    .description = vergleicht Teilnehmer mit verschieden vielen Spielen, z. B. in verschieden großen Gruppen
 plugin-tournament_engine-more_wins =
     .label = mehr Siege
     .description = eine Feinwertung, die Siege über Unentschieden stellt

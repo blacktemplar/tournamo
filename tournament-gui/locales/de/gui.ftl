@@ -40,6 +40,8 @@ help-running-byes = Bleibt ein Teilnehmer in einer Runde ohne Gegner, hat er ein
 help-formats = Formate und Tabelle
 help-standings = Die Reihenfolge der Tabelle
 help-standings-text = Die Tabelle vergleicht die Teilnehmer nach den Kriterien ihrer Reihenfolge, eines nach dem anderen: Das erste entscheidet, das zweite nur zwischen Teilnehmern, die nach dem ersten gleich sind, und so weiter. Ein Kriterium vergleicht eine Kennzahl, eine Zahl, die für jeden Teilnehmer aus den Ergebnissen berechnet wird, etwa die Punkte; die Kennzahlen, die ein Kriterium braucht, werden mit ihm berechnet. Weitere Kennzahlen lassen sich berechnen und anzeigen, ohne nach ihnen zu reihen.
+help-groups = Gruppen
+help-groups-text = Eine Phase kann in mehreren Gruppen gespielt werden, jede für sich im selben Format; die Auslosung verteilt die Teilnehmer auf sie. In Blöcken ausgeloste Gruppen spielen um eigene Plätze, z. B. K.-o.-Runden A und B um die Plätze 1–4 und 5–8. Sonst stehen die Gruppen nebeneinander: Erst kommen die Ersten aller Gruppen, dann die Zweiten und so weiter, und nimmt eine nächste Phase nur einige eines Platzes, z. B. die besten zwei von drei Dritten, werden sie nach den gruppenübergreifenden Kriterien verglichen, z. B. den Punkten pro Spiel, die zu verschieden großen Gruppen passen.
 help-criteria = Kriterien
 help-metrics = Kennzahlen
 help-stored = Deine Daten bleiben auf deinem Gerät
@@ -335,3 +337,14 @@ winners = { $count ->
         [one] Sieger: { $winners }
        *[other] geteilter erster Platz: { $winners }
     }
+
+## Divisions of a phase
+
+division-group = Gruppe { $letter }
+division-of-format = { $format } { $letter }
+division = Gruppe
+all-divisions = Alle
+divisions-shown = Gezeigte Gruppen
+compared-heading = Platz { $rank } im Vergleich der Gruppen
+compared-hint = Wer in seiner Gruppe denselben Platz hat, wird durch den Vergleich der Gruppen gereiht, zuletzt durch das Los.
+advances-compared-across = teilt seinen Gruppenplatz mit Zeilen anderer Gruppen, die nicht in { $phase } weiterkommen, daher entscheidet der Vergleich der Gruppen, zuletzt das Los

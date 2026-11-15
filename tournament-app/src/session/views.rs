@@ -13,6 +13,7 @@ use tournament_engine::{
         draw::DivisionOrder,
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
+        phase_format::{PhaseFormat, Stage},
         ranker::SliceRanker,
     },
 };
@@ -111,18 +112,8 @@ impl Session {
             stage: None,
         };
         let mut rounds = BTreeMap::new();
-        // the stage of each round, until a match or a bye of another one makes it `None`
-        let mut stages: BTreeMap<NonZeroU32, Option<StageName>> = BTreeMap::new();
-        let mut note_stage = |round, stage| {
-            stages
-                .entry(round)
-                .and_modify(|kept| {
-                    if *kept != stage {
-                        *kept = None;
-                    }
-                })
-                .or_insert(stage);
-        };
+        // the format and stage of every match and bye of each round
+        let mut stages: BTreeMap<NonZeroU32, Vec<FormatStage>> = BTreeMap::new();
         for (_, division) in divisions {
             let data = division.data();
             for r#match in data.matches().values() {
@@ -132,18 +123,24 @@ impl Session {
                 if !r#match.is_finished() {
                     summary.open += 1;
                 }
-                note_stage(round, stage(division, r#match.annotations()));
+                stages.entry(round).or_default().push((
+                    division.format(),
+                    division.format().stage(r#match.annotations()),
+                ));
             }
             for bye in data.byes().values() {
                 let round = bye.round();
                 rounds.entry(round).or_insert_with(|| empty(round));
-                note_stage(round, stage(division, bye.annotations()));
+                stages.entry(round).or_default().push((
+                    division.format(),
+                    division.format().stage(bye.annotations()),
+                ));
             }
         }
         rounds
             .into_values()
             .map(|summary| RoundSummary {
-                stage: stages.remove(&summary.round).flatten(),
+                stage: round_stage(&stages.remove(&summary.round).unwrap_or_default()),
                 ..summary
             })
             .collect()
@@ -629,6 +626,31 @@ pub(super) fn stage(division: &Division, annotations: &TypeMap) -> Option<StageN
     Some(StageName {
         format: plugin_factory::id_of(format),
         stage: format.stage(annotations)?,
+    })
+}
+
+/// The format of a match or a bye and the stage it names it by.
+type FormatStage<'a> = (&'a dyn PhaseFormat, Option<Stage>);
+
+/// The stage naming a round whose matches and byes are of `stages`, each with its format: the one
+/// stage they all are, or what the format says if they all are of one and the same format;
+/// `None` if one has no stage.
+fn round_stage(stages: &[FormatStage]) -> Option<StageName> {
+    let (format, _) = stages.first()?;
+    let id = plugin_factory::id_of(*format);
+    let mut distinct: Vec<Stage> = Vec::new();
+    for (other, stage) in stages {
+        let stage = stage.clone()?;
+        if plugin_factory::id_of(*other) != id {
+            return None;
+        }
+        if !distinct.contains(&stage) {
+            distinct.push(stage);
+        }
+    }
+    Some(StageName {
+        format: id,
+        stage: format.round_stage(&distinct)?,
     })
 }
 

@@ -184,6 +184,19 @@ impl PhaseFormat for SingleElimination {
         annotations.get::<KnockoutRound>().copied().map(Stage::from)
     }
 
+    /// The round is named by its stage other than the match for third place, which is played in
+    /// the round of the final.
+    fn round_stage(&self, stages: &[Stage]) -> Option<Stage> {
+        match stages {
+            [only] => Some(only.clone()),
+            [first, second] => [first, second]
+                .into_iter()
+                .find(|stage| stage.key() == "final")
+                .cloned(),
+            _ => None,
+        }
+    }
+
     /// The bracket, with the stage of each pairing as a [`KnockoutRound`] annotation.
     fn bracket(&self) -> Option<&Bracket> {
         self.bracket.as_ref()

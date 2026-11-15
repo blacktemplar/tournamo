@@ -251,7 +251,7 @@ impl Calculator for PointsPerMatchCalculator {
     }
 
     fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<PointsPerMatch>("points per match"))
+        Some(MetricColumn::new::<PointsPerMatch>("P/M"))
     }
 }
 

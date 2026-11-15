@@ -7,6 +7,7 @@ use tournament_engine::{
     Decision, Division, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, PhaseId, Score,
     Sides,
     plugins::{
+        draw::DivisionOrder,
         match_format::{Level, Parts},
         metrics_calculator::Cell,
         phase_format::Stage,
@@ -465,8 +466,11 @@ pub struct Column {
 /// One line of the standings.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StandingRow {
-    /// Shared by tied teams.
+    /// Shared by tied teams: in the standings of a division the rank there, in the overall
+    /// standings of a phase the overall rank.
     pub rank: NonZeroU32,
+    /// The index of the division of the row.
+    pub division: usize,
     pub entrants: Vec<EntrantRow>,
     /// How many matches it has a result of, which tells one that lost every match from one that
     /// has not played yet.
@@ -493,8 +497,23 @@ pub enum Advancing {
     /// Its place alone takes it there.
     ByPlace,
     /// It shares its rank with rows on the other side of the cut, so what decides is the
-    /// comparison, in the end the lot.
+    /// comparison, in the end the lot; of parallel divisions, its rank in its division, which
+    /// rows of other divisions on the other side of the cut have as well, so what decides is the
+    /// comparison across the divisions.
     Compared,
+}
+
+/// The rows of one rank in parallel divisions that a cut goes through, compared across the
+/// divisions, see [`Session::compared`](crate::session::Session::compared).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Compared {
+    /// The rank in their divisions, e.g. 3 for the third places.
+    pub rank: NonZeroU32,
+    /// The columns of the metrics the phase compares across divisions by, in the order of its
+    /// criteria.
+    pub columns: Vec<Column>,
+    /// Best first, each with its overall rank as [`StandingRow::rank`] and one cell per column.
+    pub rows: Vec<StandingRow>,
 }
 
 /// A division of a phase: the phase and the index of the division, from 0, in the order the
@@ -510,6 +529,23 @@ impl DivisionRef {
     pub fn first(phase: PhaseId) -> Self {
         Self { phase, division: 0 }
     }
+
+    /// The letter of the division, see [`division_letter`].
+    pub fn letter(&self) -> String {
+        division_letter(self.division)
+    }
+}
+
+/// The letter a division is known by, from its index: A, B, ..., Z, then AA, AB, ...
+pub fn division_letter(index: usize) -> String {
+    let mut letters = Vec::new();
+    let mut rest = index + 1;
+    while rest > 0 {
+        rest -= 1;
+        letters.push(char::from(b'A' + (rest % 26) as u8));
+        rest /= 26;
+    }
+    letters.into_iter().rev().collect()
 }
 
 /// The matches of a phase: of all its divisions, or of one.
@@ -550,6 +586,11 @@ pub struct PhaseOverview {
     /// Where its entrants come from, in order.
     pub sources: Vec<SourceRow>,
     pub state: PhaseState,
+    /// How many divisions it is configured with; it starts fewer where its field is too small to
+    /// give each the entrants its format needs.
+    pub configured_divisions: usize,
+    /// How its divisions stand to each other: parallel groups, or levels such as knockouts A/B/C.
+    pub order: DivisionOrder,
     /// Its divisions, none before it is started.
     pub divisions: Vec<DivisionOverview>,
 }

@@ -34,8 +34,9 @@ pub enum Command {
         /// The format, by its label with hyphens for spaces (e.g. `round-robin`) or by its id;
         /// everything else is what the format recommends
         format: Option<String>,
-        /// Answers to the fields of the format, e.g. `rounds=7`; a field not answered here is
-        /// answered as it offers
+        /// Answers to the fields of the format, e.g. `rounds=7`, or of the phase, e.g.
+        /// `divisions=3` or `draw=in-blocks` (a plugin by its label with hyphens or its id); a
+        /// field not answered here is answered as it offers
         #[arg(requires = "format", value_name = "FIELD=VALUE")]
         answers: Vec<String>,
         /// The name of the phase, e.g. "Group phase"
@@ -76,6 +77,9 @@ pub enum Command {
         /// The number of the phase, by default the only running one
         #[arg(long)]
         phase: Option<NonZeroUsize>,
+        /// Only list the matches of this division of the phase, by its letter, e.g. `b`
+        #[arg(long, value_parser = division)]
+        division: Option<usize>,
     },
     /// Report the result of a match
     Report {
@@ -104,6 +108,10 @@ pub enum Command {
         /// The number of the phase, by default the only running one
         #[arg(long, conflicts_with = "competition")]
         phase: Option<NonZeroUsize>,
+        /// Show the standings of this division of the phase, by its letter, e.g. `b`, instead of
+        /// the overall standings
+        #[arg(long, value_parser = division, conflicts_with = "competition")]
+        division: Option<usize>,
         /// Show every entrant's place in the competition instead
         #[arg(long)]
         competition: bool,
@@ -121,6 +129,26 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+}
+
+/// The index of the division of the letter `letter`, as `--division` takes it: `a` (or `A`) for
+/// the first, `z` for the 26th, `aa` for the 27th.
+fn division(letter: &str) -> Result<usize, String> {
+    let mut index = 0usize;
+    if letter.is_empty() {
+        return Err("a division is named by its letter, e.g. `b`".to_owned());
+    }
+    for char in letter.chars() {
+        let char = char.to_ascii_uppercase();
+        if !char.is_ascii_uppercase() {
+            return Err("a division is named by its letter, e.g. `b`".to_owned());
+        }
+        index = index
+            .checked_mul(26)
+            .and_then(|index| index.checked_add(usize::from(char as u8 - b'A') + 1))
+            .ok_or("no such division")?;
+    }
+    Ok(index - 1)
 }
 
 /// Where a phase takes entrants from, as `add-phase --from` takes it: the places of the
@@ -319,6 +347,7 @@ mod tests {
                 open: true,
                 round: NonZeroU32::new(2),
                 phase: None,
+                division: None,
             }
         );
         assert_eq!(
@@ -327,8 +356,31 @@ mod tests {
                 open: false,
                 round: None,
                 phase: None,
+                division: None,
             }
         );
+    }
+
+    #[test]
+    fn a_division_is_named_by_its_letter() {
+        assert_eq!(
+            parse("matches --division b"),
+            Command::Matches {
+                open: false,
+                round: None,
+                phase: None,
+                division: Some(1),
+            }
+        );
+        assert_eq!(
+            parse("ranking --division AA"),
+            Command::Ranking {
+                phase: None,
+                division: Some(26),
+                competition: false,
+            }
+        );
+        assert!(Command::parse_line("ranking --division 2").is_err());
     }
 
     #[test]
@@ -483,6 +535,7 @@ mod tests {
             parse("ranking --competition"),
             Command::Ranking {
                 phase: None,
+                division: None,
                 competition: true
             }
         );

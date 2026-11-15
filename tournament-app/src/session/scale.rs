@@ -59,21 +59,21 @@ fn play_out(entrants: usize, plugins: PhasePlugins, result: MatchResult) -> Opti
         .ok()?;
     machine.apply_new(StartCompetition.into()).ok()?;
     for _ in 0..=MOST_MATCHES {
-        let data = machine
-            .current()
-            .phases()
-            .get(&phase)?
-            .divisions()
-            .first()?
-            .data();
-        let open = data
-            .matches()
-            .values()
-            .find(|r#match| r#match.result().is_none());
+        let matches = || {
+            machine
+                .current()
+                .phases()
+                .get(&phase)
+                .into_iter()
+                .flat_map(|phase| phase.divisions())
+                .flat_map(|division| division.data().matches().values())
+        };
+        let open = matches().find(|r#match| r#match.result().is_none());
         let Some(open) = open else {
-            let rounds = data.matches().values().map(Match::round).max();
+            // the divisions play their rounds side by side
+            let rounds = matches().map(Match::round).max();
             let rounds = rounds.map_or(0, |round| round.get() as usize);
-            return Some((rounds, data.matches().len()));
+            return Some((rounds, matches().count()));
         };
         let report = ReportMatchResult::new(phase, open.id(), result);
         machine.apply_new(report.into()).ok()?;

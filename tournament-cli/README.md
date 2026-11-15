@@ -44,14 +44,15 @@ cup> exit
 | `entrants` | Lists the entrants. |
 | `add-entrant <NAME>...` (`add`) | Adds entrants. Names must be unique; quote names containing spaces. If one name is invalid, none is added. |
 | `remove-entrant <NAME>` (`remove`) | Removes an entrant. |
-| `add-phase [FORMAT [FIELD=VALUE]...]` | Adds the phase the competition is played in: the format named, or, without a format, the phase configured at the prompt, see below. Only one phase is supported. |
+| `add-phase [FORMAT [FIELD=VALUE]...] [--name <NAME>] [--from <SOURCE>]...` | Adds a phase: the format named, or, without a format, the phase configured at the prompt, see below. `--from` takes places of the registration or of a phase, e.g. `registration:1-8`, `1:9-` or `2`; by default the whole registration for the first phase, else every place of the phase before. A phase played in several divisions (groups) is added with `divisions=<N>` and, if they are not dealt in order, `draw=<DRAW>` (e.g. `in-blocks`). |
+| `phases` / `start-phase <PHASE>` | Lists the phases, or starts one taking entrants from phases that are finished. |
 | `edit-phase` | Changes the configuration of the phase at the prompt, see below. |
 | `start` | Starts the competition and schedules the first matches. Entrants cannot be changed afterwards. |
-| `matches [--open] [--round <ROUND>]` | Lists the matches with their number, round, stage (for a format that names its stages, e.g. "Quarterfinals" in a knockout) and result, followed by the byes, i.e. who has no match in which round. `--open` leaves the byes out. |
+| `matches [--open] [--round <ROUND>] [--phase <PHASE>] [--division <LETTER>]` | Lists the matches of a phase (by default the only running one), of all its divisions or of one, with their number, round, stage (for a format that names its stages, e.g. "Quarterfinals" in a knockout) and result, followed by the byes, i.e. who has no match in which round. `--open` leaves the byes out. |
 | `report <NUMBER> <a\|b\|draw>` | Reports the result of a match: team a wins, team b wins, or a draw. |
 | `report <NUMBER> <SCORE>... [a\|b\|draw]` | Reports the scores of a match whose phase enters them (its results are a score, or a best of games), team a's first, e.g. `21-17`, `21:17` or `21–17` (as `matches` shows them, so they can be copied from there): the match's score, or that of each game in order. The result is the one they give, unless one follows them. |
 | `undo-report <NUMBER>` | Undoes the result reported for a match, however long ago it was reported, keeping every other change. |
-| `ranking` | Shows the current ranking with every metric the phase calculates. |
+| `ranking [--phase <PHASE>] [--division <LETTER>]` / `ranking --competition` | Shows the current standings of a phase with every metric it calculates: the overall standings of all its divisions, or those of one; or every entrant's place in the competition. |
 | `undo` / `redo` | Undoes the last change made since the CLI was started, or redoes the last undone one. |
 | `save [NAME]` | Saves to the file `NAME`, or to the file loaded from or last saved to. |
 | `exit [--force]` (`quit`) | Exits. Refuses while there are unsaved changes, unless `--force` is given. |

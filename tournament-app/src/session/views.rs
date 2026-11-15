@@ -8,8 +8,9 @@ use std::{
 use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use tournament_engine::{
     Annotated as _, Bye, Division, DivisionData, EntrantId, Match, PhaseId, Ranking, RankingId,
-    TypeMap,
+    Standing, TypeMap,
     plugins::{
+        draw::DivisionOrder,
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
         ranker::SliceRanker,
@@ -358,26 +359,100 @@ impl Session {
             .collect()
     }
 
-    /// The overall standings of the phase `phase`: those of its only division, see
-    /// [`Self::standings`].
+    /// The overall standings of the phase `phase`, of all its divisions, each row with its overall
+    /// rank and its division, see [`Phase::standings`](tournament_engine::Phase::standings); those
+    /// of its division if it has one. `None` before the start of the phase.
     pub fn overall_standings(&self, phase: PhaseId) -> Option<Standings> {
-        self.standings(DivisionRef::first(phase))
+        let of = self.phase(phase)?;
+        let standings = of.standings();
+        let rows = standings
+            .iter()
+            .map(|row| (row.division(), row.in_division(), row.rank()))
+            .collect();
+        self.standings_of(phase, rows, Columns::Ranking)
     }
 
     /// The standings of the division `of`, with a column for every calculator that offers one;
     /// `None` before the start of its phase.
     pub fn standings(&self, of: DivisionRef) -> Option<Standings> {
         let division = self.division(of)?;
-        let advancing = self.advancing(of.phase);
+        let standings = division.standings();
+        let rows = standings
+            .iter()
+            .map(|&standing| (of.division, standing, standing.rank()))
+            .collect();
+        self.standings_of(of.phase, rows, Columns::Ranking)
+    }
+
+    /// For each rank in the parallel divisions of the phase `phase` that a cut of a source of
+    /// another phase goes through, the rows of that rank in their divisions, by their overall
+    /// standings, with the columns of the metrics the phase compares across divisions by: e.g.
+    /// "the third places compared", where the best two of three go on. Empty for a phase of one
+    /// division or of levels, and before its start.
+    pub fn compared(&self, phase: PhaseId) -> Vec<view::Compared> {
+        let Some(of) = self.phase(phase) else {
+            return Vec::new();
+        };
+        if of.divisions().len() < 2 || of.plugins().draw().order() != DivisionOrder::Parallel {
+            return Vec::new();
+        }
+        let advancing = self.advancing(phase);
+        let standings = of.standings();
+        let mut by_rank: BTreeMap<NonZeroU32, Vec<_>> = BTreeMap::new();
+        for row in standings.iter() {
+            by_rank.entry(row.in_division().rank()).or_default().push((
+                row.division(),
+                row.in_division(),
+                row.rank(),
+            ));
+        }
+        by_rank
+            .into_iter()
+            .filter(|(_, rows)| {
+                let first = advancing(rows[0].1.ranking().id()).map(|advance| advance.to);
+                rows.iter()
+                    .any(|row| advancing(row.1.ranking().id()).map(|advance| advance.to) != first)
+            })
+            .filter_map(|(rank, rows)| {
+                let standings = self.standings_of(phase, rows, Columns::Across)?;
+                Some(view::Compared {
+                    rank,
+                    columns: standings.columns,
+                    rows: standings.rows,
+                })
+            })
+            .collect()
+    }
+
+    /// The standings of `rows` of the phase `phase`, each its division, its row in the division's
+    /// standings and the rank shown, with the `columns` asked for; `None` before the start of the
+    /// phase.
+    fn standings_of(
+        &self,
+        phase: PhaseId,
+        rows: Vec<(usize, Standing, NonZeroU32)>,
+        columns: Columns,
+    ) -> Option<Standings> {
+        let of = self.phase(phase)?;
+        let first = of.divisions().first()?;
+        let advancing = self.advancing(phase);
         let first_place = self
             .competition()
-            .first_place(&of.phase)
+            .first_place(&phase)
             .map_or(1, NonZeroU32::get);
+        // a medal is one of the competition, by the overall rank
+        let overall: HashMap<RankingId, NonZeroU32> = of
+            .standings()
+            .iter()
+            .map(|row| (row.ranking().id(), row.rank()))
+            .collect();
         let calculators = AnyAxis::of::<dyn MetricsCalculator>();
         // the calculators each criterion ranks by, in the order of the criteria
-        let ranked_by: Vec<&str> = division
-            .plugins()
-            .ranking()
+        let criteria = match columns {
+            Columns::Ranking => first.plugins().ranking(),
+            Columns::Across => first.plugins().across(),
+        };
+        let ranked_by: Vec<&str> = criteria
             .iter()
             .filter_map(|criterion| {
                 AnyAxis::of::<dyn SliceRanker>().entry(plugin_factory::id_of(&**criterion))
@@ -385,12 +460,15 @@ impl Session {
             .flat_map(|criterion| criterion.providers_in(calculators))
             .map(PluginEntry::id)
             .collect();
-        let mut columns: Vec<_> = division
+        let mut columns: Vec<_> = first
             .plugins()
             .metrics()
             .iter()
             .filter_map(|calculator| {
-                Some((plugin_factory::id_of(&**calculator), calculator.column()?))
+                let id = plugin_factory::id_of(&**calculator);
+                (columns == Columns::Ranking || ranked_by.contains(&id))
+                    .then(|| Some((id, calculator.column()?)))
+                    .flatten()
             })
             .collect();
         // stable, so that the others stay in running order
@@ -400,9 +478,7 @@ impl Session {
                 .position(|ranked| ranked == calculator)
                 .unwrap_or(usize::MAX)
         });
-        let data = division.data();
-        let finished = data.matches().values().all(Match::is_finished);
-        let standings = division.standings();
+        let finished = of.is_finished();
         Some(Standings {
             columns: columns
                 .iter()
@@ -417,16 +493,19 @@ impl Session {
                     }
                 })
                 .collect(),
-            rows: standings
-                .iter()
-                .map(|standing| {
+            rows: rows
+                .into_iter()
+                .map(|(index, standing, rank)| {
+                    let division = &of.divisions()[index];
                     let ranking = standing.ranking();
-                    let advances = advancing(standing);
-                    // a medal is one of the competition, for the rows that stop here
-                    let place = NonZeroU32::new(first_place + standing.rank().get() - 1);
+                    let advances = advancing(ranking.id());
+                    let place = overall
+                        .get(&ranking.id())
+                        .and_then(|overall| NonZeroU32::new(first_place + overall.get() - 1));
                     StandingRow {
-                        rank: standing.rank(),
-                        entrants: self.team(data, &[ranking.id()]),
+                        rank,
+                        division: index,
+                        entrants: self.team(division.data(), &[ranking.id()]),
                         played: ranking.played_matches().len(),
                         cells: columns
                             .iter()
@@ -484,6 +563,14 @@ impl Session {
             details: !root.fields.is_empty() || !matches!(root.parts, Parts::None),
         }
     }
+}
+
+/// Which columns standings have: of every calculator offering one, the metrics of the ranking
+/// first, or of the metrics the phase is compared across divisions by alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Columns {
+    Ranking,
+    Across,
 }
 
 /// `teams` in the order of the names of their entrants, which tied teams are in no order of their

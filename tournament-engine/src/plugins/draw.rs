@@ -37,7 +37,7 @@ dyn_clone::clone_trait_object!(Draw);
 
 /// How the divisions of a phase stand to each other, see
 /// [`Phase::standings`](crate::Phase::standings).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DivisionOrder {
     /// No division is better than another, as groups are: the overall standings take the best of
     /// every division first, then the second best, and so on.

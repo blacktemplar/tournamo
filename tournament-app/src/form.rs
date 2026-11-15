@@ -327,9 +327,22 @@ impl PhaseForm {
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
         let completed_nodes = completed.fields();
+        let mut irrelevant = self.draft.irrelevant();
+        // comparing across divisions only matters with several, and is shown while it compares by
+        // something, so that it can be emptied
+        let answers = self.draft.answers();
+        let one_division = answers
+            .get(PhasePlugins::DIVISIONS)
+            .is_none_or(|divisions| divisions.as_u64() == Some(1));
+        let compares_by_nothing = answers
+            .get(PhasePlugins::ACROSS)
+            .is_none_or(|across| across.as_array().is_none_or(Vec::is_empty));
+        if one_division && compares_by_nothing {
+            irrelevant.push(Path::ROOT.field(PhasePlugins::ACROSS));
+        }
         let whole = Whole {
             completed: &completed_nodes,
-            irrelevant: &self.draft.irrelevant(),
+            irrelevant: &irrelevant,
         };
         let mut fields = self.fields(&nodes, None, &completed_nodes, &whole);
         let mut unplaced = Vec::new();

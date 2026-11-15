@@ -9,7 +9,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    error::StartPhaseError,
+    error::{StartError, StartPhaseError},
     form::End,
     view::{Advance, Advancing, division_letter},
 };
@@ -244,4 +244,54 @@ fn a_phase_of_one_division_compares_nothing() {
         session.overall_standings(phase),
         session.standings(session.only())
     );
+}
+
+/// Three entrants are too few for two groups of a round robin, which needs two in each: the start
+/// is refused until the groups are lowered, rather than played in fewer groups than configured.
+#[test]
+fn a_start_is_refused_with_too_few_entrants_for_the_groups() {
+    let mut session = Given::new().entrants(&SIX[..3]).divisions(2).added();
+
+    assert!(matches!(
+        session.start_refusal(),
+        Some(StartError::TooFewForDivisions {
+            divisions: 2,
+            needed: 4
+        })
+    ));
+    assert!(matches!(
+        session.start(),
+        Err(StartError::TooFewForDivisions { .. })
+    ));
+    assert!(!session.competition().is_started());
+
+    let phase = session.first();
+    let mut form = session.phase_form_to_edit(phase).unwrap();
+    form.enter(&ConfigPath::ROOT.field("divisions"), "1")
+        .unwrap();
+    session.edit_phase(phase, &form).unwrap();
+    session.start().unwrap();
+}
+
+/// A further phase whose sources take too few for its groups is refused its start likewise.
+#[test]
+fn a_phase_is_refused_its_start_with_too_few_entrants_for_its_groups() {
+    let mut session = Given::new().entrants(&SIX).added();
+    let mut groups = session.phase_form().unwrap();
+    groups.enter_place(0, End::To, "3");
+    groups
+        .enter(&ConfigPath::ROOT.field("divisions"), "2")
+        .unwrap();
+    session.add_phase(&groups).unwrap();
+    session.start().unwrap();
+    let (first, second) = (session.first(), session.phases()[1].id);
+    play_out_by_lot(&mut session, first);
+
+    assert!(matches!(
+        session.start_phase(second),
+        Err(StartPhaseError::TooFewForDivisions {
+            divisions: 2,
+            needed: 4
+        })
+    ));
 }

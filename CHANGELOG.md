@@ -26,7 +26,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   of several groups so that entrants of one group meet as late as possible).
   Entrants of the same place in different groups are compared by criteria of
   their own, e.g. the new points per match, which compares groups of different
-  sizes. The page filters the matches by group, shows the standings of each
+  sizes. A phase with too few entrants for its groups is not started until
+  the groups are lowered. The page filters the matches by group, shows the standings of each
   group and, where the cut of the next phase goes through a place, how that
   place compares across the groups; a bracket or cross table per group.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking

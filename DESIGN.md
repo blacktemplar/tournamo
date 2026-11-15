@@ -814,10 +814,13 @@ standings of earlier phases; its **draw** deals the field to its divisions.
   (the field, the number of divisions, the entrants with their annotations, a
   random stream), which can grow without breaking third-party draws, and
   returns for each division the positions of its qualifiers; the engine checks
-  the result with debug assertions. A phase starts as many divisions as
-  configured, but no more than give each the entrants its format needs
-  (`PhaseFormat::min_entrants`), so a draw dealing evenly never leaves a
-  division too small. The engine's draws: `in_order` (one division keeps the
+  the result with debug assertions. A phase with fewer entrants than its
+  divisions need (`PhaseFormat::min_entrants` in each) is refused its start by
+  the app (`TooFewForDivisions`), as one with fewer than its format needs, so
+  the operator lowers the divisions while the phase can still be edited. The
+  engine refuses neither, so that a log started elsewhere still replays: it
+  then starts no more divisions than give each the entrants its format needs,
+  so a draw dealing evenly never leaves a division too small. The engine's draws: `in_order` (one division keeps the
   field, several get it as a snake), `random`, `blocks` (consecutive places,
   as even in size as they can be, the first one larger) and
   `group_winners_apart` (ordered by rank in the group, then, changing that
@@ -889,9 +892,10 @@ Rejected:
 - The order of the divisions as a plugin axis: two ways are known; should more
   turn up, it becomes one, the rule against going against a division part of
   its contract.
-- Refusing to start a phase with more divisions than its field fills: the
-  operator would be stuck once the sources are finished; fewer divisions play
-  the same phase.
+- Starting fewer divisions than configured without a word: the summary would
+  still say how many were configured, and the operator would miss a group.
+  Refusing in the engine instead of the app: a log would no longer replay
+  wherever a consumer lets such a start through.
 - Hiding `across` by a fact: facts come from plugins, not from a number
   answered; the form hides it while there is one division and it is empty.
 

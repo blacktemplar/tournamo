@@ -12,7 +12,7 @@ use tournament_engine::{
     undoable_state_machine::TransitionId,
 };
 
-use super::{Session, rejection};
+use super::{Session, TooFew, rejection, too_few};
 use crate::{
     error::{RemovePhaseError, StartPhaseError, Tie},
     view::{
@@ -209,10 +209,13 @@ impl Session {
                 .collect();
             return Some(StartPhaseError::Waiting(waiting));
         }
-        let needed = phase.plugins().format().min_entrants();
         let field = competition.field_of(&id).len();
-        if field < needed {
-            return Some(StartPhaseError::TooFewForFormat(needed));
+        match too_few(phase, field) {
+            Some(TooFew::Format(needed)) => return Some(StartPhaseError::TooFewForFormat(needed)),
+            Some(TooFew::Divisions { divisions, needed }) => {
+                return Some(StartPhaseError::TooFewForDivisions { divisions, needed });
+            }
+            None => {}
         }
         let ties = self.ties_at_cuts(phase);
         (!ties.is_empty()).then_some(StartPhaseError::CutThroughTie(ties))

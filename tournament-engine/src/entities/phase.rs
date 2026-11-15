@@ -216,11 +216,13 @@ impl Phase {
     }
 
     /// Starts this phase with `field`, each qualifier with the best lot of its entrants: its draw
-    /// deals the field to its divisions, as many as it is configured with but no more than leave
-    /// each the entrants its format needs (see [`PhaseFormat::min_entrants`]), each starting with
-    /// a ranking of each of its qualifiers in the order dealt. The first division has the seed of
-    /// the phase, every other one a seed derived from it. Their matches are numbered after
-    /// `highest`, see [`Division::start`].
+    /// deals the field to its divisions, each starting with a ranking of each of its qualifiers in
+    /// the order dealt. It deals to as many divisions as the phase is configured with, but no more
+    /// than leave each the entrants its format needs (see [`PhaseFormat::min_entrants`]): a
+    /// consumer refuses to start a phase with too few for its divisions, this only keeps a start
+    /// it does not refuse, e.g. of a log written elsewhere, from leaving a division too small.
+    /// The first division has the seed of the phase, every other one a seed derived from it.
+    /// Their matches are numbered after `highest`, see [`Division::start`].
     pub(crate) fn start(
         &mut self,
         field: Vec<(Qualifier, NonZeroU32)>,

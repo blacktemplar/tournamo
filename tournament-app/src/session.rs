@@ -179,11 +179,14 @@ impl Session {
         } else if competition.entrants().len() < 2 {
             Some(StartError::TooFewEntrants)
         } else {
-            starting().find_map(|phase| {
-                let needed = phase.plugins().format().min_entrants();
-                (self.places_taken(phase.sources()) < needed)
-                    .then_some(StartError::TooFewForFormat(needed))
-            })
+            starting().find_map(
+                |phase| match too_few(phase, self.places_taken(phase.sources()))? {
+                    TooFew::Format(needed) => Some(StartError::TooFewForFormat(needed)),
+                    TooFew::Divisions { divisions, needed } => {
+                        Some(StartError::TooFewForDivisions { divisions, needed })
+                    }
+                },
+            )
         }
     }
 
@@ -191,9 +194,12 @@ impl Session {
     ///
     /// # Errors
     /// Returns an error if the competition has started already, has no phase, or fewer than two
-    /// entrants, or fewer than the format of the phase needs.
+    /// entrants, or fewer than the format of a phase starting needs, or its groups need.
     pub fn start(&mut self) -> Result<(), StartError> {
-        if let Some(needed @ StartError::TooFewForFormat(_)) = self.start_refusal() {
+        if let Some(
+            needed @ (StartError::TooFewForFormat(_) | StartError::TooFewForDivisions { .. }),
+        ) = self.start_refusal()
+        {
             return Err(needed);
         }
         self.history
@@ -315,3 +321,27 @@ mod storage;
 pub(crate) mod tests;
 mod undo;
 mod views;
+
+/// Why a phase cannot start with the entrants its sources take, see [`too_few`].
+pub(crate) enum TooFew {
+    /// Its format needs at least this many.
+    Format(usize),
+    /// Its groups need at least `needed`, the entrants its format needs in each.
+    Divisions { divisions: usize, needed: usize },
+}
+
+/// Whether `phase` has too few entrants with `entrants`: fewer than its format needs, or than it
+/// needs in each of its groups (divisions). The engine starts it all the same, with fewer groups,
+/// so that a log never fails to replay; the app refuses, so that the operator lowers the groups.
+pub(crate) fn too_few(phase: &Phase, entrants: usize) -> Option<TooFew> {
+    let per_division = phase.plugins().format().min_entrants();
+    let divisions = phase.plugins().divisions().get() as usize;
+    let needed = per_division.saturating_mul(divisions);
+    if entrants < per_division {
+        Some(TooFew::Format(per_division))
+    } else if entrants < needed {
+        Some(TooFew::Divisions { divisions, needed })
+    } else {
+        None
+    }
+}

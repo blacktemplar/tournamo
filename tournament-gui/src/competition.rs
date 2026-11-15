@@ -505,7 +505,12 @@ fn Started(competition: CompetitionKey) -> Element {
             .find(|overview| overview.id == phase)
             .map(|overview| overview.state)
     });
+    let winners = ctx.session.read().competition_winners();
     rsx! {
+        // above the phases: the winners are the competition's, not those of the phase shown
+        if let Some(winners) = winners {
+            Finished { winners }
+        }
         PhaseLinks { competition, ranking }
         if ranking {
             Ranking {}
@@ -672,8 +677,8 @@ fn Play() -> Element {
     }
 }
 
-/// What the screen of a finished phase says: who won the competition, or who is tied for first,
-/// once its ranking is final, else that the phase is finished and the phases that can start now.
+/// What the screen of a finished phase says: that the phase is finished and the phases that can
+/// start now; nothing once the competition is finished, whose winners [`Finished`] shows.
 #[component]
 pub fn PhaseFinished() -> Element {
     let ctx = use_context::<Ctx>();
@@ -681,10 +686,9 @@ pub fn PhaseFinished() -> Element {
         return rsx! {};
     };
     let session = ctx.session.read();
-    if let Some(winners) = session.competition_winners() {
-        return rsx! {
-            Finished { winners }
-        };
+    // the winners are shown above the phases, see `Started`
+    if session.competition_winners().is_some() {
+        return rsx! {};
     }
     let phases = session.phases();
     let Some(PhaseState::Finished { can_start }) = phases
@@ -718,7 +722,7 @@ pub fn PhaseFinished() -> Element {
     }
 }
 
-/// What the screen says once every match is played: who won, or who is tied for first.
+/// The banner of a finished competition: who won, or who is tied for first.
 #[component]
 pub fn Finished(winners: Vec<Vec<EntrantRow>>) -> Element {
     let ctx = use_context::<Ctx>();

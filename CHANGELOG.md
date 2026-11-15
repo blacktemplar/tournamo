@@ -33,7 +33,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   standings of each group and, where the cut of the next phase goes through a
   place, how that place compares across the groups, a dashed line below the
   place in a group going on as things stand; a bracket or cross table per
-  group.
+  group. Who won the competition is shown above the phases, not in the phase
+  shown.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
   `ranking` and `edit-phase`; `--division <letter>` for `matches` and

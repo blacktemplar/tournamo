@@ -247,7 +247,9 @@ impl Session {
     }
 
     /// The ties the cuts of the sources of `phase` go through: for each source of a phase, at its
-    /// first and its last place, the rows sharing a rank on both sides of the cut.
+    /// first and its last place, the rows sharing a rank on both sides of the cut, and of parallel
+    /// divisions those sharing a rank in their division, which the overall standings set apart
+    /// by its lots.
     fn ties_at_cuts(&self, phase: &Phase) -> Vec<Tie> {
         let mut ties = Vec::new();
         for source in phase.sources() {
@@ -259,36 +261,69 @@ impl Session {
             };
             let standings = from_phase.standings();
             let rows: Vec<PhaseStanding> = standings.iter().copied().collect();
+            let parallel = from_phase.divisions().len() > 1
+                && from_phase.plugins().draw().order() == DivisionOrder::Parallel;
+            let team = |standing: &PhaseStanding| {
+                let data = from_phase.divisions()[standing.division()].data();
+                self.team(data, &[standing.ranking().id()])
+            };
             let cuts = [
                 source.from().get().checked_sub(1).and_then(NonZeroU32::new),
                 source.to(),
             ];
             for last_above in cuts.into_iter().flatten() {
-                let at = last_above.get() as usize;
-                let (Some(above), Some(below)) = (rows.get(at - 1), rows.get(at)) else {
-                    continue;
-                };
-                if above.rank() != below.rank() {
+                let at = (last_above.get() as usize).min(rows.len());
+                let (above, below) = rows.split_at(at);
+                if let (Some(last), Some(first)) = (above.last(), below.first())
+                    && last.rank() == first.rank()
+                {
+                    let rank = last.rank();
+                    let tied = |range: &[PhaseStanding]| -> Vec<_> {
+                        range
+                            .iter()
+                            .filter(|standing| standing.rank() == rank)
+                            .map(team)
+                            .collect()
+                    };
+                    ties.push(Tie {
+                        phase: self.phase_name(from_phase),
+                        division: None,
+                        rank,
+                        favoured: tied(above),
+                        others: tied(below),
+                    });
+                }
+                if !parallel {
                     continue;
                 }
-                let rank = above.rank();
-                let team = |standing: &PhaseStanding| {
-                    let data = from_phase.divisions()[standing.division()].data();
-                    self.team(data, &[standing.ranking().id()])
-                };
-                let tied = |range: &[PhaseStanding]| -> Vec<_> {
-                    range
-                        .iter()
-                        .filter(|standing| standing.rank() == rank)
-                        .map(team)
-                        .collect()
-                };
-                ties.push(Tie {
-                    phase: self.phase_name(from_phase),
-                    rank,
-                    favoured: tied(&rows[..at]),
-                    others: tied(&rows[at..]),
-                });
+                for division in 0..from_phase.divisions().len() {
+                    let of = |standing: &&PhaseStanding| standing.division() == division;
+                    let (Some(last), Some(first)) = (above.iter().rfind(of), below.iter().find(of))
+                    else {
+                        continue;
+                    };
+                    let rank = last.in_division().rank();
+                    if first.in_division().rank() != rank {
+                        continue;
+                    }
+                    let tied = |range: &[PhaseStanding]| -> Vec<_> {
+                        range
+                            .iter()
+                            .filter(|standing| {
+                                standing.division() == division
+                                    && standing.in_division().rank() == rank
+                            })
+                            .map(team)
+                            .collect()
+                    };
+                    ties.push(Tie {
+                        phase: self.phase_name(from_phase),
+                        division: Some(division),
+                        rank,
+                        favoured: tied(above),
+                        others: tied(below),
+                    });
+                }
             }
         }
         ties
@@ -374,11 +409,11 @@ impl Session {
     }
 
     /// Where each row of the standings of the phase `phase` goes on to, as they are now: a
-    /// function of the ranking of a row, worked out on the overall standings.
+    /// function of the ranking of a row, worked out on the overall standings, by unique rank.
     ///
-    /// A row advances [`ByPlace`](Advancing::ByPlace) if every row it is compared with goes there
-    /// too, else [`Compared`](Advancing::Compared): of parallel divisions, the rows of its rank in
-    /// their divisions; else the rows of its overall rank.
+    /// A row advances [`ByPlace`](Advancing::ByPlace) unless the phase has parallel divisions and
+    /// rows of its place (unique rank) in other divisions go elsewhere: then it advances
+    /// [`Compared`](Advancing::Compared).
     pub(super) fn advancing(&self, phase: PhaseId) -> impl Fn(RankingId) -> Option<Advance> {
         let competition = self.competition();
         // the sources of other phases taking places of this one, with the phase taking them
@@ -399,38 +434,35 @@ impl Session {
                 .find(|(_, source)| source.takes(unique_rank))
                 .map(|(taker, _)| *taker)
         };
-        // for every ranking, the rows it is compared with and its overall unique rank
-        let mut compared_by: HashMap<RankingId, (NonZeroU32, NonZeroU32)> = HashMap::new();
-        // for every rank compared by, the phases its rows go to
+        // for every ranking, its place in its division where it is compared across parallel
+        // divisions, and its overall unique rank
+        let mut compared_by: HashMap<RankingId, (Option<NonZeroU32>, NonZeroU32)> = HashMap::new();
+        // for every place compared by, the phases its rows go to
         let mut goes_to: HashMap<NonZeroU32, Vec<Option<PhaseId>>> = HashMap::new();
         if let Some(phase) = competition.phase(&phase) {
             let across = phase.divisions().len() > 1
                 && phase.plugins().draw().order() == DivisionOrder::Parallel;
             for row in phase.standings().iter() {
-                let by = if across {
-                    row.in_division().rank()
-                } else {
-                    row.rank()
-                };
+                let by = across.then(|| row.in_division().unique_rank());
                 compared_by.insert(row.ranking().id(), (by, row.unique_rank()));
-                let to = taker_of(row.unique_rank());
-                let phases = goes_to.entry(by).or_default();
-                if !phases.contains(&to) {
-                    phases.push(to);
+                if let Some(by) = by {
+                    let to = taker_of(row.unique_rank());
+                    let phases = goes_to.entry(by).or_default();
+                    if !phases.contains(&to) {
+                        phases.push(to);
+                    }
                 }
             }
         }
         move |ranking: RankingId| {
             let &(by, unique_rank) = compared_by.get(&ranking)?;
             let to = taker_of(unique_rank)?;
-            Some(Advance {
-                to,
-                how: if goes_to[&by].len() == 1 {
-                    Advancing::ByPlace
-                } else {
-                    Advancing::Compared
-                },
-            })
+            let how = if by.is_some_and(|by| goes_to[&by].len() > 1) {
+                Advancing::Compared
+            } else {
+                Advancing::ByPlace
+            };
+            Some(Advance { to, how })
         }
     }
 }

@@ -54,7 +54,7 @@ help-formats = Formats and standings
 help-standings = The order of the standings
 help-standings-text = The standings compare the entrants by the criteria of their order in turn: the first decides, the second only between entrants the first leaves tied, and so on. A criterion compares a metric, a number calculated for each entrant from the results, such as the points; the metrics a criterion needs are calculated with it. Further metrics can be calculated and shown without ranking by them.
 help-groups = Groups
-help-groups-text = A phase can be played in several groups, each on its own in the same format; the draw deals the entrants to them. Groups dealt in blocks play for places of their own, e.g. knockouts A and B for places 1–4 and 5–8. Otherwise the groups stand side by side: the firsts of all groups come first, then the seconds, and so on, and where a next phase takes only some of one place, e.g. the best two of three thirds, they are compared by the criteria across the groups, e.g. the points per match, which suit groups of different sizes.
+help-groups-text = A phase can be played in several groups, each on its own in the same format; the draw deals the entrants to them. Groups dealt in blocks play for places of their own, e.g. knockouts A and B for places 1–4 and 5–8. Otherwise the groups stand side by side: the firsts of all groups come first, then the seconds, and so on (who is tied in their group placed by lot), and where a next phase takes only some of one place, e.g. the best two of three thirds, they are compared by the criteria across the groups, e.g. the points per match, which suit groups of different sizes.
 help-criteria = Criteria
 help-metrics = Metrics
 help-stored = Your data stays on your device
@@ -233,13 +233,14 @@ ranking = Ranking
 ranking-provisional = As things stand: not every phase is finished.
 place = Place
 phase-reached = Phase reached
-# a row of the standings going on to another phase: by its place, or for now by a comparison
-# the column of the standings saying where a row goes on to
-goes-on = Goes on
-advances-to = goes on to { $phase }
-advances-to-for-now = goes on to { $phase } for now, by comparison
-advances-by-place = goes on to { $phase } by its place
-advances-compared = shares its rank with rows that do not go on to { $phase }, so the comparison decides, in the end the lot
+# the line below the rows of the standings going on to another phase: by their place, or the
+# place going on as things stand by the comparison of the groups; and in that comparison
+cut-by-place = { $count ->
+    [one] Place { $from } goes
+   *[other] Places { $from }–{ $through } go
+} on to { $phase }
+cut-compared = Place { $place } goes on to { $phase } as things stand, compared across the groups
+cut-comparison = Go on to { $phase } as things stand
 
 matches = Matches
 # what a narrow screen shows: the matches or the standings (or a knockout's bracket); a wide screen
@@ -452,5 +453,4 @@ division = Group
 all-divisions = All
 divisions-shown = Groups shown
 compared-heading = Place { $rank } compared across the groups
-compared-hint = Who shares a place in their groups is ranked by the comparison across the groups, in the end by lot.
-advances-compared-across = shares its place in its group with rows of other groups that do not go on to { $phase }, so the comparison across the groups decides, in the end the lot
+compared-hint = The same place of every group is ranked by the comparison across the groups, in the end by lot.

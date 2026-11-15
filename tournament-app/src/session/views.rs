@@ -21,9 +21,9 @@ use super::Session;
 use crate::{
     storage::Progress,
     view::{
-        self, ByeRow, Column, DivisionRef, Entered, EntrantRow, ListedMatch, MatchRow, MatchesOf,
-        Medal, Round, RoundSummary, RoundsView, Shown, StageName, StandingCell, StandingRow,
-        Standings, TypedEntry,
+        self, ByeRow, Column, Cut, DivisionRef, Entered, EntrantRow, ListedMatch, MatchRow,
+        MatchesOf, Medal, Round, RoundSummary, RoundsView, Shown, StageName, StandingCell,
+        StandingRow, Standings, TypedEntry,
     },
 };
 
@@ -384,11 +384,11 @@ impl Session {
         self.standings_of(of.phase, rows, Columns::Ranking)
     }
 
-    /// For each rank in the parallel divisions of the phase `phase` that a cut of a source of
-    /// another phase goes through, the rows of that rank in their divisions, by their overall
-    /// standings, with the columns of the metrics the phase compares across divisions by: e.g.
-    /// "the third places compared", where the best two of three go on. Empty for a phase of one
-    /// division or of levels, and before its start.
+    /// For each place (unique rank) in the parallel divisions of the phase `phase` that a cut of
+    /// a source of another phase goes through, the rows of that place in their divisions, by
+    /// their overall standings, with the columns of the metrics the phase compares across
+    /// divisions by: e.g. "the third places compared", where the best two of three go on. Empty
+    /// for a phase of one division or of levels, and before its start.
     pub fn compared(&self, phase: PhaseId) -> Vec<view::Compared> {
         let Some(of) = self.phase(phase) else {
             return Vec::new();
@@ -400,11 +400,10 @@ impl Session {
         let standings = of.standings();
         let mut by_rank: BTreeMap<NonZeroU32, Vec<_>> = BTreeMap::new();
         for row in standings.iter() {
-            by_rank.entry(row.in_division().rank()).or_default().push((
-                row.division(),
-                row.in_division(),
-                row.rank(),
-            ));
+            by_rank
+                .entry(row.in_division().unique_rank())
+                .or_default()
+                .push((row.division(), row.in_division(), row.rank()));
         }
         by_rank
             .into_iter()
@@ -479,7 +478,11 @@ impl Session {
                 .unwrap_or(usize::MAX)
         });
         let finished = of.is_finished();
-        Some(Standings {
+        let places: Vec<NonZeroU32> = rows
+            .iter()
+            .map(|(_, standing, _)| standing.unique_rank())
+            .collect();
+        let mut standings = Standings {
             columns: columns
                 .iter()
                 .map(|(calculator, column)| {
@@ -517,10 +520,13 @@ impl Session {
                             .then(|| place.and_then(Medal::of))
                             .flatten(),
                         advances,
+                        cut: None,
                     }
                 })
                 .collect(),
-        })
+        };
+        cut(&mut standings.rows, &places);
+        Some(standings)
     }
 
     pub(super) fn entrant_row(&self, id: &EntrantId) -> EntrantRow {
@@ -624,4 +630,30 @@ pub(super) fn stage(division: &Division, annotations: &TypeMap) -> Option<StageN
         format: plugin_factory::id_of(format),
         stage: format.stage(annotations)?,
     })
+}
+
+/// Draws the [`Cut`]s below `rows`, whose places in their divisions are `places`: below the last
+/// of each run of rows going on alike.
+fn cut(rows: &mut [StandingRow], places: &[NonZeroU32]) {
+    let mut from = 0;
+    for index in 0..rows.len() {
+        let advances = rows[index].advances;
+        if index > 0 && advances != rows[index - 1].advances {
+            from = index;
+        }
+        let Some(advance) = advances else {
+            continue;
+        };
+        if rows
+            .get(index + 1)
+            .is_none_or(|next| next.advances != advances)
+        {
+            rows[index].cut = Some(Cut {
+                to: advance.to,
+                how: advance.how,
+                from: places[from],
+                through: places[index],
+            });
+        }
+    }
 }

@@ -142,39 +142,37 @@ fieldset.sources legend {
   width: min(100%, 20rem);
 }
 
-/* who goes on: an arrow and the phase, the comparison's dashed and marked with "?" */
-.advance {
+/* the line below the rows going on (play.rs), solid by their place, dashed by the comparison
+ * across the groups */
+.standing-list tr.cut td {
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-2);
+  border-top: 2px solid var(--accent);
+  color: var(--text-muted);
+  font-size: 0.85em;
+  text-align: left;
+}
+
+.standing-list tr.cut.compared td {
+  border-top-style: dashed;
+}
+
+/* in sight while the table scrolls sideways, wrapping within the card rather than the table */
+.cut-text {
+  position: sticky;
+  left: 0;
   display: inline-flex;
+  max-width: min(32rem, calc(100vw - 4rem));
   align-items: center;
-  gap: 0.15em;
-  padding: 0 0.35em;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-size: 0.8em;
-  font-weight: 400;
-  white-space: nowrap;
+  gap: var(--space-1);
+  white-space: normal;
 }
 
-.advance.compared {
-  border-style: dashed;
-}
-
-.advance .icon {
+.cut-text .icon {
+  flex: none;
   width: 1em;
   height: 1em;
-}
-
-.legend {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
-  color: var(--text-muted);
-  font-size: 0.9em;
-}
-
-.legend li + li {
-  margin-top: var(--space-1);
+  color: var(--accent);
 }
 
 .start-buttons {

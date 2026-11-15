@@ -832,25 +832,34 @@ standings of earlier phases; its **draw** deals the field to its divisions.
   knockouts A/B/C. The overall standings (`Phase::standings`, a
   `PhaseStandings` of rows each with its division's `Standing`, its division
   and its overall ranks) of levels are the divisions' standings one after the
-  other. Of parallel divisions they are by rank in the division; the rankings
-  of one rank form a slice ranked on by the `across` rankers, which see
+  other. Of parallel divisions they are by unique rank in the division, so
+  that each place of a division is a place of the overall standings and a
+  cut of `k` places per division takes `k` of each, ties in a division broken
+  by its lots; the rankings of one unique rank form a slice ranked on by the
+  `across` rankers, which see
   `RankingScope::AcrossDivisions` instead of a division's data (no ranker read
   the data before; one by direct encounters leaves such a slice tied); what
   stays tied shares an overall rank, the lot breaking it for the unique rank.
   The rank in the division is not a criterion the operator could move or drop:
   a ranking with a better rank than another in their division has a better
-  overall rank and unique rank (tested as a property), which the markers of who
+  overall rank and unique rank (tested as a property), which the lines of who
   advances by place rely on. With one division the overall standings are its
   standings. Sources and the competition ranking read the overall standings;
   a qualifier's `Origin` names its division and both ranks.
 - **Who advances, seen from a division.** The app works it out on the overall
-  standings and shows it in each division's: of parallel divisions, the rows of
-  one rank in their divisions go on by their place if all of them are taken,
-  else those taken go on by comparison, and `Session::compared` lists the rows
-  of each rank a cut goes through with the columns of the `across` criteria
-  ("the third places compared"). There is no table of the overall standings in
-  the GUI; the cards of the groups and of the comparison say it all. Medals
-  follow the overall ranks.
+  standings by unique rank, ties broken by lot as the next phase takes them,
+  and shows it in each division's: the first `k` places going on are sure (as
+  things stand), so a solid line follows them ("Places 1–2 go on to
+  Knockout"), not a column of markers. Of parallel divisions, where a cut
+  goes through a place, the rows of it taken go on by comparison: a dashed
+  line follows such a row in its division, and `Session::compared` lists the
+  rows of the place with the columns of the `across` criteria ("the third
+  places compared"), a line below those taken, without a rank, since every
+  other rank shown is one in a division. A tie in a division or of the
+  overall rank that the cut goes through shows only in the warning on
+  starting the next phase. There is no table of the overall standings in the
+  GUI; the cards of the groups and of the comparison say it all. Medals follow
+  the overall ranks.
 - **Points per match** compare groups of different sizes: the points divided
   by the matches played and the byes reached.
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",
@@ -886,9 +895,11 @@ Rejected:
   name the wrong level.
 - Addressing a match by its division too: changes the saved `ReportMatchResult`
   for what k lookups give.
-- Breaking a slice of parallel divisions by the divisions' unique ranks
-  instead of their ranks: rows tied in a group would no longer be tied
-  overall, so a cut through that tie would go unnoticed.
+- Slicing parallel divisions by their ranks instead of their unique ranks:
+  the rows tied in a group fall into one slice, so a group whose rows are all
+  tied (e.g. before its matches) sends either all or none of them on, and the
+  best eight of three groups no longer take two of each. The tie in a group
+  the unique ranks set apart is noticed by the app instead, in the division.
 - The order of the divisions as a plugin axis: two ways are known; should more
   turn up, it becomes one, the rule against going against a division part of
   its contract.

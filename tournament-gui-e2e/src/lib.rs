@@ -1137,15 +1137,15 @@ impl Gui {
             .await
     }
 
-    /// Waits until the rows of the standings say where they go on to, best first: a marker's text,
-    /// what a screen reader gets and then what shows, e.g. `"goes on to Final\nFinal"`, or `""`
-    /// for a row going nowhere.
+    /// Waits until the lines below the rows of the standings going on say `texts`, best first,
+    /// e.g. `"Places 1–2 go on to Final"`; those of the comparison across the groups too, after
+    /// those of the groups.
     ///
     /// # Panics
     /// Panics if they do not in time.
-    pub async fn expect_going_on(&self, markers: &[&str]) -> WebDriverResult<()> {
+    pub async fn expect_cuts(&self, texts: &[&str]) -> WebDriverResult<()> {
         self.page
-            .expect_texts(By::Css("#standing-list tbody td.goes-on"), markers)
+            .expect_texts(By::Css(".standing-list tr.cut"), texts)
             .await
     }
 
@@ -1183,17 +1183,16 @@ impl Gui {
         self.page
             .expect_texts(By::Css(".compared h2"), headings)
             .await?;
+        // the lines below the rows going on are rows too
+        let compared = By::Css(".compared-list tbody tr:not(.cut)");
         self.page
             .expect(
-                By::Css(".compared-list tbody tr"),
+                compared.clone(),
                 |query| query.and_displayed(),
                 "the rows compared",
             )
             .await?;
-        let found = self
-            .driver
-            .find_all(By::Css(".compared-list tbody tr"))
-            .await?;
+        let found = self.driver.find_all(compared).await?;
         assert_eq!(found.len(), rows, "the rows compared");
         Ok(())
     }

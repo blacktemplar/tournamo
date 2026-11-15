@@ -155,6 +155,11 @@ td.name {
   min-width: 7rem;
 }
 
+/* the comparison across the groups has no rank before the name */
+.compared-list .name {
+  left: 0;
+}
+
 /* the metrics of an entrant yet to play, all alike, recede behind the name */
 .standing-list tr.unplayed td.metric {
   color: var(--text-muted);

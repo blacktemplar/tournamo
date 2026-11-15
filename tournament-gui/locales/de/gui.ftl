@@ -41,7 +41,7 @@ help-formats = Formate und Tabelle
 help-standings = Die Reihenfolge der Tabelle
 help-standings-text = Die Tabelle vergleicht die Teilnehmer nach den Kriterien ihrer Reihenfolge, eines nach dem anderen: Das erste entscheidet, das zweite nur zwischen Teilnehmern, die nach dem ersten gleich sind, und so weiter. Ein Kriterium vergleicht eine Kennzahl, eine Zahl, die für jeden Teilnehmer aus den Ergebnissen berechnet wird, etwa die Punkte; die Kennzahlen, die ein Kriterium braucht, werden mit ihm berechnet. Weitere Kennzahlen lassen sich berechnen und anzeigen, ohne nach ihnen zu reihen.
 help-groups = Gruppen
-help-groups-text = Eine Phase kann in mehreren Gruppen gespielt werden, jede für sich im selben Format; die Auslosung verteilt die Teilnehmer auf sie. In Blöcken ausgeloste Gruppen spielen um eigene Plätze, z. B. K.-o.-Runden A und B um die Plätze 1–4 und 5–8. Sonst stehen die Gruppen nebeneinander: Erst kommen die Ersten aller Gruppen, dann die Zweiten und so weiter, und nimmt eine nächste Phase nur einige eines Platzes, z. B. die besten zwei von drei Dritten, werden sie nach den gruppenübergreifenden Kriterien verglichen, z. B. den Punkten pro Spiel, die zu verschieden großen Gruppen passen.
+help-groups-text = Eine Phase kann in mehreren Gruppen gespielt werden, jede für sich im selben Format; die Auslosung verteilt die Teilnehmer auf sie. In Blöcken ausgeloste Gruppen spielen um eigene Plätze, z. B. K.-o.-Runden A und B um die Plätze 1–4 und 5–8. Sonst stehen die Gruppen nebeneinander: Erst kommen die Ersten aller Gruppen, dann die Zweiten und so weiter (in ihrer Gruppe Gleichstehende nach dem Los), und nimmt eine nächste Phase nur einige eines Platzes, z. B. die besten zwei von drei Dritten, werden sie nach den gruppenübergreifenden Kriterien verglichen, z. B. den Punkten pro Spiel, die zu verschieden großen Gruppen passen.
 help-criteria = Kriterien
 help-metrics = Kennzahlen
 help-stored = Deine Daten bleiben auf deinem Gerät
@@ -187,11 +187,12 @@ ranking = Rangliste
 ranking-provisional = Vorläufig: nicht jede Phase ist beendet.
 place = Platz
 phase-reached = Erreichte Phase
-goes-on = Weiter
-advances-to = kommt weiter in { $phase }
-advances-to-for-now = kommt vorerst weiter in { $phase }, durch den Vergleich
-advances-by-place = kommt durch seinen Platz weiter in { $phase }
-advances-compared = teilt den Rang mit Zeilen, die nicht in { $phase } weiterkommen, daher entscheidet der Vergleich, zuletzt das Los
+cut-by-place = { $count ->
+    [one] Platz { $from } kommt
+   *[other] Plätze { $from }–{ $through } kommen
+} weiter in { $phase }
+cut-compared = Platz { $place } kommt nach jetzigem Stand weiter in { $phase }, im Vergleich der Gruppen
+cut-comparison = Kommen nach jetzigem Stand weiter in { $phase }
 
 matches = Spiele
 view = Ansicht
@@ -346,5 +347,4 @@ division = Gruppe
 all-divisions = Alle
 divisions-shown = Gezeigte Gruppen
 compared-heading = Platz { $rank } im Vergleich der Gruppen
-compared-hint = Wer in seiner Gruppe denselben Platz hat, wird durch den Vergleich der Gruppen gereiht, zuletzt durch das Los.
-advances-compared-across = teilt seinen Gruppenplatz mit Zeilen anderer Gruppen, die nicht in { $phase } weiterkommen, daher entscheidet der Vergleich der Gruppen, zuletzt das Los
+compared-hint = Derselbe Platz aller Gruppen wird durch den Vergleich der Gruppen gereiht, zuletzt durch das Los.

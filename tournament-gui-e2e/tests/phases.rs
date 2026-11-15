@@ -37,9 +37,8 @@ async fn a_competition_of_two_phases_is_played_through() {
         gui.expect_phase_links(&["1 · Round robin", "Final", "Ranking"], "1 · Round robin")
             .await?;
         gui.expect_bar_phase(Some("1 · Round robin")).await?;
-        // tied, the first two go on to the final for now, by the lot
-        let for_now = "goes on to Final for now, by comparison\nFinal?";
-        gui.expect_going_on(&[for_now, for_now, "", ""]).await?;
+        // tied, yet the lot has set the first two apart
+        gui.expect_cuts(&["Places 1–2 go on to Final"]).await?;
 
         draw_round_robin(&gui).await?;
         gui.click("Start Final").await?;
@@ -150,6 +149,31 @@ async fn a_competition_of_one_phase_shows_no_links_to_phases() {
         gui.expect_focus("Matches").await?;
         gui.expect_phase_links(&[], "").await?;
         gui.expect_bar_phase(None).await
+    })
+    .await;
+}
+
+/// A phase with no tie at its cut starts at once from its button.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_phase_without_a_tie_at_its_cut_starts_at_once() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Round robin").await?;
+        gui.click("Add phase").await?;
+        gui.open_new_phase("Final").await?;
+        gui.choose_format("Single elimination").await?;
+        gui.enter_place(0, "to", "4").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        draw_round_robin(&gui).await?;
+
+        gui.click("Start Final").await?;
+
+        gui.expect_bar_phase(Some("Final")).await?;
+        gui.expect_focus("Matches").await
     })
     .await;
 }

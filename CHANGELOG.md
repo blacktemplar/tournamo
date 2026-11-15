@@ -17,19 +17,23 @@ later one: a file whose `"format"` changes is migrated, not refused.
   named, and removed while no other phase takes entrants from it. A phase is
   started by hand once the phases it takes entrants from are finished; a tie
   through the cut is decided by lot, which the page asks about first. The
-  standings mark who goes on, and the ranking of the competition places
-  everyone by the phase they reached. Match numbers are unique in the whole
-  competition.
+  standings draw a line below the places going on, and the ranking of the
+  competition places everyone by the phase they reached. Match numbers are
+  unique in the whole competition.
 - A phase can be played in several groups (divisions) of one configuration,
   dealt by a draw: in order, at random, in blocks (knockouts A/B/C playing for
   places of their own) or keeping groups apart (seeding a knockout of the best
   of several groups so that entrants of one group meet as late as possible).
-  Entrants of the same place in different groups are compared by criteria of
-  their own, e.g. the new points per match, which compares groups of different
-  sizes. A phase with too few entrants for its groups is not started until
-  the groups are lowered. The page filters the matches by group, shows the standings of each
-  group and, where the cut of the next phase goes through a place, how that
-  place compares across the groups; a bracket or cross table per group.
+  Each place of a group is a place of the phase, a tie in a group decided by
+  its lot: the best eight of three groups are the firsts and seconds of every
+  group and two of the thirds. Entrants of the same place in different groups
+  are compared by criteria of their own, e.g. the new points per match, which
+  compares groups of different sizes. A phase with too few entrants for its groups is not started until
+  the groups are lowered. The page filters the matches by group, shows the
+  standings of each group and, where the cut of the next phase goes through a
+  place, how that place compares across the groups, a dashed line below the
+  place in a group going on as things stand; a bracket or cross table per
+  group.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
   `ranking` and `edit-phase`; `--division <letter>` for `matches` and

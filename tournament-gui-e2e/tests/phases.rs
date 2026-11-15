@@ -152,3 +152,28 @@ async fn a_competition_of_one_phase_shows_no_links_to_phases() {
     })
     .await;
 }
+
+/// A phase with no tie at its cut starts at once from its button.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_phase_without_a_tie_at_its_cut_starts_at_once() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Round robin").await?;
+        gui.click("Add phase").await?;
+        gui.open_new_phase("Final").await?;
+        gui.choose_format("Single elimination").await?;
+        gui.enter_place(0, "to", "4").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        draw_round_robin(&gui).await?;
+
+        gui.click("Start Final").await?;
+
+        gui.expect_bar_phase(Some("Final")).await?;
+        gui.expect_focus("Matches").await
+    })
+    .await;
+}

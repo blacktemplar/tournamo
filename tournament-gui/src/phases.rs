@@ -181,7 +181,10 @@ pub fn StartPhaseButton(phase: PhaseId, primary: bool) -> Element {
                 if disabled {
                     return;
                 }
-                match ctx.session.peek().start_phase_refusal(phase) {
+                // bound first: a guard in the scrutinee lives through the arms, and starting
+                // writes the session
+                let refusal = ctx.session.peek().start_phase_refusal(phase);
+                match refusal {
                     Some(warning @ StartPhaseError::CutThroughTie(_)) => {
                         tie.set(Some(warning.text()));
                     }

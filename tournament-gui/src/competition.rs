@@ -17,7 +17,7 @@ use tournament_app::{
     i18n::{Message, Text, Translator},
     session::Session,
     storage::{CompetitionKey, Storage as _},
-    view::{Action, Actions, Chart, DivisionRef, EntrantRow, MatchesOf, PhaseState},
+    view::{Action, Actions, Chart, DivisionRef, EntrantRow, PhaseState},
 };
 use tournament_browser::{
     channel::Broadcast,
@@ -38,7 +38,7 @@ use crate::{
     icons,
     phase::{PendingPhase, PhaseSummary},
     phases::{PhaseLinks, Ranking, StartPhaseButton},
-    play::{Rounds, Standings},
+    play::{Rounds, Standings, divisions_of},
     setup::{Entrants, Phases},
     winners_text,
 };
@@ -79,12 +79,8 @@ impl Ctx {
         *self.phase.read()
     }
 
-    /// The matches of the phase shown.
-    pub fn matches_of(&self) -> Option<MatchesOf> {
-        self.phase().map(MatchesOf::phase)
-    }
-
-    /// The division of the phase shown, its only one.
+    /// The first division of the phase shown, the only one of most phases: every division of a
+    /// phase has the same chart.
     pub fn division(&self) -> Option<DivisionRef> {
         self.phase().map(DivisionRef::first)
     }
@@ -587,6 +583,7 @@ fn Play() -> Element {
         (number, phases.len())
     };
     let chart = ctx.session.read().chart(division);
+    let divisions = divisions_of(&ctx.session.read(), &ctx.translator.read(), division.phase);
     // a phase without a chart shows the matches, e.g. after the phase changed to one without
     let current = match shown {
         View::Chart if chart.is_none() => View::Matches,
@@ -653,13 +650,15 @@ fn Play() -> Element {
             div { class: column(View::Standings), hidden: !columns_shown, Standings {} }
             if let Some(chart) = chart {
                 div { class: "column wide", hidden: current != View::Chart,
-                    match chart {
-                        Chart::Bracket => rsx! {
-                            Bracket {}
-                        },
-                        Chart::CrossTable => rsx! {
-                            CrossTable {}
-                        },
+                    for (division , heading) in divisions {
+                        match chart {
+                            Chart::Bracket => rsx! {
+                                Bracket { key: "{division.division}", division, heading }
+                            },
+                            Chart::CrossTable => rsx! {
+                                CrossTable { key: "{division.division}", division, heading }
+                            },
+                        }
                     }
                 }
             }

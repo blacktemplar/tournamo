@@ -4,20 +4,20 @@
 //! and the details of a match on a click; results are reported in the list of matches.
 
 use dioxus::prelude::*;
-use tournament_app::view::{CrossMatch, Outcome};
+use tournament_app::view::{CrossMatch, DivisionRef, Outcome};
 
-use crate::{competition::Ctx, i18n::t, result::ResultDetails, team_name};
+use crate::{competition::Ctx, i18n::t, play::id_suffix, result::ResultDetails, team_name};
 
-/// The cross table, if the phase has one.
+/// The cross table of `division`, if its phase has one, under `heading` if the phase has several
+/// divisions.
 #[component]
-pub fn CrossTable() -> Element {
+pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
     let ctx = use_context::<Ctx>();
-    let Some(table) = ctx
-        .division()
-        .and_then(|division| ctx.session.read().cross_table(division))
-    else {
+    let Some(table) = ctx.session.read().cross_table(division) else {
         return rsx! {};
     };
+    let suffix = id_suffix(division, &heading);
+    let id = format!("cross-table{suffix}");
     let tr = ctx.translator.read();
     let names: Vec<String> = table
         .rows
@@ -25,15 +25,15 @@ pub fn CrossTable() -> Element {
         .map(|row| team_name(&tr, &row.entrants))
         .collect();
     rsx! {
-        section { class: "card", aria_labelledby: "cross-table",
-            h2 { id: "cross-table", {tr.get("cross-table")} }
+        section { class: "card", aria_labelledby: "{id}",
+            h2 { id: "{id}", {heading.clone().unwrap_or_else(|| tr.get("cross-table"))} }
             // scrolls sideways if its columns do not fit, the names staying in sight
             div {
                 class: "scroll",
                 role: "group",
                 tabindex: "0",
-                aria_labelledby: "cross-table",
-                table { id: "cross-table-grid", class: "cross-table",
+                aria_labelledby: "{id}",
+                table { id: "cross-table-grid{suffix}", class: "cross-table",
                     thead {
                         tr {
                             th { class: "name", scope: "col", {tr.get("name")} }

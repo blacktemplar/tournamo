@@ -21,7 +21,7 @@ use plugin_factory::{
     draft::{Draft, FieldNode, Issue, Problem},
     schema::{DecimalRange, FieldKind, IntegerRange, NumberRange},
 };
-use tournament_engine::PhasePlugins;
+use tournament_engine::{PhasePlugins, plugins::draw::InOrder};
 
 use crate::{
     i18n::{Arg, Text},
@@ -75,6 +75,32 @@ impl FormView {
     /// ```
     pub fn fields_of(&self, id: &str) -> Option<&[FormField]> {
         fields_of(&self.fields, id)
+    }
+
+    /// The fields a summary of the phase shows: all but those of divisions where it is played in
+    /// one dealt in order, so that it reads as a phase without divisions.
+    pub fn summary(&self) -> Vec<FormField> {
+        let one_division = self.fields.iter().any(|field| {
+            field.name == PhasePlugins::DIVISIONS
+                && matches!(field.input, Input::Integer { value: Some(1), .. })
+        });
+        let in_order = self.fields.iter().any(|field| {
+            field.name == PhasePlugins::DRAW
+                && matches!(
+                    &field.input,
+                    Input::Plugin(PluginInput { chosen: Some(chosen), .. })
+                        if chosen.plugin.id == <InOrder as plugin_factory::PluginType>::ID
+                )
+        });
+        self.fields
+            .iter()
+            .filter(|field| {
+                !(one_division
+                    && (field.name == PhasePlugins::DIVISIONS
+                        || in_order && field.name == PhasePlugins::DRAW))
+            })
+            .cloned()
+            .collect()
     }
 }
 

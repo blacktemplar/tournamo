@@ -11,7 +11,7 @@ use tournament_app::{
     i18n::Translator,
     view::{
         BracketColumn, BracketEntry, BracketLine, BracketPairing, BracketPart, BracketSection,
-        BracketSource, MatchRow, StageName, Unplayed,
+        BracketSource, DivisionRef, MatchRow, StageName, Unplayed,
     },
 };
 use tournament_engine::MatchResult;
@@ -21,6 +21,7 @@ use crate::{
     competition::Ctx,
     focus::{move_focus, use_focus},
     i18n::t,
+    play::id_suffix,
     result::ResultDetails,
     result_text, scores_text, team_name,
 };
@@ -32,9 +33,10 @@ enum Focus {
     Heading,
 }
 
-/// The bracket, if the format of the phase plays one.
+/// The bracket of `division`, if the format of its phase plays one, under `heading` if the phase
+/// has several divisions.
 #[component]
-pub fn Bracket() -> Element {
+pub fn Bracket(division: DivisionRef, heading: Option<String>) -> Element {
     let ctx = use_context::<Ctx>();
     let focus = use_signal(|| None::<Focus>);
     let on_heading_mounted = use_focus(focus, Focus::Heading);
@@ -54,21 +56,19 @@ pub fn Bracket() -> Element {
             }
         }
     };
-    let Some(bracket) = ctx
-        .division()
-        .and_then(|division| ctx.session.read().bracket(division))
-    else {
+    let Some(bracket) = ctx.session.read().bracket(division) else {
         return rsx! {};
     };
+    let id = format!("bracket{}", id_suffix(division, &heading));
     let tr = ctx.translator.read();
     // said only to the tab that reports, while there is something to report
     let reports = ctx.actions().report;
     let (more_left, more_right) = more();
     rsx! {
-        section { class: "card", aria_labelledby: "bracket",
+        section { class: "card", aria_labelledby: "{id}",
             // focused once a result is reported, so that the focus is not lost
-            h2 { id: "bracket", tabindex: "-1", onmounted: on_heading_mounted,
-                {tr.get("bracket")}
+            h2 { id: "{id}", tabindex: "-1", onmounted: on_heading_mounted,
+                {heading.clone().unwrap_or_else(|| tr.get("bracket"))}
             }
             if reports {
                 p { class: "hint", {tr.get("bracket-report-hint")} }
@@ -83,7 +83,7 @@ pub fn Bracket() -> Element {
                     class: "scroll bracket-scroll",
                     role: "group",
                     tabindex: "0",
-                    aria_labelledby: "bracket",
+                    aria_labelledby: "{id}",
                     onmounted: move |event| {
                         scrolling.set(event.data().downcast::<web_sys::Element>().cloned());
                         measure();
@@ -93,7 +93,7 @@ pub fn Bracket() -> Element {
                     for (index , section) in bracket.sections.into_iter().enumerate() {
                         Section {
                             key: "{index}",
-                            index,
+                            id: format!("{id}-{index}"),
                             section,
                             focus,
                         }
@@ -105,7 +105,12 @@ pub fn Bracket() -> Element {
 }
 
 #[component]
-fn Section(index: usize, section: BracketSection, focus: Signal<Option<Focus>>) -> Element {
+fn Section(
+    /// The id of its heading, if it has one.
+    id: String,
+    section: BracketSection,
+    focus: Signal<Option<Focus>>,
+) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     // a single elimination is one bracket, its match for third place below the final
@@ -119,7 +124,7 @@ fn Section(index: usize, section: BracketSection, focus: Signal<Option<Focus>>) 
     rsx! {
         div { class: "bracket-section",
             if let Some(heading) = heading {
-                h3 { id: "bracket-{index}", {heading} }
+                h3 { id: "{id}", {heading} }
             }
             div { class: "bracket",
                 for (index , column) in section.columns.into_iter().enumerate() {

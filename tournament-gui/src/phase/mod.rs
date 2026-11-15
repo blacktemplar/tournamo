@@ -176,7 +176,7 @@ pub fn PhaseSummary(phase: PhaseId) -> Element {
     };
     let actions = ctx.actions();
     rsx! {
-        Summary { fields: form.view().fields }
+        Summary { fields: form.view().summary() }
         PhaseScale { phase }
         if actions.edit_phase {
             div { class: "phase-actions",

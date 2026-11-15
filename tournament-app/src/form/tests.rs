@@ -870,3 +870,36 @@ fn comparing_across_groups_shows_with_several_groups() {
     form.remove(&path("across[0]")).unwrap();
     assert!(!shown(&form));
 }
+
+/// A phase of one division dealt in order reads as one without divisions; otherwise its summary
+/// says how many and how they are dealt.
+#[test]
+fn a_summary_leaves_out_one_division_dealt_in_order() {
+    let mut form = new_form();
+    let names = |form: &PhaseForm| -> Vec<&str> {
+        form.view()
+            .summary()
+            .iter()
+            .map(|field| field.name)
+            .collect()
+    };
+    assert_eq!(
+        names(&form),
+        ["format", "match_format", "ranking", "metrics"]
+    );
+
+    form.enter(&path("divisions"), "2").unwrap();
+
+    assert_eq!(
+        names(&form),
+        [
+            "format",
+            "divisions",
+            "draw",
+            "match_format",
+            "ranking",
+            "metrics",
+            "across"
+        ]
+    );
+}

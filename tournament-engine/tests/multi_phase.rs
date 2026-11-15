@@ -857,6 +857,29 @@ fn the_overall_standings_of_groups_never_go_against_a_group() {
     }
 }
 
+/// After one result one group has a leader, while everyone of the others is tied; yet each place
+/// of a group is a place of the overall standings, the lot of a group deciding a tie in it, so
+/// that a next phase taking `k` places of each group takes as many of each.
+#[test]
+fn each_place_of_a_group_is_a_place_of_the_overall_standings() {
+    let mut machine = groups_then_a_knockout();
+    report_one(&mut machine, phase(GROUPS));
+
+    let phase = &machine.current().phases()[&phase(GROUPS)];
+    let rows = phase
+        .standings()
+        .iter()
+        .map(|row| (row.division(), row.in_division().unique_rank().get()))
+        .collect_vec();
+
+    // the groups of four have no fourth to compare with group A's
+    let places = rows.iter().map(|row| row.1).collect_vec();
+    assert_eq!(places, [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4]);
+    for place in rows.chunk_by(|a, b| a.1 == b.1) {
+        assert!(place.iter().map(|row| row.0).all_unique());
+    }
+}
+
 /// Group A has three entrants, so everyone of it had a bye, worth no points, and is compared with
 /// the same places of the groups of four by points per match.
 #[test]

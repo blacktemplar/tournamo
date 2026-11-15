@@ -205,6 +205,95 @@ fn of_parallel_divisions_a_cut_through_a_rank_compares_its_rows() {
     ));
 }
 
+const TWELVE: [&str; 12] = [
+    "Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Mallory",
+    "Niaj",
+];
+
+/// Twelve entrants in three groups of four, then a knockout of the places 1–8 of the groups,
+/// started: two of every group go on by their place, and two of the three thirds.
+fn three_groups_and_a_knockout_of_eight() -> (Session, PhaseId, PhaseId) {
+    let mut session = Given::new().entrants(&TWELVE).divisions(3).added();
+    let mut knockout = session.phase_form().unwrap();
+    knockout
+        .choose(
+            &ConfigPath::ROOT.field("format"),
+            Some(SingleElimination::ID),
+        )
+        .unwrap();
+    knockout.enter_place(0, End::To, "8");
+    session.add_phase(&knockout).unwrap();
+    session.start().unwrap();
+    let (groups, knockout) = (session.first(), session.phases()[1].id);
+    (session, groups, knockout)
+}
+
+/// How each row of each group of the phase `groups` goes on, by group, best first.
+fn advancing_by_group(session: &Session, groups: PhaseId) -> Vec<Vec<Option<Advancing>>> {
+    (0..3)
+        .map(|division| {
+            session
+                .standings(DivisionRef {
+                    phase: groups,
+                    division,
+                })
+                .unwrap()
+                .rows
+                .iter()
+                .map(|row| row.advances.map(|advance| advance.how))
+                .collect()
+        })
+        .collect()
+}
+
+/// Every group has two places of the eight however its standings are, the thirds are compared
+/// across the groups for the rest.
+#[test]
+fn of_parallel_divisions_each_takes_its_share_of_a_cut_by_place() {
+    let (mut session, groups, _) = three_groups_and_a_knockout_of_eight();
+    play_out_by_lot(&mut session, groups);
+
+    let by_place = Some(Advancing::ByPlace);
+    let compared = Some(Advancing::Compared);
+    for group in advancing_by_group(&session, groups) {
+        assert_eq!(group[..2], [by_place, by_place]);
+        assert!(group[2] == compared || group[2].is_none());
+        assert_eq!(group[3], None);
+    }
+    let compared = session.compared(groups);
+    assert_eq!(compared.len(), 1);
+    assert_eq!(compared[0].rank.get(), 3);
+    assert_eq!(compared[0].rows.len(), 3);
+}
+
+/// Every match drawn, everyone of a group is tied, so the lot of each group decides who of it
+/// goes on: every row going on says so, and the start is warned of the ties in the groups.
+#[test]
+fn of_parallel_divisions_a_cut_through_a_tie_in_a_group_is_decided_by_its_lot() {
+    let (mut session, groups, knockout) = three_groups_and_a_knockout_of_eight();
+    while let Some(open) = session.playable(MatchesOf::phase(groups)).first().cloned() {
+        session.report(groups, open.id, MatchResult::Draw).unwrap();
+    }
+
+    let tied = Some(Advancing::TiedInDivision);
+    for group in advancing_by_group(&session, groups) {
+        assert_eq!(group[..2], [tied, tied]);
+        assert!(group[2] == tied || group[2].is_none());
+        assert_eq!(group[3], None);
+    }
+    let Some(StartPhaseError::CutThroughTie(ties)) = session.start_phase_refusal(knockout) else {
+        panic!("the cut goes through the ties in the groups");
+    };
+    let mut divisions: Vec<_> = ties.iter().filter_map(|tie| tie.division).collect();
+    divisions.sort_unstable();
+    assert_eq!(divisions, [0, 1, 2]);
+    assert!(
+        ties.iter()
+            .filter(|tie| tie.division.is_some())
+            .all(|tie| { tie.rank.get() == 1 && tie.favoured.len() + tie.others.len() == 4 })
+    );
+}
+
 /// Medals are of the competition, so the firsts of two groups going on win none.
 #[test]
 fn a_phase_of_divisions_gives_medals_by_its_overall_ranks() {

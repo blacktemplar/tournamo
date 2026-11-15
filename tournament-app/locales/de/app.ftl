@@ -26,6 +26,7 @@ error-phase-in-use = { $count ->
     }
 error-later-phase-started = { $phase } hat mit den Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
 warning-cut-through-tie = { $favoured } und { $others } teilen sich Platz { $rank } in { $phase }; das Los reiht { $favoured } vor
+warning-cut-through-tie-in-group = { $favoured } und { $others } teilen sich Platz { $rank } der Gruppe { $group } in { $phase }; das Los reiht { $favoured } vor
 phase-unnamed = { $number } · { $format }
 phase-progress = { $phase }: { $played } von { $matches } Spielen gespielt
 error-no-phase = das Turnier hat noch keine Phase

@@ -132,10 +132,11 @@ impl Phase {
     /// rank too.
     ///
     /// - [`DivisionOrder::Levels`]: the standings of the divisions one after the other.
-    /// - [`DivisionOrder::Parallel`]: by rank in the division; the rankings of one rank in their
-    ///   divisions are ranked against each other by the slice rankers of
-    ///   [`PhasePlugins::across`], with [`RankingScope::AcrossDivisions`], and what stays tied
-    ///   shares an overall rank.
+    /// - [`DivisionOrder::Parallel`]: by unique rank in the division, so that each place of a
+    ///   division is one place of the overall standings, ties in a division broken by its lots;
+    ///   the rankings of one unique rank in their divisions are ranked against each other by the
+    ///   slice rankers of [`PhasePlugins::across`], with [`RankingScope::AcrossDivisions`], and
+    ///   what stays tied shares an overall rank.
     ///
     /// Ties of the overall rank are broken by [lot](crate::Ranking::lot).
     pub fn standings(&self) -> PhaseStandings<'_> {
@@ -170,7 +171,7 @@ impl Phase {
     }
 
     /// The rows of the overall standings of parallel divisions with the `standings` of each: by
-    /// rank in the division, then by the ranking across divisions.
+    /// unique rank in the division, then by the ranking across divisions.
     fn parallel_rows<'a>(
         &'a self,
         standings: Vec<Standings<'a>>,
@@ -182,14 +183,14 @@ impl Phase {
                 standings.iter().map(move |&standing| (standing, division))
             })
             .collect();
-        rows.sort_by_key(|&(standing, _)| standing.rank());
+        rows.sort_by_key(|&(standing, _)| standing.unique_rank());
         let row_of: Map<RankingId, (Standing, usize)> = rows
             .iter()
             .map(|&(standing, division)| (standing.ranking().id(), (standing, division)))
             .collect();
         let across = self.plugins.across_ranker();
         let mut ranked = Vec::with_capacity(rows.len());
-        for slice in rows.chunk_by(|(s1, _), (s2, _)| s1.rank() == s2.rank()) {
+        for slice in rows.chunk_by(|(s1, _), (s2, _)| s1.unique_rank() == s2.unique_rank()) {
             let start = NonZeroU32::new(ranked.len() as u32 + 1).expect("one more than a count");
             let mut slice: Vec<_> = slice
                 .iter()

@@ -16,7 +16,7 @@ use tournament_engine::{
 use crate::{
     file::Format,
     i18n::{Arg, Message, Text, english},
-    view::{EntrantRow, PhaseName},
+    view::{EntrantRow, PhaseName, division_letter},
 };
 
 /// Why an entrant was not added.
@@ -155,6 +155,9 @@ pub enum StartPhaseError {
 pub struct Tie {
     /// The phase whose standings the rows are of.
     pub phase: PhaseName,
+    /// The division of parallel divisions whose rows share `rank` in it, or `None` for rows
+    /// sharing their overall rank.
+    pub division: Option<usize>,
     pub rank: NonZeroU32,
     /// The teams of the rank before the cut, which the lot puts ahead.
     pub favoured: Vec<Vec<EntrantRow>>,
@@ -498,8 +501,12 @@ impl Message for StartPhaseError {
             }
             Self::CutThroughTie(ties) => {
                 let tie = ties.first().expect("a tie at a cut is one at least");
-                Text::new("warning-cut-through-tie")
-                    .with("phase", tie.phase.clone())
+                let text = match tie.division {
+                    Some(division) => Text::new("warning-cut-through-tie-in-group")
+                        .with("group", division_letter(division)),
+                    None => Text::new("warning-cut-through-tie"),
+                };
+                text.with("phase", tie.phase.clone())
                     .with("rank", tie.rank)
                     .with("favoured", names(&tie.favoured))
                     .with("others", names(&tie.others))

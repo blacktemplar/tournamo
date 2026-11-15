@@ -44,14 +44,15 @@ async fn groups_then_a_knockout_of_their_best_are_played_through() {
         gui.click("All").await?;
 
         // every match drawn, from the list of every group, so that everyone shares the first
-        // place of their group, and the cut of the knockout goes through them
+        // place of their group: the cut of the knockout takes the firsts and seconds of the
+        // groups by the lot of each group, and goes through the thirds
         for number in 1..=15 {
             gui.enter_result(&format!("{number} x")).await?;
         }
         gui.expect_announcement("Match 15: Draw. Every match of the phase has a result.")
             .await?;
         gui.go_to_phase("1 · Round robin").await?;
-        gui.expect_compared(&["Place 1 compared across the groups"], 11)
+        gui.expect_compared(&["Place 3 compared across the groups"], 3)
             .await?;
         gui.page.check_accessibility().await?;
 

@@ -384,11 +384,11 @@ impl Session {
         self.standings_of(of.phase, rows, Columns::Ranking)
     }
 
-    /// For each rank in the parallel divisions of the phase `phase` that a cut of a source of
-    /// another phase goes through, the rows of that rank in their divisions, by their overall
-    /// standings, with the columns of the metrics the phase compares across divisions by: e.g.
-    /// "the third places compared", where the best two of three go on. Empty for a phase of one
-    /// division or of levels, and before its start.
+    /// For each place (unique rank) in the parallel divisions of the phase `phase` that a cut of
+    /// a source of another phase goes through, the rows of that place in their divisions, by
+    /// their overall standings, with the columns of the metrics the phase compares across
+    /// divisions by: e.g. "the third places compared", where the best two of three go on. Empty
+    /// for a phase of one division or of levels, and before its start.
     pub fn compared(&self, phase: PhaseId) -> Vec<view::Compared> {
         let Some(of) = self.phase(phase) else {
             return Vec::new();
@@ -400,11 +400,10 @@ impl Session {
         let standings = of.standings();
         let mut by_rank: BTreeMap<NonZeroU32, Vec<_>> = BTreeMap::new();
         for row in standings.iter() {
-            by_rank.entry(row.in_division().rank()).or_default().push((
-                row.division(),
-                row.in_division(),
-                row.rank(),
-            ));
+            by_rank
+                .entry(row.in_division().unique_rank())
+                .or_default()
+                .push((row.division(), row.in_division(), row.rank()));
         }
         by_rank
             .into_iter()

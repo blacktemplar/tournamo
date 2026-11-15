@@ -933,6 +933,7 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>, parallel: b
                                     Advancing::ByPlace => "advances-by-place",
                                     Advancing::Compared if parallel => "advances-compared-across",
                                     Advancing::Compared => "advances-compared",
+                                    Advancing::TiedInDivision => "advances-tied-in-group",
                                 };
                                 tr.text(&Text::new(key).with("phase", name_of(to)))
                             }
@@ -1037,7 +1038,7 @@ fn AdvanceMarker(how: Advancing, to: String) -> Element {
             "advance by-place",
             t!(tr, "advances-to", phase = to.as_str()),
         ),
-        Advancing::Compared => (
+        Advancing::Compared | Advancing::TiedInDivision => (
             "advance compared",
             t!(tr, "advances-to-for-now", phase = to.as_str()),
         ),
@@ -1048,7 +1049,7 @@ fn AdvanceMarker(how: Advancing, to: String) -> Element {
             span { class: "visually-hidden", "{text}" }
             span { class: "advance-to", aria_hidden: "true",
                 "{to}"
-                if how == Advancing::Compared {
+                if how != Advancing::ByPlace {
                     "?"
                 }
             }

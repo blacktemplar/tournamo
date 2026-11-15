@@ -24,9 +24,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   dealt by a draw: in order, at random, in blocks (knockouts A/B/C playing for
   places of their own) or keeping groups apart (seeding a knockout of the best
   of several groups so that entrants of one group meet as late as possible).
-  Entrants of the same place in different groups are compared by criteria of
-  their own, e.g. the new points per match, which compares groups of different
-  sizes. A phase with too few entrants for its groups is not started until
+  Each place of a group is a place of the phase, a tie in a group decided by
+  its lot: the best eight of three groups are the firsts and seconds of every
+  group and two of the thirds. Entrants of the same place in different groups
+  are compared by criteria of their own, e.g. the new points per match, which
+  compares groups of different sizes. A phase with too few entrants for its groups is not started until
   the groups are lowered. The page filters the matches by group, shows the standings of each
   group and, where the cut of the next phase goes through a place, how that
   place compares across the groups; a bracket or cross table per group.

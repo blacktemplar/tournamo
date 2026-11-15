@@ -832,8 +832,11 @@ standings of earlier phases; its **draw** deals the field to its divisions.
   knockouts A/B/C. The overall standings (`Phase::standings`, a
   `PhaseStandings` of rows each with its division's `Standing`, its division
   and its overall ranks) of levels are the divisions' standings one after the
-  other. Of parallel divisions they are by rank in the division; the rankings
-  of one rank form a slice ranked on by the `across` rankers, which see
+  other. Of parallel divisions they are by unique rank in the division, so
+  that each place of a division is a place of the overall standings and a
+  cut of `k` places per division takes `k` of each, ties in a division broken
+  by its lots; the rankings of one unique rank form a slice ranked on by the
+  `across` rankers, which see
   `RankingScope::AcrossDivisions` instead of a division's data (no ranker read
   the data before; one by direct encounters leaves such a slice tied); what
   stays tied shares an overall rank, the lot breaking it for the unique rank.
@@ -845,10 +848,13 @@ standings of earlier phases; its **draw** deals the field to its divisions.
   a qualifier's `Origin` names its division and both ranks.
 - **Who advances, seen from a division.** The app works it out on the overall
   standings and shows it in each division's: of parallel divisions, the rows of
-  one rank in their divisions go on by their place if all of them are taken,
+  one place in their divisions go on by their place if all of them are taken,
   else those taken go on by comparison, and `Session::compared` lists the rows
-  of each rank a cut goes through with the columns of the `across` criteria
-  ("the third places compared"). There is no table of the overall standings in
+  of each place a cut goes through with the columns of the `across` criteria
+  ("the third places compared"). A row sharing its rank in its division with
+  rows on the other side of the cut goes on by the division's lot, which its
+  marker says and the start of the next phase warns of, as of a tie of the
+  overall rank. There is no table of the overall standings in
   the GUI; the cards of the groups and of the comparison say it all. Medals
   follow the overall ranks.
 - **Points per match** compare groups of different sizes: the points divided
@@ -886,9 +892,11 @@ Rejected:
   name the wrong level.
 - Addressing a match by its division too: changes the saved `ReportMatchResult`
   for what k lookups give.
-- Breaking a slice of parallel divisions by the divisions' unique ranks
-  instead of their ranks: rows tied in a group would no longer be tied
-  overall, so a cut through that tie would go unnoticed.
+- Slicing parallel divisions by their ranks instead of their unique ranks:
+  the rows tied in a group fall into one slice, so a group whose rows are all
+  tied (e.g. before its matches) sends either all or none of them on, and the
+  best eight of three groups no longer take two of each. The tie in a group
+  the unique ranks set apart is noticed by the app instead, in the division.
 - The order of the divisions as a plugin axis: two ways are known; should more
   turn up, it becomes one, the rule against going against a division part of
   its contract.

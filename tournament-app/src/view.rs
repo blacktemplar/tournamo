@@ -497,10 +497,13 @@ pub enum Advancing {
     /// Its place alone takes it there.
     ByPlace,
     /// It shares its rank with rows on the other side of the cut, so what decides is the
-    /// comparison, in the end the lot; of parallel divisions, its rank in its division, which
+    /// comparison, in the end the lot; of parallel divisions, its place in its division, which
     /// rows of other divisions on the other side of the cut have as well, so what decides is the
     /// comparison across the divisions.
     Compared,
+    /// Of parallel divisions: it shares its rank in its division with rows on the other side of
+    /// the cut, so the lot of its division decides.
+    TiedInDivision,
 }
 
 /// The rows of one rank in parallel divisions that a cut goes through, compared across the

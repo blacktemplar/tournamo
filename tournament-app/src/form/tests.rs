@@ -7,6 +7,7 @@ use tournament_engine::plugins::{
         WinsDrawsLossesCalculator,
     },
     phase_format::{DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination},
+    seeding::SeededAtRandom,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -102,7 +103,6 @@ fn a_new_phase_is_answered_as_its_format_recommends() {
         [
             "format",
             "divisions",
-            "draw",
             "seeding",
             "match_format",
             "ranking",
@@ -872,10 +872,30 @@ fn comparing_across_groups_shows_with_several_groups() {
     assert!(!shown(&form));
 }
 
-/// A phase of one division dealt in order reads as one without divisions; otherwise its summary
-/// says how many and how they are dealt.
+/// The draw is asked for only with several divisions, the seeding only of a format reading it.
 #[test]
-fn a_summary_leaves_out_one_division_dealt_in_order() {
+fn draw_and_seeding_are_asked_for_only_where_they_matter() {
+    let mut form = new_form();
+    let shown = |form: &PhaseForm, name| find(&form.view().fields, &path(name)).is_some();
+    assert!(!shown(&form, "draw"));
+    assert!(shown(&form, "seeding"));
+
+    form.enter(&path("divisions"), "2").unwrap();
+    assert!(shown(&form, "draw"));
+
+    for format in [RandomRounds::ID, MonsterDyp::ID] {
+        form.choose(&path("format"), Some(format)).unwrap();
+        assert!(!shown(&form, "seeding"), "{format}");
+    }
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert!(shown(&form, "seeding"));
+}
+
+/// A phase of one division seeded in order reads as one without divisions; otherwise its summary
+/// says how many and how they are dealt, and how they are seeded.
+#[test]
+fn a_summary_leaves_out_one_division_and_seeding_in_order() {
     let mut form = new_form();
     let names = |form: &PhaseForm| -> Vec<&str> {
         form.view()
@@ -886,7 +906,7 @@ fn a_summary_leaves_out_one_division_dealt_in_order() {
     };
     assert_eq!(
         names(&form),
-        ["format", "seeding", "match_format", "ranking", "metrics"]
+        ["format", "match_format", "ranking", "metrics"]
     );
 
     form.enter(&path("divisions"), "2").unwrap();
@@ -897,12 +917,20 @@ fn a_summary_leaves_out_one_division_dealt_in_order() {
             "format",
             "divisions",
             "draw",
-            "seeding",
             "match_format",
             "ranking",
             "metrics",
             "across"
         ]
+    );
+
+    form.enter(&path("divisions"), "1").unwrap();
+    form.choose(&path("seeding"), Some(SeededAtRandom::ID))
+        .unwrap();
+
+    assert_eq!(
+        names(&form),
+        ["format", "seeding", "match_format", "ranking", "metrics"]
     );
 }
 

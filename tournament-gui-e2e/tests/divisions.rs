@@ -205,7 +205,6 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
             "Round robin",
             "3",
             "Back and forth",
-            "In order",
             "Winner only",
             "More points, more Sonneborn-Berger",
             "Win-draw-loss record",

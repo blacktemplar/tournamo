@@ -76,8 +76,8 @@ fn undo(machine: &mut CompetitionStateMachine, target: TransitionId) -> Transiti
 }
 
 /// A competition that was seeded, given five entrants of which one was removed again, given a
-/// single elimination phase, started, and played up to its final — so its log holds at least one of
-/// every transition this crate ships.
+/// single elimination phase, started in an order given, and played up to its final — so its log
+/// holds at least one of every transition this crate ships.
 fn played_competition() -> CompetitionStateMachine {
     let mut machine = CompetitionStateMachine::default();
 
@@ -105,7 +105,15 @@ fn played_competition() -> CompetitionStateMachine {
     machine
         .apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(
+            StartCompetition::new(vec![
+                vec1![entrant_id(2)],
+                vec1![entrant_id(0), entrant_id(3)],
+            ])
+            .into(),
+        )
+        .unwrap();
     for match_id in matches_of_round(&machine.current().phases()[&phase_id()], 1) {
         machine
             .apply_new(ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into())
@@ -328,9 +336,9 @@ fn a_reported_contest_survives_a_round_trip() {
     assert_current_is(&binary_round_trip(&machine), machine.current());
 }
 
-/// A transition without any data of its own still carries its tag, which is all that identifies it.
+/// The start is saved with the order it gives the registration, as tiers of entrant ids.
 #[test]
-fn a_transition_without_data_is_serialized_as_its_tag_alone() {
+fn the_start_is_serialized_with_its_order() {
     let machine = played_competition();
 
     let Value::Array(entries) = serialized_log(&machine) else {
@@ -344,7 +352,10 @@ fn a_transition_without_data_is_serialized_as_its_tag_alone() {
     assert_eq!(starts.len(), 1, "the log must hold exactly one start");
     assert_eq!(
         starts[0]["kind"]["Apply"],
-        json!({ "StartCompetition": null })
+        json!({ "StartCompetition": { "order": [
+            ["00000000-0000-0000-0000-000000000002"],
+            ["00000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000003"],
+        ] } })
     );
 }
 

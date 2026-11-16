@@ -88,7 +88,7 @@ fn a_format_pairs_by_the_standings_and_a_replay_pairs_the_same() {
         .unwrap();
     sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
     let data = sm.current().phases()[&phase_id()].divisions()[0].data();
     let rankings: Vec<_> = data.rankings().keys().copied().collect();
     let [first, second, third, fourth] = rankings[..] else {

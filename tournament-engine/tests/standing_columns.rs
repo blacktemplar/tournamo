@@ -205,7 +205,9 @@ fn columns_keep_only_what_differs_from_the_rule() {
 #[test]
 fn the_columns_of_a_phase_with_results_change_without_a_conflict() {
     let mut machine = with_phase(AddPhase::new(phase_id(), groups()));
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     let division = &phase(&machine).divisions()[0];
     let first = division.data().matches().values().next().unwrap().id();
     machine

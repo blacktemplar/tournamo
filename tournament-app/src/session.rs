@@ -204,7 +204,7 @@ impl Session {
             return Err(needed);
         }
         self.history
-            .apply_new(&mut self.machine, StartCompetition.into())
+            .apply_new(&mut self.machine, StartCompetition::default().into())
             .map_err(|error| {
                 refused(error, StartError::Rejected, |refusal| match refusal {
                     Refusal::Started => Some(StartError::Started),

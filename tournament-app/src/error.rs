@@ -389,10 +389,13 @@ impl Refusal {
             };
         }
         if let Some(error) = error.downcast_ref() {
-            return Some(match error {
-                engine::StartCompetitionError::NoPhases => Self::NoPhase,
-                engine::StartCompetitionError::TooFewEntrants => Self::TooFewEntrants,
-            });
+            return match error {
+                engine::StartCompetitionError::NoPhases => Some(Self::NoPhase),
+                engine::StartCompetitionError::TooFewEntrants => Some(Self::TooFewEntrants),
+                // the session orders only its own entrants, each once
+                engine::StartCompetitionError::UnknownEntrant(_)
+                | engine::StartCompetitionError::EntrantTwice(_) => None,
+            };
         }
         match error.downcast_ref() {
             Some(engine::ReportMatchResultError::MatchAlreadyFinished) => Some(Self::MatchFinished),

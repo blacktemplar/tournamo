@@ -118,7 +118,7 @@ fn full_tournament() {
         .unwrap();
     sm.apply_new(AddPhase::new(phase_id, plugins).into())
         .unwrap();
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
 
     // asserts for the state after the competition start
     assert!(is_attending(sm.current(), &entrant_a));
@@ -339,7 +339,7 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
     sm.apply_new(AddPhase::new(phase_id, plugins).into())
         .unwrap();
 
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
     // the byes scored by each ranking, by the round of its bye
     let byes_scored = |sm: &CompetitionStateMachine| {
         let phase = sm.current().phases()[&phase_id].divisions()[0].data();
@@ -390,7 +390,7 @@ fn single_elimination_rejects_a_draw() {
         .unwrap();
     sm.apply_new(AddPhase::new(phase_id, plugins).into())
         .unwrap();
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
     let final_id = *sm.current().phases()[&phase_id].divisions()[0]
         .data()
         .matches()

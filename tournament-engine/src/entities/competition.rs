@@ -23,6 +23,9 @@ pub struct Competition {
     seed: Seed,
     /// The entrants by lot, best first; empty until the competition starts.
     lots: Vec<EntrantId>,
+    /// The entrants in the order of the registration, best first; empty until the competition
+    /// starts.
+    registration: Vec<EntrantId>,
     /// The highest number of a match so far, or kept for the matches of a division, 0 for none.
     highest_number: u32,
 }
@@ -65,11 +68,18 @@ impl Competition {
         self.seed
     }
 
-    /// The registration: every entrant, ordered by lot, drawn when the competition starts; empty
-    /// before. The lot breaks every tie nothing else breaks, see
-    /// [`Ranking::lot`](crate::Ranking::lot).
+    /// Every entrant, ordered by lot, drawn when the competition starts; empty before. The lot
+    /// breaks every tie nothing else breaks, see [`Ranking::lot`](crate::Ranking::lot).
     pub fn lots(&self) -> &[EntrantId] {
         &self.lots
+    }
+
+    /// The registration, what [`SourceOf::Registration`] takes places of: every entrant, in the
+    /// order the start gave (see [`StartCompetition`](crate::StartCompetition)), its tiers in
+    /// order, each by lot, then everyone else by lot. Empty before the start; without an order
+    /// given it is [`Self::lots`].
+    pub fn registration(&self) -> &[EntrantId] {
+        &self.registration
     }
 
     /// The lot of `entrant`, i.e. their place in [`Self::lots`]; `None` before the start.
@@ -123,14 +133,30 @@ impl Competition {
         self.phases.values().next()
     }
 
-    /// Draws the lots and starts every phase fed by the registration alone.
-    pub(crate) fn start(&mut self) {
+    /// Draws the lots, orders the registration by the tiers of `order` (see
+    /// [`Self::registration`]) and starts every phase fed by the registration alone.
+    pub(crate) fn start(&mut self, order: &[Vec1<EntrantId>]) {
         let mut lots: Vec<_> = self.entrants().keys().copied().collect();
         // Note that keys() is not guaranteed to give a stable ordering. To make sure ordering is
         // stable we sort before shuffling
         lots.sort_by_key(|e| e.uuid());
         lots.shuffle(&mut self.seed.rng(Entropy::CompetitionStart));
+        let lot_of: Map<EntrantId, usize> = lots.iter().copied().zip(0..).collect();
+        // the tier of every entrant named by the order, the rest after the last tier
+        let tier_of: Map<EntrantId, usize> = order
+            .iter()
+            .zip(0..)
+            .flat_map(|(tier, index)| tier.iter().map(move |entrant| (*entrant, index)))
+            .collect();
+        let mut registration = lots.clone();
+        registration.sort_by_key(|entrant| {
+            (
+                tier_of.get(entrant).copied().unwrap_or(order.len()),
+                lot_of[entrant],
+            )
+        });
         self.lots = lots;
+        self.registration = registration;
         self.started = true;
         let starting: Vec<_> = self
             .phases
@@ -179,7 +205,7 @@ impl Competition {
             match source.of() {
                 SourceOf::Registration => {
                     field.extend(
-                        self.lots
+                        self.registration
                             .iter()
                             .zip(NonZeroU32::MIN..)
                             .filter(|&(_, place)| source.takes(place))

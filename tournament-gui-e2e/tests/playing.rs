@@ -589,9 +589,9 @@ async fn reopening_a_result_a_later_one_depends_on_names_that_one() {
     .await;
 }
 
-/// A round of a knockout whose matches are all of one stage is named by it, in the list of rounds,
-/// above its matches and in the standings, rather than by its number as well; one of several
-/// stages keeps its number.
+/// A round of a knockout is named by its stage, in the list of rounds, above its matches and in the
+/// standings, rather than by its number as well; the round of the final too, though the match for
+/// third place is played in it.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_rounds_of_a_knockout_are_named_by_their_stages() {
@@ -610,7 +610,7 @@ async fn the_rounds_of_a_knockout_are_named_by_their_stages() {
         gui.expect_round_options(&["Semifinals (2 open)"]).await?;
         gui.enter_result("1 1").await?;
         gui.enter_result("2 1").await?;
-        gui.expect_round_options(&["Semifinals", "Round 2 (2 open)"])
+        gui.expect_round_options(&["Semifinals", "Final (2 open)"])
             .await?;
         gui.enter_result("4 1").await?;
         gui.enter_result("3 1").await?;

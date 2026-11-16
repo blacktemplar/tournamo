@@ -265,3 +265,15 @@ fn more_points_per_match_are_better() {
     assert_eq!(compare("1", "1.5"), Comparison::Worse);
     assert_eq!(compare("2", "2"), Comparison::Equal);
 }
+
+#[test]
+fn points_per_match_shows_two_decimals() {
+    assert_eq!(
+        PointsPerMatch(Score::new(2.0 / 3.0)).to_cell(),
+        Cell::Number(Score::new(0.67))
+    );
+    assert_eq!(
+        PointsPerMatch(Score::new(1.5)).to_cell(),
+        Cell::Number(Score::new(1.5))
+    );
+}

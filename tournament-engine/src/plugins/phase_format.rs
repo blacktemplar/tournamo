@@ -72,6 +72,16 @@ pub trait PhaseFormat: Plugin + DynClone {
         None
     }
 
+    /// The stage that names a round whose matches and byes belong to `stages` (each distinct one
+    /// once, at least one), e.g. the final for a round that also has the match for third place;
+    /// `None` if no stage names the round. By default the stage all of them are, else `None`.
+    fn round_stage(&self, stages: &[Stage]) -> Option<Stage> {
+        match stages {
+            [only] => Some(only.clone()),
+            _ => None,
+        }
+    }
+
     /// The bracket the phase is played in, if this format plays one, e.g. a knockout; `None` before
     /// the phase starts. Each pairing is annotated as its match or bye will be, so with its stage.
     fn bracket(&self) -> Option<&Bracket> {

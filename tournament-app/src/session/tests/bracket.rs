@@ -356,3 +356,26 @@ fn the_reset_of_the_grand_final_is_only_if_needed_until_that_is_decided() {
     assert!(!played.only_if_needed && played.unplayed.is_none());
     assert!(played.r#match.is_some());
 }
+
+/// The round of the final is named by it, though the match for third place is played in it too.
+#[test]
+fn the_round_of_the_final_is_named_the_final() {
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    while session.rounds(session.all()).len() < 2 {
+        let row = session.playable(session.all()).remove(0);
+        session
+            .report(session.first(), row.id, MatchResult::AWins)
+            .unwrap();
+    }
+    for row in session.playable(session.all()) {
+        session
+            .report(session.first(), row.id, MatchResult::AWins)
+            .unwrap();
+    }
+
+    let rounds = session.rounds(session.all());
+
+    let last = rounds.last().unwrap();
+    assert_eq!(english(last.stage.clone()).as_deref(), Some("Final"));
+    assert_eq!(last.matches, 2, "the final and the match for third place");
+}

@@ -167,8 +167,9 @@ pub struct PointsPerMatch(pub Score);
 impl TypeMapValue for PointsPerMatch {}
 
 impl ToCell for PointsPerMatch {
+    /// The average rounded to two decimals, as a third does not fit a table.
     fn to_cell(&self) -> Cell {
-        Cell::Number(self.0)
+        Cell::Number(Score::new((self.0.get() * 100.0).round() / 100.0))
     }
 }
 
@@ -250,7 +251,7 @@ impl Calculator for PointsPerMatchCalculator {
     }
 
     fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<PointsPerMatch>("points per match"))
+        Some(MetricColumn::new::<PointsPerMatch>("P/M"))
     }
 }
 

@@ -126,11 +126,12 @@ async fn undo_says_what_it_covers() {
     .await;
 }
 
-/// What a result did shows in a toast, and neither it nor the finish moves the matches, so that
-/// the next tap lands where it was aimed.
+/// What a result did shows in a toast, and it does not move the matches, so that the next tap lands
+/// where it was aimed. The finish may: it happens once, and the winners are the competition's, so
+/// they are shown above everything of a phase.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_result_and_the_finish_move_nothing() {
+async fn a_result_moves_nothing() {
     run_in_new_competition(async |gui| {
         start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
         gui.show_by_round().await?;
@@ -142,11 +143,12 @@ async fn a_result_and_the_finish_move_nothing() {
         assert_eq!(gui.page.top_of("#match-list").await?, top);
         gui.click_labelled("Next round").await?;
         gui.click("Draw").await?;
+        assert_eq!(gui.page.top_of("#match-list").await?, top);
         gui.click_labelled("Next round").await?;
         gui.click("Draw").await?;
         gui.expect_winners(Some("Tied for first: Alice, Bob, Carol"))
             .await?;
-        assert_eq!(gui.page.top_of("#match-list").await?, top);
+        assert!(gui.page.top_of(".winners-banner").await? < gui.page.top_of("#matches").await?);
         Ok(())
     })
     .await;
@@ -587,9 +589,9 @@ async fn reopening_a_result_a_later_one_depends_on_names_that_one() {
     .await;
 }
 
-/// A round of a knockout whose matches are all of one stage is named by it, in the list of rounds,
-/// above its matches and in the standings, rather than by its number as well; one of several
-/// stages keeps its number.
+/// A round of a knockout is named by its stage, in the list of rounds, above its matches and in the
+/// standings, rather than by its number as well; the round of the final too, though the match for
+/// third place is played in it.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_rounds_of_a_knockout_are_named_by_their_stages() {
@@ -608,7 +610,7 @@ async fn the_rounds_of_a_knockout_are_named_by_their_stages() {
         gui.expect_round_options(&["Semifinals (2 open)"]).await?;
         gui.enter_result("1 1").await?;
         gui.enter_result("2 1").await?;
-        gui.expect_round_options(&["Semifinals", "Round 2 (2 open)"])
+        gui.expect_round_options(&["Semifinals", "Final (2 open)"])
             .await?;
         gui.enter_result("4 1").await?;
         gui.enter_result("3 1").await?;

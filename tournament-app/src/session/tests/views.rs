@@ -149,7 +149,8 @@ fn a_knockout_names_the_stage_of_every_match() {
     assert!(last.winners.is_some_and(|winners| winners.len() == 1));
 }
 
-/// A round whose matches are all of one stage is named by it, one of several stages is not.
+/// A round whose matches are all of one stage is named by it, as is the round of the final, in
+/// which the match for third place is played too.
 #[test]
 fn a_round_of_one_stage_is_named_by_it() {
     let mut session = Given::new().format(SingleElimination::ID).started();
@@ -169,7 +170,10 @@ fn a_round_of_one_stage_is_named_by_it() {
         .map(|summary| english(summary.stage))
         .collect();
 
-    assert_eq!(stages, [Some("Semifinals".to_owned()), None]);
+    assert_eq!(
+        stages,
+        [Some("Semifinals".to_owned()), Some("Final".to_owned())]
+    );
 }
 
 /// A round a cell of the standings names, e.g. that of the first loss, is named by the stage of

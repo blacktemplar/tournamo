@@ -7,7 +7,7 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use thiserror::Error;
-use tournament_app::result_form::read_score;
+use tournament_app::{people::Rating, result_form::read_score};
 use tournament_engine::{EnteredValue, Sides};
 
 /// A single command typed at the prompt.
@@ -24,6 +24,18 @@ pub enum Command {
     AddEntrant {
         #[arg(required = true)]
         names: Vec<String>,
+        /// The rating of every entrant added, a number, higher is better: the start orders the
+        /// registration by rating
+        #[arg(long, value_parser = rating)]
+        rating: Option<Rating>,
+    },
+    /// Rate an entrant, or remove its rating if none is given; the start orders the registration
+    /// by rating, higher first, those of equal ratings and without one by lot
+    Rate {
+        name: String,
+        /// A number, e.g. `1500`
+        #[arg(value_parser = rating)]
+        rating: Option<Rating>,
     },
     /// Remove an entrant from the competition
     #[command(visible_alias = "remove")]
@@ -129,6 +141,11 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+}
+
+/// The rating `text` says, see [`Rating::parse`].
+fn rating(text: &str) -> Result<Rating, String> {
+    Rating::parse(text).ok_or_else(|| format!("“{text}” is no rating; write a number, e.g. `1500`"))
 }
 
 /// The index of the division of the letter `letter`, as `--division` takes it: `a` (or `A`) for
@@ -255,7 +272,8 @@ impl Command {
     /// assert_eq!(
     ///     Command::parse_line(r#"add-entrant "Ada Lovelace""#)?,
     ///     Some(Command::AddEntrant {
-    ///         names: vec!["Ada Lovelace".to_owned()]
+    ///         names: vec!["Ada Lovelace".to_owned()],
+    ///         rating: None,
     ///     })
     /// );
     /// assert_eq!(Command::parse_line("   ")?, None);
@@ -301,9 +319,36 @@ mod tests {
         assert_eq!(
             parse("add Alice 'Bob B.'"),
             Command::AddEntrant {
-                names: vec!["Alice".to_owned(), "Bob B.".to_owned()]
+                names: vec!["Alice".to_owned(), "Bob B.".to_owned()],
+                rating: None,
             }
         );
+    }
+
+    #[test]
+    fn an_entrant_is_added_and_rated_with_a_number() {
+        assert_eq!(
+            parse("add Alice --rating 1500"),
+            Command::AddEntrant {
+                names: vec!["Alice".to_owned()],
+                rating: Rating::parse("1500"),
+            }
+        );
+        assert_eq!(
+            parse("rate Alice 7,5"),
+            Command::Rate {
+                name: "Alice".to_owned(),
+                rating: Rating::parse("7.5"),
+            }
+        );
+        assert_eq!(
+            parse("rate Alice"),
+            Command::Rate {
+                name: "Alice".to_owned(),
+                rating: None,
+            }
+        );
+        assert!(Command::parse_line("rate Alice strong").is_err());
     }
 
     #[test]

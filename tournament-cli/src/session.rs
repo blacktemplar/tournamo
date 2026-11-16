@@ -25,6 +25,7 @@ use tournament_app::{
     file::{File, Format},
     form::PhaseForm,
     i18n::{Language, Translator},
+    people::Rating,
     session::Session as AppSession,
     view::{self, division_letter},
 };
@@ -79,6 +80,8 @@ pub enum Error {
     AddEntrant(#[from] app_error::AddEntrantError),
     #[error(transparent)]
     RemoveEntrant(#[from] app_error::RemoveEntrantError),
+    #[error(transparent)]
+    Rate(#[from] app_error::RateEntrantError),
     #[error(transparent)]
     AddPhase(app_error::AddPhaseError),
     #[error(transparent)]
@@ -260,7 +263,8 @@ impl Session {
     pub fn execute(&mut self, command: Command) -> Result<Outcome, Error> {
         let output = match command {
             Command::Entrants => self.entrants(),
-            Command::AddEntrant { names } => self.add_entrants(names)?,
+            Command::AddEntrant { names, rating } => self.add_entrants(names, rating)?,
+            Command::Rate { name, rating } => self.rate(&name, rating)?,
             Command::RemoveEntrant { name } => self.remove_entrant(&name)?,
             Command::AddPhase {
                 format,
@@ -313,9 +317,16 @@ impl Session {
         if entrants.is_empty() {
             return "there are no entrants yet".to_owned();
         }
-        entrants
-            .keys()
-            .map(|id| self.name_of(id))
+        self.session
+            .entrants()
+            .iter()
+            .map(|row| {
+                let name = self.name_of(&row.id);
+                match (row.rating, row.seed) {
+                    (Some(rating), Some(seed)) => format!("{name} (rating {rating}, seed {seed})"),
+                    _ => name.to_owned(),
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -333,14 +344,38 @@ impl Session {
         self.session.people().name(id).unwrap_or("<unnamed>")
     }
 
-    /// Adds all of `names` or, if any of them is not a valid new name, none of them.
-    fn add_entrants(&mut self, names: Vec<String>) -> Result<String, Error> {
-        self.session.add_named_entrants(&names)?;
+    /// Adds all of `names`, each rated `rating`, or, if any of them is not a valid new name, none
+    /// of them.
+    fn add_entrants(
+        &mut self,
+        names: Vec<String>,
+        rating: Option<Rating>,
+    ) -> Result<String, Error> {
+        if rating.is_some() && self.competition().is_started() {
+            return Err(app_error::AddEntrantError::Started.into());
+        }
+        let ids = self.session.add_named_entrants(&names)?;
+        for id in ids {
+            self.session.set_rating(id, rating)?;
+        }
         Ok(format!(
             "{} entrant(s) added, {} in total",
             names.len(),
             self.competition().entrants().len()
         ))
+    }
+
+    /// Rates the entrant named `name` `rating`, or removes its rating if `None`.
+    fn rate(&mut self, name: &str, rating: Option<Rating>) -> Result<String, Error> {
+        let entrant_id = self
+            .entrant_named(name)
+            .ok_or_else(|| Error::UnknownEntrant(name.to_owned()))?
+            .id();
+        self.session.set_rating(entrant_id, rating)?;
+        Ok(match rating {
+            Some(rating) => format!("{name} rated {rating}"),
+            None => format!("{name} is not rated"),
+        })
     }
 
     fn remove_entrant(&mut self, name: &str) -> Result<String, Error> {
@@ -1256,6 +1291,45 @@ mod tests {
         output(&mut session, "add Alice 'Bob B.'");
 
         assert_eq!(output(&mut session, "entrants"), "Alice\nBob B.");
+    }
+
+    #[test]
+    fn rated_entrants_are_listed_with_rating_and_seed() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob --rating 1500");
+        output(&mut session, "add Carol");
+
+        assert_eq!(output(&mut session, "rate Bob 1600"), "Bob rated 1600");
+        assert_eq!(
+            output(&mut session, "entrants"),
+            "Alice (rating 1500, seed 2)\nBob (rating 1600, seed 1)\nCarol"
+        );
+        assert_eq!(output(&mut session, "rate Bob"), "Bob is not rated");
+        assert!(matches!(
+            execute(&mut session, "rate Dave 1500"),
+            Err(Error::UnknownEntrant(_))
+        ));
+    }
+
+    #[test]
+    fn the_start_seeds_by_rating_and_closes_the_ratings() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob Carol Dave");
+        output(&mut session, "rate Dave 2000");
+        output(&mut session, "add-phase round-robin");
+
+        output(&mut session, "start");
+
+        let registration = session.competition().registration();
+        assert_eq!(session.name_of(&registration[0]), "Dave");
+        assert!(matches!(
+            execute(&mut session, "rate Alice 1500"),
+            Err(Error::Rate(_))
+        ));
+        assert!(matches!(
+            execute(&mut session, "add Eve --rating 1500"),
+            Err(Error::AddEntrant(AddEntrantError::Started))
+        ));
     }
 
     #[test]

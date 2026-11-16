@@ -16,8 +16,9 @@ use tournament_engine::{
             LaterFirstLoss, MorePoints, MorePointsPerMatch, PointsCalculator,
             PointsPerMatchCalculator, RoundOfFirstLossCalculator, WinsDrawsLossesCalculator,
         },
-        phase_format::SingleElimination,
+        phase_format::{MonsterDyp, SingleElimination},
         seeding::GroupWinnersApart,
+        teams::{BestWithWorst, RandomPairs, Split},
     },
     transitions::{
         AddPhaseError, Change, ConflictsError, RemovePhaseError, StartCompetitionError,
@@ -235,7 +236,7 @@ fn a_phase_starts_once_its_sources_are_finished_with_their_places_in_order() {
     assert_eq!(seeding(&machine, phase(LOWER)), qualified[8..]);
     let field = machine.current().field_of(&phase(LOWER));
     assert_eq!(
-        field[0].origin,
+        *field[0].origins.first(),
         Origin::Phase {
             phase: phase(QUALIFICATION),
             division: 0,
@@ -434,7 +435,7 @@ fn the_best_of_the_registration_go_straight_to_the_main_phase() {
     assert_eq!(field[..4], (0..4).map(entrant).collect_vec());
     assert_eq!(field[4..], qualified[..4]);
     assert_eq!(
-        machine.current().field_of(&phase(MAIN))[3].origin,
+        *machine.current().field_of(&phase(MAIN))[3].origins.first(),
         Origin::Registration { place: place(4) }
     );
     let json: CompetitionStateMachine =
@@ -1270,6 +1271,298 @@ fn a_competition_of_divisions_round_trips_as_its_log_and_as_a_snapshot() {
     play_out(&mut machine, phase(GROUPS));
     start(&mut machine, phase(KNOCKOUT));
     report_one(&mut machine, phase(KNOCKOUT));
+    let expected = serde_json::to_value(machine.current()).unwrap();
+
+    let json: CompetitionStateMachine =
+        serde_json::from_str(&serde_json::to_string(&machine).unwrap()).unwrap();
+    let binary: CompetitionStateMachine =
+        postcard::from_bytes(&postcard::to_stdvec(&machine).unwrap()).unwrap();
+    let snapshot: Competition =
+        postcard::from_bytes(&postcard::to_stdvec(machine.current()).unwrap()).unwrap();
+
+    assert_eq!(serde_json::to_value(json.current()).unwrap(), expected);
+    assert_eq!(serde_json::to_value(binary.current()).unwrap(), expected);
+    assert_eq!(serde_json::to_value(snapshot).unwrap(), expected);
+}
+
+const DYP: u128 = 9;
+const SINGLES: u128 = 10;
+
+/// The teams of each ranking of the phase `phase_id`, in seeding order, each its entrants.
+fn teams(machine: &CompetitionStateMachine, phase_id: PhaseId) -> Vec<Vec<EntrantId>> {
+    machine.current().phases()[&phase_id]
+        .divisions()
+        .iter()
+        .flat_map(|division| division.data().rankings().values())
+        .map(|ranking| ranking.entrants().to_vec())
+        .collect()
+}
+
+/// The teams of each open match of the phase `phase_id`, each its entrants.
+fn pairings(machine: &CompetitionStateMachine, phase_id: PhaseId) -> Vec<[Vec<EntrantId>; 2]> {
+    let phase = &machine.current().phases()[&phase_id];
+    open_matches(machine, phase_id)
+        .into_iter()
+        .map(|open| {
+            let data = phase.division_of(&open).unwrap().1.data();
+            let r#match = &data.matches()[&open];
+            let entrants = |team: &Vec1<RankingId>| {
+                team.iter()
+                    .flat_map(|ranking| data.rankings()[ranking].entrants().iter().copied())
+                    .collect()
+            };
+            [entrants(r#match.team_a()), entrants(r#match.team_b())]
+        })
+        .collect()
+}
+
+/// A round robin of drawn pairs, ranked by points, in `groups` groups.
+fn dyp(groups: u32) -> PhasePlugins {
+    PhasePluginsBuilder::new()
+        .teams(RandomPairs)
+        .divisions(groups)
+        .add_ranking(MorePoints)
+        .add_metric(WinsDrawsLossesCalculator)
+        .add_metric(PointsCalculator::new(Score::ONE, Score::new(0.5)))
+        .build()
+        .unwrap()
+}
+
+/// Scenario 3: a DYP of 16 entrants in two groups of four pairs, then a knockout of the best four
+/// pairs.
+fn dyp_then_a_knockout() -> CompetitionStateMachine {
+    let mut machine = registered(16);
+    add(&mut machine, AddPhase::new(phase(DYP), dyp(2)));
+    add(
+        &mut machine,
+        phase_of(
+            phase(KNOCKOUT),
+            vec1![places(phase(DYP), 1, Some(4))],
+            knockout(),
+        ),
+    );
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    machine
+}
+
+#[test]
+fn drawn_pairs_play_together_in_the_phase_and_the_phases_after_it() {
+    let mut machine = dyp_then_a_knockout();
+    let pairs = teams(&machine, phase(DYP));
+    assert_eq!(pairs.len(), 8);
+    assert!(pairs.iter().all(|pair| pair.len() == 2));
+    assert!(pairs.iter().flatten().all_unique());
+    assert_eq!(
+        machine.current().entrants_per_ranking(&phase(KNOCKOUT)),
+        NonZeroU32::new(2)
+    );
+
+    play_out(&mut machine, phase(DYP));
+    start(&mut machine, phase(KNOCKOUT));
+    let best: Vec<_> = machine.current().phases()[&phase(DYP)]
+        .standings()
+        .iter()
+        .take(4)
+        .map(|standing| standing.ranking().entrants().to_vec())
+        .collect();
+
+    assert_eq!(teams(&machine, phase(KNOCKOUT)), best);
+    play_out(&mut machine, phase(KNOCKOUT));
+    // both members of a team share its place
+    let ranking = machine.current().ranking();
+    assert_eq!(ranking.len(), 16);
+    for pair in &pairs {
+        let places = ranking
+            .iter()
+            .filter(|placed| pair.contains(&placed.entrant))
+            .map(|placed| (placed.place, placed.ranking))
+            .collect_vec();
+        assert_eq!(places.len(), 2);
+        assert_eq!(places[0], places[1]);
+    }
+}
+
+#[test]
+fn a_monster_dyp_is_followed_by_a_knockout_of_the_best_with_the_worst() {
+    let mut machine = registered(8);
+    let monster_dyp = PhasePluginsBuilder::new()
+        .format(MonsterDyp::new(3))
+        .add_ranking(MorePoints)
+        .add_metric(WinsDrawsLossesCalculator)
+        .add_metric(PointsCalculator::new(Score::ONE, Score::new(0.5)))
+        .build()
+        .unwrap();
+    add(&mut machine, AddPhase::new(phase(DYP), monster_dyp));
+    let pairs = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .teams(BestWithWorst)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(KNOCKOUT),
+            vec1![Source::everyone(SourceOf::Phase(phase(DYP)))],
+            pairs,
+        ),
+    );
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    play_out(&mut machine, phase(DYP));
+    let monster = standings(&machine, phase(DYP));
+
+    start(&mut machine, phase(KNOCKOUT));
+
+    assert_eq!(
+        teams(&machine, phase(KNOCKOUT)),
+        [
+            vec![monster[0], monster[7]],
+            vec![monster[1], monster[6]],
+            vec![monster[2], monster[5]],
+            vec![monster[3], monster[4]],
+        ]
+    );
+    play_out(&mut machine, phase(KNOCKOUT));
+}
+
+#[test]
+fn pairs_split_up_play_a_knockout_of_singles_partners_kept_apart() {
+    let mut machine = registered(8);
+    add(&mut machine, AddPhase::new(phase(DYP), dyp(1)));
+    let singles = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .teams(Split)
+        .seeding(GroupWinnersApart)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(SINGLES),
+            vec1![Source::everyone(SourceOf::Phase(phase(DYP)))],
+            singles,
+        ),
+    );
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    play_out(&mut machine, phase(DYP));
+    let pairs: Vec<_> = machine.current().phases()[&phase(DYP)]
+        .standings()
+        .iter()
+        .map(|standing| standing.ranking().entrants().to_vec())
+        .collect();
+    let teams_of = machine.current().teams_of(&phase(SINGLES));
+    assert_eq!(teams_of.len(), 8);
+    // both singles of a pair come from the pair's row
+    assert_eq!(teams_of[0].origins, teams_of[1].origins);
+
+    start(&mut machine, phase(SINGLES));
+
+    assert_eq!(
+        machine.current().entrants_per_ranking(&phase(SINGLES)),
+        Some(NonZeroU32::MIN)
+    );
+    assert_eq!(
+        teams(&machine, phase(SINGLES))
+            .into_iter()
+            .flatten()
+            .collect_vec(),
+        pairs.iter().flatten().copied().collect_vec(),
+        "seeded by the place of the pair, the better first"
+    );
+    for [a, b] in pairings(&machine, phase(SINGLES)) {
+        assert!(
+            !pairs
+                .iter()
+                .any(|pair| pair.contains(&a[0]) && pair.contains(&b[0])),
+            "partners meet in the first round"
+        );
+    }
+    play_out(&mut machine, phase(SINGLES));
+    let ranking = machine.current().ranking();
+    assert!(ranking.iter().all(|placed| placed.phase == phase(SINGLES)));
+    assert!(ranking.iter().map(|placed| placed.ranking).all_unique());
+}
+
+#[test]
+fn a_field_that_cannot_be_formed_into_its_teams_is_not_started() {
+    let mut machine = registered(5);
+    add(&mut machine, AddPhase::new(phase(DYP), dyp(1)));
+
+    assert_eq!(
+        refusal::<StartCompetitionError>(&machine, StartCompetition::default()),
+        StartCompetitionError::FieldDoesNotFit { phase: phase(DYP) }
+    );
+
+    let mut machine = registered(5);
+    add(&mut machine, AddPhase::new(phase(GROUPS), round_robin()));
+    let pairs = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .teams(BestWithWorst)
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(KNOCKOUT),
+            vec1![Source::everyone(SourceOf::Phase(phase(GROUPS)))],
+            pairs,
+        ),
+    );
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    play_out(&mut machine, phase(GROUPS));
+
+    assert_eq!(
+        refusal::<StartPhaseError>(&machine, StartPhase::new(phase(KNOCKOUT))),
+        StartPhaseError::FieldDoesNotFit {
+            phase: phase(KNOCKOUT)
+        }
+    );
+}
+
+#[test]
+fn sources_sending_teams_of_different_sizes_are_refused() {
+    let mut machine = registered(8);
+    add(
+        &mut machine,
+        phase_of(
+            phase(DYP),
+            vec1![Source::new(SourceOf::Registration, place(3), None)],
+            dyp(1),
+        ),
+    );
+
+    assert_eq!(
+        refusal::<AddPhaseError>(
+            &machine,
+            phase_of(
+                phase(KNOCKOUT),
+                vec1![
+                    Source::new(SourceOf::Registration, place(1), Some(place(2))),
+                    places(phase(DYP), 1, Some(2)),
+                ],
+                knockout(),
+            ),
+        ),
+        AddPhaseError::MixedTeamSizes
+    );
+}
+
+#[test]
+fn a_competition_of_teams_round_trips_as_its_log_and_as_a_snapshot() {
+    let mut machine = dyp_then_a_knockout();
+    play_out(&mut machine, phase(DYP));
+    start(&mut machine, phase(KNOCKOUT));
     let expected = serde_json::to_value(machine.current()).unwrap();
 
     let json: CompetitionStateMachine =

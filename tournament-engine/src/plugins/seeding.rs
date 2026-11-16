@@ -131,13 +131,14 @@ impl Seeding for SeededAtRandom {
 ///
 /// The qualifiers of the division are ordered by rank in the group (by unique rank in the division
 /// the qualifier comes from): every group's best first, then every group's second, and so on, a
-/// qualifier of the registration counting as the best of a group of its own; qualifiers of one rank
-/// keep the order of the field. Within each rank the order is then changed as little as it takes,
-/// so that in the bracket the order seeds (best seed against worst, as [`SingleElimination`] seeds)
-/// no two qualifiers of one group meet in the first round, and, where every group sends at least
-/// two, the best two of every group are in opposite halves of the bracket, so they can only meet in
-/// the final. Where that cannot be arranged, it keeps only the first; where neither, the order by
-/// rank in the group.
+/// qualifier of the registration counting as the best of a group of its own, and a team of entrants
+/// of several groups (see [`Qualifier::origins`]) as a group of its own, of the best rank among
+/// them; qualifiers of one rank keep the order of the field. Within each rank the order is then
+/// changed as little as it takes, so that in the bracket the order seeds (best seed against worst,
+/// as [`SingleElimination`] seeds) no two qualifiers of one group meet in the first round, and,
+/// where every group sends at least two, the best two of every group are in opposite halves of the
+/// bracket, so they can only meet in the final. Where that cannot be arranged, it keeps only the
+/// first; where neither, the order by rank in the group.
 ///
 /// [`SingleElimination`]: crate::plugins::phase_format::SingleElimination
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
@@ -187,14 +188,28 @@ impl KeptApart {
     fn new<'a>(qualifiers: impl ExactSizeIterator<Item = &'a Qualifier>) -> Self {
         let count = qualifiers.len();
         let (groups, ranks): (Vec<_>, Vec<_>) = qualifiers
-            .map(|qualifier| match qualifier.origin {
-                Origin::Registration { .. } => (None, NonZeroU32::MIN),
-                Origin::Phase {
-                    phase,
-                    division,
-                    unique_rank,
-                    ..
-                } => (Some((phase, division)), unique_rank),
+            .map(|qualifier| {
+                let group_and_rank = |origin: &Origin| match *origin {
+                    Origin::Registration { .. } => (None, NonZeroU32::MIN),
+                    Origin::Phase {
+                        phase,
+                        division,
+                        unique_rank,
+                        ..
+                    } => (Some((phase, division)), unique_rank),
+                };
+                match qualifier.origins.as_slice() {
+                    [origin] => group_and_rank(origin),
+                    // a team of several groups, by the best rank of its members
+                    origins => (
+                        None,
+                        origins
+                            .iter()
+                            .map(|origin| group_and_rank(origin).1)
+                            .min()
+                            .expect("a qualifier has an origin"),
+                    ),
+                }
             })
             .unzip();
         let mut by_rank: Vec<_> = (0..count).collect();

@@ -120,6 +120,11 @@ pub enum AddPhaseError {
     /// it would never start.
     #[error("the registration is closed")]
     RegistrationClosed,
+    /// The sources send qualifiers standing for different numbers of entrants, e.g. single
+    /// entrants of the registration and pairs of a phase, see
+    /// [`Competition::entrants_per_qualifier`].
+    #[error("the sources send teams of different sizes")]
+    MixedTeamSizes,
 }
 
 impl Transition<Competition> for AddPhase {
@@ -154,6 +159,9 @@ impl Transition<Competition> for AddPhase {
                 }));
             }
         }
+        if competition.entrants_per_qualifier(&self.sources).is_none() {
+            return Err(Box::new(AddPhaseError::MixedTeamSizes));
+        }
         if competition.is_started()
             && self
                 .sources
@@ -163,7 +171,7 @@ impl Transition<Competition> for AddPhase {
             return Err(Box::new(AddPhaseError::RegistrationClosed));
         }
         compatibility::check(
-            |declaration| competition.declare_phase_context(declaration),
+            |declaration| competition.declare_phase_context(&self.sources, declaration),
             &self.plugins.plugins(),
         )?;
         Ok(())

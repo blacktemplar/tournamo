@@ -5,6 +5,8 @@
 phase =
     .field-format = Format
     .field-format-description = wie die Spiele angesetzt werden
+    .field-teams = Teams
+    .field-teams-description = ob die Teilnehmer allein oder zusammen spielen
     .field-divisions = Gruppen
     .field-divisions-description = in wie vielen Teilen die Phase gespielt wird, jeder für sich
     .field-draw = Auslosung
@@ -109,6 +111,21 @@ plugin-tournament_engine-seeded_at_random =
 plugin-tournament_engine-group_winners_apart =
     .label = Gruppen getrennt
     .description = für ein K.-o.-System der Besten mehrerer Gruppen: Teilnehmer derselben Gruppe treffen so spät wie möglich aufeinander
+
+## Teams
+
+plugin-tournament_engine-keep =
+    .label = wie gemeldet
+    .description = alle spielen, wie sie kommen: allein oder im Team, mit dem sie kommen
+plugin-tournament_engine-random_pairs =
+    .label = geloste Paare
+    .description = die Teilnehmer werden zu Paaren gelost, die durchgehend zusammen spielen
+plugin-tournament_engine-best_with_worst =
+    .label = Beste mit Schlechtesten
+    .description = paart den Ersten mit dem Letzten, den Zweiten mit dem Vorletzten und so weiter
+plugin-tournament_engine-split =
+    .label = alle allein
+    .description = Teams, die kommen, werden aufgeteilt, sodass ihre Mitglieder allein spielen
 
 ## Metrics calculators
 

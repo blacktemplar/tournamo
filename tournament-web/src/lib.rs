@@ -156,10 +156,10 @@ impl Shell {
                 name,
                 from,
                 ..
-            } => Ok((
-                self.session.competition().phase_draft(),
-                Configuring::Added { name, from },
-            )),
+            } => self
+                .session
+                .new_phase_draft(&from)
+                .map(|draft| (draft, Configuring::Added { name, from })),
             Command::EditPhase { phase } => self
                 .session
                 .phase_draft_to_edit(phase)

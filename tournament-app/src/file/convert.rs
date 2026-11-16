@@ -373,9 +373,10 @@ mod v4 {
 /// shows. A started competition holds its `"lots"`, the order its phase started in, as its
 /// `"registration"` too, and every ranking its `"lot"`, its initial unique rank; the competition
 /// holds the `"highest_number"` of a match or of a pairing of a bracket, a division the
-/// `"number_base"` 0. The plugins of a phase, of a division and of an `AddPhase` are played in one
-/// division (`"divisions"`), dealt back and forth (`"draw"`), seeded in order (`"seeding"`) and
-/// compared across divisions by nothing (`"across"`). The start, saved as `null`, gives no
+/// `"number_base"` 0. The plugins of a phase, of a division and of an `AddPhase` keep the teams as
+/// they come in (`"teams"`), are played in one division (`"divisions"`), dealt back and forth
+/// (`"draw"`), seeded in order (`"seeding"`) and compared across divisions by nothing
+/// (`"across"`). The start, saved as `null`, gives no
 /// `"order"`. A person has no `"rating"`.
 mod v5 {
     use serde_json::{Map, Value, json};
@@ -402,12 +403,16 @@ mod v5 {
         }
     }
 
-    /// Plugins without the fields of divisions are played in one, dealt back and forth, seeded in
-    /// order, compared across divisions by nothing.
+    /// Plugins without the fields of divisions keep their teams as they come in, are played in
+    /// one division, dealt back and forth, seeded in order, compared across divisions by nothing.
     fn one_division(plugins: &mut Map<String, Value>) {
         if plugins.contains_key("divisions") {
             return;
         }
+        plugins.insert(
+            "teams".to_owned(),
+            json!({ "type": "tournament_engine::keep", "value": null }),
+        );
         plugins.insert("divisions".to_owned(), 1.into());
         plugins.insert(
             "draw".to_owned(),
@@ -863,10 +868,14 @@ mod tests {
         session
     }
 
-    /// `plugins`, played in one division, dealt in order, as plugins of format 4 are: without the
-    /// fields of divisions.
+    /// `plugins`, keeping their teams, played in one division, dealt in order, as plugins of format
+    /// 4 are: without the fields of teams and divisions.
     fn without_divisions(plugins: &mut Value) {
         let plugins = plugins.as_object_mut().unwrap();
+        assert_eq!(
+            plugins.remove("teams"),
+            Some(json!({ "type": "tournament_engine::keep", "value": null }))
+        );
         assert_eq!(plugins.remove("divisions"), Some(json!(1)));
         assert_eq!(
             plugins.remove("draw"),
@@ -1132,6 +1141,7 @@ mod tests {
             "columns": [],
             "plugins": {
                 "format": round_robin,
+                "teams": { "type": "tournament_engine::keep", "value": null },
                 "divisions": 1,
                 "draw": { "type": "tournament_engine::snake", "value": null },
                 "seeding": { "type": "tournament_engine::seeded_in_order", "value": null },

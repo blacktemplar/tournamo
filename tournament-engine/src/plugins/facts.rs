@@ -15,9 +15,9 @@ use crate::type_map::TypeMapValue;
 /// How many entrants every ranking of the phase stands for: one for rankings of single players,
 /// two for a phase played between pairs.
 ///
-/// Provided by the phase's context, which the [`Competition`] declares.
+/// Provided by the phase's [`Teams`], from the [`EntrantsPerQualifier`] coming in.
 ///
-/// [`Competition`]: crate::entities::Competition
+/// [`Teams`]: crate::plugins::teams::Teams
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntrantsPerRanking(pub NonZeroU32);
 
@@ -27,6 +27,19 @@ impl EntrantsPerRanking {
 }
 
 impl Fact for EntrantsPerRanking {}
+
+/// How many entrants every qualifier of the field of the phase stands for: one for the
+/// registration, as many as a ranking of an earlier phase stands for for its standings.
+///
+/// Provided by the phase's context, which the [`Competition`] declares from the sources of the
+/// phase, if they all send qualifiers of one size; [`AddPhase`] refuses sources that do not.
+///
+/// [`Competition`]: crate::entities::Competition
+/// [`AddPhase`]: crate::AddPhase
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntrantsPerQualifier(pub NonZeroU32);
+
+impl Fact for EntrantsPerQualifier {}
 
 /// No match of the phase ends in a draw, e.g. since every match has to produce a winner who moves
 /// on.

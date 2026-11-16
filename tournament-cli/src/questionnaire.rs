@@ -1127,7 +1127,7 @@ mod tests {
 
     /// An empty draft of a phase of a new competition.
     fn phase_draft() -> Draft<PhasePlugins> {
-        Competition::default().phase_draft()
+        Competition::default().phase_draft(&[tournament_engine::Source::registration()])
     }
 
     /// The ids of the plugins answering the list `field` of `draft`, without their namespace.
@@ -1154,6 +1154,7 @@ mod tests {
             script.asked,
             [
                 "Format",
+                "Teams",
                 "Groups",
                 "Draw",
                 "Seeding",
@@ -1201,7 +1202,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            script.options[4][..4],
+            script.options[5][..4],
             [
                 "more points",
                 "more Sonneborn-Berger",
@@ -1210,7 +1211,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            script.options[7][..4],
+            script.options[8][..4],
             [
                 "win-draw-loss record",
                 "points",
@@ -1263,6 +1264,7 @@ mod tests {
             Step::Accept,
             Step::Accept,
             Step::Accept,
+            Step::Accept,
             Step::Pick("more Buchholz"),
             Step::Pick(NO_FURTHER_ONE),
         ]);
@@ -1288,6 +1290,7 @@ mod tests {
             Step::Accept,
             Step::Accept,
             Step::Accept,
+            Step::Accept,
             Step::Pick("later elimination"),
             Step::Pick(NO_FURTHER_ONE),
             Step::Many(&["round of elimination"]),
@@ -1299,7 +1302,7 @@ mod tests {
         fill(&mut draft, &mut script).unwrap();
         assert_eq!(script.retries, 1);
         assert_eq!(
-            &script.asked[9..],
+            &script.asked[10..],
             ["Format", "Double elimination: grand final reset"]
         );
         assert!(draft.build().is_ok());
@@ -1309,6 +1312,7 @@ mod tests {
     fn a_missing_configurable_dependency_is_asked_again_instead_of_ignored() {
         let mut script = Script::new([
             Step::Pick("round robin"),
+            Step::Accept,
             Step::Accept,
             Step::Accept,
             Step::Accept,
@@ -1323,7 +1327,7 @@ mod tests {
         let mut draft = phase_draft();
         fill(&mut draft, &mut script).unwrap();
         assert_eq!(script.retries, 1);
-        assert_eq!(script.asked[7], "Metrics");
+        assert_eq!(script.asked[8], "Metrics");
         assert_eq!(ids(&draft, "metrics"), ["points"]);
         draft.add_implied();
         assert!(draft.build().is_ok());
@@ -1350,7 +1354,7 @@ mod tests {
                 "Format",
                 "Random rounds: rounds",
                 "Random rounds: rounds",
-                "Groups"
+                "Teams"
             ]
         );
         assert_eq!(
@@ -1378,6 +1382,7 @@ mod tests {
             &mut Script::new([
                 Step::Pick("Monster DYP"),
                 Step::Integer(7),
+                Step::Accept,
                 Step::Accept,
                 Step::Accept,
                 Step::Accept,

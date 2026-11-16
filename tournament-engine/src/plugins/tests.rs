@@ -13,9 +13,10 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
+    Source,
     entities::{Bye, Competition, DivisionData, Match, RankingId},
     plugins::{
-        facts::{CalculatesMetric, EntrantsPerRanking, MatchAnnotation},
+        facts::{CalculatesMetric, EntrantsPerQualifier, EntrantsPerRanking, MatchAnnotation},
         match_format::{BestOf, Scored, WinnerOnly},
         metrics_calculator::{
             Calculator, GamesBalance, GamesBalanceCalculator, GamesDifference,
@@ -37,6 +38,7 @@ use crate::{
             round_robin::RoundRobin,
             single_elimination::{KnockoutRound, SingleElimination},
         },
+        teams::{BestWithWorst, RandomPairs, Split, Teams},
     },
     score::Score,
     type_map::TypeMapValue,
@@ -48,13 +50,15 @@ const ONE_HALF: PointsCalculator = PointsCalculator::new(Score::ONE, Score::new(
 /// a draw counts half.
 const FULL_HALF: SonnebornBergerCalculator =
     SonnebornBergerCalculator::new(Score::ONE, Score::new(0.5));
-/// Two entrants per ranking, i.e. the rankings a draw pairing the entrants up leaves behind.
+/// Two entrants per ranking, i.e. the rankings of entrants paired up.
 const PAIRS: EntrantsPerRanking = EntrantsPerRanking(NonZeroU32::new(2).unwrap());
 
 /// Whether `plugins` fit together in a competition, i.e. what `AddPhase` checks.
 fn check(plugins: &PhasePlugins) -> Result<(), Incompatibility> {
     check_in(
-        |declaration| Competition::default().declare_phase_context(declaration),
+        |declaration| {
+            Competition::default().declare_phase_context(&[Source::registration()], declaration)
+        },
         plugins,
     )
 }
@@ -93,7 +97,7 @@ fn with_implied(
     metrics: Vec<PluginConfig>,
 ) -> Result<PhasePlugins, Vec<Issue>> {
     let mut draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with("format", format)
         .and_then(|draft| draft.with("ranking", ranking))
         .and_then(|draft| draft.with("metrics", metrics))
@@ -180,6 +184,7 @@ fn the_field_names_are_those_of_the_schema() {
         names,
         [
             PhasePlugins::FORMAT,
+            PhasePlugins::TEAMS,
             PhasePlugins::DIVISIONS,
             PhasePlugins::DRAW,
             PhasePlugins::SEEDING,
@@ -310,7 +315,7 @@ fn a_metric_the_phase_is_ranked_by_is_added_from_the_catalog() {
 #[test]
 fn ranking_by_the_points_difference_adds_its_calculators() {
     let mut draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with("format", plugin::<RoundRobin>())
         .and_then(|draft| draft.with("match_format", plugin::<Scored>()))
         .and_then(|draft| draft.with("ranking", vec![plugin::<HigherPointsDifference>()]))
@@ -329,7 +334,7 @@ fn ranking_by_the_points_difference_adds_its_calculators() {
 #[test]
 fn ranking_by_the_games_difference_adds_its_calculators() {
     let mut draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with("format", plugin::<RoundRobin>())
         .and_then(|draft| draft.with("match_format", plugin::<BestOf>()))
         .and_then(|draft| draft.with("ranking", vec![plugin::<HigherGamesDifference>()]))
@@ -548,25 +553,83 @@ fn a_monster_dyp_fits_a_competition_whose_rankings_are_single_entrants() {
     assert_eq!(check(&plugins), Ok(()));
 }
 
+/// A context sending qualifiers of `entrants` entrants, as a phase ranking teams of them does.
+fn coming_in(entrants: u32) -> impl FnOnce(&mut Declaration) {
+    move |declaration: &mut Declaration| {
+        declaration.provide(EntrantsPerQualifier(NonZeroU32::new(entrants).unwrap()));
+    }
+}
+
 #[test]
-fn a_monster_dyp_cannot_follow_a_draw_that_paired_the_entrants_up() {
+fn a_monster_dyp_cannot_follow_a_phase_of_pairs_kept_together() {
     let format = MonsterDyp::new(3);
     let plugins = PhasePluginsBuilder::new()
         .format(format.clone())
         .build()
         .unwrap();
-    let pairs = |declaration: &mut Declaration| {
-        declaration.provide(PAIRS);
-    };
 
     assert_eq!(
-        check_in(pairs, &plugins),
+        check_in(coming_in(2), &plugins),
         Err(Incompatibility::ConditionNotMet {
             condition: "rankings of single players",
             required_by: format!("{format:?}"),
             provided: format!("{PAIRS:?}"),
         })
     );
+}
+
+#[test]
+fn a_monster_dyp_cannot_pair_the_entrants_up_itself() {
+    let format = MonsterDyp::new(3);
+    let plugins = PhasePluginsBuilder::new()
+        .format(format.clone())
+        .teams(RandomPairs)
+        .build()
+        .unwrap();
+
+    assert_eq!(
+        check(&plugins),
+        Err(Incompatibility::ConditionNotMet {
+            condition: "rankings of single players",
+            required_by: format!("{format:?}"),
+            provided: format!("{PAIRS:?}"),
+        })
+    );
+}
+
+#[test]
+fn a_monster_dyp_follows_a_phase_of_pairs_split_up() {
+    let plugins = PhasePluginsBuilder::new()
+        .format(MonsterDyp::new(3))
+        .teams(Split)
+        .build()
+        .unwrap();
+
+    assert_eq!(check_in(coming_in(2), &plugins), Ok(()));
+}
+
+#[test]
+fn entrants_are_paired_up_only_where_they_come_in_on_their_own() {
+    for teams in [
+        Box::new(RandomPairs) as Box<dyn Teams>,
+        Box::new(BestWithWorst),
+    ] {
+        let plugins = PhasePluginsBuilder::new()
+            .format(SingleElimination::new())
+            .build()
+            .unwrap()
+            .with_teams(teams.clone());
+
+        assert_eq!(check_in(coming_in(1), &plugins), Ok(()));
+        assert_eq!(
+            check_in(coming_in(2), &plugins),
+            Err(Incompatibility::ConditionNotMet {
+                condition: "single entrants coming in",
+                required_by: format!("{teams:?}"),
+                provided: format!("{:?}", EntrantsPerQualifier(NonZeroU32::new(2).unwrap())),
+            })
+        );
+    }
 }
 
 /// The metric of [`CircularCalculator`], which is never calculated.

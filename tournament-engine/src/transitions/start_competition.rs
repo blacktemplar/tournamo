@@ -5,7 +5,9 @@ use thiserror::Error;
 use undoable_state_machine::Transition;
 use vec1::Vec1;
 
-use crate::{EntrantId, entities::Competition, transitions::ensure_not_started};
+#[cfg(doc)]
+use crate::plugins::teams::Teams;
+use crate::{EntrantId, PhaseId, entities::Competition, transitions::ensure_not_started};
 
 /// Closes the registration of a competition: draws the lots of its entrants (see
 /// [`Competition::lots`]), orders the registration (see [`Competition::registration`]) and starts
@@ -48,6 +50,10 @@ pub enum StartCompetitionError {
     /// The order names an entrant more than once.
     #[error("entrant {0:?} named twice")]
     EntrantTwice(EntrantId),
+    /// The field of the phase `phase`, which would start, cannot be formed into its teams, e.g. an
+    /// odd number of entrants into pairs, see [`Teams::fits`].
+    #[error("the field of a phase cannot be formed into its teams")]
+    FieldDoesNotFit { phase: PhaseId },
 }
 
 impl Transition<Competition> for StartCompetition {
@@ -65,6 +71,17 @@ impl Transition<Competition> for StartCompetition {
             .any(|phase| phase.is_fed_by_registration_alone())
         {
             return Err(Box::new(StartCompetitionError::NoPhases));
+        }
+        if let Some(phase) = competition.phases().values().find(|phase| {
+            phase.is_fed_by_registration_alone()
+                && !phase
+                    .plugins()
+                    .teams()
+                    .fits(competition.field_len(&phase.id()))
+        }) {
+            return Err(Box::new(StartCompetitionError::FieldDoesNotFit {
+                phase: phase.id(),
+            }));
         }
         let mut named = HashSet::new();
         for entrant in self.order.iter().flatten() {

@@ -418,22 +418,7 @@ impl Session {
         name: Option<String>,
         from: &[SourceArg],
     ) -> Result<String, Error> {
-        let sources = if from.is_empty() {
-            vec![match self.competition().phases().values().last() {
-                Some(before) => Source::everyone(SourceOf::Phase(before.id())),
-                None => Source::registration(),
-            }]
-        } else {
-            from.iter()
-                .map(|source| {
-                    let of = match source.phase {
-                        None => SourceOf::Registration,
-                        Some(number) => SourceOf::Phase(self.phase_id(Some(number))?),
-                    };
-                    Ok(Source::new(of, source.from, source.to))
-                })
-                .collect::<Result<_, Error>>()?
-        };
+        let sources = self.sources(from)?;
         let mut form = PhaseForm::new(draft.clone());
         form.set_name(name.as_deref().unwrap_or_default());
         form.set_sources(sources);
@@ -443,6 +428,38 @@ impl Session {
         })?;
         let summary = summary(&self.phase(id)?.config());
         Ok(format!("phase added: {summary}"))
+    }
+
+    /// The sources of a phase taking entrants `from`, by default the whole registration for the
+    /// first phase, else every place of the phase before.
+    ///
+    /// # Errors
+    /// Returns an error if `from` names a phase the competition does not have.
+    fn sources(&self, from: &[SourceArg]) -> Result<Vec<Source>, Error> {
+        if from.is_empty() {
+            return Ok(vec![match self.competition().phases().values().last() {
+                Some(before) => Source::everyone(SourceOf::Phase(before.id())),
+                None => Source::registration(),
+            }]);
+        }
+        from.iter()
+            .map(|source| {
+                let of = match source.phase {
+                    None => SourceOf::Registration,
+                    Some(number) => SourceOf::Phase(self.phase_id(Some(number))?),
+                };
+                Ok(Source::new(of, source.from, source.to))
+            })
+            .collect()
+    }
+
+    /// A draft of a new phase taking entrants `from` (see `add-phase`), with nothing answered, to
+    /// be configured and handed to [`Self::apply_phase`].
+    ///
+    /// # Errors
+    /// Returns an error if `from` names a phase the competition does not have.
+    pub fn new_phase_draft(&self, from: &[SourceArg]) -> Result<Draft<PhasePlugins>, Error> {
+        Ok(self.competition().phase_draft(&self.sources(from)?))
     }
 
     /// A draft of the phase of the number `phase`, by default the only running one, holding the
@@ -591,7 +608,10 @@ impl Session {
                 })?;
             config = config.with(field, value);
         }
-        let mut draft = self.competition().phase_draft();
+        let mut draft = match &configuring {
+            Configuring::Added { from, .. } => self.new_phase_draft(from)?,
+            Configuring::Edited { phase } => self.phase_draft_to_edit(*phase)?,
+        };
         draft.set(&ConfigPath::ROOT.field(PhasePlugins::FORMAT), config)?;
         for (field, answer) in own {
             draft.set(&ConfigPath::ROOT.field(field), answer)?;
@@ -1226,7 +1246,7 @@ mod tests {
     ) -> Draft<PhasePlugins> {
         session
             .competition()
-            .phase_draft()
+            .phase_draft(&[Source::registration()])
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))

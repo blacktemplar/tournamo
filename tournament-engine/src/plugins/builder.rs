@@ -11,13 +11,14 @@ use crate::{
         phase_format::{PhaseFormat, RoundRobin},
         ranker::SliceRanker,
         seeding::{SeededInOrder, Seeding},
+        teams::{Keep, Teams},
     },
 };
 
 /// Builds [`PhasePlugins`] directly. Without a format, the phase is a [`RoundRobin`]; without a
-/// ranking, it leaves every entrant tied; without metrics, it calculates none; it is played in one
-/// division, dealt [`Snake`] and [`SeededInOrder`], and ranked across divisions by nothing but the
-/// rank in them.
+/// ranking, it leaves every entrant tied; without metrics, it calculates none; everyone plays as
+/// they come in ([`Keep`]), in one division, dealt [`Snake`] and [`SeededInOrder`], and ranked
+/// across divisions by nothing but the rank in them.
 ///
 /// Nothing else is added: unlike a draft, the builder adds no plugin the others imply. Nor are the
 /// plugins checked against each other, so a fact one of them requires may be missing; adding them
@@ -56,6 +57,7 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct PhasePluginsBuilder {
     format: Option<Box<dyn PhaseFormat>>,
+    teams: Option<Box<dyn Teams>>,
     match_format: Option<Box<dyn MatchFormat>>,
     ranking: Vec<Box<dyn SliceRanker>>,
     metrics: Vec<Box<dyn MetricsCalculator>>,
@@ -75,6 +77,12 @@ impl PhasePluginsBuilder {
     /// Plays the phase in `format`, replacing a format given before.
     pub fn format(mut self, format: impl PhaseFormat) -> Self {
         self.format = Some(Box::new(format));
+        self
+    }
+
+    /// Forms the teams by `teams` instead of [`Keep`].
+    pub fn teams(mut self, teams: impl Teams) -> Self {
+        self.teams = Some(Box::new(teams));
         self
     }
 
@@ -145,7 +153,8 @@ impl PhasePluginsBuilder {
                         self.seeding.unwrap_or_else(|| Box::new(SeededInOrder)),
                     ),
                     self.across,
-                ),
+                )
+                .with_teams(self.teams.unwrap_or_else(|| Box::new(Keep))),
         )
     }
 }
@@ -157,7 +166,7 @@ mod tests {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::Competition;
+    use crate::{Competition, Source};
 
     #[test]
     fn nothing_given_is_a_round_robin_that_fits_a_competition() {
@@ -168,7 +177,8 @@ mod tests {
         assert!(plugins.metrics().is_empty());
         assert_eq!(
             compatibility::check(
-                |declaration| Competition::default().declare_phase_context(declaration),
+                |declaration| Competition::default()
+                    .declare_phase_context(&[Source::registration()], declaration),
                 &plugins.plugins(),
             ),
             Ok(())

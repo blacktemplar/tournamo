@@ -22,11 +22,13 @@ fn place(place: usize) -> NonZeroU32 {
 /// A field of `count` qualifiers of the registration.
 fn registered(count: usize) -> Vec<Qualifier> {
     (0..count)
-        .map(|index| Qualifier {
-            entrants: vec1![entrant(index)],
-            origin: Origin::Registration {
-                place: place(index + 1),
-            },
+        .map(|index| {
+            Qualifier::new(
+                vec1![entrant(index)],
+                Origin::Registration {
+                    place: place(index + 1),
+                },
+            )
         })
         .collect()
 }

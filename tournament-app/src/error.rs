@@ -400,7 +400,9 @@ impl Refusal {
                 engine::AddPhaseError::RegistrationClosed => {
                     Some(Self::Sources(SourcesRefusal::RegistrationClosed))
                 }
-                engine::AddPhaseError::PhaseExists | engine::AddPhaseError::UnknownPhase(_) => None,
+                engine::AddPhaseError::PhaseExists
+                | engine::AddPhaseError::UnknownPhase(_)
+                | engine::AddPhaseError::MixedTeamSizes => None,
             };
         }
         if let Some(error) = error.downcast_ref() {
@@ -409,7 +411,8 @@ impl Refusal {
                 engine::StartCompetitionError::TooFewEntrants => Some(Self::TooFewEntrants),
                 // the session orders only its own entrants, each once
                 engine::StartCompetitionError::UnknownEntrant(_)
-                | engine::StartCompetitionError::EntrantTwice(_) => None,
+                | engine::StartCompetitionError::EntrantTwice(_)
+                | engine::StartCompetitionError::FieldDoesNotFit { .. } => None,
             };
         }
         match error.downcast_ref() {

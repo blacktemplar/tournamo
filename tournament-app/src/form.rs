@@ -32,7 +32,7 @@ use tournament_engine::{
     entities::columns::{self, Rule},
     plugins::{
         metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
-        seeding::SeededInOrder,
+        seeding::SeededInOrder, teams::Keep,
     },
 };
 
@@ -93,21 +93,24 @@ impl FormView {
         fields_of(&self.fields, id)
     }
 
-    /// The fields a summary of the phase shows: those the form shows, but neither the divisions
-    /// where it is played in one, so that it reads as a phase without divisions, nor the seeding
-    /// where it is in order.
+    /// The fields a summary of the phase shows: those the form shows, but neither the teams where
+    /// everyone plays as they come in, nor the divisions where it is played in one, so that it
+    /// reads as a phase without teams and divisions, nor the seeding where it is in order.
     pub fn summary(&self) -> Vec<FormField> {
+        let chosen = |field: &FormField, id: &str| {
+            matches!(
+                &field.input,
+                Input::Plugin(PluginInput { chosen: Some(chosen), .. }) if chosen.plugin.id == id
+            )
+        };
         self.fields
             .iter()
             .filter(|field| match field.name {
+                PhasePlugins::TEAMS => !chosen(field, <Keep as PluginType>::ID),
                 PhasePlugins::DIVISIONS => {
                     !matches!(field.input, Input::Integer { value: Some(1), .. })
                 }
-                PhasePlugins::SEEDING => !matches!(
-                    &field.input,
-                    Input::Plugin(PluginInput { chosen: Some(chosen), .. })
-                        if chosen.plugin.id == <SeededInOrder as PluginType>::ID
-                ),
+                PhasePlugins::SEEDING => !chosen(field, <SeededInOrder as PluginType>::ID),
                 _ => true,
             })
             .cloned()

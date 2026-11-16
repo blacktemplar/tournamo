@@ -38,9 +38,10 @@ impl Session {
         }
     }
 
-    /// A draft of a phase of this competition played in the format `format`, a [`Plugin::id`],
-    /// with schema defaults and format suggestions, see [`PhasePlugins::with_suggestions`].
-    /// It can be changed before it is handed to [`Self::add_phase`].
+    /// A draft of a phase of this competition taking the whole registration, played in the format
+    /// `format`, a [`Plugin::id`], with schema defaults and format suggestions, see
+    /// [`PhasePlugins::with_suggestions`]. It can be changed before it is handed to
+    /// [`Self::add_phase`].
     ///
     /// # Errors
     /// Returns an error if there is no such format, or it offers an answer it does not take.
@@ -51,7 +52,7 @@ impl Session {
             .ok_or_else(|| PhaseDraftError::UnknownFormat(format.to_owned()))?;
         Ok(PhasePlugins::with_suggestions(
             self.competition()
-                .phase_draft()
+                .phase_draft(&[Source::registration()])
                 .with(PhasePlugins::FORMAT, PluginConfig::new(entry.id()))?,
         )?)
     }
@@ -66,20 +67,23 @@ impl Session {
     /// # Errors
     /// Returns an error if a plugin offers an answer it does not take.
     pub fn phase_form(&self) -> Result<PhaseForm, PhaseDraftError> {
-        let draft = self.competition().phase_draft();
         let context = self.form_context(None);
         Ok(match &self.undone_phase {
-            Some(undone) => PhaseForm::new(draft.with_answers(&undone.config)?).of_phase(
-                context,
-                undone.name.as_deref(),
-                undone.sources.to_vec(),
-                undone.columns.clone(),
-            ),
+            Some(undone) => {
+                let draft = self.competition().phase_draft(&undone.sources);
+                PhaseForm::new(draft.with_answers(&undone.config)?).of_phase(
+                    context,
+                    undone.name.as_deref(),
+                    undone.sources.to_vec(),
+                    undone.columns.clone(),
+                )
+            }
             None => {
                 let sources = vec![match self.competition().phases().values().last() {
                     Some(before) => Source::everyone(SourceOf::Phase(before.id())),
                     None => Source::registration(),
                 }];
+                let draft = self.competition().phase_draft(&sources);
                 let mut form =
                     PhaseForm::new(draft).of_phase(context, None, sources, Columns::new());
                 form.apply_suggestions()?;
@@ -219,11 +223,11 @@ impl Session {
     ///
     /// [`Phase::config`]: tournament_engine::Phase::config
     pub fn phase_draft_to_edit(&self, id: PhaseId) -> Result<Draft<PhasePlugins>, NoPhase> {
-        let config = self.phase(id).ok_or(NoPhase)?.config();
+        let phase = self.phase(id).ok_or(NoPhase)?;
         Ok(self
             .competition()
-            .phase_draft()
-            .with_answers(&config)
+            .phase_draft(phase.sources())
+            .with_answers(&phase.config())
             .expect("a phase's draft takes the configuration the phase was built from"))
     }
 

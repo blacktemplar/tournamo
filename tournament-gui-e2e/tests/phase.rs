@@ -165,14 +165,13 @@ async fn enter_in_a_number_takes_it_without_adding_the_phase() {
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn adding_a_phase_with_issues_moves_the_focus_to_them() {
     run_in_new_competition(async |gui| {
-        gui.toggle("Points").await?;
+        gui.choose_format("Single elimination").await?;
+        gui.choose_plugin("ranking", "More points").await?;
 
         gui.click("Add phase").await?;
 
-        gui.expect_focus(
-            "More points needs one of these: points.\nSonneborn-Berger needs one of these: points.",
-        )
-        .await?;
+        gui.expect_focus("More points needs one of these: points.")
+            .await?;
         gui.expect_no_error().await?;
         gui.expect_phase(&[]).await
     })
@@ -249,28 +248,30 @@ async fn what_is_said_about_the_next_field_leaves_the_issue_in_sight() {
 }
 
 /// The points can be scored in many ways, so they are not added without being chosen, and the
-/// ranking by them stays rather than being dropped unnoticed.
+/// ranking by them stays rather than being dropped unnoticed; ticking them calculates them.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_metric_needed_and_not_chosen_is_an_issue_at_the_metrics() {
+async fn a_metric_needed_and_not_calculated_is_an_issue_at_the_metrics() {
     run_in_new_competition(async |gui| {
-        gui.toggle("Points").await?;
+        gui.choose_format("Single elimination").await?;
+        gui.choose_plugin("ranking", "More points").await?;
 
-        gui.expect_issues(&[
-            "More points needs one of these: points.",
-            "Sonneborn-Berger needs one of these: points.",
-        ])
-        .await?;
-        gui.expect_list("ranking", &["More points", "More Sonneborn-Berger"])
+        gui.expect_issues(&["More points needs one of these: points."])
             .await?;
+        gui.expect_list(
+            "ranking",
+            &["Later first loss", "Fewer losses", "More points"],
+        )
+        .await?;
         gui.toggle("Points").await?;
         gui.expect_issues(&[]).await
     })
     .await;
 }
 
-/// A metric stays where it is when it is unchecked or checked again, keeping the focus, so that a
-/// second click at the same place is at the same metric; the others show as checked still.
+/// A metric stays where it is when it is hidden or shown again, keeping the focus, so that a
+/// second click at the same place is at the same metric; the others show as checked still. A
+/// metric hidden that the ranking needs is still calculated.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_metrics_stay_in_place_when_toggled() {
@@ -304,13 +305,15 @@ async fn a_metric_implied_names_what_needs_it() {
         gui.expect_checked(
             "metrics",
             &[
-                "Buchholz, needed by more Buchholz",
+                "Buchholz",
                 "Points",
                 "Sonneborn-Berger",
                 "Win-draw-loss record",
             ],
         )
-        .await
+        .await?;
+        gui.expect_metric_needed("Buchholz", "needed by more Buchholz")
+            .await
     })
     .await;
 }

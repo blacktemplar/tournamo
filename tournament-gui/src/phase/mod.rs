@@ -175,8 +175,10 @@ pub fn PhaseSummary(phase: PhaseId) -> Element {
         return rsx! {};
     };
     let actions = ctx.actions();
+    let view = form.view();
+    let columns = summary::columns(&ctx.translator.read(), &view);
     rsx! {
-        Summary { fields: form.view().summary() }
+        Summary { fields: view.summary(), columns }
         PhaseScale { phase }
         if actions.edit_phase {
             div { class: "phase-actions",

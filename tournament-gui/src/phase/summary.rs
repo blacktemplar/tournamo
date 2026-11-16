@@ -2,16 +2,21 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{FormField, Input, ListInput, PluginInput},
+    form::{FormField, FormView, Input, ListInput, PluginInput},
     i18n::Translator,
 };
+use tournament_engine::{PhasePlugins, Table};
 
 use super::fields::plugin_label;
 use crate::{capitalized, competition::Ctx};
 
-/// How the phase is played, read from the fields of its form.
+/// How the phase is played, read from the fields of its form, then what its tables of standings
+/// show or hide against the rule, as `columns` of a term and the metrics.
 #[component]
-pub(super) fn Summary(fields: Vec<FormField>) -> Element {
+pub(super) fn Summary(
+    fields: Vec<FormField>,
+    #[props(default)] columns: Vec<(String, String)>,
+) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     rsx! {
@@ -53,8 +58,41 @@ pub(super) fn Summary(fields: Vec<FormField>) -> Element {
                     }
                 }
             }
+            for (term, metrics) in columns {
+                dt { key: "{term}", "{term}" }
+                dd {
+                    span { class: "answer", {capitalized(&metrics)} }
+                }
+            }
         }
     }
+}
+
+/// What the tables of standings of the phase `view` shows show or hide against the rule, as
+/// [`Summary`] takes it: nothing where they follow it, nor for the rows compared where the phase
+/// compares nothing.
+pub(super) fn columns(tr: &Translator, view: &FormView) -> Vec<(String, String)> {
+    let compared = view
+        .fields
+        .iter()
+        .any(|field| field.plugin.is_none() && field.name == PhasePlugins::ACROSS);
+    [
+        (Table::Division, true, "columns-also-shows"),
+        (Table::Division, false, "columns-hides"),
+        (Table::Across, true, "columns-compared-also-shows"),
+        (Table::Across, false, "columns-compared-hides"),
+    ]
+    .into_iter()
+    .filter(|&(table, ..)| compared || table == Table::Division)
+    .filter_map(|(table, on, term)| {
+        let metrics: Vec<_> = view
+            .overridden(table, on)
+            .iter()
+            .map(|metric| plugin_label(tr, metric))
+            .collect();
+        (!metrics.is_empty()).then(|| (tr.get(term), metrics.join(&tr.get("list-separator"))))
+    })
+    .collect()
 }
 
 /// Whether any plugin of `list` has fields.

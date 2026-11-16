@@ -514,6 +514,8 @@ impl Session {
         EntrantRow {
             id: *id,
             name: self.people.name(id).map(str::to_owned),
+            rating: self.people.rating(id),
+            seed: self.seed(id),
         }
     }
 

@@ -19,6 +19,7 @@ use crate::{
         SourcesRefusal,
     },
     form::{Context, PhaseForm},
+    i18n::Text,
     view::{Glossary, PhaseName, Plugin},
 };
 
@@ -101,6 +102,39 @@ impl Session {
             phase.sources().to_vec(),
             phase.columns().clone(),
         ))
+    }
+
+    /// Where the lot, not the ratings, decides who of the registration a source of `sources` takes,
+    /// as the competition stands before its start: a warning for each cut through the
+    /// registration after a place whose entrant and the next have equal ratings or none, in the
+    /// order of the places. Nothing once the competition has started, whose registration is set.
+    pub fn lot_cuts(&self, sources: &[Source]) -> Vec<Text> {
+        let competition = self.competition();
+        if competition.is_started() {
+            return Vec::new();
+        }
+        let mut ratings: Vec<_> = competition
+            .entrants()
+            .keys()
+            .map(|id| self.people.rating(id))
+            .collect();
+        ratings.sort_unstable_by(|a, b| b.cmp(a));
+        let mut cuts: Vec<usize> = sources
+            .iter()
+            .filter(|source| source.of() == SourceOf::Registration && !source.is_empty())
+            .flat_map(|source| {
+                let before = source.from().get() as usize - 1;
+                let to = source.to().map(|to| to.get() as usize);
+                [Some(before).filter(|&place| place > 0), to]
+            })
+            .flatten()
+            .filter(|&place| place < ratings.len() && ratings[place - 1] == ratings[place])
+            .collect();
+        cuts.sort_unstable();
+        cuts.dedup();
+        cuts.into_iter()
+            .map(|place| Text::new("warning-lot-decides-cut").with("place", place))
+            .collect()
     }
 
     /// What a form of the phase `id`, or of a new phase if `None`, knows of the competition.

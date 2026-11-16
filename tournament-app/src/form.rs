@@ -423,6 +423,7 @@ impl PhaseForm {
             name: name.unwrap_or_default().to_owned(),
             sources,
             rejected: Rejections::default(),
+            some_places: false,
         };
         self
     }

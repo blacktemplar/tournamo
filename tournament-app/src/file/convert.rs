@@ -21,6 +21,8 @@ struct Converter {
     log_entry: fn(&mut Value),
     /// The competition stored next to the log.
     competition: fn(&mut Value),
+    /// One of the people, as the JSON of a `Person`.
+    person: fn(&mut Value),
 }
 
 /// `CONVERTERS[n]` converts format `n + 1` to format `n + 2`.
@@ -28,18 +30,22 @@ const CONVERTERS: &[Converter] = &[
     Converter {
         log_entry: v2::log_entry,
         competition: v2::competition,
+        person: |_| {},
     },
     Converter {
         log_entry: v3::log_entry,
         competition: |_| {},
+        person: |_| {},
     },
     Converter {
         log_entry: v4::log_entry,
         competition: v4::competition,
+        person: |_| {},
     },
     Converter {
         log_entry: v5::log_entry,
         competition: v5::competition,
+        person: v5::person,
     },
 ];
 
@@ -49,11 +55,15 @@ const _: () = assert!(
 );
 
 /// Brings `file`, the JSON of a file of the format `from`, to [`Format::CURRENT`]: every entry of
-/// its `"log"` and its `"competition"`, if any, and sets its `"format"`.
+/// its `"log"`, every one of its `"people"` and its `"competition"`, if any, and sets its
+/// `"format"`.
 pub(crate) fn upgrade(file: &mut Value, from: Format) {
     for converter in converters(from) {
         if let Some(Value::Array(log)) = file.get_mut("log") {
             log.iter_mut().for_each(converter.log_entry);
+        }
+        if let Some(Value::Array(people)) = file.get_mut("people") {
+            people.iter_mut().for_each(converter.person);
         }
         if let Some(competition) = file.get_mut("competition") {
             (converter.competition)(competition);
@@ -366,7 +376,7 @@ mod v4 {
 /// `"number_base"` 0. The plugins of a phase, of a division and of an `AddPhase` are played in one
 /// division (`"divisions"`), dealt back and forth (`"draw"`), seeded in order (`"seeding"`) and
 /// compared across divisions by nothing (`"across"`). The start, saved as `null`, gives no
-/// `"order"`.
+/// `"order"`. A person has no `"rating"`.
 mod v5 {
     use serde_json::{Map, Value, json};
 
@@ -408,6 +418,12 @@ mod v5 {
             json!({ "type": "tournament_engine::seeded_in_order", "value": null }),
         );
         plugins.insert("across".to_owned(), json!([]));
+    }
+
+    pub(super) fn person(person: &mut Value) {
+        if let Some(person) = person.as_object_mut() {
+            person.entry("rating").or_insert(Value::Null);
+        }
     }
 
     pub(super) fn competition(competition: &mut Value) {
@@ -1188,6 +1204,23 @@ mod tests {
             converted_by(v5::log_entry, apply(ordered.clone())),
             apply(ordered)
         );
+    }
+
+    /// A person of format 4 has no rating; one rated already keeps it.
+    #[test]
+    fn a_person_gets_no_rating_in_format_5() {
+        let converted = |mut person: Value| {
+            v5::person(&mut person);
+            person
+        };
+
+        assert_eq!(
+            converted(json!({ "id": "alice", "name": "Alice" })),
+            json!({ "id": "alice", "name": "Alice", "rating": null })
+        );
+        let rated = json!({ "id": "alice", "name": "Alice", "rating": 1500 });
+        assert_eq!(converted(rated.clone()), rated);
+        assert_eq!(converted(json!("damaged")), json!("damaged"));
     }
 
     /// A phase of an unexpected shape, or holding its divisions already, stays as it is.

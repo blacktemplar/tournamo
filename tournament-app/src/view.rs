@@ -15,7 +15,7 @@ use tournament_engine::{
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
 
-use crate::error::ReportEnteredError;
+use crate::{error::ReportEnteredError, people::Rating};
 
 /// An entrant as a screen shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -24,6 +24,13 @@ pub struct EntrantRow {
     /// The name the entrant is shown by, `None` for an entrant of a log written elsewhere that came
     /// without one.
     pub name: Option<String>,
+    /// How strong the entrant is rated, see [`Session::set_rating`].
+    ///
+    /// [`Session::set_rating`]: crate::session::Session::set_rating
+    pub rating: Option<Rating>,
+    /// The place of the entrant among the rated entrants by rating, from 1, entrants of equal
+    /// ratings sharing it; `None` if it is not rated.
+    pub seed: Option<u32>,
 }
 
 /// A plugin as a list of them shows it, e.g. a format a phase can be played in; its texts are

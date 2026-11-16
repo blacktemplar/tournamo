@@ -224,8 +224,182 @@ fn a_search_finds_an_entrant_without_a_name_only_when_nothing_is_typed() {
     let nameless = EntrantRow {
         id: EntrantId::new(Uuid::nil()),
         name: None,
+        rating: None,
+        seed: None,
     };
 
     assert!(NameSearch::new("").finds(&nameless));
     assert!(!NameSearch::new("a").finds(&nameless));
+}
+
+/// The id of the entrant named `name`.
+fn id_of(session: &Session, name: &str) -> EntrantId {
+    session
+        .entrants()
+        .into_iter()
+        .find(|row| row.name.as_deref() == Some(name))
+        .expect("an entrant of that name")
+        .id
+}
+
+/// Rates the entrant named `name` by `rating`, a number as typed.
+fn rate(session: &mut Session, name: &str, rating: &str) {
+    let id = id_of(session, name);
+    session.set_rating(id, Rating::parse(rating)).unwrap();
+}
+
+/// The rating and seed of each entrant, in the order they were added.
+fn seeds(session: &Session) -> Vec<(Option<f64>, Option<u32>)> {
+    session
+        .entrants()
+        .iter()
+        .map(|row| (row.rating.map(Rating::get), row.seed))
+        .collect()
+}
+
+#[test]
+fn a_rated_entrant_is_seeded_by_its_rating_equal_ratings_sharing_a_seed() {
+    let mut session = Given::new().added();
+    let changes = session.changes();
+
+    rate(&mut session, "Alice", "1500");
+    rate(&mut session, "Bob", "1700,5");
+    rate(&mut session, "Carol", "1500");
+
+    assert_eq!(
+        seeds(&session),
+        [
+            (Some(1500.0), Some(2)),
+            (Some(1700.5), Some(1)),
+            (Some(1500.0), Some(2)),
+            (None, None),
+        ]
+    );
+    assert_eq!(session.changes(), changes + 3);
+    let bob = id_of(&session, "Bob");
+    session.rename_entrant(bob, "Robert").unwrap();
+    session.set_rating(id_of(&session, "Alice"), None).unwrap();
+    assert_eq!(
+        seeds(&session),
+        [
+            (None, None),
+            (Some(1700.5), Some(1)),
+            (Some(1500.0), Some(2)),
+            (None, None),
+        ]
+    );
+}
+
+#[test]
+fn the_start_orders_the_registration_by_rating_then_by_lot() {
+    let mut session = Given::new().added();
+    rate(&mut session, "Dave", "2000");
+    rate(&mut session, "Bob", "1800");
+
+    session.start().unwrap();
+
+    let competition = session.competition();
+    let registration = competition.registration();
+    assert_eq!(
+        registration[..2],
+        [id_of(&session, "Dave"), id_of(&session, "Bob")]
+    );
+    let rest: Vec<_> = competition
+        .lots()
+        .iter()
+        .filter(|id| registration[2..].contains(id))
+        .copied()
+        .collect();
+    assert_eq!(registration[2..], rest);
+}
+
+#[test]
+fn equal_ratings_are_a_tier_ordered_by_lot() {
+    let mut session = Given::new().added();
+    for name in ["Alice", "Bob", "Carol", "Dave"] {
+        rate(&mut session, name, "1500");
+    }
+
+    session.start().unwrap();
+
+    assert_eq!(
+        session.competition().registration(),
+        session.competition().lots()
+    );
+}
+
+/// Without any rating the start gives no order: the competition starts as it did before ratings.
+#[test]
+fn without_ratings_the_start_gives_no_order() {
+    let session = Given::new().started();
+
+    let log = serde_json::to_value(session.machine.log()).unwrap();
+    let start = log
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|entry| entry.pointer("/kind/Apply/StartCompetition"))
+        .unwrap();
+    assert_eq!(start, &serde_json::json!({ "order": [] }));
+}
+
+#[test]
+fn ratings_do_not_change_after_the_start() {
+    let mut session = Given::new().started();
+    let alice = id_of(&session, "Alice");
+
+    assert!(matches!(
+        session.set_rating(alice, Rating::parse("1500")),
+        Err(RateEntrantError::RegistrationClosed)
+    ));
+    assert!(matches!(
+        session.set_rating(EntrantId::new(Uuid::nil()), None),
+        Err(RateEntrantError::UnknownEntrant)
+    ));
+    assert_eq!(seeds(&session)[0], (None, None));
+}
+
+/// A line pasted may give a rating after a tab or a `;`.
+#[test]
+fn a_list_rates_the_entrants_whose_lines_give_a_rating() {
+    let mut session = Session::new("cup");
+
+    session
+        .add_entrants("Alice;1500\nBob\t1700\nCarol;\nDave\n")
+        .unwrap();
+
+    assert_eq!(
+        names(&session.entrants()),
+        ["Alice", "Bob", "Carol", "Dave"]
+    );
+    assert_eq!(
+        seeds(&session),
+        [
+            (Some(1500.0), Some(2)),
+            (Some(1700.0), Some(1)),
+            (None, None),
+            (None, None),
+        ]
+    );
+}
+
+#[test]
+fn a_list_with_a_rating_that_is_no_number_adds_nobody() {
+    let mut session = Session::new("cup");
+
+    assert!(matches!(
+        session.add_entrants("Alice;1500\nBob; strong \n"),
+        Err(AddEntrantError::NoRating(rating)) if rating == "strong"
+    ));
+    assert!(session.entrants().is_empty());
+}
+
+#[test]
+fn ratings_are_exported_with_the_people() {
+    let mut session = Given::new().added();
+    rate(&mut session, "Alice", "1500");
+
+    let imported = Session::import(&session.export(), "cup", &[]).unwrap();
+
+    assert_eq!(seeds(&imported), seeds(&session));
 }

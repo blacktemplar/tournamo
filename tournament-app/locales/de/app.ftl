@@ -6,6 +6,8 @@ error-duplicate-name = es gibt schon einen Teilnehmer namens „{ $name }“
 error-entrant-added-after-start = das Turnier hat begonnen, daher kann kein Teilnehmer mehr hinzugefügt werden
 error-unknown-entrant = diesen Teilnehmer gibt es nicht
 error-entrant-removed-after-start = das Turnier hat begonnen, daher kann kein Teilnehmer mehr entfernt werden
+error-no-rating = „{ $rating }“ ist keine Wertungszahl: eine Wertungszahl ist eine Zahl, etwa 1500
+error-rating-after-start = das Turnier hat begonnen, daher können die Wertungszahlen nicht mehr geändert werden
 error-unknown-format = es gibt kein Format „{ $format }“
 error-format-misconfigured = das Format ist fehlerhaft: { $reason }
 error-invalid-phase = so kann die Phase nicht gespielt werden; das Formular zeigt, was zu ändern ist
@@ -93,6 +95,7 @@ number-range = { $whole ->
        *[other] , die ein Vielfaches von { $multiple } ist
     }
 warning-unranked = ohne Kriterium sind in der Tabelle alle Teilnehmer gleichauf
+warning-lot-decides-cut = die Teilnehmer beiderseits des Schnitts nach Platz { $place } der Anmeldung haben gleiche Wertungszahlen oder keine, daher entscheidet das Los, wer auf welcher Seite ist
 warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger üblicherweise hat
 warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt

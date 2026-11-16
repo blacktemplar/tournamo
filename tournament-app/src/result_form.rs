@@ -732,14 +732,23 @@ pub fn read_score(word: &str) -> Option<Sides<EnteredValue>> {
 /// The number `text` is: digits, a count, or digits with a point or a comma between them, a
 /// decimal.
 fn read_number(text: &str) -> Option<EnteredValue> {
+    match number_parts(text)? {
+        (whole, None) => whole.parse().ok().map(EnteredValue::Count),
+        (whole, Some(fraction)) => format!("{whole}.{fraction}")
+            .parse()
+            .ok()
+            .map(EnteredValue::Decimal),
+    }
+}
+
+/// The whole part and the fraction, if any, of `text`, a number as one is typed: digits, or digits
+/// with a point or a comma between them; `None` for anything else.
+pub(crate) fn number_parts(text: &str) -> Option<(&str, Option<&str>)> {
     let digits = |text: &str| !text.is_empty() && text.chars().all(|char| char.is_ascii_digit());
     match text.split_once(['.', ',']) {
-        None if digits(text) => text.parse().ok().map(EnteredValue::Count),
+        None if digits(text) => Some((text, None)),
         Some((whole, fraction)) if digits(whole) && digits(fraction) => {
-            format!("{whole}.{fraction}")
-                .parse()
-                .ok()
-                .map(EnteredValue::Decimal)
+            Some((whole, Some(fraction)))
         }
         _ => None,
     }

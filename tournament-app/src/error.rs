@@ -25,6 +25,9 @@ use crate::{
 pub enum AddEntrantError {
     EmptyName,
     DuplicateName(String),
+    /// A line pasted gives this after its name as its rating, which is no number, see
+    /// [`Session::add_entrants`](crate::session::Session::add_entrants).
+    NoRating(String),
     Started,
     /// The engine refused the entrant for a reason this crate does not know.
     Rejected(TransitionError),
@@ -47,6 +50,15 @@ pub enum RenameEntrantError {
     UnknownEntrant,
     EmptyName,
     DuplicateName(String),
+}
+
+/// Why the rating of an entrant was not changed.
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum RateEntrantError {
+    UnknownEntrant,
+    /// The competition has started, which ordered the registration by the ratings.
+    RegistrationClosed,
 }
 
 /// Why there is no draft of a phase played in a format.
@@ -412,8 +424,18 @@ impl Message for AddEntrantError {
             Self::DuplicateName(name) => {
                 Text::new("error-duplicate-name").with("name", name.as_str())
             }
+            Self::NoRating(rating) => Text::new("error-no-rating").with("rating", rating.as_str()),
             Self::Started => Text::new("error-entrant-added-after-start"),
             Self::Rejected(error) => rejected(error),
+        }
+    }
+}
+
+impl Message for RateEntrantError {
+    fn text(&self) -> Text {
+        match self {
+            Self::UnknownEntrant => Text::new("error-unknown-entrant"),
+            Self::RegistrationClosed => Text::new("error-rating-after-start"),
         }
     }
 }

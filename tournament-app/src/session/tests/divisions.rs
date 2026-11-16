@@ -19,7 +19,13 @@ const SIX: [&str; 6] = ["Alice", "Bob", "Carol", "Dave", "Erin", "Frank"];
 /// Six entrants in two groups of three, then a knockout of the places 1–3 of the groups, not
 /// started.
 fn groups_and_knockout() -> Session {
-    let mut session = Given::new().entrants(&SIX).divisions(2).added();
+    with_knockout(Given::new().entrants(&SIX).divisions(2))
+}
+
+/// The session `groups` builds, of six entrants, with a knockout of the places 1–3 of its phase,
+/// not started.
+fn with_knockout(groups: Given) -> Session {
+    let mut session = groups.added();
     let mut knockout = session.phase_form().unwrap();
     knockout
         .choose(
@@ -203,6 +209,43 @@ fn of_parallel_divisions_a_cut_through_a_rank_compares_its_rows() {
         session.start_phase_refusal(knockout),
         Some(StartPhaseError::CutThroughTie(_))
     ));
+}
+
+/// The tables of the groups show what the groups are ranked by, the rows compared across them what
+/// they are compared by, each with what that is calculated from.
+#[test]
+fn each_table_shows_what_it_is_ranked_by_and_what_that_is_calculated_from() {
+    let mut session = with_knockout(
+        Given::new()
+            .entrants(&SIX)
+            .divisions(2)
+            .across::<MorePointsPerMatch>(),
+    );
+    session.start().unwrap();
+    let groups = session.first();
+    play_out_by_lot(&mut session, groups);
+    let headers =
+        |columns: &[Column]| -> Vec<&str> { columns.iter().map(|column| column.header).collect() };
+
+    let group = session
+        .standings(DivisionRef {
+            phase: groups,
+            division: 0,
+        })
+        .unwrap();
+    let compared = session.compared(groups);
+
+    assert_eq!(
+        headers(&group.columns),
+        ["points", "Sonneborn-Berger", "W-D-L"]
+    );
+    assert_eq!(headers(&compared[0].columns), ["P/M", "W-D-L", "points"]);
+    let ranks: Vec<bool> = compared[0]
+        .columns
+        .iter()
+        .map(|column| column.ranks)
+        .collect();
+    assert_eq!(ranks, [true, false, false]);
 }
 
 const TWELVE: [&str; 12] = [

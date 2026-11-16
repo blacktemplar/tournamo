@@ -5,8 +5,9 @@ use tournament_app::{
     form::{FormField, Input, Path, PhaseForm, PluginInput, PluginOption},
     i18n::{PluginText, Text, Translator},
 };
+use tournament_engine::PhasePlugins;
 
-use super::lists::{OrderedList, UnorderedList};
+use super::lists::{MetricsList, OrderedList, UnorderedList};
 use crate::{
     capitalized,
     competition::Ctx,
@@ -18,16 +19,22 @@ use crate::{
 
 #[component]
 pub(super) fn Fields(form: Signal<PhaseForm>, fields: Vec<FormField>, disabled: bool) -> Element {
+    // the rows compared across divisions show metrics where the phase shows its field comparing
+    // them
+    let compared = fields
+        .iter()
+        .any(|field| field.plugin.is_none() && field.name == PhasePlugins::ACROSS);
     rsx! {
         for field in fields {
-            Field { key: "{field.path}", form, field, disabled }
+            Field { key: "{field.path}", form, field, compared, disabled }
         }
     }
 }
 
-/// One field, laid out by the kind of its answer.
+/// One field, laid out by the kind of its answer. `compared` is whether the phase compares its
+/// divisions, so that a list of metrics has a column for the comparison.
 #[component]
-fn Field(form: Signal<PhaseForm>, field: FormField, disabled: bool) -> Element {
+fn Field(form: Signal<PhaseForm>, field: FormField, compared: bool, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let id = id(&field.path);
@@ -128,7 +135,7 @@ fn Field(form: Signal<PhaseForm>, field: FormField, disabled: bool) -> Element {
                     }
                     {about}
                     if answered {
-                        Field { form, field: inner, disabled }
+                        Field { form, field: inner, compared, disabled }
                     }
                     {issues}
                 }
@@ -153,6 +160,8 @@ fn Field(form: Signal<PhaseForm>, field: FormField, disabled: bool) -> Element {
                 }
                 if list.ordered {
                     OrderedList { form, path, id: id.clone(), list, disabled }
+                } else if !list.shown.is_empty() {
+                    MetricsList { form, list_id: id.clone(), list, compared, disabled }
                 } else {
                     UnorderedList { form, path, list_id: id.clone(), list, disabled }
                 }

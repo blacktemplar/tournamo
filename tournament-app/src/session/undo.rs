@@ -45,6 +45,7 @@ impl Session {
                     name: phase.name().map(str::to_owned),
                     sources: phase.sources().clone(),
                     config: phase.config(),
+                    columns: phase.columns().clone(),
                 })
             }
             _ => None,

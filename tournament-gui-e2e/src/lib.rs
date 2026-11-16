@@ -320,7 +320,14 @@ impl Gui {
             Err(_) => self.driver.query(By::Id(id)).first().await?,
         };
         // in sight, as below a long list of entrants it may be under the bar
-        self.click_in_sight(&trigger).await
+        self.click_in_sight(&trigger).await?;
+        // the list takes the focus a frame after it opens, which scrolls it into sight: until
+        // then an option may still move away from under the pointer
+        self.driver
+            .query(By::Css("[role='listbox'][data-state='open']:focus"))
+            .first()
+            .await?;
+        Ok(())
     }
 
     /// Moves the pointer onto the option labelled `label` of the list of plugins open.
@@ -565,6 +572,78 @@ impl Gui {
                 By::Id(field_id(path)),
                 |query| query.with_value(text.to_owned()),
                 &format!("the value {text:?}"),
+            )
+            .await
+    }
+
+    /// Checks or unchecks the checkbox named `name` without a label of its own, e.g. that of a
+    /// metric in a column of the table of metrics: `"Show points in the comparison"`.
+    pub async fn toggle_named(&self, name: &str) -> WebDriverResult<()> {
+        let checkbox = self
+            .driver
+            .query(By::XPath(format!(
+                "//input[@type='checkbox'][{}='{name}']",
+                without_isolation_marks("@aria-label")
+            )))
+            .and_enabled()
+            .first()
+            .await?;
+        self.click_in_sight(&checkbox).await
+    }
+
+    /// Waits until the checkbox named `name` without a label of its own, see
+    /// [`Self::toggle_named`], has the focus and is checked if `checked`, by the rule if `by_rule`:
+    /// with the look of a box checked by rule, and saying why.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_named_checkbox(
+        &self,
+        name: &str,
+        checked: bool,
+        by_rule: bool,
+    ) -> WebDriverResult<()> {
+        let state = if checked {
+            ":checked"
+        } else {
+            ":not(:checked)"
+        };
+        let rule = if by_rule {
+            ".by-rule[aria-describedby]"
+        } else {
+            ":not(.by-rule)"
+        };
+        // the name translated isolates the metric in it, which a CSS selector cannot ignore: each
+        // of its words is in it
+        let named: String = name
+            .split_whitespace()
+            .map(|word| format!("[aria-label*=\"{word}\"]"))
+            .collect();
+        self.page
+            .expect(
+                By::Css(format!("input[type=checkbox]{named}{state}{rule}:focus")),
+                |query| query,
+                &format!("the checkbox {name:?} focused, checked: {checked}, by rule: {by_rule}"),
+            )
+            .await
+    }
+
+    /// Waits until the metric of the list of metrics labelled `metric` says it is `needed`, e.g.
+    /// `"needed by more points"`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_metric_needed(&self, metric: &str, needed: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::XPath(format!(
+                    "//ul[@id='{list}']/li[label[{text}='{metric}']]/span[@class='needed']\
+                     [{text}='{needed}']",
+                    list = field_id("metrics"),
+                    text = without_isolation_marks("normalize-space()"),
+                )),
+                |query| query,
+                &format!("{metric} {needed}"),
             )
             .await
     }
@@ -1171,6 +1250,36 @@ impl Gui {
     pub async fn expect_standings_headings(&self, headings: &[&str]) -> WebDriverResult<()> {
         self.page
             .expect_texts(By::Css("h2[id^='standings']"), headings)
+            .await
+    }
+
+    /// Waits until the headers of the columns of the standings of the division of the letter
+    /// `letter` are `headers`, in order, e.g. `"Rank"`.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with the headers shown instead.
+    pub async fn expect_division_standings_headers(
+        &self,
+        letter: char,
+        headers: &[&str],
+    ) -> WebDriverResult<()> {
+        let letter = letter.to_ascii_lowercase();
+        self.page
+            .expect_texts(
+                By::Css(format!("#standing-list-{letter} thead th")),
+                headers,
+            )
+            .await
+    }
+
+    /// Waits until the headers of the columns of the cards comparing a place across the groups
+    /// are `headers`, in order, those of each card after those of the one before.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with the headers shown instead.
+    pub async fn expect_compared_headers(&self, headers: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(".compared-list thead th"), headers)
             .await
     }
 

@@ -2,8 +2,8 @@
 
 use plugin_factory::{catalog::AnyAxis, config::PluginConfig, draft::Draft};
 use tournament_engine::{
-    AddPhase, CompetitionStateMachineExt as _, CompetitionTransition, PhaseId, PhasePlugins,
-    Source, SourceOf,
+    AddPhase, Columns, CompetitionStateMachineExt as _, CompetitionTransition, PhaseId,
+    PhasePlugins, Source, SourceOf,
     plugins::{
         metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
     },
@@ -72,13 +72,15 @@ impl Session {
                 context,
                 undone.name.as_deref(),
                 undone.sources.to_vec(),
+                undone.columns.clone(),
             ),
             None => {
                 let sources = vec![match self.competition().phases().values().last() {
                     Some(before) => Source::everyone(SourceOf::Phase(before.id())),
                     None => Source::registration(),
                 }];
-                let mut form = PhaseForm::new(draft).of_phase(context, None, sources);
+                let mut form =
+                    PhaseForm::new(draft).of_phase(context, None, sources, Columns::new());
                 form.apply_suggestions()?;
                 form
             }
@@ -97,6 +99,7 @@ impl Session {
             self.form_context(Some(id)),
             phase.name(),
             phase.sources().to_vec(),
+            phase.columns().clone(),
         ))
     }
 
@@ -147,7 +150,8 @@ impl Session {
         let id = PhaseId::new(Uuid::new_v4());
         let added = AddPhase::new(id, plugins)
             .with_name(name)
-            .with_sources(sources);
+            .with_sources(sources)
+            .with_columns(form.columns().clone());
         self.history
             .apply_new(&mut self.machine, added.into())
             .map_err(|error| {
@@ -205,7 +209,8 @@ impl Session {
         let plugins = completed(form.draft()).map_err(EditPhaseError::Invalid)?;
         let edited = AddPhase::new(id, plugins)
             .with_name(name)
-            .with_sources(sources);
+            .with_sources(sources)
+            .with_columns(form.columns().clone());
         let changed = self
             .machine
             .reconfigure_phase(&mut self.history, edited.clone())

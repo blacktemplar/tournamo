@@ -139,3 +139,81 @@ async fn knockouts_in_blocks_play_for_places_of_their_own() {
     })
     .await;
 }
+
+/// The group tables show what the groups are ranked by and what that is calculated from, the
+/// card comparing a place what the groups are compared by; the operator hides and adds a metric
+/// for either while the phase is played.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
+    const WDL_IN_GROUPS: &str = "Show win-draw-loss record in the group tables";
+    const BUCHHOLZ_IN_GROUPS: &str = "Show Buchholz in the group tables";
+    run_in_new_competition(async |gui| {
+        groups_and_knockout(&gui).await?;
+        gui.click("Start").await?;
+        for number in 1..=15 {
+            gui.enter_result(&format!("{number} x")).await?;
+        }
+        gui.go_to_phase("1 · Round robin").await?;
+
+        // not the points per match, which only the comparison is ranked by
+        gui.expect_division_standings_headers(
+            'a',
+            &["Rank", "Name", "Points", "SB", "W-D-L", "Played"],
+        )
+        .await?;
+        gui.expect_compared_headers(&["Name", "Group", "P/M", "W-D-L", "Points", "Played"])
+            .await?;
+
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+        gui.page.check_accessibility().await?;
+        gui.toggle_named(WDL_IN_GROUPS).await?;
+        gui.expect_named_checkbox(WDL_IN_GROUPS, false, false)
+            .await?;
+        gui.click("Save changes").await?;
+        gui.click("Matches & standings").await?;
+        gui.expect_division_standings_headers('a', &["Rank", "Name", "Points", "SB", "Played"])
+            .await?;
+        gui.expect_compared_headers(&["Name", "Group", "P/M", "W-D-L", "Points", "Played"])
+            .await?;
+        gui.click("Undo").await?;
+        gui.expect_division_standings_headers(
+            'a',
+            &["Rank", "Name", "Points", "SB", "W-D-L", "Played"],
+        )
+        .await?;
+
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+        gui.toggle_named(BUCHHOLZ_IN_GROUPS).await?;
+        gui.expect_named_checkbox(BUCHHOLZ_IN_GROUPS, true, false)
+            .await?;
+        gui.click("Save changes").await?;
+        gui.click("Matches & standings").await?;
+        gui.expect_division_standings_headers(
+            'a',
+            &["Rank", "Name", "Points", "SB", "W-D-L", "Bh", "Played"],
+        )
+        .await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+        gui.toggle_named(BUCHHOLZ_IN_GROUPS).await?;
+        gui.click("Save changes").await?;
+        // no longer calculated
+        gui.expect_phase(&[
+            "Round robin",
+            "3",
+            "In order",
+            "Winner only",
+            "More points, more Sonneborn-Berger",
+            "Win-draw-loss record",
+            "Points",
+            "Sonneborn-Berger",
+            "Points per match",
+            "More points per match",
+        ])
+        .await
+    })
+    .await;
+}

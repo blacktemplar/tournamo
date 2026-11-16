@@ -35,6 +35,13 @@ later one: a file whose `"format"` changes is migrated, not refused.
   place in a group going on as things stand; a bracket or cross table per
   group. Who won the competition is shown above the phases, not in the phase
   shown.
+- What a table of standings shows is chosen per metric: the metrics of a
+  phase are a checkbox per table, the group tables and, where groups are
+  compared, the comparison. By default a table shows what it is ranked by and
+  what that is calculated from (ranked by points also the wins, draws and
+  losses), marked by an outlined tick; ticking or unticking shows or hides a
+  metric anyway, also while the phase is played, and a metric ticked is
+  calculated. The summary of a phase names what is shown or hidden so.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
   `ranking` and `edit-phase`; `--division <letter>` for `matches` and
@@ -67,6 +74,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   dealt in order, compared by nothing in a competition of an earlier format).
   Competitions of formats 1 to 4 open unchanged; earlier versions refuse
   format 5.
+- The group tables show fewer columns by default, also in competitions saved
+  before: a metric no criterion of the table ranks by and nothing ranked by is
+  calculated from (e.g. the points per match the groups are only compared by,
+  or a Sonneborn-Berger score nothing ranks by) is no longer shown. To get one
+  back, edit the phase and tick it for the group tables. The rows compared
+  across groups also show what their criteria's metrics are calculated from,
+  and the CLI's `ranking` lists the columns of the criteria first. In format
+  5, a phase and the change adding it hold their `"columns"`.
 - Ties in the standings left by every criterion are broken by lot, which an
   existing competition gets as the order it started in, so nothing changes in
   it.

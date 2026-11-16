@@ -1,5 +1,6 @@
 mod annotated;
 mod bye;
+pub mod columns;
 mod competition;
 pub mod details;
 mod division;

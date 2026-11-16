@@ -282,7 +282,7 @@ pub trait CompetitionStateMachineExt {
     ///
     /// The plugins are built from a draft holding the config of the phase, see
     /// [`Phase::config`](crate::Phase::config), changed as needed. Returns `None`, leaving the log
-    /// unchanged, if the phase has its name, sources and config already.
+    /// unchanged, if the phase has its name, sources, config and columns already.
     ///
     /// # Errors
     /// Returns [`ReconfigurePhaseError::NotAdded`] if no [`AddPhase`] in effect added a phase with
@@ -455,6 +455,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
             added.name() == phase.name()
                 && added.sources() == phase.sources()
                 && added.config() == phase.plugins().config()
+                && added.columns() == phase.columns()
         }) {
             return Ok(None);
         }

@@ -65,6 +65,7 @@ pub fn Help() -> Element {
                 Glossary { plugins: glossary.formats }
                 h3 { {tr.get("help-standings")} }
                 p { {tr.get("help-standings-text")} }
+                p { {tr.get("help-columns-text")} }
                 h3 { {tr.get("help-groups")} }
                 p { {tr.get("help-groups-text")} }
                 h4 { {tr.get("help-criteria")} }

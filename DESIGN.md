@@ -863,11 +863,12 @@ standings of earlier phases; its **draw** deals the field to its divisions.
 - **Points per match** compare groups of different sizes: the points divided
   by the matches played and the byes reached.
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",
-  "seed", "started", "divisions": [{"plugins", "data", "number_base"}]}`
+  "columns", "seed", "started", "divisions": [{"plugins", "data",
+  "number_base"}]}`
   (format 5), a division's data in the layout a phase's had, each ranking with
   its `lot`, ranks written, read and dropped; the competition holds its `lots`
   and the `highest_number` of a match. The converter from format 4 gives an
-  `AddPhase` and a phase no name and the whole registration, the rankings
+  `AddPhase` and a phase no name, the whole registration and no columns, the rankings
   their initial unique rank as their lot, the competition the order its phase
   started in as its lots and the highest number of a match or of a pairing of
   a bracket, a division the base 0. The converter from
@@ -909,6 +910,66 @@ Rejected:
   wherever a consumer lets such a start through.
 - Hiding `across` by a fact: facts come from plugins, not from a number
   answered; the form hides it while there is one division and it is empty.
+
+### What the standings show
+
+A phase has two tables of standings (`Table`): those of a division, ranked by
+`ranking`, and the rows of one place compared across parallel divisions,
+ranked by `across`. Each shows a column per metric it shows, decided per
+metric (`Phase::shown`, the one rule for every consumer):
+
+- **By rule a table shows what it is ranked by and what that is calculated
+  from**, however far back (`columns::by_rule`): ranked by points per match,
+  it shows them, the points and the wins, draws and losses; a metric
+  calculated for the other table alone (points per match for the comparison)
+  stays out. "Ranked by" is a criterion of the table requiring the metric,
+  "calculated from" a calculator so shown requiring it, both read from the
+  static declarations. The rule is not stored, so it holds for competitions
+  saved before too, and a phase nobody touched follows it when its criteria
+  change.
+- **The operator decides otherwise per metric and table**, and only where it
+  differs from the rule (`Columns`, by calculator id, a `Shown` of two
+  `Option<bool>`). Only calculators offering a column are shown; those a
+  criterion ranks by come first, in the order of the criteria, then the
+  others in running order.
+- **The choice is data of `AddPhase`**, like the name and the sources, so a
+  change is logged, undoable and edits a running phase without touching a
+  result (`reconfigure_phase` counts a change of the columns alone).
+  `AddPhase::with_columns` drops what is said about a calculator the phase
+  does not have, so a column never names a metric that is not calculated.
+- **The operator chooses where a metric is shown, not whether it is
+  calculated.** A metric neither needed nor shown has no effect, so the form's
+  list of metrics is a table of checkboxes, a column per table of standings
+  (one with one division compared by nothing): ticking a metric not
+  calculated adds it, hiding one in the last table showing it removes it with
+  its fields unless something needs it (`PhaseForm::set_shown`). A box on by
+  rule is told from one the operator ticked by its look, an outlined tick, and
+  says why as its accessible description. A phase that calculates a metric
+  nothing needs and nothing shows (saved before, or by the CLI) keeps it until
+  the operator touches its row.
+- Nothing of this runs when a result is reported.
+
+Rejected:
+- An ordered list of columns per table: it can name a metric nobody
+  configured, and is a second place to keep in step with the metrics. A free
+  order of the columns: the order of the criteria is what an operator
+  expects.
+- The two booleans as fields of every calculator in the schema: each plugin,
+  third-party ones too, would repeat them; `plugin-factory` has no list whose
+  elements carry fields of the list's owner, and adding that touches schema,
+  draft, implied plugins, compatibility and both prompters.
+- Storing the choice outside the log like the names: a change would not be
+  undoable, and the log would not say what a table showed.
+- The format naming extra columns (every format would repeat it); a column
+  saying of itself that it is shown with what it is calculated from, directly
+  only (ranked by points per match alone, a table had no wins, draws and
+  losses, and a plugin had one more thing to declare); only what is ranked by
+  (a league table without wins, draws and losses); keeping the tables of old
+  saves by a converter (their group tables lose the columns nothing there
+  needs, and whoever misses one edits the phase).
+- A third checkbox "calculated" (a choice without effect), a button adding a
+  metric for show (ticking its box does it), a text next to a box on by rule
+  (the look tells it apart, the reason is its description).
 
 ## Persistence
 

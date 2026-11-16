@@ -8,21 +8,25 @@ use rand::RngExt;
 use serde::{Deserialize, Deserializer, Serialize};
 use vec1::Vec1;
 
-#[cfg(doc)]
 use crate::{
-    Competition,
-    plugins::{draw::Draw, phase_format::PhaseFormat},
-};
-use crate::{
-    Division, Entrant, MatchId, Part, PhaseId, PhaseStandings, Qualifier, RankingId, Seed, Source,
-    Standing, Standings,
-    entities::Entropy,
+    Columns, Division, Entrant, MatchId, Part, PhaseId, PhaseStandings, Qualifier, RankingId, Seed,
+    Source, Standing, Standings,
+    entities::{
+        Entropy,
+        columns::{self, Rule, Table},
+    },
     map::{IdAble, IdMap, Map},
     plugins::{
         PhasePlugins,
         draw::{DivisionOrder, DrawView},
+        metrics_calculator::MetricsCalculator,
         ranker::RankingScope,
     },
+};
+#[cfg(doc)]
+use crate::{
+    Competition,
+    plugins::{draw::Draw, phase_format::PhaseFormat},
 };
 
 /// A phase of a competition: where its entrants come from, one configuration of plugins, played
@@ -35,6 +39,7 @@ pub struct Phase {
     sources: Vec1<Source>,
     /// As configured; never changed after the phase is added.
     plugins: PhasePlugins,
+    columns: Columns,
     seed: Seed,
     started: bool,
     /// Empty until the phase is started.
@@ -56,6 +61,7 @@ impl Phase {
         name: Option<String>,
         sources: Vec1<Source>,
         plugins: PhasePlugins,
+        columns: Columns,
         seed: Seed,
     ) -> Self {
         Self {
@@ -63,6 +69,7 @@ impl Phase {
             name,
             sources,
             plugins,
+            columns,
             seed,
             started: false,
             divisions: Vec::new(),
@@ -104,6 +111,63 @@ impl Phase {
     /// [`reconfigure_phase`](crate::CompetitionStateMachineExt::reconfigure_phase).
     pub fn config(&self) -> Config {
         self.plugins.config()
+    }
+
+    /// What the operator said about the columns of its tables of standings, see [`Self::shown`].
+    pub fn columns(&self) -> &Columns {
+        &self.columns
+    }
+
+    /// The calculators of this phase that `table` shows by rule, by id, with why, see
+    /// [`columns::by_rule`].
+    pub fn rule(&self, table: Table) -> Vec<(&'static str, Rule)> {
+        let criteria = match table {
+            Table::Division => self.plugins.ranking(),
+            Table::Across => self.plugins.across(),
+        };
+        let criteria: Vec<&str> = criteria
+            .iter()
+            .map(|criterion| plugin_factory::id_of(&**criterion))
+            .collect();
+        let metrics: Vec<&str> = self
+            .plugins
+            .metrics()
+            .iter()
+            .map(|calculator| plugin_factory::id_of(&**calculator))
+            .collect();
+        columns::by_rule(&criteria, &metrics)
+    }
+
+    /// The calculators whose column `table` shows, in the order of the columns: those the
+    /// [rule](Self::rule) shows and the operator did not hide, and those the operator showed
+    /// ([`Self::columns`]), if they offer a column ([`MetricsCalculator::column`]). Those a
+    /// criterion of the table ranks by come first, in the order of the criteria, then the others
+    /// in running order.
+    pub fn shown(&self, table: Table) -> Vec<&dyn MetricsCalculator> {
+        let rule = self.rule(table);
+        let mut shown: Vec<&dyn MetricsCalculator> = self
+            .plugins
+            .metrics()
+            .iter()
+            .map(|calculator| &**calculator)
+            .filter(|calculator| {
+                let id = plugin_factory::id_of(*calculator);
+                self.columns
+                    .get(id)
+                    .of(table)
+                    .unwrap_or_else(|| rule.iter().any(|&(ruled, _)| ruled == id))
+                    && calculator.column().is_some()
+            })
+            .collect();
+        // stable, so that the others stay in running order; the rule lists those ranked by
+        // first, in the order of the criteria
+        shown.sort_by_key(|calculator| {
+            let id = plugin_factory::id_of(*calculator);
+            rule.iter()
+                .position(|&(ruled, why)| ruled == id && matches!(why, Rule::RankedBy(_)))
+                .unwrap_or(usize::MAX)
+        });
+        shown
     }
 
     pub fn is_started(&self) -> bool {
@@ -290,6 +354,7 @@ impl<'de> Deserialize<'de> for Phase {
             name: Option<String>,
             sources: Vec1<Source>,
             plugins: PhasePlugins,
+            columns: Columns,
             seed: Seed,
             started: bool,
             divisions: Vec<Division>,
@@ -303,6 +368,7 @@ impl<'de> Deserialize<'de> for Phase {
             name: saved.name,
             sources: saved.sources,
             plugins: saved.plugins.without_state(),
+            columns: saved.columns,
             seed: saved.seed,
             started: saved.started,
             divisions: saved.divisions,

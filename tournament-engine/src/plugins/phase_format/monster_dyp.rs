@@ -70,6 +70,11 @@ impl MonsterDyp {
 
 #[register]
 impl PhaseFormat for MonsterDyp {
+    /// Every round is drawn by lot, whatever order the entrants start in.
+    fn reads_seeding(&self) -> bool {
+        false
+    }
+
     /// Ranked by points, and showing the wins, draws and losses as well.
     fn suggestions(&self) -> PhaseSuggestions {
         // sitting a round out scores like a win, so the matches played need no tie break

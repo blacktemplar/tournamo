@@ -103,6 +103,7 @@ fn a_new_phase_is_answered_as_its_format_recommends() {
             "format",
             "divisions",
             "draw",
+            "seeding",
             "match_format",
             "ranking",
             "metrics"
@@ -885,7 +886,7 @@ fn a_summary_leaves_out_one_division_dealt_in_order() {
     };
     assert_eq!(
         names(&form),
-        ["format", "match_format", "ranking", "metrics"]
+        ["format", "seeding", "match_format", "ranking", "metrics"]
     );
 
     form.enter(&path("divisions"), "2").unwrap();
@@ -896,6 +897,7 @@ fn a_summary_leaves_out_one_division_dealt_in_order() {
             "format",
             "divisions",
             "draw",
+            "seeding",
             "match_format",
             "ranking",
             "metrics",

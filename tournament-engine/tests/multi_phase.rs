@@ -11,12 +11,13 @@ use tournament_engine::{
     PhasePluginsBuilder, RankingId, ReportMatchResult, Score, Seed, SetCompetitionSeed, Source,
     SourceOf, StartCompetition, StartPhase,
     plugins::{
-        draw::{Blocks, GroupWinnersApart},
+        draw::Blocks,
         metrics_calculator::{
             LaterFirstLoss, MorePoints, MorePointsPerMatch, PointsCalculator,
             PointsPerMatchCalculator, RoundOfFirstLossCalculator, WinsDrawsLossesCalculator,
         },
         phase_format::SingleElimination,
+        seeding::GroupWinnersApart,
     },
     transitions::{
         AddPhaseError, Change, ConflictsError, RemovePhaseError, StartCompetitionError,
@@ -772,7 +773,7 @@ fn groups_then_a_knockout() -> CompetitionStateMachine {
     add(&mut machine, AddPhase::new(phase(GROUPS), groups(3)));
     let knockout = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
-        .draw(GroupWinnersApart)
+        .seeding(GroupWinnersApart)
         .add_ranking(LaterFirstLoss)
         .add_metric(RoundOfFirstLossCalculator)
         .build()

@@ -126,6 +126,8 @@ fn every_plugin_is_labelled_as_the_guidelines_say() {
         ("format", AnyAxis::of::<dyn PhaseFormat>()),
         ("criterion", AnyAxis::of::<dyn SliceRanker>()),
         ("calculator", AnyAxis::of::<dyn MetricsCalculator>()),
+        ("draw", AnyAxis::of::<dyn Draw>()),
+        ("seeding", AnyAxis::of::<dyn Seeding>()),
     ];
     let mut fields: Vec<_> = PhasePlugins::schema().fields().to_vec();
     for (axis_name, axis) in axes {
@@ -180,6 +182,7 @@ fn the_field_names_are_those_of_the_schema() {
             PhasePlugins::FORMAT,
             PhasePlugins::DIVISIONS,
             PhasePlugins::DRAW,
+            PhasePlugins::SEEDING,
             PhasePlugins::MATCH_FORMAT,
             PhasePlugins::RANKING,
             PhasePlugins::METRICS,

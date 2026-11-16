@@ -29,7 +29,7 @@ use plugin_factory::{
 use tournament_engine::{
     Columns, PhasePlugins, Table,
     entities::columns::{self, Rule},
-    plugins::{draw::InOrder, metrics_calculator::MetricsCalculator, ranker::SliceRanker},
+    plugins::{draw::Snake, metrics_calculator::MetricsCalculator, ranker::SliceRanker},
 };
 
 use crate::{
@@ -101,7 +101,7 @@ impl FormView {
                 && matches!(
                     &field.input,
                     Input::Plugin(PluginInput { chosen: Some(chosen), .. })
-                        if chosen.plugin.id == <InOrder as plugin_factory::PluginType>::ID
+                        if chosen.plugin.id == <Snake as plugin_factory::PluginType>::ID
                 )
         });
         self.fields

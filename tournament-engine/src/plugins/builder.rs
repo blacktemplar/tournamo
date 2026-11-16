@@ -5,17 +5,19 @@ use plugin_factory::schema::DependencyOrderedSetError;
 use crate::{
     PhasePlugins,
     plugins::{
-        draw::{Draw, InOrder},
+        draw::{Draw, Snake},
         match_format::{self, MatchFormat},
         metrics_calculator::MetricsCalculator,
         phase_format::{PhaseFormat, RoundRobin},
         ranker::SliceRanker,
+        seeding::{SeededInOrder, Seeding},
     },
 };
 
 /// Builds [`PhasePlugins`] directly. Without a format, the phase is a [`RoundRobin`]; without a
 /// ranking, it leaves every entrant tied; without metrics, it calculates none; it is played in one
-/// division, dealt [`InOrder`], and ranked across divisions by nothing but the rank in them.
+/// division, dealt [`Snake`] and [`SeededInOrder`], and ranked across divisions by nothing but the
+/// rank in them.
 ///
 /// Nothing else is added: unlike a draft, the builder adds no plugin the others imply. Nor are the
 /// plugins checked against each other, so a fact one of them requires may be missing; adding them
@@ -59,6 +61,7 @@ pub struct PhasePluginsBuilder {
     metrics: Vec<Box<dyn MetricsCalculator>>,
     divisions: Option<NonZeroU32>,
     draw: Option<Box<dyn Draw>>,
+    seeding: Option<Box<dyn Seeding>>,
     across: Vec<Box<dyn SliceRanker>>,
 }
 
@@ -97,9 +100,15 @@ impl PhasePluginsBuilder {
         self
     }
 
-    /// Deals the field to the divisions by `draw` instead of [`InOrder`].
+    /// Deals the field to the divisions by `draw` instead of [`Snake`].
     pub fn draw(mut self, draw: impl Draw) -> Self {
         self.draw = Some(Box::new(draw));
+        self
+    }
+
+    /// Orders the qualifiers of each division by `seeding` instead of [`SeededInOrder`].
+    pub fn seeding(mut self, seeding: impl Seeding) -> Self {
+        self.seeding = Some(Box::new(seeding));
         self
     }
 
@@ -131,7 +140,10 @@ impl PhasePluginsBuilder {
             PhasePlugins::from_parts(format, match_format, self.ranking, self.metrics)?
                 .with_divisions(
                     self.divisions.unwrap_or(NonZeroU32::MIN),
-                    self.draw.unwrap_or_else(|| Box::new(InOrder)),
+                    (
+                        self.draw.unwrap_or_else(|| Box::new(Snake)),
+                        self.seeding.unwrap_or_else(|| Box::new(SeededInOrder)),
+                    ),
                     self.across,
                 ),
         )

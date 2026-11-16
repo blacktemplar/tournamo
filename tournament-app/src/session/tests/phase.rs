@@ -106,7 +106,13 @@ fn a_phase_is_edited_starting_out_at_its_configuration() {
         .iter()
         .map(|column| column.header)
         .collect();
-    assert_eq!(headers, ["W-D-L", "points", "Sonneborn-Berger"]);
+    // the points and the Sonneborn-Berger score are still calculated, but ranked by wins alone
+    // the table no longer shows them
+    assert_eq!(headers, ["W-D-L"]);
+    assert_eq!(
+        session.competition().phases()[0].plugins().metrics().len(),
+        3
+    );
     session.undo().unwrap();
     let unedited = Given::new().started();
     assert_eq!(

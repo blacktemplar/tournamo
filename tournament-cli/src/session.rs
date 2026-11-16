@@ -30,7 +30,7 @@ use tournament_app::{
 };
 use tournament_engine::{
     Annotated as _, Competition, Division, DivisionData, Entrant, EntrantId, Match, MatchId,
-    MatchResult, Phase, PhaseId, PhasePlugins, RankingId, Sides, Source, SourceOf, Standing,
+    MatchResult, Phase, PhaseId, PhasePlugins, RankingId, Sides, Source, SourceOf, Standing, Table,
     TypeMap,
     plugins::{metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker},
 };
@@ -953,14 +953,12 @@ impl Session {
     fn ranking(&self, phase: PhaseId, division: Option<usize>) -> Result<String, Error> {
         let divisions = self.divisions(phase, division)?;
         let several = division.is_none() && divisions.len() > 1;
-        let columns: Vec<_> = divisions[0]
-            .1
-            .plugins()
-            .metrics()
-            .iter()
+        let of = self.phase(phase)?;
+        let columns: Vec<_> = of
+            .shown(Table::Division)
+            .into_iter()
             .filter_map(|calculator| calculator.column())
             .collect();
-        let of = self.phase(phase)?;
         let overall = of.standings();
         let standings;
         let rows: Vec<(usize, Standing, NonZeroU32)> = match division {
@@ -1168,8 +1166,8 @@ mod tests {
     use tournament_engine::plugins::{
         match_format::{BestOf, WinnerOnly},
         metrics_calculator::{
-            FewerMatchesPlayed, MorePoints, MoreWins, PointsCalculator, SonnebornBergerCalculator,
-            WinsDrawsLossesCalculator,
+            FewerMatchesPlayed, MorePoints, MoreSonnebornBerger, MoreWins, PointsCalculator,
+            SonnebornBergerCalculator, WinsDrawsLossesCalculator,
         },
         phase_format::{MonsterDyp, RoundRobin, SingleElimination},
     };
@@ -1464,7 +1462,7 @@ mod tests {
                 .unwrap()
                 .split_whitespace()
                 .collect::<Vec<_>>(),
-            ["#", "name", "W-D-L", "points", "Sonneborn-Berger"],
+            ["#", "name", "points", "Sonneborn-Berger", "W-D-L"],
             "{ranking}"
         );
     }
@@ -1539,7 +1537,16 @@ mod tests {
                 .unwrap()
                 .split_whitespace()
                 .collect::<Vec<_>>(),
-            ["#", "name", "W-D-L", "points", "Sonneborn-Berger"]
+            ["#", "name", "W-D-L"],
+            "ranked by wins alone, the table shows the record alone"
+        );
+        assert_eq!(
+            session.session.competition().phases()[0]
+                .plugins()
+                .metrics()
+                .len(),
+            3,
+            "the metrics are kept"
         );
     }
 
@@ -1662,14 +1669,14 @@ mod tests {
                 .unwrap()
                 .split_whitespace()
                 .collect::<Vec<_>>(),
-            ["#", "name", "W-D-L", "points"],
+            ["#", "name", "points", "W-D-L"],
             "the Sonneborn-Berger of the preset was not configured, so it is not calculated"
         );
         for row in ranking.lines().skip(HEADER_LINES) {
             let columns: Vec<_> = row.split_whitespace().collect();
-            let wins = columns[2].split('-').next().unwrap();
+            let wins = columns[3].split('-').next().unwrap();
             assert_eq!(
-                columns[3], wins,
+                columns[2], wins,
                 "every win is worth a single point, {row:?}"
             );
         }
@@ -1688,7 +1695,7 @@ mod tests {
         let draft = draft(
             &session,
             plugin::<RoundRobin>(),
-            Vec::new(),
+            vec![plugin::<MoreSonnebornBerger>()],
             vec![chess_points(), sonneborn_berger],
         );
         session.add_phase(&draft, None, &[]).unwrap();
@@ -1706,7 +1713,7 @@ mod tests {
                 .unwrap()
                 .split_whitespace()
                 .collect::<Vec<_>>(),
-            ["#", "name", "W-D-L", "points", "Sonneborn-Berger"],
+            ["#", "name", "Sonneborn-Berger", "W-D-L", "points"],
             "{ranking}"
         );
     }
@@ -1967,7 +1974,7 @@ mod tests {
         let header = ranking.lines().next().unwrap();
         assert_eq!(
             header.split_whitespace().collect::<Vec<_>>(),
-            ["#", "name", "W-D-L", "points", "Sonneborn-Berger"]
+            ["#", "name", "points", "Sonneborn-Berger", "W-D-L"]
         );
         assert_eq!(ranking.lines().skip(HEADER_LINES).count(), 4);
     }

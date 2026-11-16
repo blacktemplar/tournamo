@@ -8,13 +8,13 @@ use std::{
 use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use tournament_engine::{
     Annotated as _, Bye, Division, DivisionData, EntrantId, Match, PhaseId, Ranking, RankingId,
-    Standing, TypeMap,
+    Standing, Table, TypeMap,
+    entities::columns::Rule,
     plugins::{
         draw::DivisionOrder,
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::{PhaseFormat, Stage},
-        ranker::SliceRanker,
     },
 };
 
@@ -366,11 +366,11 @@ impl Session {
             .iter()
             .map(|row| (row.division(), row.in_division(), row.rank()))
             .collect();
-        self.standings_of(phase, rows, Columns::Ranking)
+        self.standings_of(phase, rows, Table::Division)
     }
 
-    /// The standings of the division `of`, with a column for every calculator that offers one;
-    /// `None` before the start of its phase.
+    /// The standings of the division `of`, with the columns the standings of a division show, see
+    /// [`Phase::shown`](tournament_engine::Phase::shown); `None` before the start of its phase.
     pub fn standings(&self, of: DivisionRef) -> Option<Standings> {
         let division = self.division(of)?;
         let standings = division.standings();
@@ -378,7 +378,7 @@ impl Session {
             .iter()
             .map(|&standing| (of.division, standing, standing.rank()))
             .collect();
-        self.standings_of(of.phase, rows, Columns::Ranking)
+        self.standings_of(of.phase, rows, Table::Division)
     }
 
     /// For each place (unique rank) in the parallel divisions of the phase `phase` that a cut of
@@ -410,7 +410,7 @@ impl Session {
                     .any(|row| advancing(row.1.ranking().id()).map(|advance| advance.to) != first)
             })
             .filter_map(|(rank, rows)| {
-                let standings = self.standings_of(phase, rows, Columns::Across)?;
+                let standings = self.standings_of(phase, rows, Table::Across)?;
                 Some(view::Compared {
                     rank,
                     columns: standings.columns,
@@ -421,16 +421,18 @@ impl Session {
     }
 
     /// The standings of `rows` of the phase `phase`, each its division, its row in the division's
-    /// standings and the rank shown, with the `columns` asked for; `None` before the start of the
-    /// phase.
+    /// standings and the rank shown, with the columns `table` shows, see [`Phase::shown`]; `None`
+    /// before the start of the phase.
+    ///
+    /// [`Phase::shown`]: tournament_engine::Phase::shown
     fn standings_of(
         &self,
         phase: PhaseId,
         rows: Vec<(usize, Standing, NonZeroU32)>,
-        columns: Columns,
+        table: Table,
     ) -> Option<Standings> {
         let of = self.phase(phase)?;
-        let first = of.divisions().first()?;
+        of.divisions().first()?;
         let advancing = self.advancing(phase);
         let first_place = self
             .competition()
@@ -443,37 +445,19 @@ impl Session {
             .map(|row| (row.ranking().id(), row.rank()))
             .collect();
         let calculators = AnyAxis::of::<dyn MetricsCalculator>();
-        // the calculators each criterion ranks by, in the order of the criteria
-        let criteria = match columns {
-            Columns::Ranking => first.plugins().ranking(),
-            Columns::Across => first.plugins().across(),
-        };
-        let ranked_by: Vec<&str> = criteria
-            .iter()
-            .filter_map(|criterion| {
-                AnyAxis::of::<dyn SliceRanker>().entry(plugin_factory::id_of(&**criterion))
-            })
-            .flat_map(|criterion| criterion.providers_in(calculators))
-            .map(PluginEntry::id)
+        let ranked_by: Vec<&str> = of
+            .rule(table)
+            .into_iter()
+            .filter(|(_, why)| matches!(why, Rule::RankedBy(_)))
+            .map(|(calculator, _)| calculator)
             .collect();
-        let mut columns: Vec<_> = first
-            .plugins()
-            .metrics()
-            .iter()
+        let columns: Vec<_> = of
+            .shown(table)
+            .into_iter()
             .filter_map(|calculator| {
-                let id = plugin_factory::id_of(&**calculator);
-                (columns == Columns::Ranking || ranked_by.contains(&id))
-                    .then(|| Some((id, calculator.column()?)))
-                    .flatten()
+                Some((plugin_factory::id_of(calculator), calculator.column()?))
             })
             .collect();
-        // stable, so that the others stay in running order
-        columns.sort_by_key(|(calculator, _)| {
-            ranked_by
-                .iter()
-                .position(|ranked| ranked == calculator)
-                .unwrap_or(usize::MAX)
-        });
         let finished = of.is_finished();
         let places: Vec<NonZeroU32> = rows
             .iter()
@@ -566,14 +550,6 @@ impl Session {
             details: !root.fields.is_empty() || !matches!(root.parts, Parts::None),
         }
     }
-}
-
-/// Which columns standings have: of every calculator offering one, the metrics of the ranking
-/// first, or of the metrics the phase is compared across divisions by alone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Columns {
-    Ranking,
-    Across,
 }
 
 /// `teams` in the order of the names of their entrants, which tied teams are in no order of their

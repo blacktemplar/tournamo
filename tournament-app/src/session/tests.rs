@@ -16,7 +16,9 @@ use tournament_engine::{
     EnteredValue, EntrantId, MatchId, MatchResult, PhasePlugins, Score, Sides,
     plugins::{
         match_format::{BestOf, Scored},
-        metrics_calculator::{Cell as MetricCell, MoreWins, RoundOfFirstLossCalculator},
+        metrics_calculator::{
+            Cell as MetricCell, MorePointsPerMatch, MoreWins, RoundOfFirstLossCalculator,
+        },
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
@@ -101,6 +103,8 @@ struct Given {
     /// The format's suggestion if `None`.
     match_format: Option<PluginConfig>,
     divisions: u32,
+    /// What the divisions are compared across by.
+    across: Vec<PluginConfig>,
 }
 
 impl Given {
@@ -110,12 +114,19 @@ impl Given {
             format: RoundRobin::ID,
             match_format: None,
             divisions: 1,
+            across: Vec::new(),
         }
     }
 
     /// The phase played in `divisions` divisions, dealt in order.
     fn divisions(self, divisions: u32) -> Self {
         Self { divisions, ..self }
+    }
+
+    /// The divisions compared across by the criterion `C`, after those before.
+    fn across<C: PluginType>(mut self) -> Self {
+        self.across.push(PluginConfig::of::<C>());
+        self
     }
 
     fn entrants(self, entrants: &[&'static str]) -> Self {
@@ -149,7 +160,10 @@ impl Given {
                 .and_then(|draft| draft.with_defaults())
                 .unwrap();
         }
-        let draft = draft.with(PhasePlugins::DIVISIONS, self.divisions).unwrap();
+        let draft = draft
+            .with(PhasePlugins::DIVISIONS, self.divisions)
+            .and_then(|draft| draft.with(PhasePlugins::ACROSS, self.across))
+            .unwrap();
         session.add_phase(&form(draft)).unwrap();
         session
     }

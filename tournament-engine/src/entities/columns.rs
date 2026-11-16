@@ -105,7 +105,7 @@ impl Columns {
     }
 
     /// These columns without the entries of calculators that `keep` refuses.
-    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&str) -> bool) {
+    pub fn retain(&mut self, mut keep: impl FnMut(&str) -> bool) {
         self.0.retain(|(id, _)| keep(id));
     }
 }

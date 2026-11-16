@@ -13,8 +13,8 @@ use std::collections::HashMap;
 
 use plugin_factory::config::Config;
 use tournament_engine::{
-    Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division, Match,
-    MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source, StartCompetition,
+    Columns, Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division,
+    Match, MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source, StartCompetition,
     transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
     uuid::Uuid,
@@ -41,6 +41,7 @@ struct UndonePhase {
     name: Option<String>,
     sources: Vec1<Source>,
     config: Config,
+    columns: Columns,
 }
 
 /// A competition being run by an operator.

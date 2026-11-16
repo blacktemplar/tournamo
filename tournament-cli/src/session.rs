@@ -427,7 +427,7 @@ impl Session {
     }
 
     /// Plays the phase of the number `phase`, by default the only running one, as `draft`
-    /// configures it, keeping its name and sources, as if it had been added that way, see
+    /// configures it, keeping its name, sources and columns, as if it had been added that way, see
     /// [`reconfigure_phase`].
     ///
     /// [`reconfigure_phase`]: tournament_engine::CompetitionStateMachineExt::reconfigure_phase
@@ -441,6 +441,7 @@ impl Session {
         let mut form = PhaseForm::new(draft.clone());
         form.set_name(added.name().unwrap_or_default());
         form.set_sources(added.sources().to_vec());
+        form.set_columns(added.columns().clone());
         let edited = self
             .session
             .edit_phase(id, &form)
@@ -1564,6 +1565,39 @@ mod tests {
             "nothing changed"
         );
         assert_eq!(session.session.changes(), changes);
+    }
+
+    /// What a table of standings shows is not changed by the CLI, but kept by its edits.
+    #[test]
+    fn an_edit_keeps_the_columns_of_the_phase() {
+        let mut session = started("round-robin");
+        let id = session.competition().phases()[0].id();
+        let mut form = session.session.phase_form_to_edit(id).unwrap();
+        form.set_shown(WinsDrawsLossesCalculator::ID, Table::Division, false)
+            .unwrap();
+        session.session.edit_phase(id, &form).unwrap();
+        let mut draft = session.phase_draft_to_edit(None).unwrap();
+        draft
+            .set(
+                &ConfigPath::ROOT.field("ranking"),
+                vec![plugin::<MorePoints>()],
+            )
+            .unwrap();
+
+        session
+            .apply_phase(&Configuring::Edited { phase: None }, &draft)
+            .unwrap();
+
+        assert_eq!(session.phase(id).unwrap().columns(), form.columns());
+        assert_eq!(
+            output(&mut session, "ranking")
+                .lines()
+                .next()
+                .unwrap()
+                .split_whitespace()
+                .collect::<Vec<_>>(),
+            ["#", "name", "points"]
+        );
     }
 
     /// The teams of a Monster DYP are pairs, so it never schedules the match of single entrants

@@ -5,7 +5,7 @@ use undoable_state_machine::{Transition, TransitionError};
 use vec1::{Vec1, vec1};
 
 use crate::{
-    Source, SourceOf,
+    Columns, Source, SourceOf,
     entities::{Competition, PhaseId},
     plugins::PhasePlugins,
 };
@@ -26,6 +26,7 @@ pub struct AddPhase {
     name: Option<String>,
     sources: Vec1<Source>,
     plugins: PhasePlugins,
+    columns: Columns,
 }
 
 impl AddPhase {
@@ -40,6 +41,7 @@ impl AddPhase {
             name: None,
             sources: vec1![Source::registration()],
             plugins,
+            columns: Columns::new(),
         }
     }
 
@@ -57,6 +59,21 @@ impl AddPhase {
         self
     }
 
+    /// This phase showing in its tables of standings what `columns` say, without what they say
+    /// about a calculator that is not among the plugins of the phase.
+    #[must_use]
+    pub fn with_columns(mut self, mut columns: Columns) -> Self {
+        let metrics: Vec<&str> = self
+            .plugins
+            .metrics()
+            .iter()
+            .map(|calculator| plugin_factory::id_of(&**calculator))
+            .collect();
+        columns.retain(|id| metrics.contains(&id));
+        self.columns = columns;
+        self
+    }
+
     pub fn id(&self) -> PhaseId {
         self.id
     }
@@ -71,6 +88,11 @@ impl AddPhase {
 
     pub fn plugins(&self) -> &PhasePlugins {
         &self.plugins
+    }
+
+    /// What the operator said about the columns of the tables of standings of the phase.
+    pub fn columns(&self) -> &Columns {
+        &self.columns
     }
 }
 
@@ -153,6 +175,7 @@ impl Transition<Competition> for AddPhase {
             self.name.clone(),
             self.sources.clone(),
             self.plugins.clone(),
+            self.columns.clone(),
         );
     }
 }

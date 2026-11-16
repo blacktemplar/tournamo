@@ -359,7 +359,8 @@ mod v4 {
 /// once it has started: what a phase held as its `"plugins"` and `"data"` is its only division,
 /// and the phase keeps the plugins, the `"seed"` of its data and whether it has `"started"`, as
 /// the competition has. A phase has a `"name"` (none) and `"sources"` (the whole registration),
-/// as an `AddPhase` has. A started competition holds its `"lots"`, the order its phase started
+/// as an `AddPhase` has, and no `"columns"`, so that its tables of standings show what the rule
+/// shows. A started competition holds its `"lots"`, the order its phase started
 /// in, and every ranking its `"lot"`, its initial unique rank; the competition holds the
 /// `"highest_number"` of a match or of a pairing of a bracket, a division the `"number_base"` 0.
 /// The plugins of a phase, of a division and of an `AddPhase` are played in one division
@@ -368,8 +369,8 @@ mod v4 {
 mod v5 {
     use serde_json::{Map, Value, json};
 
-    /// An `AddPhase`, applied or replacing another, gets no name and the whole registration as
-    /// its source.
+    /// An `AddPhase`, applied or replacing another, gets no name, the whole registration as its
+    /// source and no columns.
     pub(super) fn log_entry(entry: &mut Value) {
         let transition = if entry.pointer("/kind/Apply").is_some() {
             "/kind/Apply/AddPhase"
@@ -377,7 +378,7 @@ mod v5 {
             "/kind/Replace/with/AddPhase"
         };
         if let Some(Value::Object(add_phase)) = entry.pointer_mut(transition) {
-            name_and_sources(add_phase);
+            entry_of_phase(add_phase);
             if let Some(Value::Object(plugins)) = add_phase.get_mut("plugins") {
                 one_division(plugins);
             }
@@ -482,15 +483,16 @@ mod v5 {
         } else {
             json!([])
         };
-        name_and_sources(phase);
+        entry_of_phase(phase);
         phase.insert("seed".to_owned(), seed);
         phase.insert("started".to_owned(), started.into());
         phase.insert("divisions".to_owned(), divisions);
         true
     }
 
-    /// A phase, or an `AddPhase`, without a name and sources gets none and the whole registration.
-    fn name_and_sources(phase: &mut Map<String, Value>) {
+    /// A phase, or an `AddPhase`, without a name, sources and columns gets no name, the whole
+    /// registration and no columns.
+    fn entry_of_phase(phase: &mut Map<String, Value>) {
         if phase.contains_key("sources") || !phase.contains_key("plugins") {
             return;
         }
@@ -499,6 +501,7 @@ mod v5 {
             "sources".to_owned(),
             json!([{ "of": "Registration", "from": 1, "to": null }]),
         );
+        phase.entry("columns").or_insert_with(|| json!([]));
     }
 }
 
@@ -1083,15 +1086,16 @@ mod tests {
     }
 
     /// A phase added, or added in place of another, takes the whole registration, without a name,
-    /// and is played in one division.
+    /// shows what the rule shows, and is played in one division.
     #[test]
-    fn a_phase_added_gets_no_name_the_whole_registration_and_one_division_in_format_5() {
+    fn a_phase_added_gets_no_name_the_whole_registration_no_columns_and_one_division_in_format_5() {
         let round_robin = json!({ "type": "tournament_engine::round_robin", "value": null });
         let added = json!({ "id": "phase", "plugins": { "format": round_robin } });
         let converted = json!({
             "id": "phase",
             "name": null,
             "sources": [{ "of": "Registration", "from": 1, "to": null }],
+            "columns": [],
             "plugins": {
                 "format": round_robin,
                 "divisions": 1,

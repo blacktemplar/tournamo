@@ -11,6 +11,7 @@ pub use entities::{
     Annotated, Bye, ByeId, Competition, Division, DivisionData, DivisionView, Entrant, EntrantId,
     Match, MatchId, MatchResult, NewMatch, Origin, Phase, PhaseId, Placed, Qualifier, Ranking,
     RankingId, ResultOfTeam, Seed, Source, SourceOf, Team,
+    columns::{Columns, Shown, Table},
     details::{Decision, EnteredValue, FieldKey, Part, ResultReason, Sides, Values},
     standings::{PhaseStanding, PhaseStandings, Standing, Standings},
 };

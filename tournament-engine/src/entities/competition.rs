@@ -7,8 +7,8 @@ use vec1::{Vec1, vec1};
 
 use super::seed::Entropy;
 use crate::{
-    Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, RankingId, Seed, Source,
-    SourceOf,
+    Columns, Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, RankingId, Seed,
+    Source, SourceOf,
     map::{IdMap, Map},
     plugins::{PhasePlugins, facts::EntrantsPerRanking},
 };
@@ -86,10 +86,11 @@ impl Competition {
         name: Option<String>,
         sources: Vec1<Source>,
         plugins: PhasePlugins,
+        columns: Columns,
     ) {
         let seed = Seed::new(self.seed.rng(id).random());
         self.phases
-            .insert(Phase::new(id, name, sources, plugins, seed));
+            .insert(Phase::new(id, name, sources, plugins, columns, seed));
     }
 
     /// Declares the facts that hold for a phase added to this competition before any of its

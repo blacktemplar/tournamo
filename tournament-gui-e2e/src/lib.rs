@@ -320,7 +320,14 @@ impl Gui {
             Err(_) => self.driver.query(By::Id(id)).first().await?,
         };
         // in sight, as below a long list of entrants it may be under the bar
-        self.click_in_sight(&trigger).await
+        self.click_in_sight(&trigger).await?;
+        // the list takes the focus a frame after it opens, which scrolls it into sight: until
+        // then an option may still move away from under the pointer
+        self.driver
+            .query(By::Css("[role='listbox'][data-state='open']:focus"))
+            .first()
+            .await?;
+        Ok(())
     }
 
     /// Moves the pointer onto the option labelled `label` of the list of plugins open.

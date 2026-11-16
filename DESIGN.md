@@ -725,7 +725,15 @@ A competition is played in phases (issue #6). A phase is one configuration of
 plugins, played by one or more divisions: the groups of a group phase, the
 knockouts A, B and C of a phase of knockouts. Each phase takes its entrants
 from its **sources**: ranges of places of the registration or of the overall
-standings of earlier phases; its **draw** deals the field to its divisions.
+standings of earlier phases; its **draw** deals the field to its divisions,
+and its **seeding** orders each division.
+
+The entry of a phase is one ordered list going through steps, each keeping
+the order it gets unless changing it is its job: the **registration** (the
+entrants by lot), the **field** (which places of which sources, in order:
+`AddPhase::sources`), the **draw** (which division a qualifier goes to, and
+whether the divisions are parallel or levels: `PhasePlugins::draw`) and the
+**seeding** (the order within a division: `PhasePlugins::seeding`).
 
 - **Sources are typed data of `AddPhase`**, next to an optional name, not
   fields of the schema: the schema has no kind for a reference to a phase, and
@@ -802,31 +810,47 @@ standings of earlier phases; its **draw** deals the field to its divisions.
 - **Seeds.** Division 0 has the seed of its phase, so an old log replays into
   the same competition; a later division derives its seed from the phase's and
   its index (`Entropy::Division`), the draw its random stream from the phase's
-  (`Entropy::Draw`).
-- **Divisions and the draw are fields of `PhasePlugins`**: `divisions` (at
-  least 1, a `NonZeroU32`), `draw` (the axis `Draw`) and `across` (slice
-  rankers), so forms, questionnaire, compatibility and translation cover them
+  (`Entropy::Draw`), the seeding of a division its stream from the division's
+  (`Entropy::Seeding`).
+- **Divisions, draw and seeding are fields of `PhasePlugins`**: `divisions`
+  (at least 1, a `NonZeroU32`), `draw` (the axis `Draw`), `seeding` (the axis
+  `Seeding`) and `across` (slice rankers), so forms, questionnaire, compatibility and translation cover them
   as every field. One configuration per phase: differently configured parallel
   units are separate phases. The restriction lives only in the data of
   `AddPhase`, so a converter can loosen it.
-- **The draw hands each division an ordered list; the format interprets the
-  order** (a knockout seeds its bracket by it). `Draw::draw` gets a `DrawView`
-  (the field, the number of divisions, the entrants with their annotations, a
+- **Each division gets an ordered list; the format interprets the order** (a
+  knockout seeds its bracket by it). `Draw::draw` gets a `DrawView` (the
+  field, the number of divisions, the entrants with their annotations, a
   random stream), which can grow without breaking third-party draws, and
-  returns for each division the positions of its qualifiers; the engine checks
-  the result with debug assertions. A phase with fewer entrants than its
+  returns for each division the positions of its qualifiers, in no order that
+  matters; the engine sorts each division's positions into the order of the
+  field and asks `Seeding::seed` once per division, with a `SeedingView` (the
+  field, the positions dealt, the division and how many there are, the
+  entrants, the division's random stream), for a permutation of them. The
+  engine checks both results with debug assertions. A phase with fewer entrants than its
   divisions need (`PhaseFormat::min_entrants` in each) is refused its start by
   the app (`TooFewForDivisions`), as one with fewer than its format needs, so
   the operator lowers the divisions while the phase can still be edited. The
   engine refuses neither, so that a log started elsewhere still replays: it
   then starts no more divisions than give each the entrants its format needs,
-  so a draw dealing evenly never leaves a division too small. The engine's draws: `in_order` (one division keeps the
-  field, several get it as a snake), `random`, `blocks` (consecutive places,
-  as even in size as they can be, the first one larger) and
-  `group_winners_apart` (ordered by rank in the group, then, changing that
-  order as little as it takes, found by a bounded depth-first search, so that
-  no two of a group meet in the first round of the bracket the order seeds and
-  the best two of a group are in opposite halves where every group sends two).
+  so a draw dealing evenly never leaves a division too small. The engine's
+  draws: `snake` (the field in its order, back and forth), `random` (shuffled,
+  then dealt in turn) and `blocks` (consecutive places, as even in size as
+  they can be, the first one larger). Its seedings: `seeded_in_order`,
+  `seeded_at_random` and `group_winners_apart` (ordered by rank in the group,
+  then, changing that order as little as it takes, found by a bounded
+  depth-first search, so that no two of a group meet in the first round of the
+  bracket the order seeds and the best two of a group are in opposite halves
+  where every group sends two). Plugin ids are unique across axes, since the
+  translation is keyed by them, hence `seeded_`. A format whose order means
+  nothing to it, as one drawing its pairings by lot, says so
+  (`PhaseFormat::reads_seeding`), and the app does not ask for its seeding.
+- **Draw and seeding are two axes.** A draw deciding both who is in which
+  division and each division's order needed a draw of its own for every
+  combination: "knockouts A/B/C in blocks, each seeded at random" was neither
+  `blocks` nor `random`. Rejected: the seeding as a field of the formats that
+  seed (every such format repeats it, and a third-party seeding needs a
+  format).
 - **How the divisions stand to each other is declared by the draw**
   (`Draw::order`): **parallel**, as groups (the default), or **levels**, as
   knockouts A/B/C. The overall standings (`Phase::standings`, a

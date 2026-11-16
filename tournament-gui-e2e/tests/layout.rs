@@ -13,7 +13,9 @@ async fn show_bracket(gui: &Gui, format: &str, names: &[&str]) -> WebDriverResul
     gui.choose_format(format).await?;
     gui.click("Add phase").await?;
     gui.click("Start").await?;
-    gui.click("Bracket").await
+    gui.click("Bracket").await?;
+    // shown only after the click, which the measurements that follow must wait for
+    gui.expect_view("Bracket").await
 }
 
 /// Long names wrap within their pairing, which keeps its column's width, so the lines meet.

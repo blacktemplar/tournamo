@@ -57,6 +57,9 @@ pub enum RenameEntrantError {
 #[error("{}", english(self))]
 pub enum RateEntrantError {
     UnknownEntrant,
+    /// What was typed as the rating is no number, see
+    /// [`Session::enter_rating`](crate::session::Session::enter_rating).
+    NoRating(String),
     /// The competition has started, which ordered the registration by the ratings.
     RegistrationClosed,
 }
@@ -435,6 +438,7 @@ impl Message for RateEntrantError {
     fn text(&self) -> Text {
         match self {
             Self::UnknownEntrant => Text::new("error-unknown-entrant"),
+            Self::NoRating(rating) => Text::new("error-no-rating").with("rating", rating.as_str()),
             Self::RegistrationClosed => Text::new("error-rating-after-start"),
         }
     }

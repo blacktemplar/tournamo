@@ -150,6 +150,7 @@ impl Session {
             add_entrant: !started,
             remove_entrant: !started && !competition.entrants().is_empty(),
             rename_entrant: !competition.entrants().is_empty(),
+            rate_entrant: !started && !competition.entrants().is_empty(),
             // after the start, a phase takes entrants from another one
             add_phase: !started || has_phase,
             edit_phase: has_phase,

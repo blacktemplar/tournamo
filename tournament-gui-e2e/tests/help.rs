@@ -24,6 +24,7 @@ async fn the_help_says_where_the_competitions_are_kept() {
                 &[
                     "Running a competition",
                     "Formats and standings",
+                    "Seeding",
                     "Your data stays on your device",
                     "Offline use and installation",
                     "Open source",

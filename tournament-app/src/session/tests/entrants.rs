@@ -344,6 +344,22 @@ fn without_ratings_the_start_gives_no_order() {
 }
 
 #[test]
+fn a_rating_is_entered_as_typed_and_blank_unrates() {
+    let mut session = Given::new().added();
+    let alice = id_of(&session, "Alice");
+
+    session.enter_rating(alice, " 1500 ").unwrap();
+    assert_eq!(seeds(&session)[0], (Some(1500.0), Some(1)));
+    assert!(matches!(
+        session.enter_rating(alice, "strong"),
+        Err(RateEntrantError::NoRating(typed)) if typed == "strong"
+    ));
+    assert_eq!(seeds(&session)[0], (Some(1500.0), Some(1)));
+    session.enter_rating(alice, " ").unwrap();
+    assert_eq!(seeds(&session)[0], (None, None));
+}
+
+#[test]
 fn ratings_do_not_change_after_the_start() {
     let mut session = Given::new().started();
     let alice = id_of(&session, "Alice");

@@ -5,12 +5,13 @@ use dioxus::prelude::*;
 use tournament_app::form::{End, EntryView, PhaseForm};
 use tournament_engine::PhaseId;
 
-use super::fields::Issues;
+use super::fields::{Issues, Warnings};
 use crate::{competition::Ctx, i18n::t, icons, phases::phase_id_text};
 
 /// The name of the phase of `form`, and where it takes its entrants from: everyone registered for
-/// the first phase, else a row per source, each of a phase or the registration and a range of its
-/// places, with a button adding one more.
+/// the first phase unless the operator asks to take only some places, else a row per source, each
+/// of a phase or the registration and a range of its places, with a button adding one more, and
+/// where the lot decides who of the registration is taken.
 #[component]
 pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
@@ -38,6 +39,9 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
             },
         })
     });
+    // where the lot decides who of the registration is taken, as the ratings stand
+    let sources = form.read().sources().to_vec();
+    let lot_cuts = ctx.session.read().lot_cuts(&sources);
     let choice_name = |phase: Option<PhaseId>| {
         entry
             .choices
@@ -65,7 +69,21 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
         if entry.everyone_registered {
             div { class: "field number-field",
                 span { class: "number-label", {tr.get("entrants-from")} }
-                span { class: "answer", {crate::capitalized(&tr.get("everyone-registered"))} }
+                span { class: "answer",
+                    {crate::capitalized(&tr.get("everyone-registered"))}
+                    " "
+                    button {
+                        id: "some-places",
+                        r#type: "button",
+                        class: "quiet small",
+                        disabled,
+                        onclick: move |_| {
+                            form.write().take_some_places();
+                            crate::focus::focus_later(&["#source-0-from"]);
+                        },
+                        {tr.get("only-some-places")}
+                    }
+                }
             }
         } else {
             fieldset { class: "field sources",
@@ -146,6 +164,7 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                     {tr.get("add-source")}
                 }
                 Issues { id: "source-issues", issues: entry.issues.clone() }
+                Warnings { id: "source-warnings", warnings: lot_cuts }
             }
         }
     }

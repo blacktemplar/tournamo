@@ -1,7 +1,7 @@
 //! The help, at `#help`: how a competition is run, what each format, criterion of the standings
-//! and metric is, that the competitions are kept in the browser and nowhere else, what follows
-//! from that, the version, where the source code is, and who owns the page. `#help-<section>`
-//! opens it at the section whose heading has that id, e.g. [`RUNNING`].
+//! and metric is, how entrants are seeded, that the competitions are kept in the browser and
+//! nowhere else, what follows from that, the version, where the source code is, and who owns the
+//! page. `#help-<section>` opens it at the section whose heading has that id, e.g. [`RUNNING`].
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -25,6 +25,9 @@ pub const RUNNING: &str = "help-running";
 
 /// The fragment of the URL of the section on the formats and the standings.
 pub const FORMATS: &str = "help-formats";
+
+/// The fragment of the URL of the section on seeding: ratings, draw and seeding.
+pub const SEEDING: &str = "help-seeding";
 
 #[component]
 pub fn Help() -> Element {
@@ -72,6 +75,13 @@ pub fn Help() -> Element {
                 Glossary { plugins: glossary.criteria }
                 h4 { {tr.get("help-metrics")} }
                 Glossary { plugins: glossary.metrics }
+            }
+            section { class: "card", aria_labelledby: SEEDING,
+                h2 { id: SEEDING, {tr.get("help-seeding")} }
+                p { {tr.get("help-seeding-ratings")} }
+                p { {tr.get("help-seeding-places")} }
+                p { {tr.get("help-seeding-draw")} }
+                p { {tr.get("help-seeding-log")} }
             }
             section { class: "card", aria_labelledby: "help-stored",
                 h2 { id: "help-stored", {tr.get("help-stored")} }

@@ -56,6 +56,11 @@ help-standings-text = The standings compare the entrants by the criteria of thei
 help-columns-text = A table of standings shows the metrics it is ranked by and those they are calculated from, e.g. ranked by points also the wins, draws and losses the points are scored for. Where a phase compares several groups, the rows compared show what they are compared by. In the metrics of a phase, a box with an outlined tick is shown by this rule; tick or untick it to show or hide the metric anyway, in the group tables or in the comparison. A metric ticked is calculated, one shown nowhere and needed by nothing is not. This can be changed at any time, also while the phase is played.
 help-groups = Groups
 help-groups-text = A phase can be played in several groups, each on its own in the same format; the draw deals the entrants to them, and the seeding orders those of each, which a knockout seeds its bracket by: “groups kept apart” lets entrants of one group meet as late as possible. Groups dealt in blocks play for places of their own, e.g. knockouts A and B for places 1–4 and 5–8. Otherwise the groups stand side by side: the firsts of all groups come first, then the seconds, and so on (who is tied in their group placed by lot), and where a next phase takes only some of one place, e.g. the best two of three thirds, they are compared by the criteria across the groups, e.g. the points per match, which suit groups of different sizes.
+help-seeding = Seeding
+help-seeding-ratings = Entrants can be rated, by any number where higher is better, e.g. an Elo rating: switch on “Ratings” above the entrants. The start orders the registration by rating, best first; entrants of equal ratings, and those without one after the rated, are ordered by lot. A knockout of the registration seeds its bracket in this order, so that the best rated meet as late as possible.
+help-seeding-places = A phase can take only some places of the registration: the best rated can go straight to a main phase while the others play a qualification for the remaining places. Where such a cut goes through entrants of equal ratings or none, the lot decides who is on which side, which the form of the phase says.
+help-seeding-draw = Played in groups, the draw deals the registration to them in its order, e.g. back and forth, so that the best rated end up in different groups; the seeding then orders the entrants of each group.
+help-seeding-log = The ratings are kept with the names, not in the competition's history: it holds only the order the start gave the registration. Once started, the ratings no longer change.
 help-criteria = Criteria
 help-metrics = Metrics
 help-stored = Your data stays on your device
@@ -125,7 +130,7 @@ read-only = This competition is open in another tab, so it is only shown here. I
 ## Before the start
 
 entrants = Entrants
-no-entrants = No entrants yet. Each one is added by its name, or several at once by pasting a list with a name on each line.
+no-entrants = No entrants yet. Each one is added by its name, or several at once by pasting a list with a name on each line, followed by a rating after a semicolon or a tab where there is one.
 name = Name
 add-entrant = Add entrant
 # the name typed looks like that of an entrant, e.g. differing in case only, so that it is refused
@@ -133,6 +138,11 @@ entrant-like = “{ $name }” is entered already.
 remove = Remove
 remove-entrant = Remove { $name }
 rename-entrant = Rename { $name }
+ratings = Ratings
+rating-of = Rating of { $name }
+seed = seed { $seed }
+ratings-note = Entrants are seeded by rating, higher first; those without one follow by lot.
+seeding-explained = Seeding explained
 # the field of the name an entrant is renamed to
 entrant-new-name = New name of { $name }
 # not `phase`, which is the app's message of the fields of a phase
@@ -154,6 +164,7 @@ edit-phase-named = Edit phase: { $phase }
 remove-phase-named = Remove phase: { $phase }
 # where a phase takes its entrants from
 everyone-registered = everyone registered
+only-some-places = Only some places
 registration = the registration
 every-place-of = every place of { $phase }
 places-of = places { $from }–{ $to } of { $phase }

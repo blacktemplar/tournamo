@@ -43,6 +43,10 @@ pub fn Entrants() -> Element {
     let count = entrants.len();
     // a competition without entrants, e.g. one just created, opens at the field of the first
     let opened_empty = use_hook(|| count == 0);
+    // the ratings are shown once asked for, and always while an entrant has one
+    let mut ratings_asked = use_signal(|| false);
+    let rated = entrants.iter().any(|(entrant, _)| entrant.rating.is_some());
+    let ratings = ratings_asked() || rated;
     rsx! {
         section { class: "card", aria_labelledby: "entrants",
             h2 { id: "entrants",
@@ -58,10 +62,32 @@ pub fn Entrants() -> Element {
                     " "
                     HelpLink { section: help::RUNNING, text: tr.get("how-it-works") }
                 }
+            } else {
+                div { class: "toolbar",
+                    label {
+                        input {
+                            id: "ratings-switch",
+                            r#type: "checkbox",
+                            role: "switch",
+                            checked: ratings,
+                            // on by itself while an entrant has a rating
+                            disabled: rated || !actions.rate_entrant,
+                            onchange: move |event| ratings_asked.set(event.checked()),
+                        }
+                        {tr.get("ratings")}
+                    }
+                }
             }
-            ol { id: "entrant-list",
+            ol { id: "entrant-list", class: if ratings { "rated" },
                 for (position, (row, name)) in entrants.into_iter().enumerate() {
-                    EntrantItem { key: "{row.id:?}", row, name, position }
+                    EntrantItem { key: "{row.id:?}", row, name, position, ratings }
+                }
+            }
+            if ratings {
+                p { id: "ratings-note", class: "hint",
+                    {tr.get("ratings-note")}
+                    " "
+                    HelpLink { section: help::SEEDING, text: tr.get("seeding-explained") }
                 }
             }
             // below the list, so that the entrant just added shows right above the field, which
@@ -148,9 +174,9 @@ pub fn Entrants() -> Element {
 }
 
 /// An entrant of the list, `row` shown as `name`, at `position` from 0: its name, which is
-/// renamed in place, and its removal.
+/// renamed in place, its rating and seed if `ratings` are shown, and its removal.
 #[component]
-fn EntrantItem(row: EntrantRow, name: String, position: usize) -> Element {
+fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) -> Element {
     let ctx = use_context::<Ctx>();
     // the name typed while the entrant is renamed
     let mut renaming = use_signal(|| None::<String>);
@@ -172,33 +198,48 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize) -> Element {
     };
     let Some(typed) = renaming() else {
         let removed = row.clone();
+        let seed = row.seed;
+        let rated = row.clone();
+        let rename_to = row.name.clone().unwrap_or_default();
         return rsx! {
             li {
                 span { class: "name", "{name}" }
-                // quiet, so that a long list is no column of outlines
-                button {
-                    class: "small quiet icon-only rename",
-                    aria_label: t!(tr, "rename-entrant", name = name.as_str()),
-                    title: t!(tr, "rename-entrant", name = name.as_str()),
-                    disabled: !actions.rename_entrant,
-                    onclick: move |_| renaming.set(Some(row.name.clone().unwrap_or_default())),
-                    icons::Pencil {}
-                }
-                button {
-                    class: "small quiet remove",
-                    aria_label: t!(tr, "remove-entrant", name = name.as_str()),
-                    disabled: !actions.remove_entrant,
-                    onclick: move |_| {
-                        let id = removed.id;
-                        if ctx.act(|session| session.remove_entrant(id)).is_some() {
-                            ctx.announce(Announcement::RemovedEntrant(removed.clone()));
-                            // the entrant after it, which takes its place, else the field adding
-                            // one
-                            let next = format!("{item} .remove");
-                            focus_later(&[&next, "#entrant-name"]);
+                // wrapping together below the name where the row is too narrow
+                span { class: "controls",
+                    if ratings {
+                        span { class: "seed",
+                            if let Some(seed) = seed {
+                                span { aria_hidden: "true", "#{seed}" }
+                                span { class: "visually-hidden", {t!(tr, "seed", seed = seed)} }
+                            }
                         }
-                    },
-                    {tr.get("remove")}
+                        RatingField { row: rated, name: name.clone(), position }
+                    }
+                    // quiet, so that a long list is no column of outlines
+                    button {
+                        class: "small quiet icon-only rename",
+                        aria_label: t!(tr, "rename-entrant", name = name.as_str()),
+                        title: t!(tr, "rename-entrant", name = name.as_str()),
+                        disabled: !actions.rename_entrant,
+                        onclick: move |_| renaming.set(Some(rename_to.clone())),
+                        icons::Pencil {}
+                    }
+                    button {
+                        class: "small quiet remove",
+                        aria_label: t!(tr, "remove-entrant", name = name.as_str()),
+                        disabled: !actions.remove_entrant,
+                        onclick: move |_| {
+                            let id = removed.id;
+                            if ctx.act(|session| session.remove_entrant(id)).is_some() {
+                                ctx.announce(Announcement::RemovedEntrant(removed.clone()));
+                                // the entrant after it, which takes its place, else the field
+                                // adding one
+                                let next = format!("{item} .remove");
+                                focus_later(&[&next, "#entrant-name"]);
+                            }
+                        },
+                        {tr.get("remove")}
+                    }
                 }
             }
         };
@@ -271,6 +312,55 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize) -> Element {
                         {tr.sentence(&error)}
                     }
                 }
+            }
+        }
+    }
+}
+
+/// The rating of the entrant `row`, shown as `name`, at `position` from 0 of the list: a field
+/// rating it as it is left. Text it cannot take stays shown with why.
+#[component]
+fn RatingField(row: EntrantRow, name: String, position: usize) -> Element {
+    let ctx = use_context::<Ctx>();
+    // what was typed since the rating was taken last
+    let mut typed = use_signal(|| None::<String>);
+    // why what was typed is no rating, shown until it is changed
+    let mut error = use_signal(|| None::<Text>);
+    use_cleared_on_language_change(ctx.translator, error);
+    let actions = ctx.actions();
+    let tr = ctx.translator.read();
+    let field = format!("entrant-rating-{position}");
+    let value = typed().unwrap_or_else(|| {
+        row.rating
+            .map(|rating| tr.number(rating.get()))
+            .unwrap_or_default()
+    });
+    let id = row.id;
+    rsx! {
+        input {
+            id: "{field}",
+            class: "rating",
+            inputmode: "decimal",
+            autocomplete: "off",
+            value: "{value}",
+            aria_label: t!(tr, "rating-of", name = name.as_str()),
+            aria_invalid: error.read().is_some().then_some("true"),
+            aria_describedby: "{field}-error",
+            disabled: !actions.rate_entrant,
+            oninput: move |event| {
+                error.set(None);
+                typed.set(Some(event.value()));
+            },
+            onchange: move |event| {
+                match ctx.try_act(|session| session.enter_rating(id, &event.value())) {
+                    Ok(()) => typed.set(None),
+                    Err(refused) => error.set(Some(refused)),
+                }
+            },
+        }
+        p { id: "{field}-error", class: "error rating-error", role: "alert",
+            if let Some(error) = error() {
+                {tr.sentence(&error)}
             }
         }
     }

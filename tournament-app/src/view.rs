@@ -722,6 +722,8 @@ pub struct Actions {
     pub add_entrant: bool,
     pub remove_entrant: bool,
     pub rename_entrant: bool,
+    /// An entrant can be rated, see [`Session::set_rating`](crate::session::Session::set_rating).
+    pub rate_entrant: bool,
     pub add_phase: bool,
     /// A phase can be edited: there is one. What keeps a phase from being removed or started is
     /// said for each, see [`Session::remove_phase_refusal`] and [`Session::start_phase_refusal`].

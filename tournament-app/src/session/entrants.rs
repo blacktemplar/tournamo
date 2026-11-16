@@ -232,6 +232,23 @@ impl Session {
         Ok(())
     }
 
+    /// Rates the entrant `id` by `entered`, a rating as typed (see [`Rating::parse`]), or unrates
+    /// it if `entered` is blank.
+    ///
+    /// # Errors
+    /// Returns an error if `entered` is no rating, as [`Self::set_rating`] does otherwise.
+    pub fn enter_rating(&mut self, id: EntrantId, entered: &str) -> Result<(), RateEntrantError> {
+        let rating = if entered.trim().is_empty() {
+            None
+        } else {
+            Some(
+                Rating::parse(entered)
+                    .ok_or_else(|| RateEntrantError::NoRating(entered.trim().to_owned()))?,
+            )
+        };
+        self.set_rating(id, rating)
+    }
+
     /// The order the start gives the registration: the rated entrants by rating, best first,
     /// those of equal ratings a tier, see
     /// [`StartCompetition`](tournament_engine::StartCompetition). Empty if nobody is rated.

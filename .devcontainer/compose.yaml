@@ -35,8 +35,6 @@ services:
       GIT_CONFIG_COUNT: "1"
       GIT_CONFIG_KEY_0: gc.worktreePruneExpire
       GIT_CONFIG_VALUE_0: never
-      # .devcontainer is read-only here, and these hooks fail on read-only files
-      SKIP: end-of-file-fixer-devcontainer,fix-byte-order-marker-devcontainer
       GH_NO_UPDATE_NOTIFIER: "1"
     # the read-only GitHub token gh uses (README.md, "GitHub CLI"); empty if none was given
     secrets: [gh_token]
@@ -45,11 +43,10 @@ services:
       # worktree's .git file points
       - ${WORKSPACE}:${WORKSPACE}
       - ${GIT_COMMON_DIR}:${GIT_COMMON_DIR}
-      # read-only, since the host runs them: the hooks, the configuration of git (which can name
-      # commands, e.g. core.fsmonitor), and this directory
+      # read-only, since every git command on the host runs them: the hooks and the configuration
+      # of git (which can name commands, e.g. core.fsmonitor)
       - ${GIT_COMMON_DIR}/hooks:${GIT_COMMON_DIR}/hooks:ro
       - ${GIT_COMMON_DIR}/config:${GIT_COMMON_DIR}/config:ro
-      - ${WORKSPACE}/.devcontainer:${WORKSPACE}/.devcontainer:ro
       # a target directory of its own, so the host never runs what was built here
       - target:${WORKSPACE}/target
       - claude:/home/dev/.claude

@@ -50,8 +50,8 @@ Claude can do anything the user `dev` can do in the container. What it cannot do
   to (for a worktree, the main repository's `.git`), and volumes. No home directory, no SSH keys, no
   git credentials (so no `git push`: push from the host), no Docker socket. `git fetch` does work:
   the image's git config turns GitHub's SSH URLs into HTTPS ones, the only way through the proxy.
-- **Plant code the host runs by itself.** Read-only: `.git/hooks`, `.git/config` (it can name
-  commands), and `.devcontainer` (whose `initializeCommand` and mounts the host would use).
+- **Plant code the host runs by itself.** Read-only: `.git/hooks` and `.git/config` (it can name
+  commands, e.g. `core.fsmonitor`), which any git command on the host runs without asking.
   `target/` is a volume of the container, so the host never runs what was built inside.
 
 ## What remains
@@ -59,9 +59,11 @@ Claude can do anything the user `dev` can do in the container. What it cannot do
 - **Everything in the checkout is Claude's output.** Code you build or run on the host (`build.rs`,
   proc macros, tests, `.pre-commit-config.yaml`, which your hook runs on every commit) can do
   anything you can. Read the diff before running anything on the host, or run it in the container
-  only. The same holds for commits Claude makes: it could commit a change to `.devcontainer` even
-  though it cannot write the files, which a later checkout on the host would bring in; look at
-  `git diff` of `.devcontainer` before reopening the container.
+  only.
+- **`.devcontainer` is writable.** Its `initializeCommand` runs on the host and its mounts and
+  proxy allowlist take effect whenever the container is reopened, which often happens without a
+  deliberate step (an editor restart, "reopen in container"). Review `git status` and
+  `git diff -- .devcontainer` (uncommitted changes and commits Claude made) before every reopen.
 - **The repository is writable.** Claude can rewrite branches and other worktrees' refs in the
   shared `.git` (the reflog keeps the old commits) and delete files of the checkout. Keep pushed
   backups.

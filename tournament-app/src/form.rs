@@ -21,6 +21,7 @@ pub(crate) use entry::Context;
 pub use entry::{End, EntryView, SourceChoice, SourceRowView};
 pub use plugin_factory::config::Path;
 use plugin_factory::{
+    PluginType,
     catalog::{AnyAxis, PluginEntry},
     config::{ConfigError, PluginConfig, Segment, Value},
     draft::{Draft, FieldNode, Issue, Problem},
@@ -29,7 +30,10 @@ use plugin_factory::{
 use tournament_engine::{
     Columns, PhasePlugins, Table,
     entities::columns::{self, Rule},
-    plugins::{draw::InOrder, metrics_calculator::MetricsCalculator, ranker::SliceRanker},
+    plugins::{
+        metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
+        seeding::SeededInOrder,
+    },
 };
 
 use crate::{
@@ -89,27 +93,22 @@ impl FormView {
         fields_of(&self.fields, id)
     }
 
-    /// The fields a summary of the phase shows: all but those of divisions where it is played in
-    /// one dealt in order, so that it reads as a phase without divisions.
+    /// The fields a summary of the phase shows: those the form shows, but neither the divisions
+    /// where it is played in one, so that it reads as a phase without divisions, nor the seeding
+    /// where it is in order.
     pub fn summary(&self) -> Vec<FormField> {
-        let one_division = self.fields.iter().any(|field| {
-            field.name == PhasePlugins::DIVISIONS
-                && matches!(field.input, Input::Integer { value: Some(1), .. })
-        });
-        let in_order = self.fields.iter().any(|field| {
-            field.name == PhasePlugins::DRAW
-                && matches!(
-                    &field.input,
-                    Input::Plugin(PluginInput { chosen: Some(chosen), .. })
-                        if chosen.plugin.id == <InOrder as plugin_factory::PluginType>::ID
-                )
-        });
         self.fields
             .iter()
-            .filter(|field| {
-                !(one_division
-                    && (field.name == PhasePlugins::DIVISIONS
-                        || in_order && field.name == PhasePlugins::DRAW))
+            .filter(|field| match field.name {
+                PhasePlugins::DIVISIONS => {
+                    !matches!(field.input, Input::Integer { value: Some(1), .. })
+                }
+                PhasePlugins::SEEDING => !matches!(
+                    &field.input,
+                    Input::Plugin(PluginInput { chosen: Some(chosen), .. })
+                        if chosen.plugin.id == <SeededInOrder as PluginType>::ID
+                ),
+                _ => true,
             })
             .cloned()
             .collect()
@@ -558,6 +557,18 @@ impl PhaseForm {
             .is_none_or(|across| across.as_array().is_none_or(Vec::is_empty));
         if one_division && compares_by_nothing {
             irrelevant.push(Path::ROOT.field(PhasePlugins::ACROSS));
+        }
+        // the draw only matters with several divisions, the seeding to a format reading it
+        if one_division {
+            irrelevant.push(Path::ROOT.field(PhasePlugins::DRAW));
+        }
+        let reads_no_seeding = answers
+            .get(PhasePlugins::FORMAT)
+            .and_then(PluginConfig::from_answer)
+            .and_then(|config| config.build::<dyn PhaseFormat>().ok())
+            .is_some_and(|format| !format.reads_seeding());
+        if reads_no_seeding {
+            irrelevant.push(Path::ROOT.field(PhasePlugins::SEEDING));
         }
         let whole = Whole {
             completed: &completed_nodes,

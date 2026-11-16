@@ -364,8 +364,8 @@ mod v4 {
 /// in, and every ranking its `"lot"`, its initial unique rank; the competition holds the
 /// `"highest_number"` of a match or of a pairing of a bracket, a division the `"number_base"` 0.
 /// The plugins of a phase, of a division and of an `AddPhase` are played in one division
-/// (`"divisions"`), dealt in order (`"draw"`) and compared across divisions by nothing
-/// (`"across"`).
+/// (`"divisions"`), dealt back and forth (`"draw"`), seeded in order (`"seeding"`) and compared
+/// across divisions by nothing (`"across"`).
 mod v5 {
     use serde_json::{Map, Value, json};
 
@@ -385,8 +385,8 @@ mod v5 {
         }
     }
 
-    /// Plugins without the fields of divisions are played in one, dealt in order, compared across
-    /// divisions by nothing.
+    /// Plugins without the fields of divisions are played in one, dealt back and forth, seeded in
+    /// order, compared across divisions by nothing.
     fn one_division(plugins: &mut Map<String, Value>) {
         if plugins.contains_key("divisions") {
             return;
@@ -394,7 +394,11 @@ mod v5 {
         plugins.insert("divisions".to_owned(), 1.into());
         plugins.insert(
             "draw".to_owned(),
-            json!({ "type": "tournament_engine::in_order", "value": null }),
+            json!({ "type": "tournament_engine::snake", "value": null }),
+        );
+        plugins.insert(
+            "seeding".to_owned(),
+            json!({ "type": "tournament_engine::seeded_in_order", "value": null }),
         );
         plugins.insert("across".to_owned(), json!([]));
     }
@@ -841,7 +845,11 @@ mod tests {
         assert_eq!(plugins.remove("divisions"), Some(json!(1)));
         assert_eq!(
             plugins.remove("draw"),
-            Some(json!({ "type": "tournament_engine::in_order", "value": null }))
+            Some(json!({ "type": "tournament_engine::snake", "value": null }))
+        );
+        assert_eq!(
+            plugins.remove("seeding"),
+            Some(json!({ "type": "tournament_engine::seeded_in_order", "value": null }))
         );
         assert_eq!(plugins.remove("across"), Some(json!([])));
     }
@@ -1099,7 +1107,8 @@ mod tests {
             "plugins": {
                 "format": round_robin,
                 "divisions": 1,
-                "draw": { "type": "tournament_engine::in_order", "value": null },
+                "draw": { "type": "tournament_engine::snake", "value": null },
+                "seeding": { "type": "tournament_engine::seeded_in_order", "value": null },
                 "across": [],
             },
         });

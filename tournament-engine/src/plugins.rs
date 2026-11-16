@@ -1,9 +1,9 @@
 //! The plugin axes of a phase and the plugins of this crate, built on `plugin_factory`.
 //!
-//! A phase is played in one [`PhaseFormat`] by divisions its [`Draw`] deals the field
-//! to, ranked by a list of [`SliceRanker`]s and calculates the metrics of a list of
-//! [`MetricsCalculator`]s; [`PhasePlugins`] is that composite. Every
-//! plugin registers itself in the catalog of its axis, see [`plugin_factory::catalog`], so a
+//! A phase is played in one [`PhaseFormat`] by divisions its [`Draw`] deals the field to, each in
+//! the order its [`Seeding`] gives it, ranked by a list of [`SliceRanker`]s and calculates the
+//! metrics of a list of [`MetricsCalculator`]s; [`PhasePlugins`] is that composite. Every plugin
+//! registers itself in the catalog of its axis, see [`plugin_factory::catalog`], so a
 //! consumer configuring a phase finds them there, and declares what it provides to and requires of
 //! its phase, see [`facts`] and [`plugin_factory::compatibility`].
 //!
@@ -62,6 +62,7 @@ use crate::{
         metrics_calculator::MetricsCalculator,
         phase_format::{PhaseFormat, Schedule},
         ranker::{HierarchicalRanker, SliceRanker},
+        seeding::Seeding,
     },
 };
 
@@ -74,10 +75,12 @@ pub mod metrics_calculator;
 pub mod phase_format;
 mod phrase;
 pub mod ranker;
+pub mod seeding;
 
 /// The plugins of one phase: the format its matches are scheduled by, how many divisions it is
-/// played in and the draw dealing its field to them, the slice rankers each division is ranked
-/// by, the calculators of its metrics, and the slice rankers comparing parallel divisions.
+/// played in, the draw dealing its field to them and the seeding ordering each, the slice rankers
+/// each division is ranked by, the calculators of its metrics, and the slice rankers comparing
+/// parallel divisions.
 ///
 /// It is configured as a composite of `plugin_factory`, through the
 /// [`Competition::phase_draft`](crate::Competition::phase_draft) of the competition it is added to,
@@ -134,10 +137,16 @@ pub struct PhasePlugins {
     divisions: NonZeroU32,
     #[plugin(
         label = "draw",
-        description = "how the entrants are dealt to the groups and seeded",
-        default = Box::new(draw::InOrder)
+        description = "how the entrants are dealt to the groups",
+        default = Box::new(draw::Snake)
     )]
     draw: Box<dyn Draw>,
+    #[plugin(
+        label = "seeding",
+        description = "the order the format sets the entrants of a group in",
+        default = Box::new(seeding::SeededInOrder)
+    )]
+    seeding: Box<dyn Seeding>,
     #[plugin(
         label = "match format",
         description = "what is entered for a match",
@@ -224,7 +233,8 @@ impl PhasePlugins {
         Ok(Self {
             format,
             divisions: NonZeroU32::MIN,
-            draw: Box::new(draw::InOrder),
+            draw: Box::new(draw::Snake),
+            seeding: Box::new(seeding::SeededInOrder),
             match_format,
             ranking,
             metrics: DependencyOrderedSet::new(metrics)?,
@@ -232,16 +242,17 @@ impl PhasePlugins {
         })
     }
 
-    /// These plugins played in `divisions` divisions, dealt by `draw`, ranked across them by
-    /// `across`.
+    /// These plugins played in `divisions` divisions, dealt by `draw`, each seeded by `seeding`,
+    /// ranked across them by `across`.
     pub(crate) fn with_divisions(
         mut self,
         divisions: NonZeroU32,
-        draw: Box<dyn Draw>,
+        (draw, seeding): (Box<dyn Draw>, Box<dyn Seeding>),
         across: Vec<Box<dyn SliceRanker>>,
     ) -> Self {
         self.divisions = divisions;
         self.draw = draw;
+        self.seeding = seeding;
         self.across = across;
         self
     }
@@ -258,6 +269,11 @@ impl PhasePlugins {
     /// How the field of the phase is dealt to its divisions.
     pub fn draw(&self) -> &dyn Draw {
         &*self.draw
+    }
+
+    /// How the qualifiers dealt to a division are ordered.
+    pub fn seeding(&self) -> &dyn Seeding {
+        &*self.seeding
     }
 
     /// The slice rankers ranking the rankings of one rank in their parallel divisions against each
@@ -310,7 +326,7 @@ impl PhasePlugins {
         .expect("the calculators were in order")
         .with_divisions(
             self.divisions,
-            built(answer(Self::DRAW)),
+            (built(answer(Self::DRAW)), built(answer(Self::SEEDING))),
             list(Self::ACROSS).iter().map(built).collect(),
         )
     }

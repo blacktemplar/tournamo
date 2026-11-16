@@ -21,12 +21,13 @@ use crate::{
         draw::{DivisionOrder, DrawView},
         metrics_calculator::MetricsCalculator,
         ranker::RankingScope,
+        seeding::SeedingView,
     },
 };
 #[cfg(doc)]
 use crate::{
     Competition,
-    plugins::{draw::Draw, phase_format::PhaseFormat},
+    plugins::{draw::Draw, phase_format::PhaseFormat, seeding::Seeding},
 };
 
 /// A phase of a competition: where its entrants come from, one configuration of plugins, played
@@ -281,8 +282,9 @@ impl Phase {
     }
 
     /// Starts this phase with `field`, each qualifier with the best lot of its entrants: its draw
-    /// deals the field to its divisions, each starting with a ranking of each of its qualifiers in
-    /// the order dealt. It deals to as many divisions as the phase is configured with, but no more
+    /// deals the field to its divisions, its seeding orders each division's qualifiers (given in
+    /// the order of the field), and each division starts with a ranking of each of its qualifiers
+    /// in that order. It deals to as many divisions as the phase is configured with, but no more
     /// than leave each the entrants its format needs (see [`PhaseFormat::min_entrants`]): a
     /// consumer refuses to start a phase with too few for its divisions, this only keeps a start
     /// it does not refuse, e.g. of a log written elsewhere, from leaving a division too small.
@@ -297,7 +299,7 @@ impl Phase {
         let needed = self.plugins.format().min_entrants().max(1);
         let count = (self.plugins.divisions().get() as usize).min((field.len() / needed).max(1));
         let (qualifiers, lots): (Vec<_>, Vec<_>) = field.into_iter().unzip();
-        let dealt =
+        let mut dealt =
             self.plugins
                 .draw()
                 .draw(&DrawView::new(&qualifiers, count, entrants, self.seed));
@@ -313,7 +315,7 @@ impl Phase {
             "a draw deals every qualifier to one of the divisions, none empty"
         );
         self.divisions = dealt
-            .into_iter()
+            .iter_mut()
             .enumerate()
             .map(|(index, positions)| {
                 let seed = if index == 0 {
@@ -321,8 +323,24 @@ impl Phase {
                 } else {
                     Seed::new(self.seed.rng(Entropy::Division(index)).random())
                 };
+                positions.sort_unstable();
+                let seeded = self.plugins.seeding().seed(&SeedingView::new(
+                    &qualifiers,
+                    positions,
+                    (index, count),
+                    entrants,
+                    seed,
+                ));
+                debug_assert!(
+                    seeded
+                        .iter()
+                        .copied()
+                        .sorted()
+                        .eq(positions.iter().copied()),
+                    "a seeding orders the qualifiers of its division"
+                );
                 let mut division = Division::new(self.plugins.clone(), seed);
-                let field = positions
+                let field = seeded
                     .into_iter()
                     .map(|position| (qualifiers[position].entrants.clone(), lots[position]))
                     .collect();

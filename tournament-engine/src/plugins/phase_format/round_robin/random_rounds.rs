@@ -52,6 +52,11 @@ impl RandomRounds {
 
 #[register]
 impl PhaseFormat for RandomRounds {
+    /// Every round is drawn by lot, whatever order the entrants start in.
+    fn reads_seeding(&self) -> bool {
+        false
+    }
+
     /// Ranked by points, then Buchholz, Sonneborn-Berger and Buchholz of Buchholz, and showing the
     /// wins, draws and losses as well.
     fn suggestions(&self) -> PhaseSuggestions {

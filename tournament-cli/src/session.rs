@@ -2719,7 +2719,7 @@ mod tests {
         output(&mut session, "add Alice Bob Carol Dave");
         output(
             &mut session,
-            "add-phase round-robin divisions=2 draw=in-order",
+            "add-phase round-robin divisions=2 draw=back-and-forth",
         );
         output(&mut session, "start");
 

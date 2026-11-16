@@ -21,10 +21,12 @@ later one: a file whose `"format"` changes is migrated, not refused.
   competition places everyone by the phase they reached. Match numbers are
   unique in the whole competition.
 - A phase can be played in several groups (divisions) of one configuration,
-  dealt by a draw: in order, at random, in blocks (knockouts A/B/C playing for
-  places of their own) or keeping groups apart (seeding a knockout of the best
-  of several groups so that entrants of one group meet as late as possible).
-  Each place of a group is a place of the phase, a tie in a group decided by
+  dealt by a draw: back and forth, at random, or in blocks (knockouts A/B/C
+  playing for places of their own). A seeding orders the entrants of each
+  group, which a knockout seeds its bracket by: in order, at random, or
+  keeping groups apart (for a knockout of the best of several groups, so that
+  entrants of one group meet as late as possible); it is not asked for random
+  rounds and Monster DYP, which draw their pairings by lot. Each place of a group is a place of the phase, a tie in a group decided by
   its lot: the best eight of three groups are the firsts and seconds of every
   group and two of the thirds. Entrants of the same place in different groups
   are compared by criteria of their own, e.g. the new points per match, which

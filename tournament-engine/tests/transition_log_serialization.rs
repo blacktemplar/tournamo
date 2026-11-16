@@ -22,7 +22,7 @@ use tournament_engine::{
     ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
     StartCompetition, StartPhase, TypeMapValue,
     plugins::{
-        draw::{Blocks, Draw, GroupWinnersApart, InOrder, Random},
+        draw::{Blocks, Draw, Random, Snake},
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MetricsCalculator, MorePoints, MorePointsPerMatch,
             Points, PointsCalculator, PointsPerMatchCalculator, RoundOfFirstLossCalculator,
@@ -30,6 +30,7 @@ use tournament_engine::{
         },
         phase_format::SingleElimination,
         ranker::SliceRanker,
+        seeding::{GroupWinnersApart, SeededAtRandom, SeededInOrder, Seeding},
     },
     undoable_state_machine::{LogEntry, LogEntryKind, SessionHistory, TransitionId},
     uuid::Uuid,
@@ -552,7 +553,11 @@ fn every_plugin_is_serialized_under_its_id() {
         ]
     );
     assert_eq!(plugins["divisions"], 1);
-    assert_eq!(plugins["draw"]["type"], "tournament_engine::in_order");
+    assert_eq!(plugins["draw"]["type"], "tournament_engine::snake");
+    assert_eq!(
+        plugins["seeding"]["type"],
+        "tournament_engine::seeded_in_order"
+    );
     assert_eq!(plugins["across"], json!([]));
 }
 
@@ -560,21 +565,30 @@ fn every_plugin_is_serialized_under_its_id() {
 #[test]
 fn the_plugins_of_divisions_are_serialized_under_their_ids() {
     let id = |plugin: Value| plugin["type"].as_str().unwrap().to_owned();
-    let draws: [Box<dyn Draw>; 4] = [
-        Box::new(InOrder),
-        Box::new(Random),
-        Box::new(Blocks),
-        Box::new(GroupWinnersApart),
-    ];
+    let draws: [Box<dyn Draw>; 3] = [Box::new(Snake), Box::new(Random), Box::new(Blocks)];
 
     assert_eq!(
         draws
             .map(|draw| id(serde_json::to_value(draw).unwrap()))
             .as_slice(),
         [
-            "tournament_engine::in_order",
+            "tournament_engine::snake",
             "tournament_engine::random",
             "tournament_engine::blocks",
+        ]
+    );
+    let seedings: [Box<dyn Seeding>; 3] = [
+        Box::new(SeededInOrder),
+        Box::new(SeededAtRandom),
+        Box::new(GroupWinnersApart),
+    ];
+    assert_eq!(
+        seedings
+            .map(|seeding| id(serde_json::to_value(seeding).unwrap()))
+            .as_slice(),
+        [
+            "tournament_engine::seeded_in_order",
+            "tournament_engine::seeded_at_random",
             "tournament_engine::group_winners_apart",
         ]
     );

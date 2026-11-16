@@ -95,6 +95,16 @@ pub trait PhaseFormat: Plugin + DynClone {
     fn highest_number(&self) -> Option<NonZeroU32> {
         self.bracket().and_then(Bracket::highest_number)
     }
+
+    /// Whether the order of the rankings a division starts with means something to this format,
+    /// as it does to a knockout seeding its bracket by it; `true` unless the format says otherwise,
+    /// as one drawing its pairings by lot does, where the order changes no more than which pairings
+    /// the lot gives. A consumer need not ask for a [`Seeding`] of a format that reads none.
+    ///
+    /// [`Seeding`]: crate::plugins::seeding::Seeding
+    fn reads_seeding(&self) -> bool {
+        true
+    }
 }
 
 dyn_clone::clone_trait_object!(PhaseFormat);

@@ -34,4 +34,6 @@ pub(crate) enum Entropy {
     Draw,
     /// The seed of a division of a phase other than the first, with its index.
     Division(usize),
+    /// The seeding ordering a division of a phase.
+    Seeding,
 }

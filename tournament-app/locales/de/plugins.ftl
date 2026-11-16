@@ -8,7 +8,9 @@ phase =
     .field-divisions = Gruppen
     .field-divisions-description = in wie vielen Teilen die Phase gespielt wird, jeder für sich
     .field-draw = Auslosung
-    .field-draw-description = wie die Teilnehmer auf die Gruppen verteilt und gesetzt werden
+    .field-draw-description = wie die Teilnehmer auf die Gruppen verteilt werden
+    .field-seeding = Setzung
+    .field-seeding-description = in welcher Reihenfolge das Format die Teilnehmer einer Gruppe setzt
     .field-match_format = Spielformat
     .field-match_format-description = was zu einem Spiel eingetragen wird
     .field-ranking = Reihenfolge der Tabelle
@@ -86,15 +88,24 @@ plugin-tournament_engine-monster_dyp =
 
 ## Draws
 
-plugin-tournament_engine-in_order =
-    .label = der Reihe nach
-    .description = behält die Reihenfolge des Teilnehmerfelds; mehrere Gruppen bekommen es abwechselnd, hin und zurück
+plugin-tournament_engine-snake =
+    .label = hin und zurück
+    .description = die Gruppen bekommen die Teilnehmer abwechselnd, in ihrer Reihenfolge, hin und zurück
 plugin-tournament_engine-random =
     .label = zufällig
-    .description = jeder Teilnehmer in eine Gruppe und auf einen Setzplatz nach Los
+    .description = jeder Teilnehmer in eine Gruppe nach Los
 plugin-tournament_engine-blocks =
     .label = in Blöcken
     .description = die Besten in die erste Gruppe, die Nächsten in die zweite und so weiter; jede Gruppe spielt um eigene Plätze
+
+## Seedings
+
+plugin-tournament_engine-seeded_in_order =
+    .label = der Reihe nach
+    .description = die Teilnehmer werden in der Reihenfolge gesetzt, in der sie kommen
+plugin-tournament_engine-seeded_at_random =
+    .label = zufällig
+    .description = die Teilnehmer werden nach Los gesetzt
 plugin-tournament_engine-group_winners_apart =
     .label = Gruppen getrennt
     .description = für ein K.-o.-System der Besten mehrerer Gruppen: Teilnehmer derselben Gruppe treffen so spät wie möglich aufeinander

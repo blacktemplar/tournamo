@@ -22,7 +22,7 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
     gui.click("Add phase").await?;
     gui.open_new_phase("Knockout").await?;
     gui.choose_format("Single elimination").await?;
-    gui.choose_plugin("draw", "Groups kept apart").await?;
+    gui.choose_plugin("seeding", "Groups kept apart").await?;
     gui.enter_place(0, "to", "8").await?;
     gui.click("Add phase").await?;
     gui.expect_announcement("The phase is added.").await
@@ -204,7 +204,7 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
         gui.expect_phase(&[
             "Round robin",
             "3",
-            "In order",
+            "Back and forth",
             "Winner only",
             "More points, more Sonneborn-Berger",
             "Win-draw-loss record",

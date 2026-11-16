@@ -126,11 +126,12 @@ async fn undo_says_what_it_covers() {
     .await;
 }
 
-/// What a result did shows in a toast, and neither it nor the finish moves the matches, so that
-/// the next tap lands where it was aimed.
+/// What a result did shows in a toast, and it does not move the matches, so that the next tap lands
+/// where it was aimed. The finish may: it happens once, and the winners are the competition's, so
+/// they are shown above everything of a phase.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_result_and_the_finish_move_nothing() {
+async fn a_result_moves_nothing() {
     run_in_new_competition(async |gui| {
         start_round_robin(&gui, &["Alice", "Bob", "Carol"]).await?;
         gui.show_by_round().await?;
@@ -142,11 +143,12 @@ async fn a_result_and_the_finish_move_nothing() {
         assert_eq!(gui.page.top_of("#match-list").await?, top);
         gui.click_labelled("Next round").await?;
         gui.click("Draw").await?;
+        assert_eq!(gui.page.top_of("#match-list").await?, top);
         gui.click_labelled("Next round").await?;
         gui.click("Draw").await?;
         gui.expect_winners(Some("Tied for first: Alice, Bob, Carol"))
             .await?;
-        assert_eq!(gui.page.top_of("#match-list").await?, top);
+        assert!(gui.page.top_of(".winners-banner").await? < gui.page.top_of("#matches").await?);
         Ok(())
     })
     .await;

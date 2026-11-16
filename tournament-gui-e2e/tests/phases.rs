@@ -57,8 +57,13 @@ async fn a_competition_of_two_phases_is_played_through() {
         gui.page
             .expect_texts(By::Css(".winners-banner h2"), &["Finished"])
             .await?;
+        // the competition's winners, above its phases
+        assert!(gui.page.top_of(".winners-banner").await? < gui.page.top_of(".phase-links").await?);
         gui.go_to_phase("Ranking").await?;
         gui.expect_bar_phase(Some("Ranking")).await?;
+        gui.page
+            .expect_texts(By::Css(".winners-banner h2"), &["Finished"])
+            .await?;
         gui.page
             .expect_texts(
                 By::Css("#ranking-list tbody td:last-child"),

@@ -9,8 +9,11 @@ use tournament_engine::{
         register,
     },
     plugins::{
-        metrics_calculator::{LaterElimination, PointsCalculator, RoundOfEliminationCalculator},
-        phase_format::{PhaseFormat, PhaseSuggestions, Schedule},
+        metrics_calculator::{
+            LaterElimination, MorePoints, MorePointsPerMatch, PointsCalculator,
+            RoundOfEliminationCalculator,
+        },
+        phase_format::{PhaseFormat, PhaseSuggestions, RoundRobin, Schedule},
     },
 };
 #[cfg(target_arch = "wasm32")]
@@ -34,6 +37,7 @@ impl PhaseFormat for Custom {
                 PluginConfig::of::<RoundOfEliminationCalculator>(),
                 PluginConfig::of::<PointsCalculator>().with("points_for_win", self.points),
             ],
+            across: Vec::new(),
         }
     }
 
@@ -137,4 +141,33 @@ fn filling_unanswered_settings_preserves_an_explicit_empty_ranking() {
     );
     draft.add_implied();
     assert!(draft.build().is_ok());
+}
+
+#[test]
+fn comparing_across_groups_is_suggested_only_for_several_groups() {
+    let across = |divisions: u32| {
+        let draft = Competition::default()
+            .phase_draft(&[Source::registration()])
+            .with("format", PluginConfig::of::<RoundRobin>())
+            .unwrap()
+            .with("divisions", divisions)
+            .unwrap();
+        PhasePlugins::with_suggestions(draft)
+            .unwrap()
+            .answers()
+            .get("across")
+            .cloned()
+    };
+
+    assert_eq!(across(1), Some(Vec::<PluginConfig>::new().into()));
+    assert_eq!(
+        across(2),
+        Some(
+            vec![
+                PluginConfig::of::<MorePointsPerMatch>(),
+                PluginConfig::of::<MorePoints>(),
+            ]
+            .into()
+        )
+    );
 }

@@ -866,12 +866,40 @@ fn comparing_across_groups_shows_with_several_groups() {
 
     form.enter(&path("divisions"), "3").unwrap();
     assert!(shown(&form));
-    form.add(&path("across"), MorePointsPerMatch::ID).unwrap();
     form.enter(&path("divisions"), "1").unwrap();
+    assert!(!shown(&form), "the suggestion is gone with the groups");
+    form.add(&path("across"), MorePointsPerMatch::ID).unwrap();
 
     assert!(shown(&form));
     form.remove(&path("across[0]")).unwrap();
     assert!(!shown(&form));
+}
+
+/// With several groups, a format ranking by points suggests comparing them by points per match,
+/// which suits groups of different sizes, then by points; a knockout suggests nothing.
+#[test]
+fn comparing_across_groups_is_suggested_with_several_groups() {
+    let mut form = new_form();
+    let across = |form: &PhaseForm| {
+        form.draft()
+            .answers()
+            .get(PhasePlugins::ACROSS)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let by_points = Value::from(vec![
+        PluginConfig::of::<MorePointsPerMatch>(),
+        PluginConfig::of::<MorePoints>(),
+    ]);
+    assert_eq!(across(&form), Value::from(Vec::<PluginConfig>::new()));
+
+    form.enter(&path("divisions"), "2").unwrap();
+    assert_eq!(across(&form), by_points);
+    assert!(form.view().complete);
+
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(across(&form), Value::from(Vec::<PluginConfig>::new()));
 }
 
 /// The draw is asked for only with several divisions, the seeding only of a format reading it.

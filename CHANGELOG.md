@@ -29,8 +29,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   rounds and Monster DYP, which draw their pairings by lot. Each place of a group is a place of the phase, a tie in a group decided by
   its lot: the best eight of three groups are the firsts and seconds of every
   group and two of the thirds. Entrants of the same place in different groups
-  are compared by criteria of their own, e.g. the new points per match, which
-  compares groups of different sizes. A phase with too few entrants for its groups is not started until
+  are compared by criteria of their own, by default (for round robin, random
+  rounds and Monster DYP) the new points per match, which compares groups of
+  different sizes, then the points, rather than by lot. A phase with too few entrants for its groups is not started until
   the groups are lowered. The page filters the matches by group, shows the
   standings of each group and, where the cut of the next phase goes through a
   place, how that place compares across the groups, a dashed line below the
@@ -132,6 +133,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `CompetitionStateMachineExt::apply_transition` and `apply_in`; they take a
   `CompetitionTransition`, so a transition goes in with `.into()`.
   `Transition::apply` returns nothing.
+- Library users: `PhaseSuggestions` has a third list, `across`, the criteria
+  comparing groups, which `PhasePlugins::default_value` and `with_suggestions`
+  offer only where the draft answers several divisions; `PhasePlugins::SUGGESTED`
+  names `across` too.
 - Library users: `Phase::plugins` replaces `Phase::metrics_calculators` and
   `Phase::slice_rankers`, and a `HierarchicalRanker` borrows its slice
   rankers.

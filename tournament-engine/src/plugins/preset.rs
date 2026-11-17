@@ -23,8 +23,9 @@ use crate::{
     plugins::{
         PhasePlugins, Phrase,
         draw::Blocks,
-        metrics_calculator::{MorePoints, MorePointsPerMatch},
-        phase_format::{DoubleElimination, RandomRounds, RoundRobin, SingleElimination},
+        phase_format::{
+            DoubleElimination, PhaseSuggestions, RandomRounds, RoundRobin, SingleElimination,
+        },
         seeding::GroupWinnersApart,
         teams::RandomPairs,
     },
@@ -240,13 +241,7 @@ impl Preset for GroupsThenKnockout {
                 answers: Config::new()
                     .with(PhasePlugins::FORMAT, PluginConfig::of::<RoundRobin>())
                     .with(PhasePlugins::DIVISIONS, groups.get())
-                    .with(
-                        PhasePlugins::ACROSS,
-                        vec![
-                            PluginConfig::of::<MorePointsPerMatch>(),
-                            PluginConfig::of::<MorePoints>(),
-                        ],
-                    ),
+                    .with(PhasePlugins::ACROSS, PhaseSuggestions::across_by_points()),
             },
             PresetPhase {
                 name: Phrase::new("knockout", "Knockout"),

@@ -8,9 +8,9 @@
 //! [`Session::add_phase`](crate::session::Session::add_phase) or
 //! [`Session::edit_phase`](crate::session::Session::edit_phase).
 //!
-//! New forms follow suggestions for their ranking and metrics until either is edited. Then the
-//! whole section stays as chosen, until [`PhaseForm::apply_suggestions`] replaces it and resumes
-//! following. Existing phases start with their settings kept.
+//! New forms follow suggestions for their ranking, metrics and comparison across groups until one
+//! is edited. Then the whole section stays as chosen, until [`PhaseForm::apply_suggestions`]
+//! replaces it and resumes following. Existing phases start with their settings kept.
 //!
 //! The metrics are not chosen by themselves but by where they are shown
 //! ([`PhaseForm::set_shown`]): a metric is calculated while something needs it or a table of
@@ -613,9 +613,9 @@ impl PhaseForm {
         self.columns = columns;
     }
 
-    /// Replaces the ranking and metrics, including their settings, with the suggestions for the
-    /// other phase fields, and resumes following suggestions. Those fields and their rejected
-    /// numeric input are kept.
+    /// Replaces the ranking, metrics and comparison across groups, including their settings, with
+    /// the suggestions for the other phase fields, and resumes following suggestions. Those fields
+    /// and their rejected numeric input are kept.
     ///
     /// # Errors
     /// Returns an error if a suggested answer does not fit its schema. Nothing changes then.

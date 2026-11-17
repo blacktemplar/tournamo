@@ -5,7 +5,11 @@ use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
 use crate::{
     entities::{Bye, DivisionView, NewMatch},
-    plugins::{Phrase, facts::NoDraws},
+    plugins::{
+        Phrase,
+        facts::NoDraws,
+        metrics_calculator::{MorePoints, MorePointsPerMatch},
+    },
     type_map::TypeMap,
 };
 
@@ -128,6 +132,21 @@ impl dyn PhaseFormat {
 pub struct PhaseSuggestions {
     pub ranking: Vec<PluginConfig>,
     pub metrics: Vec<PluginConfig>,
+    /// The criteria comparing entrants of the same place in different groups, in priority order,
+    /// suggested only for a phase played in several, see
+    /// [`PhasePlugins::default_value`](crate::plugins::PhasePlugins::default_value).
+    pub across: Vec<PluginConfig>,
+}
+
+impl PhaseSuggestions {
+    /// The comparison across groups of a format ranking by points: more points per match, which
+    /// suits groups of different sizes, then more points.
+    pub(crate) fn across_by_points() -> Vec<PluginConfig> {
+        vec![
+            PluginConfig::of::<MorePointsPerMatch>(),
+            PluginConfig::of::<MorePoints>(),
+        ]
+    }
 }
 
 /// The name of a stage of a phase, as a [`PhaseFormat`] names a match or a bye by, see

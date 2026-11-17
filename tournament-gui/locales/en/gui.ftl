@@ -455,6 +455,8 @@ announce-started = Started: { $count ->
        *[other] { $count } matches
     } to play.
 action-add-entrant = adding { $name }
+# $count: at least two
+action-add-entrants = adding { $count } entrants
 action-remove-entrant = removing { $name }
 action-add-phase = adding { $phase }
 action-edit-phase = editing { $phase }

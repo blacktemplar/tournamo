@@ -227,6 +227,25 @@ async fn undo_and_redo_walk_through_the_actions() {
     .await;
 }
 
+/// A list pasted is one action: one undo takes every entrant of it back, one redo adds them again.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_list_pasted_is_undone_and_redone_as_a_whole() {
+    run_in_new_competition(async |gui| {
+        gui.paste_entrant_names("Alice\nBob\nCarol").await?;
+        gui.expect_entrants(&["Alice", "Bob", "Carol"]).await?;
+
+        gui.click("Undo").await?;
+        gui.expect_entrants(&[]).await?;
+        gui.expect_announcement("Undone: adding 3 entrants.")
+            .await?;
+        gui.click("Redo").await?;
+        gui.expect_entrants(&["Alice", "Bob", "Carol"]).await?;
+        gui.expect_announcement("Redone: adding 3 entrants.").await
+    })
+    .await;
+}
+
 /// Undo keeps the focus once there is nothing left to undo, and pressing it then does nothing.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

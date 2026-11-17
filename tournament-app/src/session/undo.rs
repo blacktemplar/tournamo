@@ -16,13 +16,14 @@ impl Session {
     /// leaves play, is asked about first. `None` if there is nothing to undo, or another session
     /// has undone the action already.
     pub fn next_undo(&self) -> Option<Action> {
-        let id = self.history.next_undo(&self.machine)?;
-        Some(self.action_of(id))
+        let ids = self.history.next_undo(&self.machine)?;
+        Some(self.action_of(ids))
     }
 
     /// Undoes the latest action of this session that is still in effect, which may be an
-    /// [`Self::undo_report`], bringing the result back. Returns the action undone. The form of a
-    /// match whose report it undoes starts out at the result, see [`Self::result_form`].
+    /// [`Self::undo_report`], bringing the result back, or every entrant of a list added at once.
+    /// Returns the action undone. The form of a match whose report it undoes starts out at the
+    /// result, see [`Self::result_form`].
     ///
     /// The changes of other sessions, caught up with, are not undone, and stay in effect.
     ///
@@ -31,7 +32,7 @@ impl Session {
     /// [`UndoError::ChangedElsewhere`] if a change of another session undid the action or does not
     /// apply without it; then nothing more can be undone, while what can be redone stays.
     pub fn undo(&mut self) -> Result<Action, UndoError> {
-        let Some(id) = self.history.next_undo(&self.machine) else {
+        let Some(ids) = self.history.next_undo(&self.machine).map(<[_]>::to_vec) else {
             // nothing to undo, or undone elsewhere, which the history fails with and ends at
             return Err(match self.history.undo_last(&mut self.machine) {
                 Err(UndoLastError::NothingToUndo) => UndoError::NothingToUndo,
@@ -39,23 +40,29 @@ impl Session {
             });
         };
         // read before the undo, which removes the phase, or the result
-        let phase = match self.applied(id) {
-            Some(CompetitionTransition::AddPhase(added)) => {
-                self.phase(added.id()).map(|phase| UndonePhase {
-                    name: phase.name().map(str::to_owned),
-                    sources: phase.sources().clone(),
-                    config: phase.config(),
-                    columns: phase.columns().clone(),
-                })
-            }
+        let phase = match ids.as_slice() {
+            [id] => match self.applied(*id) {
+                Some(CompetitionTransition::AddPhase(added)) => {
+                    self.phase(added.id()).map(|phase| UndonePhase {
+                        name: phase.name().map(str::to_owned),
+                        sources: phase.sources().clone(),
+                        config: phase.config(),
+                        columns: phase.columns().clone(),
+                    })
+                }
+                _ => None,
+            },
             _ => None,
         };
-        let reported = match self.applied(id) {
-            Some(CompetitionTransition::ReportMatchResult(report)) => {
-                self.reported_contest(report.phase_id(), report.match_id())
-            }
-            _ => None,
-        };
+        let reported: Vec<_> = ids
+            .iter()
+            .filter_map(|id| match self.applied(*id) {
+                Some(CompetitionTransition::ReportMatchResult(report)) => {
+                    self.reported_contest(report.phase_id(), report.match_id())
+                }
+                _ => None,
+            })
+            .collect();
         self.history
             .undo_last(&mut self.machine)
             .map_err(|_| UndoError::ChangedElsewhere)?;
@@ -63,7 +70,7 @@ impl Session {
             self.undone_phase = phase;
         }
         self.reopened.extend(reported);
-        Ok(self.action_of(id))
+        Ok(self.action_of(&ids))
     }
 
     /// Redoes the action this session undid last, as long as it took no other action since.
@@ -75,7 +82,7 @@ impl Session {
     /// [`RedoError::ChangedElsewhere`] if a change of another session redid the action or does not
     /// apply with it; then nothing more can be redone, while what can be undone stays.
     pub fn redo(&mut self) -> Result<Action, RedoError> {
-        let Some(id) = self.history.next_redo(&self.machine) else {
+        let Some(ids) = self.history.next_redo(&self.machine).map(<[_]>::to_vec) else {
             // nothing to redo, or redone elsewhere, which the history fails with and ends at
             return Err(match self.history.redo_last(&mut self.machine) {
                 Err(RedoLastError::NothingToRedo) => RedoError::NothingToRedo,
@@ -83,20 +90,23 @@ impl Session {
             });
         };
         // read before the redo, which takes the result back
-        let reported = match self.machine.entry(id).map(LogEntry::kind) {
-            Some(LogEntryKind::Undo(target)) => match self.applied(*target) {
-                Some(CompetitionTransition::ReportMatchResult(report)) => {
-                    self.reported_contest(report.phase_id(), report.match_id())
-                }
+        let reported: Vec<_> = ids
+            .iter()
+            .filter_map(|id| match self.machine.entry(*id).map(LogEntry::kind) {
+                Some(LogEntryKind::Undo(target)) => match self.applied(*target) {
+                    Some(CompetitionTransition::ReportMatchResult(report)) => {
+                        self.reported_contest(report.phase_id(), report.match_id())
+                    }
+                    _ => None,
+                },
                 _ => None,
-            },
-            _ => None,
-        };
+            })
+            .collect();
         self.history
             .redo_last(&mut self.machine)
             .map_err(|_| RedoError::ChangedElsewhere)?;
         self.reopened.extend(reported);
-        Ok(self.action_of(id))
+        Ok(self.action_of(&ids))
     }
 
     /// The transition the log entry `id` applies, if it applies one.
@@ -107,14 +117,33 @@ impl Session {
         }
     }
 
-    /// The action of this session whose entry in the log is `id`, as the competition shows it
-    /// now: done, or about to be undone or redone, or just undone or redone.
+    /// The action of this session whose entries in the log are `ids`, oldest first, as the
+    /// competition shows it now: done, or about to be undone or redone, or just undone or redone.
     ///
     /// # Panics
-    /// Panics if `id` is no action of the session, or the match of a report is not scheduled, which
-    /// it is while the report is in effect, and after it was undone or before it is redone, since
-    /// only the entries before a report schedule its match.
-    fn action_of(&self, id: TransitionId) -> Action {
+    /// Panics if `ids` are no action of the session, or as [`Self::action_of_entry`] does.
+    fn action_of(&self, ids: &[TransitionId]) -> Action {
+        match ids {
+            [id] => self.action_of_entry(*id),
+            _ => Action::AddEntrants(
+                ids.iter()
+                    .map(|id| match self.action_of_entry(*id) {
+                        Action::AddEntrant(row) => row,
+                        _ => unreachable!("the only action of several entries adds entrants"),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+
+    /// The action the entry `id` of an action of this session would be on its own, as
+    /// [`Self::action_of`] shows it.
+    ///
+    /// # Panics
+    /// Panics if `id` is no entry of an action of the session, or the match of a report is not
+    /// scheduled, which it is while the report is in effect, and after it was undone or before it
+    /// is redone, since only the entries before a report schedule its match.
+    fn action_of_entry(&self, id: TransitionId) -> Action {
         let entry = self
             .machine
             .entry(id)

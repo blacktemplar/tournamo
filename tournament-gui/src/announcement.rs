@@ -120,6 +120,7 @@ fn action_text(tr: &Translator, action: &Action) -> String {
             "action-add-entrant",
             name = team_name(tr, std::slice::from_ref(entrant)),
         ),
+        Action::AddEntrants(entrants) => t!(tr, "action-add-entrants", count = entrants.len()),
         Action::RemoveEntrant(entrant) => t!(
             tr,
             "action-remove-entrant",

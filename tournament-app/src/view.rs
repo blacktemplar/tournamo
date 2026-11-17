@@ -780,6 +780,9 @@ pub struct Reopened {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Action {
     AddEntrant(EntrantRow),
+    /// Several entrants added at once, e.g. a pasted list, in the order added: one action, see
+    /// [`Session::add_entrants`](crate::session::Session::add_entrants).
+    AddEntrants(Vec<EntrantRow>),
     RemoveEntrant(EntrantRow),
     AddPhase(PhaseName),
     EditPhase(PhaseName),

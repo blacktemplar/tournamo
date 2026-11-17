@@ -2848,4 +2848,22 @@ mod tests {
             Err(Error::UnknownDivision(letter)) if letter == "C"
         ));
     }
+
+    /// A phase of drawn pairs ranks teams of two, and does not start with an odd number.
+    #[test]
+    fn a_phase_of_drawn_pairs_ranks_teams_of_two() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob Carol");
+        output(&mut session, "add-phase round-robin teams=drawn-pairs");
+
+        assert!(
+            execute(&mut session, "start").is_err(),
+            "three are no pairs"
+        );
+        output(&mut session, "add Dave");
+        output(&mut session, "start");
+
+        let ranking = output(&mut session, "ranking");
+        assert_eq!(ranking.lines().count(), 4, "a header, a rule and two pairs");
+    }
 }

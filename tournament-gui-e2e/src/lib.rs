@@ -1461,6 +1461,51 @@ impl Gui {
             .await
     }
 
+    /// Waits until the rows of the standings name teams of `sizes` members, in this order, the
+    /// members of a team joined by `&`.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with the sizes shown instead.
+    pub async fn expect_standings_team_sizes(&self, sizes: &[usize]) -> WebDriverResult<()> {
+        self.page
+            .expect_script(
+                "const shown = [...document.querySelectorAll('#standing-list tbody th.name')]
+                    .map((name) => name.textContent.split(' & ').length);
+                return JSON.stringify(shown) === JSON.stringify(arguments[0])
+                    ? null : `the teams have ${shown.join(', ')} members`;",
+                vec![serde_json::json!(sizes)],
+                &format!("the standings must list teams of {sizes:?} members"),
+            )
+            .await
+    }
+
+    /// The number of the first match listed and the name of the last member of its first side,
+    /// which names the side as well as any other member.
+    ///
+    /// # Panics
+    /// Panics if no match is listed.
+    pub async fn last_member_of_first_side(&self) -> WebDriverResult<(String, String)> {
+        let found = self
+            .driver
+            .execute(
+                &format!(
+                    "const marks = /[{}]/g;
+                    const match = document.querySelector('#match-list li.match');
+                    const side = match.querySelector('.side').textContent.replace(marks, '');
+                    return [match.querySelector('.number').textContent.trim(),
+                        side.split(' & ').pop().trim()];",
+                    ISOLATION_MARKS.iter().collect::<String>()
+                ),
+                Vec::new(),
+            )
+            .await?
+            .json()
+            .clone();
+        let [number, name]: [String; 2] =
+            serde_json::from_value(found).expect("a match with a side is listed");
+        Ok((number, name))
+    }
+
     /// Waits until the entrants listed are `names`, in this order.
     ///
     /// # Panics

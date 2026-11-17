@@ -310,9 +310,10 @@ pub trait CompetitionStateMachineExt {
     /// # machine.apply_new(StartCompetition::default().into())?;
     /// // a started round robin, changed into two random rounds of it
     /// let competition = machine.current();
+    /// let phase = &competition.phases()[&phase_id];
     /// let plugins = competition
-    ///     .phase_draft()
-    ///     .with_answers(&competition.phases()[&phase_id].config())?
+    ///     .phase_draft(phase.sources())
+    ///     .with_answers(&phase.config())?
     ///     .with(
     ///         "format",
     ///         PluginConfig::of::<RandomRounds>().with("rounds", 2),
@@ -571,7 +572,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        Entrant, EntrantId, Match, MatchResult, PhasePluginsBuilder, Seed,
+        Entrant, EntrantId, Match, MatchResult, PhasePluginsBuilder, Seed, Source,
         plugins::{
             metrics_calculator::{WinsDrawsLosses, WinsDrawsLossesCalculator},
             phase_format::{MonsterDyp, SingleElimination},
@@ -850,7 +851,7 @@ mod tests {
         report(&mut machine, first);
         let unchanged = machine
             .current()
-            .phase_draft()
+            .phase_draft(&[Source::registration()])
             .with_answers(&config(&machine))
             .unwrap()
             .build()

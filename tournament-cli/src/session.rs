@@ -23,7 +23,6 @@ use thiserror::Error;
 use tournament_app::{
     error::{self as app_error, ImportError, RedoError, UndoError},
     file::{File, Format},
-    form::PhaseForm,
     i18n::{Language, Translator},
     people::Rating,
     session::Session as AppSession,
@@ -418,23 +417,11 @@ impl Session {
         name: Option<String>,
         from: &[SourceArg],
     ) -> Result<String, Error> {
-        let sources = if from.is_empty() {
-            vec![match self.competition().phases().values().last() {
-                Some(before) => Source::everyone(SourceOf::Phase(before.id())),
-                None => Source::registration(),
-            }]
-        } else {
-            from.iter()
-                .map(|source| {
-                    let of = match source.phase {
-                        None => SourceOf::Registration,
-                        Some(number) => SourceOf::Phase(self.phase_id(Some(number))?),
-                    };
-                    Ok(Source::new(of, source.from, source.to))
-                })
-                .collect::<Result<_, Error>>()?
-        };
-        let mut form = PhaseForm::new(draft.clone());
+        let sources = self.sources(from)?;
+        let mut form = self
+            .session
+            .phase_form_with(draft.clone(), None)
+            .map_err(|_| Error::NoPhase)?;
         form.set_name(name.as_deref().unwrap_or_default());
         form.set_sources(sources);
         let id = self.session.add_phase(&form).map_err(|error| match error {
@@ -443,6 +430,38 @@ impl Session {
         })?;
         let summary = summary(&self.phase(id)?.config());
         Ok(format!("phase added: {summary}"))
+    }
+
+    /// The sources of a phase taking entrants `from`, by default the whole registration for the
+    /// first phase, else every place of the phase before.
+    ///
+    /// # Errors
+    /// Returns an error if `from` names a phase the competition does not have.
+    fn sources(&self, from: &[SourceArg]) -> Result<Vec<Source>, Error> {
+        if from.is_empty() {
+            return Ok(vec![match self.competition().phases().values().last() {
+                Some(before) => Source::everyone(SourceOf::Phase(before.id())),
+                None => Source::registration(),
+            }]);
+        }
+        from.iter()
+            .map(|source| {
+                let of = match source.phase {
+                    None => SourceOf::Registration,
+                    Some(number) => SourceOf::Phase(self.phase_id(Some(number))?),
+                };
+                Ok(Source::new(of, source.from, source.to))
+            })
+            .collect()
+    }
+
+    /// A draft of a new phase taking entrants `from` (see `add-phase`), with nothing answered, to
+    /// be configured and handed to [`Self::apply_phase`].
+    ///
+    /// # Errors
+    /// Returns an error if `from` names a phase the competition does not have.
+    pub fn new_phase_draft(&self, from: &[SourceArg]) -> Result<Draft<PhasePlugins>, Error> {
+        Ok(self.competition().phase_draft(&self.sources(from)?))
     }
 
     /// A draft of the phase of the number `phase`, by default the only running one, holding the
@@ -472,11 +491,10 @@ impl Session {
         draft: &Draft<PhasePlugins>,
     ) -> Result<String, Error> {
         let id = self.phase_id(phase)?;
-        let added = self.phase(id)?;
-        let mut form = PhaseForm::new(draft.clone());
-        form.set_name(added.name().unwrap_or_default());
-        form.set_sources(added.sources().to_vec());
-        form.set_columns(added.columns().clone());
+        let form = self
+            .session
+            .phase_form_with(draft.clone(), Some(id))
+            .map_err(|_| Error::NoPhase)?;
         let edited = self
             .session
             .edit_phase(id, &form)
@@ -591,7 +609,10 @@ impl Session {
                 })?;
             config = config.with(field, value);
         }
-        let mut draft = self.competition().phase_draft();
+        let mut draft = match &configuring {
+            Configuring::Added { from, .. } => self.new_phase_draft(from)?,
+            Configuring::Edited { phase } => self.phase_draft_to_edit(*phase)?,
+        };
         draft.set(&ConfigPath::ROOT.field(PhasePlugins::FORMAT), config)?;
         for (field, answer) in own {
             draft.set(&ConfigPath::ROOT.field(field), answer)?;
@@ -1226,7 +1247,7 @@ mod tests {
     ) -> Draft<PhasePlugins> {
         session
             .competition()
-            .phase_draft()
+            .phase_draft(&[Source::registration()])
             .with("format", format)
             .and_then(|draft| draft.with("ranking", ranking))
             .and_then(|draft| draft.with("metrics", metrics))
@@ -2826,5 +2847,23 @@ mod tests {
             execute(&mut session, "ranking --division c"),
             Err(Error::UnknownDivision(letter)) if letter == "C"
         ));
+    }
+
+    /// A phase of drawn pairs ranks teams of two, and does not start with an odd number.
+    #[test]
+    fn a_phase_of_drawn_pairs_ranks_teams_of_two() {
+        let mut session = Session::new(MemoryStorage::default());
+        output(&mut session, "add Alice Bob Carol");
+        output(&mut session, "add-phase round-robin teams=drawn-pairs");
+
+        assert!(
+            execute(&mut session, "start").is_err(),
+            "three are no pairs"
+        );
+        output(&mut session, "add Dave");
+        output(&mut session, "start");
+
+        let ranking = output(&mut session, "ranking");
+        assert_eq!(ranking.lines().count(), 4, "a header, a rule and two pairs");
     }
 }

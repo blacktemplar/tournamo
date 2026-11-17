@@ -12,7 +12,7 @@ use tournament_engine::{
     undoable_state_machine::TransitionId,
 };
 
-use super::{Session, TooFew, rejection, too_few};
+use super::{CannotStart, Session, Taken, rejection};
 use crate::{
     error::{RemovePhaseError, StartPhaseError, Tie},
     view::{
@@ -209,11 +209,20 @@ impl Session {
                 .collect();
             return Some(StartPhaseError::Waiting(waiting));
         }
-        let field = competition.field_of(&id).len();
-        match too_few(phase, field) {
-            Some(TooFew::Format(needed)) => return Some(StartPhaseError::TooFewForFormat(needed)),
-            Some(TooFew::Divisions { divisions, needed }) => {
+        let field = competition.field_of(&id);
+        let taken = Taken {
+            qualifiers: field.len(),
+            entrants: field.iter().map(|qualifier| qualifier.entrants.len()).sum(),
+        };
+        match self.cannot_start(phase, taken) {
+            Some(CannotStart::Format(needed)) => {
+                return Some(StartPhaseError::TooFewForFormat(needed));
+            }
+            Some(CannotStart::Divisions { divisions, needed }) => {
                 return Some(StartPhaseError::TooFewForDivisions { divisions, needed });
+            }
+            Some(CannotStart::Teams(does_not_fit)) => {
+                return Some(StartPhaseError::FieldDoesNotFit(does_not_fit));
             }
             None => {}
         }

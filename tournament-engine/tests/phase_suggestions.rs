@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    Competition, DivisionView, PhasePlugins,
+    Competition, DivisionView, PhasePlugins, Source,
     plugin_factory::{
         Plugin,
         config::{Path, PluginConfig},
@@ -45,7 +45,7 @@ impl PhaseFormat for Custom {
 #[test]
 fn suggestions_use_the_configured_format_and_leave_conflicts_for_validation() {
     let draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with("format", PluginConfig::of::<Custom>().with("points", 7))
         .unwrap();
     let mut draft = PhasePlugins::with_suggestions(draft).unwrap();
@@ -73,7 +73,7 @@ fn suggestions_use_the_configured_format_and_leave_conflicts_for_validation() {
 #[test]
 fn an_incomplete_format_defers_suggestions_until_its_settings_are_answered() {
     let draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with("format", PluginConfig::of::<Custom>())
         .unwrap();
     let mut draft = PhasePlugins::with_suggestions(draft).unwrap();
@@ -101,7 +101,7 @@ fn an_incomplete_format_defers_suggestions_until_its_settings_are_answered() {
 #[test]
 fn accepting_schema_defaults_does_not_apply_phase_suggestions() {
     let draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with_defaults()
         .unwrap();
 
@@ -112,7 +112,7 @@ fn accepting_schema_defaults_does_not_apply_phase_suggestions() {
 #[test]
 fn filling_unanswered_settings_preserves_an_explicit_empty_ranking() {
     let draft = Competition::default()
-        .phase_draft()
+        .phase_draft(&[Source::registration()])
         .with("ranking", Vec::<PluginConfig>::new())
         .unwrap();
     let mut draft = PhasePlugins::with_suggestions(draft).unwrap();

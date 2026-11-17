@@ -1,16 +1,19 @@
 use std::num::NonZeroU32;
 
+use itertools::Itertools;
 use plugin_factory::{compatibility::Declaration, draft::Draft};
 use rand::{RngExt, seq::SliceRandom};
 use serde::{Deserialize, Serialize};
 use vec1::{Vec1, vec1};
 
 use super::seed::Entropy;
+#[cfg(doc)]
+use crate::plugins::teams::Teams;
 use crate::{
     Columns, Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, RankingId, Seed,
     Source, SourceOf,
     map::{IdMap, Map},
-    plugins::{PhasePlugins, facts::EntrantsPerRanking},
+    plugins::{PhasePlugins, teams::TeamsView},
 };
 
 /// A competition: its entrants, its phases, and the random seed everything random in it derives
@@ -103,19 +106,44 @@ impl Competition {
             .insert(Phase::new(id, name, sources, plugins, columns, seed));
     }
 
-    /// Declares the facts that hold for a phase added to this competition before any of its
-    /// plugins declare theirs, i.e. the context of its [`PhasePlugins`] for a [`Draft`] and for
-    /// [`plugin_factory::compatibility`].
-    pub(crate) fn declare_phase_context(&self, declaration: &mut Declaration) {
-        // every entrant gets a ranking of its own when the competition starts, see `Self::start`,
-        // and every source passes on the rankings it takes
-        declaration.provide(EntrantsPerRanking::SINGLE);
+    /// Declares the facts that hold for a phase of this competition taking its entrants from
+    /// `sources` before any of its plugins declare theirs, i.e. the context of its
+    /// [`PhasePlugins`] for a [`Draft`] and for [`plugin_factory::compatibility`], see
+    /// [`PhasePlugins::draft`].
+    pub(crate) fn declare_phase_context(&self, sources: &[Source], declaration: &mut Declaration) {
+        PhasePlugins::declare_context(self.entrants_per_qualifier(sources), declaration);
     }
 
-    /// A draft of the plugins of a phase of this competition, with nothing answered yet. Building
-    /// [`PhasePlugins`] from it is the way to make them, see their example.
-    pub fn phase_draft(&self) -> Draft<PhasePlugins> {
-        Draft::new(|declaration| self.declare_phase_context(declaration))
+    /// A draft of the plugins of a phase of this competition taking its entrants from `sources`,
+    /// with nothing answered yet: [`PhasePlugins::draft`] of how many entrants each of their
+    /// qualifiers stands for ([`Self::entrants_per_qualifier`]). Building [`PhasePlugins`] from it
+    /// is the way to make them, see their example.
+    pub fn phase_draft(&self, sources: &[Source]) -> Draft<PhasePlugins> {
+        PhasePlugins::draft(self.entrants_per_qualifier(sources))
+    }
+
+    /// How many entrants each qualifier of a field taken from `sources` stands for: one for the
+    /// registration, for a phase as many as each of its rankings, see
+    /// [`Self::entrants_per_ranking`]. `None` if the sources send qualifiers of different sizes,
+    /// take places of a phase this competition does not have, or are none.
+    pub fn entrants_per_qualifier(&self, sources: &[Source]) -> Option<NonZeroU32> {
+        let mut sizes = sources.iter().map(|source| match source.of() {
+            SourceOf::Registration => Some(NonZeroU32::MIN),
+            SourceOf::Phase(phase) => self.entrants_per_ranking(&phase),
+        });
+        let first = sizes.next()??;
+        sizes.all(|size| size == Some(first)).then_some(first)
+    }
+
+    /// How many entrants each ranking of the phase `phase_id` stands for: what its teams make of
+    /// the qualifiers coming in, see [`Teams::entrants_per_team`]. `None` if there is no such
+    /// phase or its teams are not all of one size.
+    pub fn entrants_per_ranking(&self, phase_id: &PhaseId) -> Option<NonZeroU32> {
+        let phase = self.phase(phase_id)?;
+        phase
+            .plugins()
+            .teams()
+            .entrants_per_team(self.entrants_per_qualifier(phase.sources()))
     }
 
     /// The phases, in the order they were added in; a phase takes entrants only from phases
@@ -169,13 +197,13 @@ impl Competition {
         }
     }
 
-    /// Starts the phase `phase_id` with its field, see [`Self::field_of`].
+    /// Starts the phase `phase_id` with its teams, see [`Self::teams_of`].
     ///
     /// # Panics
     /// Panics if there is no such phase.
     pub(crate) fn start_phase(&mut self, phase_id: PhaseId) {
         let field = self
-            .field_of(&phase_id)
+            .teams_of(&phase_id)
             .into_iter()
             .map(|qualifier| {
                 let lot = qualifier
@@ -191,6 +219,82 @@ impl Competition {
             .get_mut(&phase_id)
             .expect("the phase exists")
             .start(field, &self.entrants, &mut self.highest_number);
+    }
+
+    /// How many qualifiers the field of the phase `phase_id` has as things stand, see
+    /// [`Self::field_of`], counting the whole registration before the start too. 0 if there is no
+    /// such phase.
+    pub fn field_len(&self, phase_id: &PhaseId) -> usize {
+        let Some(phase) = self.phase(phase_id) else {
+            return 0;
+        };
+        phase
+            .sources()
+            .iter()
+            .map(|source| {
+                let available = match source.of() {
+                    SourceOf::Registration => self.entrants.len(),
+                    SourceOf::Phase(from) => self
+                        .phase(&from)
+                        .map_or(0, |from| from.standings().iter().count()),
+                };
+                source.count(available)
+            })
+            .sum()
+    }
+
+    /// The field of the phase `phase_id` formed into its teams, what its draw deals, see
+    /// [`Teams`]: each team a qualifier of its entrants, with the origins of the qualifiers of the
+    /// field they come from. Empty if there is no such phase.
+    pub fn teams_of(&self, phase_id: &PhaseId) -> Vec<Qualifier> {
+        let Some(phase) = self.phase(phase_id) else {
+            return Vec::new();
+        };
+        let field = self.field_of(phase_id);
+        let teams = phase.plugins().teams();
+        let formed = teams.form(&TeamsView::new(&field, &self.entrants, phase.seed()));
+        let position_of: Map<EntrantId, usize> = field
+            .iter()
+            .enumerate()
+            .flat_map(|(position, qualifier)| {
+                qualifier
+                    .entrants
+                    .iter()
+                    .map(move |entrant| (*entrant, position))
+            })
+            .collect();
+        debug_assert!(
+            formed
+                .iter()
+                .flatten()
+                .map(|entrant| entrant.uuid())
+                .sorted()
+                .eq(position_of.keys().map(|entrant| entrant.uuid()).sorted())
+                && self.entrants_per_ranking(phase_id).is_none_or(|size| {
+                    formed.iter().all(|team| team.len() == size.get() as usize)
+                }),
+            "teams take every entrant of the field once, each of the size they stand for"
+        );
+        formed
+            .into_iter()
+            .map(|entrants| {
+                let positions: Vec<_> = entrants
+                    .iter()
+                    .map(|entrant| position_of[entrant])
+                    .sorted()
+                    .dedup()
+                    .collect();
+                let origins = positions
+                    .into_iter()
+                    .flat_map(|position| field[position].origins.iter().copied())
+                    .dedup()
+                    .collect::<Vec<_>>();
+                Qualifier {
+                    entrants,
+                    origins: Vec1::try_from_vec(origins).expect("an entrant comes from a row"),
+                }
+            })
+            .collect()
     }
 
     /// The field of the phase `phase_id`, what it starts with as things stand: its sources in
@@ -209,9 +313,8 @@ impl Competition {
                             .iter()
                             .zip(NonZeroU32::MIN..)
                             .filter(|&(_, place)| source.takes(place))
-                            .map(|(entrant, place)| Qualifier {
-                                entrants: vec1![*entrant],
-                                origin: Origin::Registration { place },
+                            .map(|(entrant, place)| {
+                                Qualifier::new(vec1![*entrant], Origin::Registration { place })
                             }),
                     );
                 }
@@ -223,16 +326,18 @@ impl Competition {
                         from.standings()
                             .iter()
                             .filter(|standing| source.takes(standing.unique_rank()))
-                            .map(|standing| Qualifier {
-                                entrants: standing.ranking().entrants().clone(),
-                                origin: Origin::Phase {
-                                    phase: from.id(),
-                                    division: standing.division(),
-                                    rank: standing.in_division().rank(),
-                                    unique_rank: standing.in_division().unique_rank(),
-                                    overall_rank: standing.rank(),
-                                    overall_unique_rank: standing.unique_rank(),
-                                },
+                            .map(|standing| {
+                                Qualifier::new(
+                                    standing.ranking().entrants().clone(),
+                                    Origin::Phase {
+                                        phase: from.id(),
+                                        division: standing.division(),
+                                        rank: standing.in_division().rank(),
+                                        unique_rank: standing.in_division().unique_rank(),
+                                        overall_rank: standing.rank(),
+                                        overall_unique_rank: standing.unique_rank(),
+                                    },
+                                )
                             }),
                     );
                 }

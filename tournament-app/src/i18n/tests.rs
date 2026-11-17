@@ -24,6 +24,7 @@ use tournament_engine::{
         },
         ranker::SliceRanker,
         seeding::Seeding,
+        teams::Teams,
     },
 };
 #[cfg(target_arch = "wasm32")]
@@ -307,6 +308,7 @@ fn engine_plugins() -> Vec<&'static PluginEntry> {
         AnyAxis::of::<dyn PhaseFormat>(),
         AnyAxis::of::<dyn Draw>(),
         AnyAxis::of::<dyn Seeding>(),
+        AnyAxis::of::<dyn Teams>(),
         AnyAxis::of::<dyn SliceRanker>(),
         AnyAxis::of::<dyn MetricsCalculator>(),
         AnyAxis::of::<dyn MatchFormat>(),

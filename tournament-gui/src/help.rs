@@ -71,6 +71,9 @@ pub fn Help() -> Element {
                 p { {tr.get("help-columns-text")} }
                 h3 { {tr.get("help-groups")} }
                 p { {tr.get("help-groups-text")} }
+                h3 { {tr.get("help-teams")} }
+                p { {tr.get("help-teams-text")} }
+                p { {tr.get("help-teams-later")} }
                 h4 { {tr.get("help-criteria")} }
                 Glossary { plugins: glossary.criteria }
                 h4 { {tr.get("help-metrics")} }

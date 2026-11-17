@@ -8,6 +8,7 @@ use tournament_engine::plugins::{
     },
     phase_format::{DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination},
     seeding::SeededAtRandom,
+    teams::RandomPairs,
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -102,6 +103,7 @@ fn a_new_phase_is_answered_as_its_format_recommends() {
         names,
         [
             "format",
+            "teams",
             "divisions",
             "seeding",
             "match_format",
@@ -892,10 +894,11 @@ fn draw_and_seeding_are_asked_for_only_where_they_matter() {
     assert!(shown(&form, "seeding"));
 }
 
-/// A phase of one division seeded in order reads as one without divisions; otherwise its summary
-/// says how many and how they are dealt, and how they are seeded.
+/// A phase of one division seeded in order, everyone playing as they come in, reads as one without
+/// teams and divisions; otherwise its summary says how many and how they are dealt, how they are
+/// seeded, and who plays together.
 #[test]
-fn a_summary_leaves_out_one_division_and_seeding_in_order() {
+fn a_summary_leaves_out_one_division_seeding_in_order_and_teams_as_they_come() {
     let mut form = new_form();
     let names = |form: &PhaseForm| -> Vec<&str> {
         form.view()
@@ -931,6 +934,20 @@ fn a_summary_leaves_out_one_division_and_seeding_in_order() {
     assert_eq!(
         names(&form),
         ["format", "seeding", "match_format", "ranking", "metrics"]
+    );
+
+    form.choose(&path("teams"), Some(RandomPairs::ID)).unwrap();
+
+    assert_eq!(
+        names(&form),
+        [
+            "format",
+            "teams",
+            "seeding",
+            "match_format",
+            "ranking",
+            "metrics"
+        ]
     );
 }
 

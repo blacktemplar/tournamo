@@ -175,6 +175,11 @@ impl Phase {
         self.started
     }
 
+    /// The seed of this phase, derived from the competition seed and its id.
+    pub(crate) fn seed(&self) -> Seed {
+        self.seed
+    }
+
     /// The divisions of this phase, none before it is started.
     pub fn divisions(&self) -> &[Division] {
         &self.divisions

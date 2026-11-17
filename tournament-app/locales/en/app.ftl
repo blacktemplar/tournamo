@@ -18,6 +18,7 @@ error-sources-overlap = two ranges of places of the phase overlap
 # $phase: the phase that takes some of the same places already
 error-source-taken = { $phase } takes some of these places already
 error-registration-closed = the competition has started, so a phase cannot take entrants from the registration alone anymore
+error-mixed-team-sizes = the places taken are of teams of different sizes, e.g. single entrants and pairs, which a phase takes only with “everyone on their own”
 error-place-not-taken = enter a place: a whole number from 1
 error-no-such-phase = there is no such phase
 error-phase-started-already = the phase has started already
@@ -53,6 +54,7 @@ error-started-already = the competition has started already
 error-too-few-entrants = a competition needs at least two entrants
 error-too-few-for-format = the format needs at least { $count } entrants
 error-too-few-for-divisions = { $divisions } groups need at least { $count } entrants: lower the number of groups
+error-field-does-not-fit = { $phase } cannot form its teams ({ $teams }) of { $count } entrants, e.g. an odd number into pairs
 error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already

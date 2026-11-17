@@ -18,7 +18,7 @@ use std::{
 use crate::{
     __private::Index,
     Plugin, PluginType,
-    compatibility::{Declaration, OpenFacts, ProvidedFact, RequiredFact},
+    compatibility::{Declaration, OpenFacts, RequiredFact},
     config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Value},
     schema::Schema,
 };
@@ -334,14 +334,7 @@ impl AnyAxis {
         Self::reachable([*self])
             .iter()
             .flat_map(Self::entries)
-            .flat_map(|entry| {
-                entry
-                    .declaration()
-                    .provided()
-                    .iter()
-                    .map(ProvidedFact::type_id)
-                    .collect::<Vec<_>>()
-            })
+            .flat_map(|entry| entry.declaration().provided_types().collect::<Vec<_>>())
             .collect()
     }
 

@@ -31,6 +31,7 @@ use tournament_engine::{
         phase_format::SingleElimination,
         ranker::SliceRanker,
         seeding::{GroupWinnersApart, SeededAtRandom, SeededInOrder, Seeding},
+        teams::{BestWithWorst, Keep, RandomPairs, Split, Teams},
     },
     undoable_state_machine::{LogEntry, LogEntryKind, SessionHistory, TransitionId},
     uuid::Uuid,
@@ -563,6 +564,7 @@ fn every_plugin_is_serialized_under_its_id() {
             "tournament_engine::buchholz",
         ]
     );
+    assert_eq!(plugins["teams"]["type"], "tournament_engine::keep");
     assert_eq!(plugins["divisions"], 1);
     assert_eq!(plugins["draw"]["type"], "tournament_engine::snake");
     assert_eq!(
@@ -574,7 +576,7 @@ fn every_plugin_is_serialized_under_its_id() {
 
 /// The plugins no phase of [`played_competition`] has, pinned like those it has.
 #[test]
-fn the_plugins_of_divisions_are_serialized_under_their_ids() {
+fn the_plugins_of_divisions_and_teams_are_serialized_under_their_ids() {
     let id = |plugin: Value| plugin["type"].as_str().unwrap().to_owned();
     let draws: [Box<dyn Draw>; 3] = [Box::new(Snake), Box::new(Random), Box::new(Blocks)];
 
@@ -601,6 +603,23 @@ fn the_plugins_of_divisions_are_serialized_under_their_ids() {
             "tournament_engine::seeded_in_order",
             "tournament_engine::seeded_at_random",
             "tournament_engine::group_winners_apart",
+        ]
+    );
+    let teams: [Box<dyn Teams>; 4] = [
+        Box::new(Keep),
+        Box::new(RandomPairs),
+        Box::new(BestWithWorst),
+        Box::new(Split),
+    ];
+    assert_eq!(
+        teams
+            .map(|teams| id(serde_json::to_value(teams).unwrap()))
+            .as_slice(),
+        [
+            "tournament_engine::keep",
+            "tournament_engine::random_pairs",
+            "tournament_engine::best_with_worst",
+            "tournament_engine::split",
         ]
     );
     let calculator: Box<dyn MetricsCalculator> = Box::new(PointsPerMatchCalculator);

@@ -87,12 +87,26 @@ impl Source {
 }
 
 /// One entry of the field of a phase, the ordered list it starts with: the entrants of a row of a
-/// source, and where they come from.
+/// source, and where they come from; or, once its teams are formed (see
+/// [`Competition::teams_of`]), the entrants of a team, and where the rows they come from come
+/// from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Qualifier {
     pub entrants: Vec1<EntrantId>,
-    pub origin: Origin,
+    /// Where the rows of its entrants come from, each once, in the order of the field: one origin
+    /// for a row of a source, and for an entrant of a team taken apart that of the team.
+    pub origins: Vec1<Origin>,
+}
+
+impl Qualifier {
+    /// The qualifier of a row of a source: its `entrants`, coming from `origin`.
+    pub(crate) fn new(entrants: Vec1<EntrantId>, origin: Origin) -> Self {
+        Self {
+            entrants,
+            origins: Vec1::new(origin),
+        }
+    }
 }
 
 /// Where a [`Qualifier`] comes from.

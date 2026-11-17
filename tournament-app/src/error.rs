@@ -16,7 +16,7 @@ use tournament_engine::{
 use crate::{
     file::Format,
     i18n::{Arg, Message, Text, english},
-    view::{EntrantRow, PhaseName, division_letter},
+    view::{EntrantRow, PhaseName, Plugin, division_letter},
 };
 
 /// Why an entrant was not added.
@@ -108,6 +108,9 @@ pub enum SourcesError {
     /// The competition has started, so a phase taking entrants from the registration alone would
     /// never start.
     RegistrationClosed,
+    /// The sources send teams of different sizes, e.g. single entrants of the registration and
+    /// pairs of a phase.
+    MixedTeamSizes,
 }
 
 /// The competition has no phase yet.
@@ -157,6 +160,8 @@ pub enum StartPhaseError {
         divisions: usize,
         needed: usize,
     },
+    /// The entrants its sources take cannot be formed into its teams.
+    FieldDoesNotFit(Box<DoesNotFit>),
     /// Not a refusal but a warning: the phase starts all the same. A cut of its sources goes
     /// through rows sharing a rank, so the lot decides who of them is taken.
     CutThroughTie(Vec<Tie>),
@@ -208,8 +213,36 @@ pub enum StartError {
         divisions: usize,
         needed: usize,
     },
+    /// The entrants of a phase starting with the competition cannot be formed into its teams.
+    FieldDoesNotFit(Box<DoesNotFit>),
     /// The engine refused the start for a reason this crate does not know.
     Rejected(TransitionError),
+}
+
+/// The entrants a phase takes from its sources cannot be formed into its teams, e.g. an odd number
+/// into pairs, see [`StartError::FieldDoesNotFit`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoesNotFit {
+    pub phase: PhaseName,
+    /// How many come in: entrants, or teams of an earlier phase.
+    pub entrants: usize,
+    /// How the phase forms its teams.
+    pub teams: Plugin,
+}
+
+impl Message for DoesNotFit {
+    fn text(&self) -> Text {
+        Text::new("error-field-does-not-fit")
+            .with("phase", self.phase.clone())
+            .with("count", self.entrants)
+            .with(
+                "teams",
+                Arg::Plugin {
+                    id: self.teams.id,
+                    english: self.teams.label,
+                },
+            )
+    }
 }
 
 /// Why a result was not reported.
@@ -366,6 +399,7 @@ pub(crate) enum SourcesRefusal {
     Empty,
     Overlap(Option<tournament_engine::PhaseId>),
     RegistrationClosed,
+    MixedTeamSizes,
 }
 
 /// Why the engine refused an action, where the app says it in words of its own: the engine errors
@@ -400,6 +434,9 @@ impl Refusal {
                 engine::AddPhaseError::RegistrationClosed => {
                     Some(Self::Sources(SourcesRefusal::RegistrationClosed))
                 }
+                engine::AddPhaseError::MixedTeamSizes => {
+                    Some(Self::Sources(SourcesRefusal::MixedTeamSizes))
+                }
                 engine::AddPhaseError::PhaseExists | engine::AddPhaseError::UnknownPhase(_) => None,
             };
         }
@@ -409,7 +446,8 @@ impl Refusal {
                 engine::StartCompetitionError::TooFewEntrants => Some(Self::TooFewEntrants),
                 // the session orders only its own entrants, each once
                 engine::StartCompetitionError::UnknownEntrant(_)
-                | engine::StartCompetitionError::EntrantTwice(_) => None,
+                | engine::StartCompetitionError::EntrantTwice(_)
+                | engine::StartCompetitionError::FieldDoesNotFit { .. } => None,
             };
         }
         match error.downcast_ref() {
@@ -500,6 +538,7 @@ impl Message for SourcesError {
                 Text::new("error-source-taken").with("phase", phase.clone())
             }
             Self::RegistrationClosed => Text::new("error-registration-closed"),
+            Self::MixedTeamSizes => Text::new("error-mixed-team-sizes"),
         }
     }
 }
@@ -528,6 +567,7 @@ impl Message for StartPhaseError {
                     .with("divisions", *divisions)
                     .with("count", *needed)
             }
+            Self::FieldDoesNotFit(does_not_fit) => does_not_fit.text(),
             Self::CutThroughTie(ties) => {
                 let tie = ties.first().expect("a tie at a cut is one at least");
                 let text = match tie.division {
@@ -611,6 +651,7 @@ impl Message for StartError {
                     .with("divisions", *divisions)
                     .with("count", *needed)
             }
+            Self::FieldDoesNotFit(does_not_fit) => does_not_fit.text(),
             Self::Rejected(error) => rejected(error),
         }
     }

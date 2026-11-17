@@ -22,11 +22,13 @@ fn place(place: usize) -> NonZeroU32 {
 /// A field of `count` qualifiers of the registration.
 fn registered(count: usize) -> Vec<Qualifier> {
     (0..count)
-        .map(|index| Qualifier {
-            entrants: vec1![entrant(index)],
-            origin: Origin::Registration {
-                place: place(index + 1),
-            },
+        .map(|index| {
+            Qualifier::new(
+                vec1![entrant(index)],
+                Origin::Registration {
+                    place: place(index + 1),
+                },
+            )
         })
         .collect()
 }
@@ -41,9 +43,9 @@ fn of_groups(sending: &[usize]) -> Vec<Qualifier> {
         for (division, &sends) in sending.iter().enumerate() {
             if rank <= sends {
                 let overall = field.len() + 1;
-                field.push(Qualifier {
-                    entrants: vec1![entrant(field.len())],
-                    origin: Origin::Phase {
+                field.push(Qualifier::new(
+                    vec1![entrant(field.len())],
+                    Origin::Phase {
                         phase,
                         division,
                         rank: place(rank),
@@ -51,7 +53,7 @@ fn of_groups(sending: &[usize]) -> Vec<Qualifier> {
                         overall_rank: place(overall),
                         overall_unique_rank: place(overall),
                     },
-                });
+                ));
             }
         }
     }
@@ -151,7 +153,7 @@ fn groups_by_seed(sending: &[usize]) -> Vec<usize> {
     let field = of_groups(sending);
     seed(&GroupWinnersApart, &field)
         .iter()
-        .map(|&position| match field[position].origin {
+        .map(|&position| match *field[position].origins.first() {
             Origin::Phase { division, .. } => division,
             Origin::Registration { .. } => unreachable!("every qualifier is of a group"),
         })
@@ -205,7 +207,7 @@ fn groups_kept_apart_are_ordered_by_rank_in_the_group() {
         let group_of = groups_by_seed(&sending);
         let field = of_groups(&sending);
         let order = seed(&GroupWinnersApart, &field);
-        let rank = |position: usize| match field[position].origin {
+        let rank = |position: usize| match *field[position].origins.first() {
             Origin::Phase { unique_rank, .. } => unique_rank,
             Origin::Registration { .. } => unreachable!("every qualifier is of a group"),
         };

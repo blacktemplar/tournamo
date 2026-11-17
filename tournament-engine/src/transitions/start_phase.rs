@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use undoable_state_machine::{Transition, TransitionError};
 
+#[cfg(doc)]
+use crate::plugins::teams::Teams;
 use crate::{
     SourceOf,
     entities::{Competition, PhaseId},
@@ -12,8 +14,8 @@ use crate::{
 /// see [`StartCompetition`](crate::StartCompetition).
 ///
 /// Applying it fails with a [`StartPhaseError`] unless the competition has started, the phase
-/// exists, has not started and has a source in a phase, and every phase it has a source in is
-/// finished.
+/// exists, has not started and has a source in a phase, every phase it has a source in is
+/// finished, and its field can be formed into its teams.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StartPhase {
     phase_id: PhaseId,
@@ -44,6 +46,10 @@ pub enum StartPhaseError {
     /// The phase takes entrants from a phase that is not finished.
     #[error("a phase the phase takes entrants from is not finished")]
     SourceNotFinished(PhaseId),
+    /// The field of the phase `phase` cannot be formed into its teams, e.g. an odd number of
+    /// entrants into pairs, see [`Teams::fits`].
+    #[error("the field of the phase cannot be formed into its teams")]
+    FieldDoesNotFit { phase: PhaseId },
 }
 
 impl Transition<Competition> for StartPhase {
@@ -68,6 +74,15 @@ impl Transition<Competition> for StartPhase {
             {
                 return Err(Box::new(StartPhaseError::SourceNotFinished(from)));
             }
+        }
+        if !phase
+            .plugins()
+            .teams()
+            .fits(competition.field_len(&self.phase_id))
+        {
+            return Err(Box::new(StartPhaseError::FieldDoesNotFit {
+                phase: self.phase_id,
+            }));
         }
         Ok(())
     }

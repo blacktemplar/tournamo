@@ -106,10 +106,12 @@ fn run(mut session: Session) -> Result<(), Error> {
                 name,
                 from,
                 ..
-            } => {
-                let draft = session.competition().phase_draft();
-                configure_phase(&mut session, draft, &Configuring::Added { name, from })
-            }
+            } => session
+                .new_phase_draft(&from)
+                .map_err(Error::Session)
+                .and_then(|draft| {
+                    configure_phase(&mut session, draft, &Configuring::Added { name, from })
+                }),
             Command::EditPhase { phase } => session
                 .phase_draft_to_edit(phase)
                 .map_err(Error::Session)

@@ -54,6 +54,19 @@ impl ProvidedFact {
     }
 }
 
+/// A fact a declaration provides if the context of the composite provides another one, see
+/// [`Declaration::provide_from`].
+struct DerivedFact {
+    /// The type of the fact of the context it is derived from.
+    from: TypeId,
+    /// The type of the fact derived.
+    type_id: TypeId,
+    derive: Derive,
+}
+
+/// Derives a fact from a fact of the context, given as [`Any`].
+type Derive = Box<dyn Fn(&dyn Any) -> ProvidedFact + Send + Sync>;
+
 /// A fact a declaration requires, with the condition its value has to meet if there is one.
 pub(crate) struct RequiredFact {
     type_id: TypeId,
@@ -77,6 +90,7 @@ impl RequiredFact {
 /// a composite provides.
 pub struct Declaration {
     provided: Vec<ProvidedFact>,
+    derived: Vec<DerivedFact>,
     required: Vec<RequiredFact>,
 }
 
@@ -85,6 +99,7 @@ impl Declaration {
     pub(crate) const fn new() -> Self {
         Self {
             provided: vec![],
+            derived: vec![],
             required: vec![],
         }
     }
@@ -102,6 +117,47 @@ impl Declaration {
     /// nor its context.
     pub fn provide<T: Fact>(&mut self, value: T) -> &mut Self {
         self.provided.push(ProvidedFact::new(value));
+        self
+    }
+
+    /// Declares that `derive` of the fact of type `S` holds if the context of the composite
+    /// provides one, see [`check`]; if it does not, nothing of type `T` is provided. Only a fact
+    /// of the context is derived from, never one of a plugin, so there is no order among plugins
+    /// to resolve.
+    ///
+    /// Nothing else of the composite may provide a fact of type `T`, as for [`Self::provide`].
+    /// Where only the type of a fact matters, e.g. for the plugins a fact nothing provides
+    /// implies, or the fields a fact makes irrelevant, `T` counts as provided.
+    ///
+    /// ```
+    /// use plugin_factory::compatibility::{Declaration, Fact};
+    ///
+    /// /// How many players come into the composite as one entrant.
+    /// #[derive(Debug)]
+    /// struct PlayersComingIn(u32);
+    /// impl Fact for PlayersComingIn {}
+    ///
+    /// /// How many players play as one entrant.
+    /// #[derive(Debug)]
+    /// struct PlayersPerEntrant(u32);
+    /// impl Fact for PlayersPerEntrant {}
+    ///
+    /// /// What a plugin putting two of what comes in together declares.
+    /// fn declare(declaration: &mut Declaration) {
+    ///     declaration.provide_from(|coming: &PlayersComingIn| PlayersPerEntrant(2 * coming.0));
+    /// }
+    /// # let _ = declare;
+    /// ```
+    pub fn provide_from<S: Fact, T: Fact>(&mut self, derive: fn(&S) -> T) -> &mut Self {
+        self.derived.push(DerivedFact {
+            from: TypeId::of::<S>(),
+            type_id: TypeId::of::<T>(),
+            derive: Box::new(move |fact| {
+                ProvidedFact::new(derive(
+                    fact.downcast_ref().expect("facts are keyed by their type"),
+                ))
+            }),
+        });
         self
     }
 
@@ -148,9 +204,19 @@ impl Declaration {
         &self.required
     }
 
-    /// Whether this declaration provides a fact of the type `type_id`.
+    /// The types of the facts this declaration provides, those it derives from the context (see
+    /// [`Self::provide_from`]) after the others.
+    pub(crate) fn provided_types(&self) -> impl Iterator<Item = TypeId> + '_ {
+        self.provided
+            .iter()
+            .map(ProvidedFact::type_id)
+            .chain(self.derived.iter().map(|derived| derived.type_id))
+    }
+
+    /// Whether this declaration provides a fact of the type `type_id`, counting one it derives
+    /// from the context, whether the context provides what it is derived from or not.
     pub(crate) fn provides_type(&self, type_id: TypeId) -> bool {
-        self.provided.iter().any(|fact| fact.type_id() == type_id)
+        self.provided_types().any(|provided| provided == type_id)
     }
 }
 
@@ -421,33 +487,80 @@ pub(crate) fn conflicts<'a>(
 
 /// The facts of a composite by their type, each with the name of the plugin providing it, or
 /// `None` for a fact of the composite's context.
-struct Facts<'a>(HashMap<TypeId, (Option<&'a str>, &'a ProvidedFact)>);
+struct Facts<'a>(HashMap<TypeId, (Option<&'a str>, FactOf<'a>)>);
+
+/// A fact of [`Facts`]: provided as it is, or derived from a fact of the context.
+enum FactOf<'a> {
+    Given(&'a ProvidedFact),
+    Derived(ProvidedFact),
+}
+
+impl FactOf<'_> {
+    fn value(&self) -> &dyn Fact {
+        match self {
+            FactOf::Given(fact) => fact.value(),
+            FactOf::Derived(fact) => fact.value(),
+        }
+    }
+}
 
 impl<'a> Facts<'a> {
-    /// The facts `context` provides.
+    /// The facts `context` provides, those it derives from its own facts included.
     fn of(context: &'a Declaration) -> Self {
-        Self(
+        let mut facts = Self(
             context
                 .provided()
                 .iter()
-                .map(|fact| (fact.type_id(), (None, fact)))
+                .map(|fact| (fact.type_id(), (None, FactOf::Given(fact))))
                 .collect(),
-        )
+        );
+        for (type_id, fact) in facts.derived(context) {
+            facts.0.insert(type_id, (None, FactOf::Derived(fact)));
+        }
+        facts
+    }
+
+    /// The facts `declaration` derives from the context, see [`Declaration::provide_from`], each
+    /// with its type: those whose fact of the context these facts hold.
+    fn derived(&self, declaration: &Declaration) -> Vec<(TypeId, ProvidedFact)> {
+        declaration
+            .derived
+            .iter()
+            .filter_map(|derived| {
+                let (_, from) = self
+                    .0
+                    .get(&derived.from)
+                    .filter(|(provider, _)| provider.is_none())?;
+                let value: &dyn Any = from.value();
+                Some((derived.type_id, (derived.derive)(value)))
+            })
+            .collect()
     }
 
     /// Adds every fact the plugin `provider` provides.
     fn add(&mut self, provider: &'a Declared) {
+        let derived = self.derived(&provider.declaration);
+        let name = Some(provider.name.as_str());
         for fact in provider.declaration.provided() {
-            self.0
-                .insert(fact.type_id(), (Some(provider.name.as_str()), fact));
+            self.0.insert(fact.type_id(), (name, FactOf::Given(fact)));
+        }
+        for (type_id, fact) in derived {
+            self.0.insert(type_id, (name, FactOf::Derived(fact)));
         }
     }
 
     /// Why the plugin `provider` cannot be added to these facts, i.e. the fact of it the context
     /// or another plugin provides already.
     fn conflict_with(&self, provider: &Declared) -> Option<Conflict> {
-        provider.declaration.provided().iter().find_map(|fact| {
-            let (first, _) = self.0.get(&fact.type_id())?;
+        let derived = self.derived(&provider.declaration);
+        let provided = provider
+            .declaration
+            .provided()
+            .iter()
+            .map(|fact| (fact.type_id(), fact))
+            .chain(derived.iter().map(|(type_id, fact)| (*type_id, fact)));
+        provided.into_iter().find_map(|(type_id, fact)| {
+            let (first, _) = self.0.get(&type_id)?;
             let incompatibility = match first {
                 Some(first) => Incompatibility::FactProvidedTwice {
                     fact: format!("{:?}", fact.value()),
@@ -460,7 +573,7 @@ impl<'a> Facts<'a> {
                 },
             };
             Some(Conflict {
-                fact: fact.type_id(),
+                fact: type_id,
                 incompatibility,
             })
         })
@@ -490,7 +603,7 @@ impl<'a> Facts<'a> {
                         fact: requirement.name(),
                         required_by: required_by.clone(),
                     },
-                    Some(&(_, provided)) => {
+                    Some((_, provided)) => {
                         let condition = requirement
                             .condition
                             .as_ref()
@@ -1060,5 +1173,114 @@ mod tests {
             check_addition(&Declaration::new(), &[], &addition, &OpenFacts::NOTHING),
             Ok(())
         );
+    }
+    /// How many entrants come into the composite as one, the fact [`pairing`] derives from.
+    #[derive(Debug)]
+    struct EntrantsComingIn(u32);
+
+    impl Fact for EntrantsComingIn {}
+
+    /// What a plugin putting two of what comes in together declares.
+    fn pairing(declaration: &mut Declaration) {
+        declaration
+            .provide_from(|coming_in: &EntrantsComingIn| EntrantsPerRanking(2 * coming_in.0));
+    }
+
+    fn coming_in(entrants: u32) -> Declaration {
+        Declaration::of(|declaration| {
+            declaration.provide(EntrantsComingIn(entrants));
+        })
+    }
+
+    #[test]
+    fn a_fact_derived_from_the_context_meets_a_condition_by_its_value() {
+        let declarations = [
+            declared("teams", pairing),
+            declared("format", |declaration| {
+                declaration.require_that::<EntrantsPerRanking>(
+                    "the entrants per ranking",
+                    "rankings of pairs",
+                    |entrants| *entrants == PAIRS,
+                );
+            }),
+        ];
+
+        assert_eq!(
+            check_facts(&coming_in(1), &declarations, &OpenFacts::NOTHING),
+            Ok(())
+        );
+        assert_eq!(
+            check_facts(&coming_in(2), &declarations, &OpenFacts::NOTHING),
+            Err(Incompatibility::ConditionNotMet {
+                condition: "rankings of pairs",
+                required_by: "format".to_owned(),
+                provided: format!("{:?}", EntrantsPerRanking(4)),
+            })
+        );
+    }
+
+    #[test]
+    fn nothing_is_derived_from_a_fact_the_context_does_not_provide() {
+        let declarations = [
+            declared("teams", pairing),
+            declared("format", requires_single_players),
+        ];
+
+        assert_eq!(
+            check_facts(&Declaration::new(), &declarations, &OpenFacts::NOTHING),
+            Err(Incompatibility::FactNotProvided {
+                fact: "the entrants per ranking",
+                required_by: "format".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn nothing_is_derived_from_a_fact_a_plugin_provides() {
+        let declarations = [
+            declared("source", |declaration| {
+                declaration.provide(EntrantsComingIn(1));
+            }),
+            declared("teams", pairing),
+            declared("format", requires_single_players),
+        ];
+
+        assert_eq!(
+            check_facts(&Declaration::new(), &declarations, &OpenFacts::NOTHING),
+            Err(Incompatibility::FactNotProvided {
+                fact: "the entrants per ranking",
+                required_by: "format".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn a_derived_fact_conflicts_with_the_same_fact_provided_otherwise() {
+        let draw = declared("draw", |declaration| {
+            declaration.provide(SINGLE);
+        });
+        let teams = declared("teams", pairing);
+
+        assert_eq!(
+            check_addition(&coming_in(1), [&draw], &teams, &OpenFacts::NOTHING),
+            Err(Incompatibility::FactProvidedTwice {
+                fact: format!("{PAIRS:?}"),
+                first: "draw".to_owned(),
+                second: "teams".to_owned(),
+            })
+        );
+        // without the fact it is derived from it provides nothing
+        assert_eq!(
+            check_addition(&Declaration::new(), [&draw], &teams, &OpenFacts::NOTHING),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn a_derived_fact_counts_as_provided_where_only_its_type_matters() {
+        let teams = Declaration::of(pairing);
+
+        assert!(teams.provides_type(TypeId::of::<EntrantsPerRanking>()));
+        assert!(!teams.provides_type(TypeId::of::<EntrantsComingIn>()));
     }
 }

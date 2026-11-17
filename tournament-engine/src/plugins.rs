@@ -1,6 +1,7 @@
 //! The plugin axes of a phase and the plugins of this crate, built on `plugin_factory`.
 //!
-//! A phase is played in one [`PhaseFormat`] by divisions its [`Draw`] deals the field to, each in
+//! A phase is played in one [`PhaseFormat`] between the teams its [`Teams`] form of its field, by
+//! divisions its [`Draw`] deals them to, each in
 //! the order its [`Seeding`] gives it, ranked by a list of [`SliceRanker`]s and calculates the
 //! metrics of a list of [`MetricsCalculator`]s; [`PhasePlugins`] is that composite. Every plugin
 //! registers itself in the catalog of its axis, see [`plugin_factory::catalog`], so a
@@ -45,6 +46,7 @@ use std::num::NonZeroU32;
 
 use plugin_factory::{
     catalog::Axis,
+    compatibility::Declaration,
     config::{Config, ConfigError, Path, PluginConfig, Value},
     draft::Draft,
     schema::{Configurable, DependencyOrderedSet},
@@ -63,6 +65,7 @@ use crate::{
         phase_format::{PhaseFormat, Schedule},
         ranker::{HierarchicalRanker, SliceRanker},
         seeding::Seeding,
+        teams::Teams,
     },
 };
 
@@ -76,8 +79,10 @@ pub mod phase_format;
 mod phrase;
 pub mod ranker;
 pub mod seeding;
+pub mod teams;
 
-/// The plugins of one phase: the format its matches are scheduled by, how many divisions it is
+/// The plugins of one phase: the format its matches are scheduled by, who plays together, how
+/// many divisions it is
 /// played in, the draw dealing its field to them and the seeding ordering each, the slice rankers
 /// each division is ranked by, the calculators of its metrics, and the slice rankers comparing
 /// parallel divisions.
@@ -92,7 +97,7 @@ pub mod seeding;
 /// # Examples
 /// ```
 /// use tournament_engine::{
-///     Competition,
+///     Competition, Source,
 ///     plugin_factory::config::PluginConfig,
 ///     plugins::{
 ///         metrics_calculator::{MorePoints, PointsCalculator},
@@ -101,7 +106,7 @@ pub mod seeding;
 /// };
 ///
 /// let mut draft = Competition::default()
-///     .phase_draft()
+///     .phase_draft(&[Source::registration()])
 ///     .with("format", PluginConfig::of::<RoundRobin>())?
 ///     .with("ranking", vec![PluginConfig::of::<MorePoints>()])?
 ///     .with(
@@ -129,6 +134,12 @@ pub struct PhasePlugins {
         default = Box::new(phase_format::RoundRobin)
     )]
     format: Box<dyn PhaseFormat>,
+    #[plugin(
+        label = "teams",
+        description = "whether entrants play on their own or together",
+        default = Box::new(teams::Keep)
+    )]
+    teams: Box<dyn Teams>,
     #[plugin(
         label = "groups",
         description = "how many parts the phase is played in, each on its own",
@@ -173,6 +184,25 @@ pub struct PhasePlugins {
 }
 
 impl PhasePlugins {
+    /// A draft of the plugins of a phase, with nothing answered yet, whose context provides that
+    /// every qualifier of its field stands for `entrants_per_qualifier` entrants
+    /// ([`EntrantsPerQualifier`](facts::EntrantsPerQualifier)), or nothing if `None`, for
+    /// qualifiers of different sizes. [`Competition::phase_draft`](crate::Competition::phase_draft)
+    /// is the draft of a phase of a competition, from its sources.
+    pub fn draft(entrants_per_qualifier: Option<NonZeroU32>) -> Draft<Self> {
+        Draft::new(|declaration| Self::declare_context(entrants_per_qualifier, declaration))
+    }
+
+    /// Declares the facts the context of a phase provides, see [`Self::draft`].
+    pub(crate) fn declare_context(
+        entrants_per_qualifier: Option<NonZeroU32>,
+        declaration: &mut Declaration,
+    ) {
+        if let Some(entrants) = entrants_per_qualifier {
+            declaration.provide(facts::EntrantsPerQualifier(entrants));
+        }
+    }
+
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
     pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];
@@ -232,6 +262,7 @@ impl PhasePlugins {
     ) -> Result<Self, plugin_factory::schema::DependencyOrderedSetError> {
         Ok(Self {
             format,
+            teams: Box::new(teams::Keep),
             divisions: NonZeroU32::MIN,
             draw: Box::new(draw::Snake),
             seeding: Box::new(seeding::SeededInOrder),
@@ -257,8 +288,19 @@ impl PhasePlugins {
         self
     }
 
+    /// These plugins forming the teams by `teams`.
+    pub(crate) fn with_teams(mut self, teams: Box<dyn Teams>) -> Self {
+        self.teams = teams;
+        self
+    }
+
     pub fn format(&self) -> &dyn PhaseFormat {
         &*self.format
+    }
+
+    /// Who plays together: how the field is formed into the teams the phase ranks.
+    pub fn teams(&self) -> &dyn Teams {
+        &*self.teams
     }
 
     /// How many divisions the phase is played in.
@@ -329,6 +371,7 @@ impl PhasePlugins {
             (built(answer(Self::DRAW)), built(answer(Self::SEEDING))),
             list(Self::ACROSS).iter().map(built).collect(),
         )
+        .with_teams(built(answer(Self::TEAMS)))
     }
 
     /// The ranker of a division with these plugins: its slice rankers in order.

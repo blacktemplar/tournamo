@@ -36,4 +36,6 @@ pub(crate) enum Entropy {
     Division(usize),
     /// The seeding ordering a division of a phase.
     Seeding,
+    /// The teams formed from the field of a phase.
+    Teams,
 }

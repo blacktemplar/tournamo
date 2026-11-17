@@ -3,14 +3,15 @@
 use dioxus::prelude::*;
 use tournament_app::{
     form::{
-        self, Because, By, Editable as _, Item, ListInput, MetricShown, Path, PhaseForm,
-        PluginOption, SetEntry,
+        self, Because, By, Item, ListInput, MetricShown, Path, PhaseForm, PluginOption, SetEntry,
     },
     i18n::Translator,
 };
 use tournament_engine::Table;
 
-use super::fields::{Fields, Issues, PluginChoice, id, plugin_description, plugin_label};
+use super::fields::{
+    EditedForm, Fields, Issues, PluginChoice, id, plugin_description, plugin_label,
+};
 use crate::{
     capitalized, competition::Ctx, components::select::Select, focus::focus_later, i18n::t, icons,
     toggletip::Toggletip,
@@ -20,7 +21,7 @@ use crate::{
 /// added at the end.
 #[component]
 pub(super) fn OrderedList(
-    form: Signal<PhaseForm>,
+    form: EditedForm,
     path: Path,
     id: String,
     list: ListInput,
@@ -69,7 +70,7 @@ pub(super) fn OrderedList(
                     placeholder: tr.get("choose-plugin"),
                     disabled,
                     on_change: move |chosen: String| {
-                        _ = form.write().add(&path, &chosen);
+                        form.edit(|form| form.add(&path, &chosen));
                         focus_later(&[&add_trigger, &added]);
                     },
                     for (index, option) in list.options.iter().enumerate() {
@@ -90,7 +91,7 @@ pub(super) fn OrderedList(
 /// moving and removing it, and its fields.
 #[component]
 fn OrderedItem(
-    form: Signal<PhaseForm>,
+    form: EditedForm,
     list: String,
     list_path: Path,
     index: usize,
@@ -136,7 +137,7 @@ fn OrderedItem(
                     disabled,
                     aria_disabled: (index == 0).then_some("true"),
                     onclick: move |_| {
-                        _ = form.write().move_up(&up);
+                        form.edit(|form| form.move_up(&up));
                         focus_later(&[&moved_up]);
                     },
                     icons::ArrowUp {}
@@ -150,7 +151,7 @@ fn OrderedItem(
                     disabled,
                     aria_disabled: last.then_some("true"),
                     onclick: move |_| {
-                        _ = form.write().move_down(&down);
+                        form.edit(|form| form.move_down(&down));
                         // nothing at the end, where it stays
                         focus_later(&[&moved_down]);
                     },
@@ -165,7 +166,7 @@ fn OrderedItem(
                     title: t!(tr, "remove-plugin", plugin = name.as_str()),
                     disabled,
                     onclick: move |_| {
-                        _ = form.write().remove(&remove);
+                        form.edit(|form| form.remove(&remove));
                         let selectors: Vec<&str> =
                             after_removal.iter().map(String::as_str).collect();
                         focus_later(&selectors);
@@ -237,7 +238,7 @@ fn About(list: String, option: PluginOption) -> Element {
 /// A set of plugins, each chosen or not by a checkbox, and configured once chosen.
 #[component]
 pub(super) fn UnorderedList(
-    form: Signal<PhaseForm>,
+    form: EditedForm,
     path: Path,
     list_id: String,
     list: ListInput,
@@ -289,10 +290,10 @@ pub(super) fn UnorderedList(
                                     checked: !matches!(entry.state, SetState::Offered),
                                     disabled: disabled || matches!(entry.state, SetState::Implied),
                                     onchange: move |_| {
-                                        _ = match &chosen {
-                                            Some(item) => form.write().remove(item),
-                                            None => form.write().add(&add, plugin),
-                                        };
+                                        form.edit(|form| match &chosen {
+                                            Some(item) => form.remove(item),
+                                            None => form.add(&add, plugin),
+                                        });
                                     },
                                 }
                                 " {entry.text}"
@@ -505,7 +506,7 @@ fn MetricFields(form: Signal<PhaseForm>, row: MetricRow, disabled: bool) -> Elem
         return rsx! {};
     };
     rsx! {
-        Fields { form, fields: item.fields, disabled }
+        Fields { form: EditedForm::Phase(form), fields: item.fields, disabled }
         Issues { id: "{id(&item.path)}-issues", issues: item.issues }
     }
 }

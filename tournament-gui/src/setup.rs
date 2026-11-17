@@ -16,7 +16,7 @@ use crate::{
     i18n::t,
     icons,
     notices::use_cleared_on_language_change,
-    phase::{NewPhase, PhaseSummary},
+    phase::{HowPlayed, NewPhase, PhaseSummary},
     phases::sources_text,
     team_name,
 };
@@ -467,7 +467,7 @@ pub fn Phases() -> Element {
                     }
                 }
             } else {
-                NewPhase {}
+                HowPlayed {}
             }
             // apart from the phases above it, the card's primary action once a phase is added
             div { class: "start",

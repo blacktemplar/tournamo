@@ -4,6 +4,7 @@
 mod entry;
 mod fields;
 mod lists;
+mod preset;
 mod summary;
 
 use dioxus::prelude::*;
@@ -15,12 +16,12 @@ use tournament_app::{
 };
 use tournament_engine::PhaseId;
 
-pub use self::summary::answer;
 use self::{
     entry::Entry,
-    fields::{Fields, Issues},
+    fields::{EditedForm, Fields, Issues},
     summary::Summary,
 };
+pub use self::{preset::HowPlayed, summary::answer};
 use crate::{
     announcement::Announcement,
     competition::Ctx,
@@ -361,7 +362,7 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
     rsx! {
         div { class: "phase-form",
             Entry { form, entry, disabled }
-            Fields { form, fields, disabled }
+            Fields { form: EditedForm::Phase(form), fields, disabled }
             p { role: "status",
                 if following_suggestions {
                     {tr.get("following-suggestions")}

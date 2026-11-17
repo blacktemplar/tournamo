@@ -82,13 +82,15 @@ button.icon-only {
   }
 
   /* a box a finger finds, on a row as high as a control */
-  input[type="checkbox"] {
+  input[type="checkbox"],
+  input[type="radio"] {
     width: 1.5rem;
     height: 1.5rem;
     margin: 0;
   }
 
-  label:has(> input[type="checkbox"]) {
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
     display: inline-flex;
     min-height: var(--control);
     align-items: center;

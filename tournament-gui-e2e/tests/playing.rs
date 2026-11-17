@@ -365,6 +365,24 @@ async fn the_entry_of_results_stays_as_it_was_left() {
     .await;
 }
 
+/// Opening the entry of results moves the focus into it, so that what is typed next goes there.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn opening_the_entry_of_results_focuses_it() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob"]).await?;
+
+        gui.toggle_result_entry().await?;
+
+        gui.expect_focus_on_result_entry().await?;
+        gui.type_text("ali").await?;
+
+        gui.expect_result_preview(Some("Reports match 1: Alice won."))
+            .await
+    })
+    .await;
+}
+
 /// The hint of the entry of results reads as a sentence.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

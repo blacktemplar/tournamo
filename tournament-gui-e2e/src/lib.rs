@@ -2151,6 +2151,20 @@ impl Gui {
             .await
     }
 
+    /// Waits until the focus is in the field of the entry of results.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_on_result_entry(&self) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css("#result-entry:focus"),
+                |query| query,
+                "the focus in the entry of results",
+            )
+            .await
+    }
+
     /// Opens the entry of results typed in if it is closed, or else closes it.
     pub async fn toggle_result_entry(&self) -> WebDriverResult<()> {
         self.driver

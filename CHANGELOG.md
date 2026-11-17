@@ -171,6 +171,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   0.30000000000000004, and entrants with equal points or tiebreaks are tied
   rather than ranked apart. Scores are counted to nine decimal places, also
   those of competitions saved before.
+- Opening "Type in results" moves the focus into its field, so the first
+  result typed right after is no longer lost.
 
 ## [0.4.0] - 2026-11-09
 

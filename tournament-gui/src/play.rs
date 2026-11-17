@@ -20,7 +20,7 @@ use crate::{
     announcement::Announcement,
     capitalized,
     competition::{Ctx, PhaseFinished},
-    focus::{move_focus, use_focus},
+    focus::{focus_later, move_focus, use_focus},
     i18n::t,
     icons,
     phase::answer,
@@ -275,6 +275,7 @@ fn round_name(tr: &Translator, summary: &RoundSummary) -> String {
 
 /// The button in the heading of the matches showing the entry of results typed in, or hiding it
 /// again, which shows whether it is open; the browser remembers what the operator left it at.
+/// Opening it moves the focus into its field.
 #[component]
 fn ResultEntryToggle(open: Signal<bool>) -> Element {
     let ctx = use_context::<Ctx>();
@@ -289,6 +290,10 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
                 let opened = !open();
                 open.set(opened);
                 remember(RESULT_ENTRY_OPEN, opened);
+                // opened to type into, unless this tab only reads the competition
+                if opened {
+                    focus_later(&["#result-entry:enabled"]);
+                }
             },
             {tr.get("type-results")}
             icons::ChevronDown {}

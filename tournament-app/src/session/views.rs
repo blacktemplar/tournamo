@@ -249,12 +249,20 @@ impl Session {
             .as_ref()
             .is_some_and(|round| round.matches.iter().any(|row| row.details));
         let (rows, byes, entry) = match (entered, shown) {
-            (Some(Entered { found, report }), _) => (
+            (
+                Some(Entered {
+                    found,
+                    report,
+                    warnings,
+                }),
+                _,
+            ) => (
                 found,
                 Vec::new(),
                 Some(TypedEntry {
                     text: entry.to_owned(),
                     report,
+                    warnings,
                 }),
             ),
             (None, Shown::Playable) => (playable, Vec::new(), None),

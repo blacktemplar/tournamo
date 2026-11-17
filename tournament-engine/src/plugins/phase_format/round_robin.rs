@@ -46,6 +46,7 @@ impl PhaseFormat for RoundRobin {
                 PluginConfig::of::<PointsCalculator>(),
                 PluginConfig::of::<SonnebornBergerCalculator>(),
             ],
+            across: PhaseSuggestions::across_by_points(),
         }
     }
 

@@ -74,6 +74,7 @@ impl PhaseFormat for RandomRounds {
                 PluginConfig::of::<SonnebornBergerCalculator>(),
                 PluginConfig::of::<BuchholzOfBuchholzCalculator>(),
             ],
+            across: PhaseSuggestions::across_by_points(),
         }
     }
 

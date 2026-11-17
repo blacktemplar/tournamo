@@ -329,6 +329,27 @@ async fn the_games_of_a_best_of_are_entered_in_the_row_of_the_match() {
     .await;
 }
 
+/// A result typed in is reported though the result form would warn of it, as the form reports it,
+/// but the entry says the warning with what Enter reports.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_typed_in_warns_of_what_looks_wrong() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Best of games").await?;
+
+        gui.type_result("ali 21-9 21-9 21-9").await?;
+
+        gui.expect_result_warnings_either_way(&[
+            "The match was decided at 2–0 already, yet more is entered.",
+        ])
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.type_result("ali 21-9 21-9").await?;
+        gui.expect_result_warnings_either_way(&[]).await
+    })
+    .await;
+}
+
 /// A game of a best of appears in the row once the match needs it, in time for Tab to move into it.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

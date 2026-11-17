@@ -3,8 +3,8 @@
 //! screen reader gets.
 //!
 //! The result of a match is reported by a click on the side that won, whose name is a button
-//! until then; the focus moves to the bracket's heading, rather than to a side of the next match,
-//! which a second Enter would report without the operator having read it.
+//! until then; the focus stays on the pairing, which now shows the result, rather than moving to a
+//! side of the next match, which a second Enter would report without the operator having read it.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -14,7 +14,7 @@ use tournament_app::{
         BracketSource, DivisionRef, MatchRow, StageName, Unplayed,
     },
 };
-use tournament_engine::MatchResult;
+use tournament_engine::{MatchId, MatchResult};
 
 use crate::{
     announcement::Announcement,
@@ -29,8 +29,8 @@ use crate::{
 /// What gets the focus once the page shows a result reported in the bracket.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Focus {
-    /// The heading of the bracket.
-    Heading,
+    /// The pairing of the match reported; a pairing of no match, `None`, is never asked for.
+    Pairing(Option<MatchId>),
 }
 
 /// The bracket of `division`, if the format of its phase plays one, under `heading` if the phase
@@ -39,7 +39,6 @@ enum Focus {
 pub fn Bracket(division: DivisionRef, heading: Option<String>) -> Element {
     let ctx = use_context::<Ctx>();
     let focus = use_signal(|| None::<Focus>);
-    let on_heading_mounted = use_focus(focus, Focus::Heading);
     // the element scrolling, and whether more of the bracket is out of its sight to the left and
     // to the right, which fades out at that edge
     let mut scrolling = use_signal(|| None::<web_sys::Element>);
@@ -66,10 +65,7 @@ pub fn Bracket(division: DivisionRef, heading: Option<String>) -> Element {
     let (more_left, more_right) = more();
     rsx! {
         section { class: "card", aria_labelledby: "{id}",
-            // focused once a result is reported, so that the focus is not lost
-            h2 { id: "{id}", tabindex: "-1", onmounted: on_heading_mounted,
-                {heading.clone().unwrap_or_else(|| tr.get("bracket"))}
-            }
+            h2 { id: "{id}", {heading.clone().unwrap_or_else(|| tr.get("bracket"))} }
             if reports {
                 p { class: "hint", {tr.get("bracket-report-hint")} }
             }
@@ -212,6 +208,9 @@ fn Stage(stage: Option<StageName>, nested: bool) -> Element {
 #[component]
 fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
+    let id = pairing.r#match.as_ref().map(|row| row.id);
+    // focused once its result is reported, so that the focus stays where it was
+    let on_mounted = use_focus(focus, Focus::Pairing(id));
     let tr = ctx.translator.read();
     // its slot kept, so that the others stay where the lines meet them
     match pairing.unplayed {
@@ -282,7 +281,10 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
     };
     rsx! {
         li { class: "slot {line_in} {line_out}",
-            div { class: "pairing {finished}",
+            div {
+                class: "pairing {finished}",
+                tabindex: id.is_some().then_some("-1"),
+                onmounted: on_mounted,
                 // also before it is scheduled, since the sides waiting for it name it by its number
                 if let Some(number) = pairing.number {
                     span { class: "number",
@@ -349,7 +351,7 @@ fn WinButtons(row: MatchRow, after_bye: [bool; 2], focus: Signal<Option<Focus>>)
         move |_| {
             if let Some(reported) = ctx.act(move |session| session.report(phase, id, result)) {
                 ctx.announce(Announcement::Reported(reported));
-                move_focus(focus, Focus::Heading);
+                move_focus(focus, Focus::Pairing(Some(id)));
             }
         }
     };

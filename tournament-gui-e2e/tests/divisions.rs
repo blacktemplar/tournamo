@@ -10,15 +10,15 @@ const ELEVEN: [&str; 11] = [
     "Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Heidi", "Ivan", "Judy", "Kim",
 ];
 
-/// Enters eleven entrants in three groups, played as round robins compared across the groups by
-/// points per match, then a knockout of the best eight of the groups.
+/// Enters eleven entrants in three groups, played as round robins compared across the groups as
+/// suggested, by points per match, then by points, then a knockout of the best eight of the
+/// groups.
 async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
     for name in ELEVEN {
         gui.add_entrant(name).await?;
     }
     gui.choose_format("Round robin").await?;
     gui.enter("divisions", "3").await?;
-    gui.choose_plugin("across", "More points per match").await?;
     gui.click("Add phase").await?;
     gui.open_new_phase("Knockout").await?;
     gui.choose_format("Single elimination").await?;
@@ -162,7 +162,7 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
             &["Rank", "Name", "Points", "SB", "W-D-L", "Played"],
         )
         .await?;
-        gui.expect_compared_headers(&["Name", "Group", "P/M", "W-D-L", "Points", "Played"])
+        gui.expect_compared_headers(&["Name", "Group", "P/M", "Points", "W-D-L", "Played"])
             .await?;
 
         gui.click("Phase").await?;
@@ -175,7 +175,7 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
         gui.click("Matches & standings").await?;
         gui.expect_division_standings_headers('a', &["Rank", "Name", "Points", "SB", "Played"])
             .await?;
-        gui.expect_compared_headers(&["Name", "Group", "P/M", "W-D-L", "Points", "Played"])
+        gui.expect_compared_headers(&["Name", "Group", "P/M", "Points", "W-D-L", "Played"])
             .await?;
         gui.click("Undo").await?;
         gui.expect_division_standings_headers(
@@ -211,7 +211,7 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
             "Points",
             "Sonneborn-Berger",
             "Points per match",
-            "More points per match",
+            "More points per match, more points",
         ])
         .await
     })

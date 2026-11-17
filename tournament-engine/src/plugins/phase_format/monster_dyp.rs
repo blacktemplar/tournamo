@@ -84,6 +84,7 @@ impl PhaseFormat for MonsterDyp {
                 PluginConfig::of::<WinsDrawsLossesCalculator>(),
                 PluginConfig::of::<PointsCalculator>(),
             ],
+            across: PhaseSuggestions::across_by_points(),
         }
     }
 

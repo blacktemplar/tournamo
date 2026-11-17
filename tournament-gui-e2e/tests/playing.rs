@@ -365,6 +365,24 @@ async fn the_entry_of_results_stays_as_it_was_left() {
     .await;
 }
 
+/// Opening the entry of results moves the focus into it, so that what is typed next goes there.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn opening_the_entry_of_results_focuses_it() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui, &["Alice", "Bob"]).await?;
+
+        gui.toggle_result_entry().await?;
+
+        gui.expect_focus_on_result_entry().await?;
+        gui.type_text("ali").await?;
+
+        gui.expect_result_preview(Some("Reports match 1: Alice won."))
+            .await
+    })
+    .await;
+}
+
 /// The hint of the entry of results reads as a sentence.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -528,9 +546,9 @@ async fn the_bracket_shows_who_meets_whom() {
     .await;
 }
 
-/// A click on a side's name in the bracket reports that it won, and the focus moves to the
-/// bracket's heading, rather than to a side of the next match, where one more Enter would report
-/// it.
+/// A click on a side's name in the bracket reports that it won, and the focus stays on its
+/// pairing, rather than moving to a side of the next match, where one more Enter would report it.
+/// What was reported is said until the view changes.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn results_are_reported_in_the_bracket() {
@@ -549,7 +567,7 @@ async fn results_are_reported_in_the_bracket() {
 
         gui.expect_bracket_waiting(&["Winner of 2", "Loser of 2"])
             .await?;
-        gui.expect_focus("Bracket").await?;
+        gui.expect_focus_in_bracket("1").await?;
         gui.press(Key::Enter).await?;
         gui.expect_bracket_waiting(&["Winner of 2", "Loser of 2"])
             .await?;
@@ -557,8 +575,10 @@ async fn results_are_reported_in_the_bracket() {
         gui.win_in_bracket("2").await?;
 
         gui.expect_bracket_waiting(&[]).await?;
-        gui.expect_focus("Bracket").await?;
-        gui.page.check_accessibility().await
+        gui.expect_focus_in_bracket("2").await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Matches & standings").await?;
+        gui.expect_announcement("").await
     })
     .await;
 }

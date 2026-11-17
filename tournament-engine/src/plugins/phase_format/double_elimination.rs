@@ -183,6 +183,7 @@ impl PhaseFormat for DoubleElimination {
                 PluginConfig::of::<RoundOfEliminationCalculator>(),
                 PluginConfig::of::<WinsDrawsLossesCalculator>(),
             ],
+            across: Vec::new(),
         }
     }
 

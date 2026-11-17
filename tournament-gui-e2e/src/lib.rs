@@ -2094,7 +2094,8 @@ impl Gui {
         Ok(())
     }
 
-    /// Waits until the focus is on a side of the match numbered `number` in the bracket.
+    /// Waits until the focus is on the pairing of the match numbered `number` in the bracket, or
+    /// on a side of it.
     ///
     /// # Panics
     /// Panics if it is not in time, with the number of the match it is on instead, if any.
@@ -2102,7 +2103,7 @@ impl Gui {
         // the number follows the hidden word "Match", which is a block of its own
         self.page
             .expect_texts(
-                By::Css(".pairing:has(:focus) > .number"),
+                By::Css(".pairing:is(:focus, :has(:focus)) > .number"),
                 &[&format!("Match\n{number}")],
             )
             .await
@@ -2147,6 +2148,39 @@ impl Gui {
             .expect_texts(
                 By::Css("#result-entry-preview:not(:empty)"),
                 &Vec::from_iter(text),
+            )
+            .await
+    }
+
+    /// Waits until the focus is in the field of the entry of results.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_on_result_entry(&self) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css("#result-entry:focus"),
+                |query| query,
+                "the focus in the entry of results",
+            )
+            .await
+    }
+
+    /// Waits until the entry of results warns of `warnings` with what it would report, their
+    /// scores read from either side, as [`Self::expect_scores_either_way`] reads them.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the warnings it shows instead.
+    pub async fn expect_result_warnings_either_way(
+        &self,
+        warnings: &[&str],
+    ) -> WebDriverResult<()> {
+        let mirrored: Vec<String> = warnings.iter().map(|warning| mirrored(warning)).collect();
+        let mirrored: Vec<&str> = mirrored.iter().map(String::as_str).collect();
+        self.page
+            .expect_texts_of(
+                By::Css("#result-entry-preview .warnings"),
+                &[warnings, &mirrored],
             )
             .await
     }
@@ -2386,7 +2420,7 @@ impl Gui {
         Ok(())
     }
 
-    /// Waits until the page announces that the last action did `text`.
+    /// Waits until the page announces that the last action did `text`, or nothing for `""`.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it announces instead.

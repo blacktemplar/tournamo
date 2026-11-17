@@ -47,6 +47,7 @@ pub fn PhaseLinks(competition: CompetitionKey, ranking: bool) -> Element {
                     li { key: "{index}",
                         a {
                             href: "#{phase_fragment(competition, index + 1, count, None)}",
+                            onclick: move |_| ctx.forget_announcement(),
                             aria_current: (!ranking && shown == Some(phase.id)).then_some("page"),
                             StateIcon { state: phase.state.clone() }
                             span { {tr.phase_name(&phase.name)} }
@@ -56,6 +57,7 @@ pub fn PhaseLinks(competition: CompetitionKey, ranking: bool) -> Element {
                 li {
                     a {
                         href: "#{ranking_fragment(competition)}",
+                        onclick: move |_| ctx.forget_announcement(),
                         aria_current: ranking.then_some("page"),
                         icons::Trophy {}
                         span { {tr.get("ranking")} }

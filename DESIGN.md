@@ -1532,9 +1532,11 @@ writer tabs (forks the log: that is the sync problem).
 ### Configuring a phase
 
 **Suggestions belong to the tournament layer.** `PhaseFormat::suggestions` returns
-`PhaseSuggestions`: separate lists of ranking criteria and metrics, with any
-suggested settings. `PhasePlugins::default_value` offers those answers for the
-root ranking/metrics fields; `with_suggestions` fills unanswered sections while
+`PhaseSuggestions`: separate lists of ranking criteria, metrics and criteria
+comparing groups (`across`), with any suggested settings.
+`PhasePlugins::default_value` offers those answers for the root ranking, metrics
+and `across` fields, the last only where the draft answers several groups (a
+comparison of one group would only add a hidden metric); `with_suggestions` fills unanswered sections while
 preserving explicit choices and filling schema defaults. The form and the phase
 questionnaire use these operations. Third-party formats implement the same trait;
 consumers need no table of formats. A future match type can be combined at this
@@ -1567,11 +1569,11 @@ questions, discovering children after choosing their plugin; it keeps that walk
 rather than snapshotting fields before they have been chosen.
 
 - **One following/customized state for ranking and scoring**. A new form follows
-  suggestions: changing basic settings replaces both ranking and metrics with
-  defaults and suggestions for those settings. Editing either list or a field
-  within it, including entering invalid numeric text, keeps the whole section
-  from then on. Applying suggestions explicitly replaces both lists and their
-  settings and resumes following. There is no per-field comparison or merging.
+  suggestions: changing basic settings (the groups too) replaces ranking,
+  metrics and `across` with defaults and suggestions for those settings.
+  Editing any of the lists or a field within it, including entering invalid
+  numeric text, keeps the whole section from then on. Applying suggestions
+  explicitly replaces the lists and their settings and resumes following. There is no per-field comparison or merging.
   Existing and undone phases start customized, preserving their configuration.
   The state belongs to the form and is not saved.
 - **Visibility does not imply customization**. Future preset, advanced, and expert
@@ -1579,7 +1581,8 @@ rather than snapshotting fields before they have been chosen.
   supply a complete draft; an actual edit takes control of the section. Keeping
   hidden fields following after customization would require a separate design;
   the current section-wide state intentionally freezes them too. Suggestion
-  outputs are ranking and metrics; other basic settings remain inputs, allowing
+  outputs are ranking, metrics and `across`; other basic settings remain
+  inputs, allowing
   a future match-type axis alongside the format.
 - **Implied plugins are shown, not chosen**: added to a copy for the view, never
   to the draft, so they go when nothing needs them.

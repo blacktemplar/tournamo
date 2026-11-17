@@ -169,6 +169,7 @@ impl PhaseFormat for SingleElimination {
                 PluginConfig::of::<RoundOfFirstLossCalculator>(),
                 PluginConfig::of::<WinsDrawsLossesCalculator>(),
             ],
+            across: Vec::new(),
         }
     }
 

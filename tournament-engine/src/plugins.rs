@@ -206,17 +206,21 @@ impl PhasePlugins {
 
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
-    pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];
+    pub const SUGGESTED: [&str; 3] = [Self::RANKING, Self::METRICS, Self::ACROSS];
 
-    /// The suggested answer for a root ranking or metrics field, otherwise its schema default.
-    /// Suggestions come only from the configured format and are not filtered for compatibility.
+    /// The suggested answer for a root ranking, metrics or across field, otherwise its schema
+    /// default. Suggestions come only from the configured format and are not filtered for
+    /// compatibility; the comparison across groups is suggested only where the draft answers more
+    /// than one group, and nothing otherwise.
     ///
     /// # Errors
     /// Returns a configuration error if the path is unknown. An incomplete or rejected format
     /// supplies no suggestions; validation reports its problems independently.
     pub fn default_value(draft: &Draft<Self>, path: &Path) -> Result<Option<Value>, ConfigError> {
-        let ranking = *path == Path::ROOT.field(Self::RANKING);
-        if (ranking || *path == Path::ROOT.field(Self::METRICS))
+        let field = Self::SUGGESTED
+            .into_iter()
+            .find(|field| *path == Path::ROOT.field(*field));
+        if let Some(field) = field
             && let Some(format) = draft
                 .answers()
                 .get(Self::FORMAT)
@@ -224,10 +228,16 @@ impl PhasePlugins {
                 .and_then(|config| config.build::<dyn PhaseFormat>().ok())
         {
             let suggestions = format.suggestions();
-            return Ok(Some(if ranking {
-                suggestions.ranking.into()
-            } else {
-                suggestions.metrics.into()
+            let several = draft
+                .answers()
+                .get(Self::DIVISIONS)
+                .and_then(Value::as_u64)
+                .is_some_and(|divisions| divisions > 1);
+            return Ok(Some(match field {
+                Self::RANKING => suggestions.ranking.into(),
+                Self::METRICS => suggestions.metrics.into(),
+                _ if several => suggestions.across.into(),
+                _ => Vec::<PluginConfig>::new().into(),
             }));
         }
         draft.default_value(path)

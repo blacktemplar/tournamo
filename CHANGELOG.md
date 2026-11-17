@@ -23,14 +23,15 @@ later one: a file whose `"format"` changes is migrated, not refused.
 - A phase can be played in several groups (divisions) of one configuration,
   dealt by a draw: back and forth, at random, or in blocks (knockouts A/B/C
   playing for places of their own). A seeding orders the entrants of each
-  group, which a knockout seeds its bracket by: in order, at random, or
+  group, which a knockout seeds its bracket by: by rank, at random, or
   keeping groups apart (for a knockout of the best of several groups, so that
   entrants of one group meet as late as possible); it is not asked for random
   rounds and Monster DYP, which draw their pairings by lot. Each place of a group is a place of the phase, a tie in a group decided by
   its lot: the best eight of three groups are the firsts and seconds of every
   group and two of the thirds. Entrants of the same place in different groups
-  are compared by criteria of their own, e.g. the new points per match, which
-  compares groups of different sizes. A phase with too few entrants for its groups is not started until
+  are compared by criteria of their own, by default (for round robin, random
+  rounds and Monster DYP) the new points per match, which compares groups of
+  different sizes, then the points, rather than by lot. A phase with too few entrants for its groups is not started until
   the groups are lowered. The page filters the matches by group, shows the
   standings of each group and, where the cut of the next phase goes through a
   place, how that place compares across the groups, a dashed line below the
@@ -132,6 +133,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `CompetitionStateMachineExt::apply_transition` and `apply_in`; they take a
   `CompetitionTransition`, so a transition goes in with `.into()`.
   `Transition::apply` returns nothing.
+- Library users: `PhaseSuggestions` has a third list, `across`, the criteria
+  comparing groups, which `PhasePlugins::default_value` and `with_suggestions`
+  offer only where the draft answers several divisions; `PhasePlugins::SUGGESTED`
+  names `across` too.
 - Library users: `Phase::plugins` replaces `Phase::metrics_calculators` and
   `Phase::slice_rankers`, and a `HierarchicalRanker` borrows its slice
   rankers.
@@ -171,6 +176,20 @@ later one: a file whose `"format"` changes is migrated, not refused.
   0.30000000000000004, and entrants with equal points or tiebreaks are tied
   rather than ranked apart. Scores are counted to nine decimal places, also
   those of competitions saved before.
+- Opening "Type in results" moves the focus into its field, so the first
+  result typed right after is no longer lost.
+- Start no longer throws away the form of a further phase left open: it waits,
+  saying so, until the phase is added or the form discarded by its new button
+  "Discard".
+- A result reported in the bracket keeps the focus on its pairing, rather than
+  moving it to the bracket's heading, so keyboard users keep their place. What
+  the last action did is no longer said once another view or phase is shown.
+- A result typed in with scores says what the form of the result would warn
+  of, e.g. a third game of a best of 3 after 2–0, or a score unlike a game's
+  winning score, with what Enter reports; it is still reported, as the form
+  reports it. The number of games of a best of is labelled "best of" (German
+  "Best of (Sätze)", the match format "nach Sätzen" rather than
+  "Gewinnsätze", which read as the games needed to win).
 
 ## [0.4.0] - 2026-11-09
 

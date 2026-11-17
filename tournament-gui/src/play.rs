@@ -20,7 +20,7 @@ use crate::{
     announcement::Announcement,
     capitalized,
     competition::{Ctx, PhaseFinished},
-    focus::{move_focus, use_focus},
+    focus::{focus_later, move_focus, use_focus},
     i18n::t,
     icons,
     phase::answer,
@@ -89,9 +89,13 @@ pub fn Rounds() -> Element {
         with_round,
         with_stage,
     } = view;
-    let (entered, preview) = match typed {
-        Some(TypedEntry { text, report }) => (Some(text), Some(report.map_err(|why| why.text()))),
-        None => (None, None),
+    let (entered, preview, warnings) = match typed {
+        Some(TypedEntry {
+            text,
+            report,
+            warnings,
+        }) => (Some(text), Some(report.map_err(|why| why.text())), warnings),
+        None => (None, None, Vec::new()),
     };
     // the match whose result Enter in the entry reports
     let to_report = preview
@@ -115,6 +119,7 @@ pub fn Rounds() -> Element {
                     scores,
                     entry,
                     preview: preview.clone(),
+                    warnings,
                     focus,
                 }
             }
@@ -275,6 +280,7 @@ fn round_name(tr: &Translator, summary: &RoundSummary) -> String {
 
 /// The button in the heading of the matches showing the entry of results typed in, or hiding it
 /// again, which shows whether it is open; the browser remembers what the operator left it at.
+/// Opening it moves the focus into its field.
 #[component]
 fn ResultEntryToggle(open: Signal<bool>) -> Element {
     let ctx = use_context::<Ctx>();
@@ -289,6 +295,10 @@ fn ResultEntryToggle(open: Signal<bool>) -> Element {
                 let opened = !open();
                 open.set(opened);
                 remember(RESULT_ENTRY_OPEN, opened);
+                // opened to type into, unless this tab only reads the competition
+                if opened {
+                    focus_later(&["#result-entry:enabled"]);
+                }
             },
             {tr.get("type-results")}
             icons::ChevronDown {}
@@ -309,6 +319,8 @@ fn ResultEntry(
     /// The match and result reported if submitted now, or why none; nothing while nothing is
     /// typed.
     preview: Option<Result<MatchRow, Text>>,
+    /// What looks wrong about the result reported if submitted now, said with it.
+    warnings: Vec<Text>,
     focus: Signal<Option<Focus>>,
 ) -> Element {
     let ctx = use_context::<Ctx>();
@@ -401,8 +413,17 @@ fn ResultEntry(
                 let (class, text) = preview
                     .filter(|_| error.read().is_none())
                     .map_or(("preview", None), |(class, text)| (class, Some(text)));
+                let said = text.is_some();
                 rsx! {
-                    p { id: "result-entry-preview", class, role: "status", {text} }
+                    p { id: "result-entry-preview", class, role: "status",
+                        {text}
+                        if said {
+                            for warning in &warnings {
+                                " "
+                                span { class: "warnings", {tr.sentence(warning)} }
+                            }
+                        }
+                    }
                 }
             }
             if !used() {

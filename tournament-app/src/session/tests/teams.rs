@@ -215,3 +215,47 @@ fn the_ranking_lists_a_team_in_one_row() {
     assert_eq!(ranking.rows.len(), 3);
     assert!(ranking.rows.iter().all(|row| row.entrants.len() == 2));
 }
+
+/// A knockout of pairs whose finalists play on as single entrants: the pairs of the match for third
+/// place come after the four finalists, without a medal, in its standings and in the ranking.
+#[test]
+fn pairs_out_before_a_phase_of_singles_are_placed_after_its_players() {
+    let mut session = Given::new()
+        .entrants(&["A", "B", "C", "D", "E", "F", "G", "H"])
+        .teams::<RandomPairs>()
+        .format(SingleElimination::ID)
+        .added();
+    let first = session.first();
+    let mut form = session.phase_form().unwrap();
+    form.take_some_places();
+    form.choose_source(0, Some(first));
+    form.enter_place(0, End::To, "2");
+    form.choose(&ConfigPath::ROOT.field("teams"), Some(Split::ID))
+        .unwrap();
+    let second = session.add_phase(&form).unwrap();
+    session.start().unwrap();
+    play_out(&mut session, first);
+
+    let medals: Vec<_> = session
+        .standings(session.only())
+        .unwrap()
+        .rows
+        .iter()
+        .map(|row| row.medal)
+        .collect();
+    assert_eq!(
+        medals, [None; 4],
+        "the finalists play on, the others are 5th and 6th"
+    );
+
+    session.start_phase(second).unwrap();
+    play_out(&mut session, second);
+    let ranking = session.ranking();
+    let out_first: Vec<_> = ranking
+        .rows
+        .iter()
+        .filter(|row| row.phase == first)
+        .map(|row| (row.place.get(), row.entrants.len(), row.medal))
+        .collect();
+    assert_eq!(out_first, [(5, 2, None), (6, 2, None)]);
+}

@@ -434,16 +434,8 @@ impl Session {
         let of = self.phase(phase)?;
         of.divisions().first()?;
         let advancing = self.advancing(phase);
-        let first_place = self
-            .competition()
-            .first_place(&phase)
-            .map_or(1, NonZeroU32::get);
-        // a medal is one of the competition, by the overall rank
-        let overall: HashMap<RankingId, NonZeroU32> = of
-            .standings()
-            .iter()
-            .map(|row| (row.ranking().id(), row.rank()))
-            .collect();
+        // a medal is one of the competition, by the place there
+        let place_of = self.competition().places(&phase);
         let calculators = AnyAxis::of::<dyn MetricsCalculator>();
         let ranked_by: Vec<&str> = of
             .rule(table)
@@ -483,9 +475,7 @@ impl Session {
                     let division = &of.divisions()[index];
                     let ranking = standing.ranking();
                     let advances = advancing(ranking.id());
-                    let place = overall
-                        .get(&ranking.id())
-                        .and_then(|overall| NonZeroU32::new(first_place + overall.get() - 1));
+                    let place = place_of.get(&ranking.id()).copied();
                     StandingRow {
                         rank,
                         division: index,

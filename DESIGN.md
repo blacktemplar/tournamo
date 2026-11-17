@@ -798,14 +798,27 @@ order of the new list: `PhasePlugins::teams`).
   next to it numbers on after its bracket.
 - **The competition ranking is derived, never stored**
   (`Competition::ranking`): an entrant is placed by the latest started phase
-  they are in, at the place the phase starts at plus their rank there, less
-  one. A phase starts at the smallest place its sources start at, a source of
-  the registration at its first place, one of a phase at that phase's start
-  plus its first place, less one. Where a cut goes through rows sharing a
-  rank, each side of the cut shares the place of its first row, so that the
-  rows the lot left behind are placed after those it took on (the plain sum
-  would place them with the rows that went on). Ranges leaving gaps leave
-  gaps between the places.
+  they are in, by their row there, the members of a team sharing it. A row's
+  place is one more than the rows before it (rows of a rank sharing the
+  place of the first), whatever their size: a pair is one row, so a
+  competition of pairs is placed 1, 2, 3. The order comes from *slots*
+  counting entrants, so that phases of teams of different sizes compare: a
+  phase's rows take the slots of the rows of its sources it took on, a pair
+  split into two singles two slots, two singles paired one each; a phase
+  starts at the smallest slot its sources start at, a source of the
+  registration at its first place, one of a phase at the slot of its row at
+  its first place, and a row's slot is its phase's start plus the entrants
+  of the rows before it. Numbering each phase's rows by its own ranks
+  instead put a pair left behind before a phase of six singles at place
+  four, among them. Where a
+  cut goes through rows sharing a rank, each side of the cut shares the slot
+  of its first row, so that the rows the lot left behind are placed after
+  those it took on (the plain sum would place them with the rows that went
+  on). A row going on to a phase not started yet counts as the rows that
+  phase will form of it (a pair split up two, a single entrant to be paired
+  half), so the places after it are already those they will be. Entrants of
+  the registration in no started phase keep a place free each. A medal in a
+  table of standings is by this place (`Competition::places`).
 - **Undo across phases needs no mechanism of its own.** Undoing a result of a
   finished phase leaves it unfinished, so a `StartPhase` after it no longer
   applies and the undo is refused; the app names the phase started. Editing

@@ -55,6 +55,15 @@ later one: a file whose `"format"` changes is migrated, not refused.
   places”), so the best rated can go straight to a later phase while the
   others play a qualification; the form warns where the lot decides who of
   the registration is in a phase. CLI: `add-entrant --rating`, `rate`.
+- Teams (DYP, #1): a phase can be played between teams, its entrants drawn
+  into pairs by lot at its start or paired best with worst; a pair plays
+  together throughout and in the phases after it, unless a later phase
+  splits it up (“everyone on their own”), e.g. for a knockout played singles
+  after a DYP. Pairs are seeded by the places their members came in with.
+  Standings, matches and the ranking name a team by its members, and a
+  result can be typed with the name of either. An odd number of entrants is
+  not drawn into pairs: the start says so. A Monster DYP takes single
+  entrants only. CLI: `teams=drawn-pairs`.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
   `ranking` and `edit-phase`; `--division <letter>` for `matches` and

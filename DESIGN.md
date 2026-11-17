@@ -143,8 +143,14 @@ impl Declaration {
   does not compile, and by the orphan rule each fact belongs to the crate owning
   its concept, so crates cannot collide on `bool` or `u32`.
 - Facts come from the phase's plugins and its context, the competition
-  (`Competition::declare_phase_context`, e.g. `EntrantsPerRanking(1)`). The
-  check is flat: any plugin may require any fact, mutual requirements are fine,
+  (`Competition::declare_phase_context` from the sources of the phase:
+  `EntrantsPerQualifier`, how many entrants each qualifier coming in stands
+  for). A plugin may provide a fact derived from a fact of the context
+  (`Declaration::provide_from`): the teams of a phase provide
+  `EntrantsPerRanking` from `EntrantsPerQualifier`. It derives only from the
+  context, never from another plugin, so there is no order among plugins to
+  resolve; where only the type of a fact matters (implied plugins, irrelevant
+  fields) a derived fact counts as provided. The check is flat: any plugin may require any fact, mutual requirements are fine,
   since a requirement states what is true of the phase, not what ran first. A
   fact provided twice (also by a plugin and the context) is an error.
 - The vocabulary is open: core defines facts about what it owns
@@ -231,9 +237,11 @@ Rejected:
   saved log's replay.
 - A typed builder for `PhasePlugins` in production: a second way to make a
   phase, skipping implied plugins.
-- A plugin replacing a fact of the context (a draw providing
-  `EntrantsPerRanking(2)`): a fact provided twice for now; to revisit when a
-  phase's context comes from the phase before.
+- A plugin replacing a fact of the context (teams providing
+  `EntrantsPerRanking(2)` over a context's 1): a fact would hold two values.
+  The context says what comes in, the teams what the phase ranks, two facts.
+- Deriving from facts of other plugins: an order among plugins to resolve,
+  for what only the context has needed.
 
 ## The plugin catalog
 
@@ -733,7 +741,9 @@ the order it gets unless changing it is its job: the **registration** (the
 entrants in the order the start gave, the rest by lot), the **field** (which places of which sources, in order:
 `AddPhase::sources`), the **draw** (which division a qualifier goes to, and
 whether the divisions are parallel or levels: `PhasePlugins::draw`) and the
-**seeding** (the order within a division: `PhasePlugins::seeding`).
+**seeding** (the order within a division: `PhasePlugins::seeding`); between
+the field and the draw, the **teams** (which qualifiers form a ranking, and the
+order of the new list: `PhasePlugins::teams`).
 
 - **Sources are typed data of `AddPhase`**, next to an optional name, not
   fields of the schema: the schema has no kind for a reference to a phase, and
@@ -856,6 +866,38 @@ whether the divisions are parallel or levels: `PhasePlugins::draw`) and the
   translation is keyed by them, hence `seeded_`. A format whose order means
   nothing to it, as one drawing its pairings by lot, says so
   (`PhaseFormat::reads_seeding`), and the app does not ask for its seeding.
+- **Teams are an axis** (`Teams`, issue #1), a field of `PhasePlugins`
+  after the format. `Teams::form` gets a `TeamsView` (the field, the
+  entrants, the phase's random stream, `Entropy::Teams`) and returns the teams,
+  each its entrants, in the order of the new field
+  (`Competition::teams_of`, what the draw deals; `field_of` stays the field
+  of the sources). A team's `Qualifier` carries the `origins` of the rows its
+  entrants come from, each once, so `group_winners_apart` keeps a team of
+  several groups as a group of its own, and both singles of a pair split up
+  in the pair's group, which keeps partners apart. The lot of a team is the
+  best of its entrants'. The engine's teams: `keep` (as registered, the
+  default), `random_pairs` (drawn pairs), `best_with_worst` and `split`
+  (everyone on their own, the members of a qualifier in the order it lists
+  them). `Teams::fits` says whether a field can be formed (an even one into
+  pairs); `StartCompetition` and `StartPhase` refuse a start otherwise
+  (`FieldDoesNotFit`), in `check_applicable`, since `apply` cannot fail, and
+  the app says so before. How many entrants a ranking stands for follows the
+  sources: the registration sends single entrants, a phase rankings of
+  `Teams::entrants_per_team` of what came into it
+  (`Competition::entrants_per_ranking`); sources sending different sizes are
+  refused (`MixedTeamSizes`), and a phase edited so that it sends another size
+  than a later phase was built for is refused by the replay of that phase's
+  `AddPhase`. A Monster DYP requires single players, so it refuses drawn
+  pairs and pairs coming in, unless they are split. The form of a phase makes
+  its draft anew when its sources change (`PhasePlugins::draft`), so what
+  fits follows them.
+- **A pair stands by the sum of its members' places** in the incoming field,
+  ties by its better member, which is listed first, the order `split` takes
+  a pair apart in: a DYP, then a knockout played singles for the one winner.
+  With a rated registration that is the best estimate of its strength the
+  engine has; with one by lot it is random anyway, so there is nothing to
+  configure. Rejected: always by lot (a rated registration could not seed a
+  DYP knockout); the best member's place (ignores the partner).
 - **Draw and seeding are two axes.** A draw deciding both who is in which
   division and each division's order needed a draw of its own for every
   combination: "knockouts A/B/C in blocks, each seeded at random" was neither
@@ -909,8 +951,9 @@ whether the divisions are parallel or levels: `PhasePlugins::draw`) and the
   a bracket, a division the base 0. The converter from
   format 4 moves a started phase's `plugins` and `data` into its only division
   and leaves the phase its plugins whole: knowing no plugin, it cannot tell
-  their state from their configuration. It also gives plugins of format 4 one
-  division dealt in order and compared across divisions by nothing. The typed
+  their state from their configuration. It also gives plugins of format 4 their
+  teams as registered and one division dealt in order and compared across
+  divisions by nothing. The typed
   read of a phase drops the
   state (`PhasePlugins::without_state`, each plugin built again from its
   answer in the config), since `#[serde(default)]` fills a state that is

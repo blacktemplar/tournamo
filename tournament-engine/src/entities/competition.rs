@@ -458,31 +458,23 @@ impl Competition {
     /// so that the rows the lot left behind are placed after those it took on. A phase's rows
     /// come where those of its sources it took on were: a phase starts where the first of them
     /// was, a source of the registration at its first place. A row going on to a phase not
-    /// started yet counts as the rows that phase will form of its entrants (two for a pair split
-    /// up, half for a single entrant paired), so that the places after it stay as they will be.
+    /// started yet counts as the rows that phase will form of its entrants, but at least as one:
+    /// a pair to be split up counts as two, so that the places after it are those they will be,
+    /// while entrants to be paired keep a row each until they are.
     ///
     /// Final once every phase is finished. Entrants of the registration in no started phase are
     /// not placed, each keeping a place free; entrants of places of a phase that no phase takes
     /// are placed by the phase they stopped in.
     pub fn ranking(&self) -> Vec<Placed> {
-        // a row counts as `unit` and the rows its entrants will form in the phase taking it on as
-        // `unit` each, so that every count is whole
-        let per_ranking = |phase: &PhaseId| {
-            u64::from(self.entrants_per_ranking(phase).map_or(1, NonZeroU32::get))
-        };
-        let unit = self
-            .phases
-            .keys()
-            .map(per_ranking)
-            .fold(1, |unit, size| unit / gcd(unit, size) * size);
         // (slot, index of the phase, unique slot, rows counted, placed) of every entrant placed
         // so far, see `slots`
-        let mut placed: Map<EntrantId, (u32, usize, u32, u64, Placed)> = Map::default();
+        let mut placed: Map<EntrantId, (u32, usize, u32, u32, Placed)> = Map::default();
         for (index, phase) in self.phases.values().enumerate() {
             for (ranking, slot, unique, taker) in self.slots(&phase.id()) {
                 // a taker placing the row has started, and replaces it below
-                let rows = taker.map_or(unit, |taker| {
-                    ranking.entrants().len() as u64 * unit / per_ranking(&taker)
+                let rows = taker.map_or(1, |taker| {
+                    let per_ranking = self.entrants_per_ranking(&taker).map_or(1, NonZeroU32::get);
+                    (ranking.entrants().len() as u32 / per_ranking).max(1)
                 });
                 for entrant in ranking.entrants() {
                     let entry = Placed {
@@ -507,12 +499,9 @@ impl Competition {
         for (slot, index, _, rows, placed) in &mut placed {
             if last_group != Some((*slot, *index)) {
                 last_group = Some((*slot, *index));
-                rows_before += unit * u64::from(slot.saturating_sub(next_slot));
+                rows_before += slot.saturating_sub(next_slot);
                 next_slot = next_slot.max(*slot);
-                place = u32::try_from(rows_before / unit + 1)
-                    .ok()
-                    .and_then(NonZeroU32::new)
-                    .unwrap_or(NonZeroU32::MAX);
+                place = NonZeroU32::MIN.saturating_add(rows_before);
             }
             if last_row != Some((*index, placed.ranking)) {
                 last_row = Some((*index, placed.ranking));
@@ -523,11 +512,6 @@ impl Competition {
         }
         placed.into_iter().map(|(.., placed)| placed).collect()
     }
-}
-
-/// The greatest common divisor of `a` and `b`.
-fn gcd(a: u64, b: u64) -> u64 {
-    if b == 0 { a } else { gcd(b, a % b) }
 }
 
 /// How many entrants each qualifier of a field taken from `sources` stands for, each ranking of a

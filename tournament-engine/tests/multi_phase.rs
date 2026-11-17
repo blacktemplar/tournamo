@@ -1700,8 +1700,11 @@ fn entrants_paired_again_are_placed_as_pairs() {
     start(&mut machine, phase(SINGLES));
     play_out(&mut machine, phase(SINGLES));
 
-    // the four singles going on will be two rows, so two of them count as one
-    assert_eq!(places_taken(&machine), [(1, 2), (2, 2), (3, 2), (5, 2)]);
+    // the four singles going on keep a row each until they are paired
+    assert_eq!(
+        places_taken(&machine),
+        [(1, 1), (2, 1), (3, 2), (5, 2), (7, 2)]
+    );
 
     start(&mut machine, phase(PAIRS));
     play_out(&mut machine, phase(PAIRS));

@@ -815,8 +815,12 @@ order of the new list: `PhasePlugins::teams`).
   of its first row, so that the rows the lot left behind are placed after
   those it took on (the plain sum would place them with the rows that went
   on). A row going on to a phase not started yet counts as the rows that
-  phase will form of it (a pair split up two, a single entrant to be paired
-  half), so the places after it are already those they will be. Entrants of
+  phase will form of it, but at least as one: a pair to be split up counts as
+  two, so the places after it are already those they will be (no provisional
+  medal for a pair left behind), while entrants to be paired keep a row each
+  until the pairs are drawn (counted as half a row, two of them would share a
+  place as if they were a pair, which the draw may never make them), so the
+  rows after them move up once the phase starts. Entrants of
   the registration in no started phase keep a place free each. A medal in a
   table of standings is by this place (`Competition::places`).
 - **Undo across phases needs no mechanism of its own.** Undoing a result of a

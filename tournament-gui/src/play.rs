@@ -89,9 +89,13 @@ pub fn Rounds() -> Element {
         with_round,
         with_stage,
     } = view;
-    let (entered, preview) = match typed {
-        Some(TypedEntry { text, report }) => (Some(text), Some(report.map_err(|why| why.text()))),
-        None => (None, None),
+    let (entered, preview, warnings) = match typed {
+        Some(TypedEntry {
+            text,
+            report,
+            warnings,
+        }) => (Some(text), Some(report.map_err(|why| why.text())), warnings),
+        None => (None, None, Vec::new()),
     };
     // the match whose result Enter in the entry reports
     let to_report = preview
@@ -115,6 +119,7 @@ pub fn Rounds() -> Element {
                     scores,
                     entry,
                     preview: preview.clone(),
+                    warnings,
                     focus,
                 }
             }
@@ -314,6 +319,8 @@ fn ResultEntry(
     /// The match and result reported if submitted now, or why none; nothing while nothing is
     /// typed.
     preview: Option<Result<MatchRow, Text>>,
+    /// What looks wrong about the result reported if submitted now, said with it.
+    warnings: Vec<Text>,
     focus: Signal<Option<Focus>>,
 ) -> Element {
     let ctx = use_context::<Ctx>();
@@ -406,8 +413,17 @@ fn ResultEntry(
                 let (class, text) = preview
                     .filter(|_| error.read().is_none())
                     .map_or(("preview", None), |(class, text)| (class, Some(text)));
+                let said = text.is_some();
                 rsx! {
-                    p { id: "result-entry-preview", class, role: "status", {text} }
+                    p { id: "result-entry-preview", class, role: "status",
+                        {text}
+                        if said {
+                            for warning in &warnings {
+                                " "
+                                span { class: "warnings", {tr.sentence(warning)} }
+                            }
+                        }
+                    }
                 }
             }
             if !used() {

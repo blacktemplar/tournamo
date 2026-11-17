@@ -194,6 +194,23 @@ pub struct PartView {
     pub parts: Vec<PartView>,
 }
 
+impl ResultView {
+    /// Every warning of the match, of its parts and of their fields, the match's first, then each
+    /// part's in order, each said once.
+    pub fn warnings(&self) -> Vec<Text> {
+        fn all<'a>(part: &'a PartView, warnings: &mut Vec<&'a Text>) {
+            warnings.extend(&part.warnings);
+            warnings.extend(part.fields.iter().flat_map(|field| &field.warnings));
+            for part in &part.parts {
+                all(part, warnings);
+            }
+        }
+        let mut warnings = Vec::new();
+        all(&self.root, &mut warnings);
+        said_once(warnings)
+    }
+}
+
 impl PartView {
     /// Its parts as a table, a row each, if it has any: the columns are the values of each side of
     /// each field of the first part, which every part at one level shares.

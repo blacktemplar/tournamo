@@ -5,6 +5,7 @@ use tournament_engine::{EnteredValue, MatchResult, Sides, Team};
 use super::Session;
 use crate::{
     error::{ReportEnteredError, ReportError},
+    i18n::Text,
     result_form::read_score,
     view::{Entered, EntrantRow, MatchRow, MatchesOf, NameSearch, Reported},
 };
@@ -59,7 +60,8 @@ impl Session {
     /// A score is one [`read_score`] reads, e.g. `21-17`, `21–17` or `9.5-10`: that of the match,
     /// or else one of each of its parts in order, e.g. its games, as [`ResultForm::enter_scores`]
     /// enters them. The result entered must be the one they say, if they say one: a result
-    /// against them is entered in a [`ResultForm`].
+    /// against them is entered in a [`ResultForm`]. What the form warns of about them, e.g. a
+    /// game after the match was decided, it says too ([`Entered::warnings`]), but reports anyway.
     ///
     /// The result is an error if the phase has not started, `entry` is empty, it is the
     /// number of a match alone, there is no match of the number entered, it has a result already,
@@ -73,6 +75,7 @@ impl Session {
         let nothing = |error: ReportEnteredError| Entered {
             found: Vec::new(),
             report: Err(error),
+            warnings: Vec::new(),
         };
         let divisions = self.divisions_of(of);
         if divisions.is_empty() {
@@ -113,7 +116,7 @@ impl Session {
                 let draws = draws(&row);
                 self.with_scores(draws, row, &scores, result)
             });
-            return Entered { found, report };
+            return Entered::new(found, report);
         };
         let Some((index, division, r#match)) = divisions.iter().find_map(|&(index, division)| {
             division
@@ -136,49 +139,68 @@ impl Session {
                 result,
             ),
         };
-        Entered {
-            found: vec![row],
-            report,
-        }
+        Entered::new(vec![row], report)
     }
 
     /// `row`, an open match of a division that takes draws if `draws`, with the result `scores`
-    /// (side A's first) and `result` say, see [`Self::read_entered`].
+    /// (side A's first) and `result` say, and what looks wrong about it, see
+    /// [`Self::read_entered`].
     fn with_scores(
         &self,
         draws: bool,
         row: MatchRow,
         scores: &[Sides<EnteredValue>],
         result: Option<MatchResult>,
-    ) -> Result<MatchRow, ReportEnteredError> {
+    ) -> Result<(MatchRow, Vec<Text>), ReportEnteredError> {
         let scores: Vec<_> = scores
             .iter()
             .map(|score| Sides::new(Some(score.a), Some(score.b)))
             .collect();
-        let result = if scores.is_empty() {
-            result
+        let (result, warnings) = if scores.is_empty() {
+            (result, Vec::new())
         } else {
             let mut form = self.result_form(row.phase, row.id)?;
             if !form.enter_scores(&scores) {
                 return Err(ReportEnteredError::ScoresNotTaken(row.number));
             }
-            match (result, form.result()) {
+            let result = match (result, form.result()) {
                 (Some(entered), Some(suggested)) if entered != suggested => {
                     return Err(ReportEnteredError::AgainstScores(row.number));
                 }
                 (None, None) => return Err(ReportEnteredError::Undecided(row.number)),
                 (entered, suggested) => entered.or(suggested),
-            }
+            };
+            (result, form.view().warnings())
         };
         let result = result.expect("a result entered or suggested");
         if result == MatchResult::Draw && !draws {
             return Err(ReportError::DrawNotAllowed.into());
         }
-        Ok(MatchRow {
+        let row = MatchRow {
             result: Some(result),
             scores,
             ..row
-        })
+        };
+        Ok((row, warnings))
+    }
+}
+
+impl Entered {
+    /// What an entry fitting `found` says, `report` with its warnings, see
+    /// [`Session::read_entered`].
+    fn new(
+        found: Vec<MatchRow>,
+        report: Result<(MatchRow, Vec<Text>), ReportEnteredError>,
+    ) -> Self {
+        let (report, warnings) = match report {
+            Ok((row, warnings)) => (Ok(row), warnings),
+            Err(error) => (Err(error), Vec::new()),
+        };
+        Self {
+            found,
+            report,
+            warnings,
+        }
     }
 }
 

@@ -2,6 +2,7 @@
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
+use crate::i18n::Text;
 
 #[test]
 fn a_result_is_entered_as_the_number_of_its_match_and_1_x_or_2() {
@@ -109,6 +110,32 @@ fn scores_are_entered_after_the_number_of_a_match_and_say_its_result() {
         "the result entered decides where the scores do not"
     );
     assert_eq!(reported.row.scores, scores([(17, 21), (21, 17)]));
+}
+
+#[test]
+fn scores_entered_say_what_looks_wrong_and_are_reported_anyway() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<BestOf>().with("games", 3))
+        .started();
+
+    let entered = session.read_entered(session.all(), "1 9-21 9-21 9-21");
+    assert_eq!(
+        entered.warnings,
+        [Text::new("warning-more-than-decided-at")
+            .with("a", 0u32)
+            .with("b", 2u32)]
+    );
+    assert!(entered.report.is_ok());
+    assert!(
+        session
+            .read_entered(session.all(), "1 21-9 21-9")
+            .warnings
+            .is_empty()
+    );
+    let reported = session
+        .report_entered(session.all(), "1 9-21 9-21 9-21")
+        .unwrap();
+    assert_eq!(reported.row.result, Some(MatchResult::BWins));
 }
 
 #[test]

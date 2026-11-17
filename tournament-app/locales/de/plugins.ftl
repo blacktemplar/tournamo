@@ -36,12 +36,12 @@ plugin-tournament_engine-scored =
     .field-winning_score = Gewinnpunktzahl
     .field-winning_score-description = was ein Sieger üblicherweise hat, oder mehr, dann mit einem oder zwei Punkten Vorsprung; jeder andere Spielstand wird angemerkt, da er ein Tippfehler sein kann
 plugin-tournament_engine-best_of =
-    .label = Gewinnsätze
+    .label = nach Sätzen
     .description = wer die meisten Sätze gewinnt, gewinnt; jeder Satz nach seinem Spielstand
     .level-match = Spiel
     .level-game = Satz
     .value-score = Punkte
-    .field-games = Sätze
+    .field-games = Best of (Sätze)
     .field-winning_score = Gewinnpunktzahl eines Satzes
     .field-winning_score-description = was der Sieger eines Satzes üblicherweise hat, oder mehr, dann mit einem oder zwei Punkten Vorsprung; jeder andere Spielstand wird angemerkt, da er ein Tippfehler sein kann
 

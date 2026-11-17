@@ -15,7 +15,7 @@ use tournament_engine::{
 };
 use unicode_normalization::{UnicodeNormalization as _, char::is_combining_mark};
 
-use crate::{error::ReportEnteredError, people::Rating};
+use crate::{error::ReportEnteredError, i18n::Text, people::Rating};
 
 /// An entrant as a screen shows it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -137,6 +137,8 @@ pub struct TypedEntry {
     /// The match whose result it says, with that result, or why it reports none, see
     /// [`Entered::report`].
     pub report: Result<MatchRow, ReportEnteredError>,
+    /// What looks wrong about that result, see [`Entered::warnings`].
+    pub warnings: Vec<Text>,
 }
 
 /// A match in a list of matches.
@@ -763,6 +765,10 @@ pub struct Entered {
     /// The match whose result it says, one of [`Self::found`], with that result; or why it
     /// reports none.
     pub report: Result<MatchRow, ReportEnteredError>,
+    /// What looks wrong about the result it says, though it is reported, as a
+    /// [`ResultView`](crate::result_form::ResultView) warns of it, e.g. a game entered after the
+    /// match was decided; none where it reports none.
+    pub warnings: Vec<Text>,
 }
 
 /// What reporting a result led to.

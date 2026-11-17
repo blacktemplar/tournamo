@@ -2166,6 +2166,25 @@ impl Gui {
             .await
     }
 
+    /// Waits until the entry of results warns of `warnings` with what it would report, their
+    /// scores read from either side, as [`Self::expect_scores_either_way`] reads them.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the warnings it shows instead.
+    pub async fn expect_result_warnings_either_way(
+        &self,
+        warnings: &[&str],
+    ) -> WebDriverResult<()> {
+        let mirrored: Vec<String> = warnings.iter().map(|warning| mirrored(warning)).collect();
+        let mirrored: Vec<&str> = mirrored.iter().map(String::as_str).collect();
+        self.page
+            .expect_texts_of(
+                By::Css("#result-entry-preview .warnings"),
+                &[warnings, &mirrored],
+            )
+            .await
+    }
+
     /// Opens the entry of results typed in if it is closed, or else closes it.
     pub async fn toggle_result_entry(&self) -> WebDriverResult<()> {
         self.driver

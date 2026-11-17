@@ -895,7 +895,7 @@ impl Gui {
         let scores = self
             .driver
             .query(By::XPath(format!(
-                "//ol[@id = 'match-list']/li[span[@class = 'number'] = '{number}']\
+                "//ol[@id = 'match-list']/li[span/span[@class = 'number'] = '{number}']\
                  //span[contains(concat(' ', @class, ' '), ' scores ')]"
             )))
             .and_displayed()

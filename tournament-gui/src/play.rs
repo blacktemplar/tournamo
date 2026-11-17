@@ -490,22 +490,26 @@ fn MatchLine(
             ""
         }
     };
-    // one card: the pairing around the number, then each side's button below its name; once it
-    // has a result, one line, the button reopening it after the pairing
+    // one card: its number, then the pairing, then each side's button below its name; once it has
+    // a result, one line, the button reopening it after the pairing
     rsx! {
         li {
             class: "match",
             class: if row.result.is_some() { "finished" },
             class: if to_report { "to-report" },
-            span { class: "visually-hidden", {tr.get("match")} }
-            span { class: "number", "{row.number}" }
-            if let Some(division) = division {
-                span { class: "division-tag",
-                    span { aria_hidden: "true", {division_letter(row.division)} }
-                    span { class: "visually-hidden", "{division}" }
+            span { class: "match-label",
+                {tr.get("match")}
+                " "
+                span { class: "number", "{row.number}" }
+                if let Some(division) = division {
+                    span { class: "division-tag",
+                        span { aria_hidden: "true", {division_letter(row.division)} }
+                        span { class: "visually-hidden", "{division}" }
+                    }
                 }
             }
             span { class: "side a {winner(Side::A)}", {team_name(&tr, &row.a)} }
+            span { class: "versus", aria_hidden: "true", "–" }
             span { class: "visually-hidden", {tr.get("versus")} }
             span { class: "side b {winner(Side::B)}", {team_name(&tr, &row.b)} }
             if with_round || with_stage {

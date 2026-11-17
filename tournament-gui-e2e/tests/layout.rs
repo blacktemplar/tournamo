@@ -134,10 +134,10 @@ async fn finished_matches_line_up_whatever_their_scores() {
 
         for (width, games_shown) in [(1280, false), (900, true)] {
             gui.page.resize(width, 900).await?;
-            let numbers = gui.page.rects_of("#match-list .number").await?;
-            assert_eq!(numbers.len(), 2);
+            let between = gui.page.rects_of("#match-list .versus").await?;
+            assert_eq!(between.len(), 2);
             assert_eq!(
-                numbers[0].left, numbers[1].left,
+                between[0].left, between[1].left,
                 "the pairings line up at {width}px"
             );
             let games = gui.page.rects_of("#match-list .game-scores").await?;
@@ -391,6 +391,37 @@ async fn the_winner_of_a_match_stands_out_from_its_loser() {
         gui.click_labelled("Alice wins").await?;
 
         gui.expect_finished_card_looks_played().await
+    })
+    .await;
+}
+
+/// A match to play shows its number above the pairing, so that it reads as no score, and each
+/// name centred above its button, at every width where they stand side by side.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_match_to_play_shows_each_name_above_its_button() {
+    run_in_new_competition(async |gui| {
+        start_round_robin_of(&gui, &["Eve", "Bob"]).await?;
+
+        for width in [1280, 900, 600] {
+            gui.page.resize(width, 900).await?;
+            let label = gui.page.rects_of("#match-list .match-label").await?[0];
+            let sides = gui.page.rects_of("#match-list .side").await?;
+            let wins = gui.page.rects_of("#match-list .win").await?;
+            assert!(
+                label.bottom <= sides[0].top,
+                "the number above at {width}px"
+            );
+            assert_eq!(sides.len(), 2);
+            for (side, win) in sides.iter().zip(&wins) {
+                let middle = (side.left + side.right - win.left - win.right) / 2.0;
+                assert!(
+                    middle.abs() < 1.0,
+                    "{side:?} centred above {win:?} at {width}px"
+                );
+            }
+        }
+        Ok(())
     })
     .await;
 }

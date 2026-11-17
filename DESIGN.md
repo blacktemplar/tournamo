@@ -1788,10 +1788,13 @@ entrants, but any number and format.
   them keeping the focus.
 - **What can be clicked looks like a button**: bordered, 44px where the pointer
   is coarse; one primary action per card.
-- **A match is a card**: the two sides around its number, each side's button
-  below its name, draw in the middle, columns aligned by subgrid; one per line,
+- **A match is a card**: its number above ("Match 3", with the letter of its
+  group), since a number between the names read as a score; below it the two
+  sides, each name centred above its button, draw in the middle, columns
+  aligned by subgrid; one per line,
   since a list is read to find who plays whom. With a result it shrinks to one
-  row in place, so a round is mostly what is left to play without cards moving.
+  row in place (number, sides with a dash between, result), so a round is
+  mostly what is left to play without cards moving.
   Finished matches share the columns of the list (subgrid), so their pairings
   line up whatever their scores, as in a table; where the list is narrower
   than 40rem, the scores of the games of a best of give way to the games won

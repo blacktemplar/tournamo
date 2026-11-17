@@ -175,6 +175,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
+- A match to play shows its number above the pairing ("Match 3"), where it
+  sat between the names and read like a score, and each name centred above
+  its button; a played match shows its number first, a dash between the
+  names.
 - The cross table counts the points of the phase: a result shows its points
   where it shows no score (e.g. 3, 1 or 0), and the last column is the points
   of the standings, byes included, which a column of their own shows where a

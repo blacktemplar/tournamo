@@ -3,7 +3,7 @@
 
 use std::num::NonZeroU32;
 
-use tournament_engine::{PhaseId, Source, SourceOf, vec1::Vec1};
+use tournament_engine::{PhaseId, PhasePlugins, Source, SourceOf, vec1::Vec1};
 
 use super::PhaseForm;
 use crate::{error::SourcesError, i18n::Text, rejected::Rejections, view::PhaseName};
@@ -15,6 +15,11 @@ pub(crate) struct Context {
     pub(crate) number: usize,
     /// The phases before it, which it can take entrants from.
     pub(crate) earlier: Vec<(PhaseId, PhaseName)>,
+    /// How many entrants each ranking of a phase before it stands for, of those where its sources
+    /// agree, see [`Competition::entrants_per_ranking`].
+    ///
+    /// [`Competition::entrants_per_ranking`]: tournament_engine::Competition::entrants_per_ranking
+    pub(crate) entrants_per_ranking: Vec<(PhaseId, NonZeroU32)>,
     /// The sources of every other phase, each with the phase it is of.
     pub(crate) taken: Vec<(Source, PhaseName)>,
     /// Whether a phase taking entrants from the registration alone can no longer start: the
@@ -28,6 +33,7 @@ impl Default for Context {
         Self {
             number: 1,
             earlier: Vec::new(),
+            entrants_per_ranking: Vec::new(),
             taken: Vec::new(),
             registration_closed: false,
         }
@@ -132,6 +138,32 @@ impl PhaseForm {
     pub fn set_sources(&mut self, sources: Vec<Source>) {
         self.entry.sources = sources;
         self.entry.rejected.clear();
+        self.redraft();
+    }
+
+    /// How many entrants each qualifier of the field stands for, as the sources stand: one for the
+    /// registration, for a phase as many as each of its rankings; `None` if the sources differ, or
+    /// there are none.
+    pub(crate) fn entrants_per_qualifier(&self) -> Option<NonZeroU32> {
+        let mut sizes = self.entry.sources.iter().map(|source| match source.of() {
+            SourceOf::Registration => Some(NonZeroU32::MIN),
+            SourceOf::Phase(phase) => self
+                .context
+                .entrants_per_ranking
+                .iter()
+                .find(|(of, _)| *of == phase)
+                .map(|(_, size)| *size),
+        });
+        let first = sizes.next()??;
+        sizes.all(|size| size == Some(first)).then_some(first)
+    }
+
+    /// Makes the draft anew for the sources as they stand, with its answers, so that what is
+    /// compatible follows the sources, see [`PhasePlugins::draft`].
+    pub(super) fn redraft(&mut self) {
+        self.draft = PhasePlugins::draft(self.entrants_per_qualifier())
+            .with_answers(self.draft.answers())
+            .expect("a phase's draft takes the answers of another one");
     }
 
     /// Shows the sources of the first phase as those of any other, to take only some places of
@@ -159,6 +191,7 @@ impl PhaseForm {
             .max()
             .unwrap_or(NonZeroU32::MIN);
         self.entry.sources.push(Source::new(of, from, None));
+        self.redraft();
     }
 
     /// Removes the source at `index`, if there is one.
@@ -178,6 +211,7 @@ impl PhaseForm {
                 .rejected
                 .reject((at, *end), &rejected.entered, rejected.problem.clone());
         }
+        self.redraft();
     }
 
     /// Takes the places of the source at `index` from the phase `phase` instead, or from the
@@ -187,6 +221,7 @@ impl PhaseForm {
             let of = phase.map_or(SourceOf::Registration, SourceOf::Phase);
             *source = Source::new(of, source.from(), source.to());
         }
+        self.redraft();
     }
 
     /// Enters `entered` as the place `end` of the source at `index`: a whole number from 1, or
@@ -326,6 +361,9 @@ impl PhaseForm {
         }
         if let Some(issue) = (0..self.entry.sources.len()).find_map(|index| self.issue_of(index)) {
             return Some(issue);
+        }
+        if self.entrants_per_qualifier().is_none() {
+            return Some(SourcesError::MixedTeamSizes);
         }
         let registration_alone = self
             .entry

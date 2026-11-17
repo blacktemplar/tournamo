@@ -9,12 +9,13 @@
 //! [`Storage`]: crate::storage::Storage
 //! [`mod@file`]: mod@crate::file
 
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU32};
 
-use plugin_factory::config::Config;
+use plugin_factory::{catalog::AnyAxis, config::Config};
 use tournament_engine::{
     Columns, Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division,
     Match, MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source, StartCompetition,
+    plugins::teams::Teams,
     transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
     uuid::Uuid,
@@ -22,10 +23,10 @@ use tournament_engine::{
 };
 
 use crate::{
-    error::{NoPhase, Refusal, StartError},
+    error::{DoesNotFit, NoPhase, Refusal, StartError},
     people::People,
     storage::CompetitionKey,
-    view::{Actions, DivisionRef, MatchesOf},
+    view::{Actions, DivisionRef, MatchesOf, Plugin},
 };
 
 /// The name of a competition imported from a file that names it by nothing but spaces, and whose
@@ -181,14 +182,17 @@ impl Session {
         } else if competition.entrants().len() < 2 {
             Some(StartError::TooFewEntrants)
         } else {
-            starting().find_map(
-                |phase| match too_few(phase, self.places_taken(phase.sources()))? {
-                    TooFew::Format(needed) => Some(StartError::TooFewForFormat(needed)),
-                    TooFew::Divisions { divisions, needed } => {
+            starting().find_map(|phase| {
+                match self.cannot_start(phase, self.places_taken(phase.sources()))? {
+                    CannotStart::Format(needed) => Some(StartError::TooFewForFormat(needed)),
+                    CannotStart::Divisions { divisions, needed } => {
                         Some(StartError::TooFewForDivisions { divisions, needed })
                     }
-                },
-            )
+                    CannotStart::Teams(does_not_fit) => {
+                        Some(StartError::FieldDoesNotFit(does_not_fit))
+                    }
+                }
+            })
         }
     }
 
@@ -201,7 +205,9 @@ impl Session {
     /// entrants, or fewer than the format of a phase starting needs, or its groups need.
     pub fn start(&mut self) -> Result<(), StartError> {
         if let Some(
-            needed @ (StartError::TooFewForFormat(_) | StartError::TooFewForDivisions { .. }),
+            needed @ (StartError::TooFewForFormat(_)
+            | StartError::TooFewForDivisions { .. }
+            | StartError::FieldDoesNotFit(_)),
         ) = self.start_refusal()
         {
             return Err(needed);
@@ -327,26 +333,67 @@ pub(crate) mod tests;
 mod undo;
 mod views;
 
-/// Why a phase cannot start with the entrants its sources take, see [`too_few`].
-pub(crate) enum TooFew {
+/// Why a phase cannot start with the entrants its sources take, see [`Session::cannot_start`].
+pub(crate) enum CannotStart {
     /// Its format needs at least this many.
     Format(usize),
     /// Its groups need at least `needed`, the entrants its format needs in each.
     Divisions { divisions: usize, needed: usize },
+    /// They cannot be formed into its teams.
+    Teams(Box<DoesNotFit>),
 }
 
-/// Whether `phase` has too few entrants with `entrants`: fewer than its format needs, or than it
-/// needs in each of its groups (divisions). The engine starts it all the same, with fewer groups,
-/// so that a log never fails to replay; the app refuses, so that the operator lowers the groups.
-pub(crate) fn too_few(phase: &Phase, entrants: usize) -> Option<TooFew> {
-    let per_division = phase.plugins().format().min_entrants();
-    let divisions = phase.plugins().divisions().get() as usize;
-    let needed = per_division.saturating_mul(divisions);
-    if entrants < per_division {
-        Some(TooFew::Format(per_division))
-    } else if entrants < needed {
-        Some(TooFew::Divisions { divisions, needed })
-    } else {
-        None
+impl Session {
+    /// Whether `phase` cannot start with `qualifiers` coming in from its sources: they do not fit
+    /// its teams (see [`Teams::fits`]), or its teams are fewer than its format needs, or than it
+    /// needs in each of its groups (divisions). The engine starts it with fewer groups all the
+    /// same, so that a log never fails to replay; the app refuses, so that the operator lowers
+    /// the groups.
+    ///
+    /// [`Teams::fits`]: tournament_engine::plugins::teams::Teams::fits
+    pub(crate) fn cannot_start(&self, phase: &Phase, qualifiers: usize) -> Option<CannotStart> {
+        let plugins = phase.plugins();
+        if !plugins.teams().fits(qualifiers) {
+            let id = plugin_factory::id_of(plugins.teams());
+            let entry = AnyAxis::of::<dyn Teams>().entry(id);
+            return Some(CannotStart::Teams(Box::new(DoesNotFit {
+                phase: self.phase_name(phase),
+                entrants: qualifiers,
+                teams: Plugin {
+                    id,
+                    label: entry.map_or(id, |entry| entry.label()),
+                    description: entry.and_then(|entry| entry.description()),
+                },
+            })));
+        }
+        let teams = teams_formed(
+            plugins.teams(),
+            qualifiers,
+            self.competition().entrants_per_qualifier(phase.sources()),
+        );
+        let per_division = plugins.format().min_entrants();
+        let divisions = plugins.divisions().get() as usize;
+        let needed = per_division.saturating_mul(divisions);
+        if teams < per_division {
+            Some(CannotStart::Format(per_division))
+        } else if teams < needed {
+            Some(CannotStart::Divisions { divisions, needed })
+        } else {
+            None
+        }
     }
+}
+
+/// How many teams `teams` forms of `qualifiers` coming in, each of `per_qualifier` entrants; as
+/// many as come in if their sizes differ.
+pub(crate) fn teams_formed(
+    teams: &dyn Teams,
+    qualifiers: usize,
+    per_qualifier: Option<NonZeroU32>,
+) -> usize {
+    let Some(per_qualifier) = per_qualifier else {
+        return qualifiers;
+    };
+    let per_team = teams.entrants_per_team(per_qualifier).get() as usize;
+    qualifiers * per_qualifier.get() as usize / per_team
 }

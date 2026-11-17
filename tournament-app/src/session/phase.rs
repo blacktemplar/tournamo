@@ -79,16 +79,50 @@ impl Session {
                 )
             }
             None => {
-                let sources = vec![match self.competition().phases().values().last() {
-                    Some(before) => Source::everyone(SourceOf::Phase(before.id())),
-                    None => Source::registration(),
-                }];
-                let draft = self.competition().phase_draft(&sources);
-                let mut form =
-                    PhaseForm::new(draft).of_phase(context, None, sources, Columns::new());
+                let draft = self.competition().phase_draft(&self.sources_of_new_phase());
+                let mut form = self
+                    .phase_form_with(draft, None)
+                    .expect("no phase is named");
                 form.apply_suggestions()?;
                 form
             }
+        })
+    }
+
+    /// The sources a new phase starts out at: every entrant registered for the first phase, else
+    /// every place of the phase before.
+    fn sources_of_new_phase(&self) -> Vec<Source> {
+        vec![match self.competition().phases().values().last() {
+            Some(before) => Source::everyone(SourceOf::Phase(before.id())),
+            None => Source::registration(),
+        }]
+    }
+
+    /// A form answered by `draft`, a draft of this competition's phase: of the phase `id` with its
+    /// name, sources and columns, or of a new phase if `None`, without a name, taking what
+    /// [`Self::phase_form`] offers. Once filled, it is handed to [`Self::add_phase`] or
+    /// [`Self::edit_phase`].
+    ///
+    /// # Errors
+    /// Returns [`NoPhase`] if the competition has no phase `id`.
+    pub fn phase_form_with(
+        &self,
+        draft: Draft<PhasePlugins>,
+        id: Option<PhaseId>,
+    ) -> Result<PhaseForm, NoPhase> {
+        let context = self.form_context(id);
+        let form = PhaseForm::new(draft);
+        Ok(match id {
+            Some(id) => {
+                let phase = self.phase(id).ok_or(NoPhase)?;
+                form.of_phase(
+                    context,
+                    phase.name(),
+                    phase.sources().to_vec(),
+                    phase.columns().clone(),
+                )
+            }
+            None => form.of_phase(context, None, self.sources_of_new_phase(), Columns::new()),
         })
     }
 
@@ -98,14 +132,7 @@ impl Session {
     /// # Errors
     /// Returns [`NoPhase`] if the competition has no such phase.
     pub fn phase_form_to_edit(&self, id: PhaseId) -> Result<PhaseForm, NoPhase> {
-        let draft = self.phase_draft_to_edit(id)?;
-        let phase = self.phase(id).ok_or(NoPhase)?;
-        Ok(PhaseForm::new(draft).of_phase(
-            self.form_context(Some(id)),
-            phase.name(),
-            phase.sources().to_vec(),
-            phase.columns().clone(),
-        ))
+        self.phase_form_with(self.phase_draft_to_edit(id)?, Some(id))
     }
 
     /// Where the lot, not the ratings, decides who of the registration a source of `sources` takes,
@@ -154,6 +181,14 @@ impl Session {
                 .values()
                 .take(index)
                 .map(|phase| (phase.id(), self.phase_name(phase)))
+                .collect(),
+            entrants_per_ranking: phases
+                .values()
+                .take(index)
+                .filter_map(|phase| {
+                    let size = competition.entrants_per_ranking(&phase.id())?;
+                    Some((phase.id(), size))
+                })
                 .collect(),
             taken: phases
                 .values()
@@ -209,6 +244,7 @@ impl Session {
                 SourcesError::Overlap(phase.and_then(|phase| self.name_of_phase(phase)))
             }
             SourcesRefusal::RegistrationClosed => SourcesError::RegistrationClosed,
+            SourcesRefusal::MixedTeamSizes => SourcesError::MixedTeamSizes,
         }
     }
 

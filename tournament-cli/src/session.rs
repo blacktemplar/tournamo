@@ -23,7 +23,6 @@ use thiserror::Error;
 use tournament_app::{
     error::{self as app_error, ImportError, RedoError, UndoError},
     file::{File, Format},
-    form::PhaseForm,
     i18n::{Language, Translator},
     people::Rating,
     session::Session as AppSession,
@@ -419,7 +418,10 @@ impl Session {
         from: &[SourceArg],
     ) -> Result<String, Error> {
         let sources = self.sources(from)?;
-        let mut form = PhaseForm::new(draft.clone());
+        let mut form = self
+            .session
+            .phase_form_with(draft.clone(), None)
+            .map_err(|_| Error::NoPhase)?;
         form.set_name(name.as_deref().unwrap_or_default());
         form.set_sources(sources);
         let id = self.session.add_phase(&form).map_err(|error| match error {
@@ -489,11 +491,10 @@ impl Session {
         draft: &Draft<PhasePlugins>,
     ) -> Result<String, Error> {
         let id = self.phase_id(phase)?;
-        let added = self.phase(id)?;
-        let mut form = PhaseForm::new(draft.clone());
-        form.set_name(added.name().unwrap_or_default());
-        form.set_sources(added.sources().to_vec());
-        form.set_columns(added.columns().clone());
+        let form = self
+            .session
+            .phase_form_with(draft.clone(), Some(id))
+            .map_err(|_| Error::NoPhase)?;
         let edited = self
             .session
             .edit_phase(id, &form)

@@ -13,7 +13,7 @@ use crate::{
     Columns, Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, RankingId, Seed,
     Source, SourceOf,
     map::{IdMap, Map},
-    plugins::{PhasePlugins, facts::EntrantsPerQualifier, teams::TeamsView},
+    plugins::{PhasePlugins, teams::TeamsView},
 };
 
 /// A competition: its entrants, its phases, and the random seed everything random in it derives
@@ -108,20 +108,18 @@ impl Competition {
 
     /// Declares the facts that hold for a phase of this competition taking its entrants from
     /// `sources` before any of its plugins declare theirs, i.e. the context of its
-    /// [`PhasePlugins`] for a [`Draft`] and for [`plugin_factory::compatibility`]: how many
-    /// entrants a qualifier stands for ([`EntrantsPerQualifier`]), if every source sends
-    /// qualifiers of one size, see [`Self::entrants_per_qualifier`].
+    /// [`PhasePlugins`] for a [`Draft`] and for [`plugin_factory::compatibility`], see
+    /// [`PhasePlugins::draft`].
     pub(crate) fn declare_phase_context(&self, sources: &[Source], declaration: &mut Declaration) {
-        if let Some(per_qualifier) = self.entrants_per_qualifier(sources) {
-            declaration.provide(EntrantsPerQualifier(per_qualifier));
-        }
+        PhasePlugins::declare_context(self.entrants_per_qualifier(sources), declaration);
     }
 
     /// A draft of the plugins of a phase of this competition taking its entrants from `sources`,
-    /// with nothing answered yet. Building [`PhasePlugins`] from it is the way to make them, see
-    /// their example.
+    /// with nothing answered yet: [`PhasePlugins::draft`] of how many entrants each of their
+    /// qualifiers stands for ([`Self::entrants_per_qualifier`]). Building [`PhasePlugins`] from it
+    /// is the way to make them, see their example.
     pub fn phase_draft(&self, sources: &[Source]) -> Draft<PhasePlugins> {
-        Draft::new(|declaration| self.declare_phase_context(sources, declaration))
+        PhasePlugins::draft(self.entrants_per_qualifier(sources))
     }
 
     /// How many entrants each qualifier of a field taken from `sources` stands for: one for the

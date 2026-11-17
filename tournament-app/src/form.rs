@@ -428,6 +428,7 @@ impl PhaseForm {
             rejected: Rejections::default(),
             some_places: false,
         };
+        self.redraft();
         self
     }
 

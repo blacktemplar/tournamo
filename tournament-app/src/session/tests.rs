@@ -57,6 +57,7 @@ mod phases;
 mod report;
 mod scale;
 mod storage;
+mod teams;
 mod undo;
 mod views;
 
@@ -106,6 +107,8 @@ struct Given {
     divisions: u32,
     /// What the divisions are compared across by.
     across: Vec<PluginConfig>,
+    /// Who plays together; as registered if `None`.
+    teams: Option<PluginConfig>,
 }
 
 impl Given {
@@ -116,6 +119,15 @@ impl Given {
             match_format: None,
             divisions: 1,
             across: Vec::new(),
+            teams: None,
+        }
+    }
+
+    /// The teams formed by `T`.
+    fn teams<T: PluginType>(self) -> Self {
+        Self {
+            teams: Some(PluginConfig::of::<T>()),
+            ..self
         }
     }
 
@@ -160,6 +172,9 @@ impl Given {
                 .with(PhasePlugins::MATCH_FORMAT, match_format)
                 .and_then(|draft| draft.with_defaults())
                 .unwrap();
+        }
+        if let Some(teams) = self.teams {
+            draft = draft.with(PhasePlugins::TEAMS, teams).unwrap();
         }
         let draft = draft
             .with(PhasePlugins::DIVISIONS, self.divisions)

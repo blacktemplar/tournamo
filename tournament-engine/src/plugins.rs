@@ -46,6 +46,7 @@ use std::num::NonZeroU32;
 
 use plugin_factory::{
     catalog::Axis,
+    compatibility::Declaration,
     config::{Config, ConfigError, Path, PluginConfig, Value},
     draft::Draft,
     schema::{Configurable, DependencyOrderedSet},
@@ -183,6 +184,25 @@ pub struct PhasePlugins {
 }
 
 impl PhasePlugins {
+    /// A draft of the plugins of a phase, with nothing answered yet, whose context provides that
+    /// every qualifier of its field stands for `entrants_per_qualifier` entrants
+    /// ([`EntrantsPerQualifier`](facts::EntrantsPerQualifier)), or nothing if `None`, for
+    /// qualifiers of different sizes. [`Competition::phase_draft`](crate::Competition::phase_draft)
+    /// is the draft of a phase of a competition, from its sources.
+    pub fn draft(entrants_per_qualifier: Option<NonZeroU32>) -> Draft<Self> {
+        Draft::new(|declaration| Self::declare_context(entrants_per_qualifier, declaration))
+    }
+
+    /// Declares the facts the context of a phase provides, see [`Self::draft`].
+    pub(crate) fn declare_context(
+        entrants_per_qualifier: Option<NonZeroU32>,
+        declaration: &mut Declaration,
+    ) {
+        if let Some(entrants) = entrants_per_qualifier {
+            declaration.provide(facts::EntrantsPerQualifier(entrants));
+        }
+    }
+
     /// The names of the fields the format suggests answers for, see
     /// [`PhaseFormat::suggestions`].
     pub const SUGGESTED: [&str; 2] = [Self::RANKING, Self::METRICS];

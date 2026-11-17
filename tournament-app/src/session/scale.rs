@@ -2,10 +2,13 @@
 
 use tournament_engine::{
     AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, Match, MatchResult, PhaseId,
-    PhasePlugins, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition, uuid::Uuid,
+    PhasePlugins, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition,
+    plugin_factory::config::{Path, PluginConfig},
+    plugins::teams::Keep,
+    uuid::Uuid,
 };
 
-use super::{MOST_MATCHES, Session, phase::completed};
+use super::{MOST_MATCHES, Session, phase::completed, teams_formed};
 use crate::{
     form::PhaseForm,
     view::{Count, Scale},
@@ -20,12 +23,27 @@ impl Session {
     }
 
     /// How many rounds and matches the phase `form` configures takes with the entrants its sources
-    /// take, as many as there are now, found by playing it out apart from this competition, once
-    /// with every match won by side A and once by side B, which sets how far the numbers depend on
-    /// the results; `None` if it does not start with them or takes more than [`MOST_MATCHES`].
+    /// take, as many as there are now, formed into its teams, found by playing it out apart from
+    /// this competition, once with every match won by side A and once by side B, which sets how
+    /// far the numbers depend on the results; `None` if it does not start with them or takes more
+    /// than [`MOST_MATCHES`].
     pub fn scale(&self, form: &PhaseForm) -> Option<Scale> {
-        let entrants = self.entrants_taken(form);
-        let plugins = completed(form.draft()).ok()?;
+        let qualifiers = self.entrants_taken(form);
+        let configured = completed(form.draft()).ok()?;
+        let teams = configured.teams();
+        if !teams.fits(qualifiers) {
+            return None;
+        }
+        let entrants = teams_formed(teams, qualifiers, form.entrants_per_qualifier());
+        // played by as many single entrants as there are teams, which take as long
+        let mut draft = form.draft().clone();
+        draft
+            .set(
+                &Path::ROOT.field(PhasePlugins::TEAMS),
+                PluginConfig::of::<Keep>(),
+            )
+            .ok()?;
+        let plugins = completed(&draft).ok()?;
         let [a, b] = [MatchResult::AWins, MatchResult::BWins]
             .map(|result| play_out(entrants, plugins.clone(), result));
         let ((a_rounds, a_matches), (b_rounds, b_matches)) = (a?, b?);

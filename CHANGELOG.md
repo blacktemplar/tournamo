@@ -163,7 +163,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `StandingRow::division` and `PhaseOverview::{configured_divisions, order}`.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
-  way: all of them at once, rather than one at a time.
+  way: all of them at once, rather than one at a time, and of which phase,
+  e.g. those of a later phase that other entrants would go on to. The page
+  shows why an edit was refused above the buttons of the dialog, rather than
+  below its form, out of sight.
 
 ### Fixed
 

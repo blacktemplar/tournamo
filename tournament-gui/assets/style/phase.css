@@ -243,11 +243,23 @@
   gap: var(--space-2);
 }
 
+/* why the dialog's form was refused, above its buttons, in sight however far the form scrolls;
+ * no room while it says nothing, staying a live region all the same */
+.dialog-buttons > .error[role="alert"] {
+  width: 100%;
+  margin: 0;
+}
+
+.dialog-buttons > .error[role="alert"]:empty {
+  display: contents;
+}
+
 /* at the bottom of the dialog while its form scrolls, over the dialog's own padding */
 .dialog-buttons {
   position: sticky;
   bottom: -24px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   padding: var(--space-3) 0 24px;
   border-top: 1px solid var(--border);

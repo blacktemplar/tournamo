@@ -1854,7 +1854,8 @@ mod tests {
         assert!(
             matches!(
                 &result,
-                Err(Error::EditPhase(EditPhaseError::ResultDoesNotFit(numbers))) if *numbers == [1]
+                Err(Error::EditPhase(EditPhaseError::ResultDoesNotFit(matches)))
+                    if matches.len() == 1 && matches[0].numbers == [1]
             ),
             "{result:?}"
         );

@@ -23,7 +23,7 @@ use tournament_engine::{
 };
 
 use crate::{
-    error::{DoesNotFit, NoPhase, Refusal, StartError},
+    error::{DoesNotFit, MatchesOfPhase, NoPhase, Refusal, StartError},
     people::People,
     storage::CompetitionKey,
     view::{Actions, DivisionRef, MatchesOf, Plugin},
@@ -229,6 +229,41 @@ impl Session {
     /// The numbers of the matches whose results would no longer apply if `change` were made,
     /// ascending, see
     /// [`conflicts_of`](tournament_engine::CompetitionStateMachineExt::conflicts_of).
+    /// The matches whose results would no longer apply after `change` of the phase `changed`, by
+    /// phase: those of `changed` first, then those of each later phase, in the order of the
+    /// phases; none of a phase without such a match.
+    fn conflicting_by_phase(
+        &self,
+        change: Change<'_>,
+        changed: PhaseId,
+    ) -> Result<Vec<MatchesOfPhase>, ConflictsError> {
+        let conflicts = self.machine.conflicts_of(change)?;
+        let mut by_phase: Vec<_> = self
+            .competition()
+            .phases()
+            .values()
+            .filter_map(|phase| {
+                let mut numbers: Vec<_> = conflicts
+                    .iter()
+                    .filter(|conflict| conflict.phase_id == phase.id())
+                    .filter_map(|conflict| {
+                        let (_, _, r#match) =
+                            self.match_of(conflict.phase_id, conflict.match_id)?;
+                        Some(views::number(r#match))
+                    })
+                    .collect();
+                numbers.sort_unstable();
+                (!numbers.is_empty()).then(|| MatchesOfPhase {
+                    phase: (phase.id() != changed).then(|| self.phase_name(phase)),
+                    numbers,
+                })
+            })
+            .collect();
+        // stable, so the later phases stay in order
+        by_phase.sort_by_key(|of| of.phase.is_some());
+        Ok(by_phase)
+    }
+
     fn conflicting_numbers(&self, change: Change<'_>) -> Result<Vec<usize>, ConflictsError> {
         let mut numbers: Vec<_> = self
             .machine

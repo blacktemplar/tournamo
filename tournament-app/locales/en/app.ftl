@@ -46,12 +46,24 @@ phase-unnamed = { $number } · { $format }
 # a phase that is not finished: e.g. "Group phase: 12 of 18 matches played"
 phase-progress = { $phase }: { $played } of { $matches } matches played
 error-no-phase = the competition has no phase yet
-# $count: how many matches that have a result the changed phase does not play; $numbers: their
-# numbers, e.g. "5, 7, 9"
-error-result-does-not-fit = { $count ->
-        [one] the phase changed this way does not play match { $numbers }, which has a result; reopen that match first to change the phase this way
-       *[other] the phase changed this way does not play matches { $numbers }, which have results; reopen those matches first to change the phase this way
+# $count: how many matches have a result the changed phase does not fit; $matches: a list of
+# them, of the phase itself and of later phases, see matches-of-edited-phase
+error-result-does-not-fit = changed this way, the phase does not fit the { $count ->
+        [one] result
+       *[other] results
+    } of { $matches }; reopen { $count ->
+        [one] that match
+       *[other] those matches
+    } first
+# $numbers: the numbers of matches, e.g. "5, 7, 9"
+matches-of-edited-phase = { $count ->
+        [one] its match { $numbers }
+       *[other] its matches { $numbers }
     }
+matches-of-later-phase = { $count ->
+        [one] match { $numbers }
+       *[other] matches { $numbers }
+    } of { $phase }, which it sends entrants to
 # $reason: in English, from the engine
 error-phase-change-does-not-fit = the phase cannot be changed this way, since a later change no longer fits it: { $reason }
 error-started-already = the competition has started already

@@ -17,7 +17,8 @@ use tournament_engine::{
     plugins::{
         match_format::{BestOf, Scored},
         metrics_calculator::{
-            Cell as MetricCell, MorePointsPerMatch, MoreWins, RoundOfFirstLossCalculator,
+            Cell as MetricCell, MoreBuchholz, MorePointsPerMatch, MoreWins,
+            RoundOfFirstLossCalculator,
         },
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,

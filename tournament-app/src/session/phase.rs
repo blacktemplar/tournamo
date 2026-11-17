@@ -327,13 +327,16 @@ impl Session {
         let id = edited.id();
         let edited = edited.into();
         let conflicts = self.machine.added_by(id).map(|target| {
-            self.conflicting_numbers(Change::Replace {
-                target,
-                with: &edited,
-            })
+            self.conflicting_by_phase(
+                Change::Replace {
+                    target,
+                    with: &edited,
+                },
+                id,
+            )
         });
         match conflicts {
-            Some(Ok(numbers)) if !numbers.is_empty() => EditPhaseError::ResultDoesNotFit(numbers),
+            Some(Ok(matches)) if !matches.is_empty() => EditPhaseError::ResultDoesNotFit(matches),
             Some(Err(ConflictsError::Other(entry, error))) => {
                 if let Some(phase) = self.started_by(entry) {
                     return EditPhaseError::PhaseStarted(phase);

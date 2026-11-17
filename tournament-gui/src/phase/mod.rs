@@ -32,9 +32,13 @@ use crate::{
     phases::{StartPhaseButton, phase_id_text, sources_text},
 };
 
-/// The form of a new phase, and the button adding it; once added, `on_added` runs.
+/// The form of a new phase, and the button adding it; once added, `on_added` runs. With
+/// `on_discarded`, a button beside it discards the form, which then runs.
 #[component]
-pub fn NewPhase(on_added: Option<EventHandler<()>>) -> Element {
+pub fn NewPhase(
+    on_added: Option<EventHandler<()>>,
+    on_discarded: Option<EventHandler<()>>,
+) -> Element {
     let ctx = use_context::<Ctx>();
     let created = use_hook(|| {
         ctx.session
@@ -70,6 +74,14 @@ pub fn NewPhase(on_added: Option<EventHandler<()>>) -> Element {
             Form { form, disabled: !actions.add_phase }
             PhaseScale { form }
             div { class: "form-actions",
+                if let Some(on_discarded) = on_discarded {
+                    button {
+                        id: "discard-phase",
+                        r#type: "button",
+                        onclick: move |_| on_discarded.call(()),
+                        {tr.get("discard-phase")}
+                    }
+                }
                 button {
                     class: "primary",
                     r#type: "submit",

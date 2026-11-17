@@ -102,6 +102,34 @@ async fn a_result_is_not_reopened_once_the_next_phase_started() {
     .await;
 }
 
+/// The start waits while the form of a further phase is open, so that what was entered in it is
+/// not lost, until the phase is added or the form discarded.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_start_waits_for_a_new_phase_to_be_added_or_discarded() {
+    run_in_new_competition(async |gui| {
+        round_robin_and_final(&gui).await?;
+        gui.open_new_phase("Plate").await?;
+
+        gui.expect_disabled("Start").await?;
+        gui.expect_start_refusal(Some("Add the new phase, or discard it, first."))
+            .await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Start").await?;
+        gui.expect_phase_list(&[
+            ("1 · Round robin", "Everyone registered"),
+            ("Final", "Places 1–2 of 1 · Round robin"),
+        ])
+        .await?;
+        gui.click("Discard").await?;
+        gui.expect_focus("Add phase").await?;
+        gui.expect_start_refusal(None).await?;
+        gui.click("Start").await?;
+        gui.expect_bar_phase(Some("1 · Round robin")).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_phase_is_removed_and_brought_back_by_undo() {

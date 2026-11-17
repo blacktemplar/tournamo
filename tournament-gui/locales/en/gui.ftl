@@ -165,6 +165,8 @@ medal-bronze = Bronze medal,
 add-phase = Add phase
 add-phase-description = The phase takes its entrants from the registration or from places of the phases before it.
 new-phase = New phase
+# the button discarding the form of a new phase, before it is added
+discard-phase = Discard
 # the heading of the card once a competition has several phases
 phases = Phases
 remove-phase = Remove phase
@@ -193,6 +195,8 @@ scale-matches = { $count ->
     }
 scale-matches-range = { $least } to { $most } matches
 start = Start
+# why the start waits while the form of a further phase is open
+start-new-phase-open = Add the new phase, or discard it, first.
 
 ## Configuring the phase
 

@@ -139,6 +139,7 @@ medal-bronze = Bronzemedaille,
 add-phase = Phase hinzufügen
 add-phase-description = Die Phase nimmt ihre Teilnehmer aus der Anmeldung oder von Plätzen der Phasen vor ihr.
 new-phase = Neue Phase
+discard-phase = Verwerfen
 phases = Phasen
 remove-phase = Phase entfernen
 edit-phase-named = Phase bearbeiten: { $phase }
@@ -161,6 +162,7 @@ scale-matches = { $count ->
     }
 scale-matches-range = { $least } bis { $most } Spielen
 start = Starten
+start-new-phase-open = Erst die neue Phase hinzufügen oder verwerfen.
 
 ## Configuring the phase
 

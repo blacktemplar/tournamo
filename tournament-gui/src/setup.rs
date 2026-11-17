@@ -416,6 +416,9 @@ pub fn Phases() -> Element {
         .then(|| ctx.session.read().start_refusal())
         .flatten()
         .map(|refusal| refusal.text());
+    // the start would leave the form of a further phase behind, and what was entered in it, so it
+    // waits until the phase is added or discarded; focusable, so that why is said
+    let waiting = adding() && actions.start;
     let tr = ctx.translator.read();
     let several = phases.len() > 1;
     let has_phase = !phases.is_empty();
@@ -454,6 +457,10 @@ pub fn Phases() -> Element {
                             adding.set(false);
                             focus_later(&["#phases"]);
                         },
+                        on_discarded: move |()| {
+                            adding.set(false);
+                            focus_later(&["#add-phase"]);
+                        },
                     }
                 } else if actions.add_phase {
                     button {
@@ -475,8 +482,12 @@ pub fn Phases() -> Element {
                     id: "start",
                     class: if has_phase { "primary" },
                     disabled: !actions.start,
-                    aria_describedby: refusal.is_some().then_some("start-refusal"),
+                    aria_disabled: waiting.then_some("true"),
+                    aria_describedby: (waiting || refusal.is_some()).then_some("start-refusal"),
                     onclick: move |_| {
+                        if waiting {
+                            return;
+                        }
                         if ctx.act(Session::start).is_some() {
                             let matches = ctx
                                 .session
@@ -493,7 +504,10 @@ pub fn Phases() -> Element {
                     },
                     {tr.get("start")}
                 }
-                if let Some(refusal) = &refusal {
+                if waiting {
+                    " "
+                    span { id: "start-refusal", class: "hint", {tr.get("start-new-phase-open")} }
+                } else if let Some(refusal) = &refusal {
                     " "
                     span { id: "start-refusal", class: "hint", {tr.sentence(refusal)} }
                 }

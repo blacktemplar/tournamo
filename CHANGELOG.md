@@ -173,6 +173,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   those of competitions saved before.
 - Opening "Type in results" moves the focus into its field, so the first
   result typed right after is no longer lost.
+- Start no longer throws away the form of a further phase left open: it waits,
+  saying so, until the phase is added or the form discarded by its new button
+  "Discard".
 
 ## [0.4.0] - 2026-11-09
 

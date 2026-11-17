@@ -103,8 +103,8 @@ plugin-tournament_engine-blocks =
 ## Seedings
 
 plugin-tournament_engine-seeded_in_order =
-    .label = der Reihe nach
-    .description = die Teilnehmer werden in der Reihenfolge gesetzt, in der sie kommen
+    .label = nach Rang
+    .description = die Teilnehmer werden nach ihren Plätzen in den Phasen davor gesetzt, sonst nach Wertungszahl; die ohne Wertungszahl nach Los
 plugin-tournament_engine-seeded_at_random =
     .label = zufällig
     .description = die Teilnehmer werden nach Los gesetzt

@@ -23,7 +23,7 @@ later one: a file whose `"format"` changes is migrated, not refused.
 - A phase can be played in several groups (divisions) of one configuration,
   dealt by a draw: back and forth, at random, or in blocks (knockouts A/B/C
   playing for places of their own). A seeding orders the entrants of each
-  group, which a knockout seeds its bracket by: in order, at random, or
+  group, which a knockout seeds its bracket by: by rank, at random, or
   keeping groups apart (for a knockout of the best of several groups, so that
   entrants of one group meet as late as possible); it is not asked for random
   rounds and Monster DYP, which draw their pairings by lot. Each place of a group is a place of the phase, a tie in a group decided by

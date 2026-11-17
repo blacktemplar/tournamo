@@ -92,12 +92,14 @@ impl<'a> SeedingView<'a> {
     }
 }
 
-/// Keeps the order the qualifiers have in the field.
+/// Keeps the order the qualifiers have in the field: by their places in the phases they come
+/// from, those of the registration by rating, the rest by lot.
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::seeded_in_order",
-    label = "in order",
-    description = "the entrants are seeded in the order they come in"
+    label = "by rank",
+    description = "the entrants are seeded by their places in the phases before, or else by \
+                   rating; those without a rating by lot"
 )]
 pub struct SeededInOrder;
 

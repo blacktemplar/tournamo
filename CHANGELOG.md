@@ -62,7 +62,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   after a DYP, which may take single entrants next to the pairs. Pairs are
   seeded by the places their members came in with.
   Standings, matches and the ranking name a team by its members, and a
-  result can be typed with the name of either. An odd number of entrants is
+  result can be typed with the name of either. In the ranking of the
+  competition a pair is one row: a pair out before a phase of singles is
+  placed after all of its players, and gets no medal for a place counted in
+  pairs. An odd number of entrants is
   not drawn into pairs: the start says so. A Monster DYP takes single
   entrants only. CLI: `teams=drawn-pairs`.
 - Presets set up the phases of a whole competition at once, while it has

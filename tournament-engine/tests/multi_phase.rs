@@ -1370,7 +1370,8 @@ fn drawn_pairs_play_together_in_the_phase_and_the_phases_after_it() {
 
     assert_eq!(teams(&machine, phase(KNOCKOUT)), best);
     play_out(&mut machine, phase(KNOCKOUT));
-    // both members of a team share its place
+    // both members of a team share its place, a team taking one
+    assert_eq!(places_taken(&machine)[..3], [(1, 2), (2, 2), (3, 4)]);
     let ranking = machine.current().ranking();
     assert_eq!(ranking.len(), 16);
     for pair in &pairs {
@@ -1616,4 +1617,95 @@ fn a_competition_of_teams_round_trips_as_its_log_and_as_a_snapshot() {
     assert_eq!(serde_json::to_value(json.current()).unwrap(), expected);
     assert_eq!(serde_json::to_value(binary.current()).unwrap(), expected);
     assert_eq!(serde_json::to_value(snapshot).unwrap(), expected);
+}
+
+/// The places of the competition's ranking, best first, each with the number of entrants in it.
+fn places_taken(machine: &CompetitionStateMachine) -> Vec<(u32, usize)> {
+    machine
+        .current()
+        .ranking()
+        .iter()
+        .chunk_by(|placed| placed.place.get())
+        .into_iter()
+        .map(|(place, placed)| (place, placed.count()))
+        .collect()
+}
+
+const PAIRS: u128 = 11;
+
+/// Drawn pairs of eight entrants, then a knockout of the best three of them split up.
+fn pairs_then_singles() -> CompetitionStateMachine {
+    let mut machine = registered(8);
+    add(&mut machine, AddPhase::new(phase(DYP), dyp(1)));
+    let singles = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .teams(Split)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(SINGLES),
+            vec1![places(phase(DYP), 1, Some(3))],
+            singles,
+        ),
+    );
+    machine
+}
+
+#[test]
+fn a_pair_left_behind_is_placed_after_every_entrant_of_the_pairs_split_up() {
+    let mut machine = pairs_then_singles();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    play_out(&mut machine, phase(DYP));
+
+    // the three pairs going on will be six rows
+    assert_eq!(places_taken(&machine)[3], (7, 2));
+
+    start(&mut machine, phase(SINGLES));
+    play_out(&mut machine, phase(SINGLES));
+
+    assert_eq!(
+        places_taken(&machine),
+        [(1, 1), (2, 1), (3, 2), (5, 2), (7, 2)]
+    );
+}
+
+#[test]
+fn entrants_paired_again_are_placed_as_pairs() {
+    let mut machine = pairs_then_singles();
+    let pairs = PhasePluginsBuilder::new()
+        .teams(RandomPairs)
+        .add_ranking(MorePoints)
+        .add_metric(WinsDrawsLossesCalculator)
+        .add_metric(PointsCalculator::new(Score::ONE, Score::new(0.5)))
+        .build()
+        .unwrap();
+    add(
+        &mut machine,
+        phase_of(
+            phase(PAIRS),
+            vec1![places(phase(SINGLES), 1, Some(4))],
+            pairs,
+        ),
+    );
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    play_out(&mut machine, phase(DYP));
+    start(&mut machine, phase(SINGLES));
+    play_out(&mut machine, phase(SINGLES));
+
+    // the four singles going on will be two rows, so two of them count as one
+    assert_eq!(places_taken(&machine), [(1, 2), (2, 2), (3, 2), (5, 2)]);
+
+    start(&mut machine, phase(PAIRS));
+    play_out(&mut machine, phase(PAIRS));
+
+    // the singles left behind come after two pairs, the pair left behind after four rows
+    assert_eq!(places_taken(&machine), [(1, 2), (2, 2), (3, 2), (5, 2)]);
 }

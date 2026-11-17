@@ -10,8 +10,8 @@ use super::seed::Entropy;
 #[cfg(doc)]
 use crate::plugins::teams::Teams;
 use crate::{
-    Columns, Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, RankingId, Seed,
-    Source, SourceOf,
+    Columns, Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, Ranking,
+    RankingId, Seed, Source, SourceOf,
     map::{IdMap, Map},
     plugins::{PhasePlugins, teams::TeamsView},
 };
@@ -38,7 +38,8 @@ pub struct Competition {
 #[non_exhaustive]
 pub struct Placed {
     pub entrant: EntrantId,
-    /// Shared by entrants placed equal.
+    /// One more than the rows placed before the entrant's, a team one row; shared by entrants
+    /// placed equal.
     pub place: NonZeroU32,
     /// The latest started phase the entrant is in, which places them.
     pub phase: PhaseId,
@@ -352,90 +353,181 @@ impl Competition {
             .report_match(match_id, entered, &mut self.highest_number);
     }
 
-    /// The place in the competition the overall standings of the phase `phase_id` start at, see
-    /// [`Self::ranking`]; `None` if there is no such phase.
-    pub fn first_place(&self, phase_id: &PhaseId) -> Option<NonZeroU32> {
+    /// The slot the overall standings of the phase `phase_id` start at, see [`Self::slots`];
+    /// `None` if there is no such phase.
+    fn first_slot(&self, phase_id: &PhaseId) -> Option<NonZeroU32> {
         let phase = self.phase(phase_id)?;
         phase
             .sources()
             .iter()
-            .map(|source| {
-                let of = match source.of() {
-                    SourceOf::Registration => Some(NonZeroU32::MIN),
-                    SourceOf::Phase(from) => self.first_place(&from),
-                };
-                of.and_then(|of| of.checked_add(source.from().get() - 1))
+            .map(|source| match source.of() {
+                SourceOf::Registration => Some(source.from()),
+                SourceOf::Phase(from) => self
+                    .first_slot(&from)?
+                    .checked_add(self.entrants_before(&from, source.from())),
             })
             .min()
             .flatten()
     }
 
+    /// The number of entrants in the rows of the overall standings of the phase `phase_id` before
+    /// the row of `unique_rank`; each row the phase does not have (yet) counts as many as a
+    /// ranking of it stands for, see [`Self::entrants_per_ranking`], or else as one.
+    fn entrants_before(&self, phase_id: &PhaseId, unique_rank: NonZeroU32) -> u32 {
+        let rows = unique_rank.get() - 1;
+        let Some(phase) = self.phase(phase_id) else {
+            return rows;
+        };
+        let standings = phase.standings();
+        let known = standings.iter().take(rows as usize);
+        let missing = rows - known.len() as u32;
+        let entrants: u32 = known
+            .map(|standing| standing.ranking().entrants().len() as u32)
+            .sum();
+        let per_ranking = self
+            .entrants_per_ranking(phase_id)
+            .map_or(1, NonZeroU32::get);
+        entrants + missing * per_ranking
+    }
+
+    /// The ranking, slot, unique slot and taker (the phase taking it on, if any) of each row of
+    /// the overall standings of the phase `phase_id`, best first. Slots count entrants, so that
+    /// rows of phases of teams of different sizes compare: a row's slot is the slot its phase
+    /// starts at plus the entrants of the rows before it, where a cut goes through rows sharing a
+    /// rank those before the first row of its side of the cut, its unique slot those before it.
+    fn slots(&self, phase_id: &PhaseId) -> Vec<(&Ranking, u32, u32, Option<PhaseId>)> {
+        let (Some(phase), Some(start)) = (self.phase(phase_id), self.first_slot(phase_id)) else {
+            return Vec::new();
+        };
+        let start = start.get();
+        // the phase taking each unique rank on, if any
+        let taker = |unique_rank: NonZeroU32| {
+            self.phases.values().find_map(|taker| {
+                taker
+                    .sources()
+                    .iter()
+                    .any(|source| {
+                        source.of() == SourceOf::Phase(*phase_id) && source.takes(unique_rank)
+                    })
+                    .then(|| taker.id())
+            })
+        };
+        let standings = phase.standings();
+        // the entrants in the rows before each row
+        let before: Vec<u32> = standings
+            .iter()
+            .scan(0, |entrants, standing| {
+                let before = *entrants;
+                *entrants += standing.ranking().entrants().len() as u32;
+                Some(before)
+            })
+            .collect();
+        // the entrants before the first row of each rank and taker
+        let mut first_of: Map<(NonZeroU32, Option<PhaseId>), u32> = Map::default();
+        for (standing, &before) in standings.iter().zip(&before) {
+            first_of
+                .entry((standing.rank(), taker(standing.unique_rank())))
+                .or_insert(before);
+        }
+        standings
+            .iter()
+            .zip(before)
+            .map(|(standing, before)| {
+                let taker = taker(standing.unique_rank());
+                let first = first_of[&(standing.rank(), taker)];
+                (standing.ranking(), start + first, start + before, taker)
+            })
+            .collect()
+    }
+
+    /// The place in the competition of each ranking the phase `phase_id` places, i.e. of each row
+    /// of its overall standings not gone on to a started phase, see [`Self::ranking`].
+    pub fn places(&self, phase_id: &PhaseId) -> Map<RankingId, NonZeroU32> {
+        self.ranking()
+            .into_iter()
+            .filter(|placed| placed.phase == *phase_id)
+            .map(|placed| (placed.ranking, placed.place))
+            .collect()
+    }
+
     /// The place in the competition every entrant of a started phase has as things stand, best
-    /// first. An entrant is placed by the latest started phase they are in, at the place its
-    /// overall standings start at (see [`Self::first_place`]) plus their rank there, less one: a
-    /// phase starts at the smallest place its sources start at, a source of the registration at
-    /// its first place, a source of a phase at that phase's start plus its first place, less one.
-    /// Where a cut of a source goes through rows sharing a rank, each side of the cut shares the
-    /// place of its first row, so that the rows the lot left behind are placed after those it
-    /// took on.
+    /// first. An entrant is placed by the latest started phase they are in, by their row there;
+    /// the members of a team share its row. A row's place is one more than the rows ranked before
+    /// it, rows of one rank of a phase sharing the place of the first; where the cut of a source
+    /// goes through rows sharing a rank, each side of the cut shares the place of its first row,
+    /// so that the rows the lot left behind are placed after those it took on. A phase's rows
+    /// come where those of its sources it took on were: a phase starts where the first of them
+    /// was, a source of the registration at its first place. A row going on to a phase not
+    /// started yet counts as the rows that phase will form of its entrants (two for a pair split
+    /// up, half for a single entrant paired), so that the places after it stay as they will be.
     ///
-    /// Final once every phase is finished. Sources leaving places between them that no phase
-    /// takes leave gaps between the places; entrants of such places are placed by the phase they
-    /// stopped in, and entrants in no started phase are not placed at all.
+    /// Final once every phase is finished. Entrants of the registration in no started phase are
+    /// not placed, each keeping a place free; entrants of places of a phase that no phase takes
+    /// are placed by the phase they stopped in.
     pub fn ranking(&self) -> Vec<Placed> {
-        // (place, unique place, index of the phase, placed) of every entrant placed so far
-        let mut placed: Map<EntrantId, (u32, u32, usize, Placed)> = Map::default();
+        // a row counts as `unit` and the rows its entrants will form in the phase taking it on as
+        // `unit` each, so that every count is whole
+        let per_ranking = |phase: &PhaseId| {
+            u64::from(self.entrants_per_ranking(phase).map_or(1, NonZeroU32::get))
+        };
+        let unit = self
+            .phases
+            .keys()
+            .map(per_ranking)
+            .fold(1, |unit, size| unit / gcd(unit, size) * size);
+        // (slot, index of the phase, unique slot, rows counted, placed) of every entrant placed
+        // so far, see `slots`
+        let mut placed: Map<EntrantId, (u32, usize, u32, u64, Placed)> = Map::default();
         for (index, phase) in self.phases.values().enumerate() {
-            let start = self
-                .first_place(&phase.id())
-                .expect("the phase exists")
-                .get();
-            // the phase taking each unique rank on, if any
-            let taker = |unique_rank: NonZeroU32| {
-                self.phases.values().find_map(|taker| {
-                    taker
-                        .sources()
-                        .iter()
-                        .any(|source| {
-                            source.of() == SourceOf::Phase(phase.id()) && source.takes(unique_rank)
-                        })
-                        .then(|| taker.id())
-                })
-            };
-            let standings = phase.standings();
-            // the first unique rank of each rank and taker, by which the rows of a rank on one
-            // side of a cut are placed
-            let mut first_of: Map<(NonZeroU32, Option<PhaseId>), u32> = Map::default();
-            for standing in standings.iter() {
-                first_of
-                    .entry((standing.rank(), taker(standing.unique_rank())))
-                    .or_insert(standing.unique_rank().get());
-            }
-            for standing in standings.iter() {
-                let rank = first_of[&(standing.rank(), taker(standing.unique_rank()))];
-                let place = start + rank - 1;
-                for entrant in standing.ranking().entrants() {
-                    placed.insert(
-                        *entrant,
-                        (
-                            place,
-                            start + standing.unique_rank().get() - 1,
-                            index,
-                            Placed {
-                                entrant: *entrant,
-                                place: NonZeroU32::new(place).expect("a place is at least 1"),
-                                phase: phase.id(),
-                                ranking: standing.ranking().id(),
-                            },
-                        ),
-                    );
+            for (ranking, slot, unique, taker) in self.slots(&phase.id()) {
+                // a taker placing the row has started, and replaces it below
+                let rows = taker.map_or(unit, |taker| {
+                    ranking.entrants().len() as u64 * unit / per_ranking(&taker)
+                });
+                for entrant in ranking.entrants() {
+                    let entry = Placed {
+                        entrant: *entrant,
+                        place: NonZeroU32::MIN,
+                        phase: phase.id(),
+                        ranking: ranking.id(),
+                    };
+                    placed.insert(*entrant, (slot, index, unique, rows, entry));
                 }
             }
         }
         let mut placed: Vec<_> = placed.into_values().collect();
-        placed.sort_by_key(|&(place, unique, index, _)| (place, unique, index));
+        placed.sort_by_key(|&(slot, index, unique, ..)| (slot, index, unique));
+        // number the rows: rows sharing a slot in a phase share a place, and each slot left free
+        // before a row (an entrant of the registration in no started phase) counts as a row
+        let mut next_slot = 1;
+        let mut rows_before = 0;
+        let mut last_group = None;
+        let mut last_row = None;
+        let mut place = NonZeroU32::MIN;
+        for (slot, index, _, rows, placed) in &mut placed {
+            if last_group != Some((*slot, *index)) {
+                last_group = Some((*slot, *index));
+                rows_before += unit * u64::from(slot.saturating_sub(next_slot));
+                next_slot = next_slot.max(*slot);
+                place = u32::try_from(rows_before / unit + 1)
+                    .ok()
+                    .and_then(NonZeroU32::new)
+                    .unwrap_or(NonZeroU32::MAX);
+            }
+            if last_row != Some((*index, placed.ranking)) {
+                last_row = Some((*index, placed.ranking));
+                rows_before += *rows;
+            }
+            next_slot += 1;
+            placed.place = place;
+        }
         placed.into_iter().map(|(.., placed)| placed).collect()
     }
+}
+
+/// The greatest common divisor of `a` and `b`.
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 { a } else { gcd(b, a % b) }
 }
 
 /// How many entrants each qualifier of a field taken from `sources` stands for, each ranking of a

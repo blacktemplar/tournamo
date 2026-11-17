@@ -39,10 +39,10 @@ pub use start_phase::{StartPhase, StartPhaseError};
 /// ```
 /// use tournament_engine::{CompetitionTransition, StartCompetition};
 ///
-/// let transition = CompetitionTransition::from(StartCompetition);
+/// let transition = CompetitionTransition::from(StartCompetition::default());
 /// let json = serde_json::to_string(&transition).unwrap();
 ///
-/// assert_eq!(json, r#"{"StartCompetition":null}"#);
+/// assert_eq!(json, r#"{"StartCompetition":{"order":[]}}"#);
 /// assert!(serde_json::from_str::<CompetitionTransition>(&json).is_ok());
 /// ```
 #[derive(Debug, Serialize, Deserialize)]
@@ -241,7 +241,7 @@ pub trait CompetitionStateMachineExt {
     /// # }
     /// # let plugins = PhasePluginsBuilder::new().build()?;
     /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition.into())?;
+    /// # machine.apply_new(StartCompetition::default().into())?;
     /// // a round robin between four entrants, with the first and the last match reported
     /// let matches: Vec<_> = machine.current().phases()[&phase_id].divisions()[0]
     ///     .data()
@@ -307,7 +307,7 @@ pub trait CompetitionStateMachineExt {
     /// # }
     /// # let plugins = PhasePluginsBuilder::new().build()?;
     /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition.into())?;
+    /// # machine.apply_new(StartCompetition::default().into())?;
     /// // a started round robin, changed into two random rounds of it
     /// let competition = machine.current();
     /// let plugins = competition
@@ -401,7 +401,7 @@ pub trait CompetitionStateMachineExt {
     /// #     .format(SingleElimination::new())
     /// #     .build()?;
     /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition.into())?;
+    /// # machine.apply_new(StartCompetition::default().into())?;
     /// # let matches = |machine: &CompetitionStateMachine| -> Vec<MatchId> {
     /// #     let phase = &machine.current().phases()[&phase_id];
     /// #     phase.divisions()[0].data().matches().keys().copied().collect()
@@ -615,7 +615,9 @@ mod tests {
         machine
             .apply_new(AddPhase::new(phase_id(), plugins).into())
             .unwrap();
-        machine.apply_new(StartCompetition.into()).unwrap();
+        machine
+            .apply_new(StartCompetition::default().into())
+            .unwrap();
         machine
     }
 

@@ -25,6 +25,9 @@ use crate::{
 pub enum AddEntrantError {
     EmptyName,
     DuplicateName(String),
+    /// A line pasted gives this after its name as its rating, which is no number, see
+    /// [`Session::add_entrants`](crate::session::Session::add_entrants).
+    NoRating(String),
     Started,
     /// The engine refused the entrant for a reason this crate does not know.
     Rejected(TransitionError),
@@ -47,6 +50,18 @@ pub enum RenameEntrantError {
     UnknownEntrant,
     EmptyName,
     DuplicateName(String),
+}
+
+/// Why the rating of an entrant was not changed.
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum RateEntrantError {
+    UnknownEntrant,
+    /// What was typed as the rating is no number, see
+    /// [`Session::enter_rating`](crate::session::Session::enter_rating).
+    NoRating(String),
+    /// The competition has started, which ordered the registration by the ratings.
+    RegistrationClosed,
 }
 
 /// Why there is no draft of a phase played in a format.
@@ -389,10 +404,13 @@ impl Refusal {
             };
         }
         if let Some(error) = error.downcast_ref() {
-            return Some(match error {
-                engine::StartCompetitionError::NoPhases => Self::NoPhase,
-                engine::StartCompetitionError::TooFewEntrants => Self::TooFewEntrants,
-            });
+            return match error {
+                engine::StartCompetitionError::NoPhases => Some(Self::NoPhase),
+                engine::StartCompetitionError::TooFewEntrants => Some(Self::TooFewEntrants),
+                // the session orders only its own entrants, each once
+                engine::StartCompetitionError::UnknownEntrant(_)
+                | engine::StartCompetitionError::EntrantTwice(_) => None,
+            };
         }
         match error.downcast_ref() {
             Some(engine::ReportMatchResultError::MatchAlreadyFinished) => Some(Self::MatchFinished),
@@ -409,8 +427,19 @@ impl Message for AddEntrantError {
             Self::DuplicateName(name) => {
                 Text::new("error-duplicate-name").with("name", name.as_str())
             }
+            Self::NoRating(rating) => Text::new("error-no-rating").with("rating", rating.as_str()),
             Self::Started => Text::new("error-entrant-added-after-start"),
             Self::Rejected(error) => rejected(error),
+        }
+    }
+}
+
+impl Message for RateEntrantError {
+    fn text(&self) -> Text {
+        match self {
+            Self::UnknownEntrant => Text::new("error-unknown-entrant"),
+            Self::NoRating(rating) => Text::new("error-no-rating").with("rating", rating.as_str()),
+            Self::RegistrationClosed => Text::new("error-rating-after-start"),
         }
     }
 }

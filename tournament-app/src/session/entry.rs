@@ -527,6 +527,8 @@ mod tests {
             .map(|name| EntrantRow {
                 id: EntrantId::new(Uuid::new_v5(&Uuid::nil(), name.as_bytes())),
                 name: Some((*name).to_owned()),
+                rating: None,
+                seed: None,
             })
             .collect()
     }

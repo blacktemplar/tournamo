@@ -98,7 +98,7 @@ pub fn run_tournament(entrants: usize) -> CompetitionStateMachine {
     sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
     // this creates the rankings, initializes all metrics and schedules the matches of all rounds
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
     // every single result updates all metrics
     for (match_id, result) in reporting_schedule(&sm) {
         sm.apply_new(ReportMatchResult::new(phase_id(), match_id, result).into())

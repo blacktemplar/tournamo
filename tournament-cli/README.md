@@ -41,13 +41,14 @@ cup> exit
 
 | Command | Does |
 |---|---|
-| `entrants` | Lists the entrants. |
-| `add-entrant <NAME>...` (`add`) | Adds entrants. Names must be unique; quote names containing spaces. If one name is invalid, none is added. |
+| `entrants` | Lists the entrants, with their rating and seed where they have one. |
+| `add-entrant <NAME>... [--rating <N>]` (`add`) | Adds entrants, rated `N` if given. Names must be unique; quote names containing spaces. If one name is invalid, none is added. |
+| `rate <NAME> [<N>]` | Rates an entrant `N`, higher is better, or removes its rating. The start orders the registration by rating, equal ratings and the unrated by lot; only that order is saved in the log, the ratings are saved with the names. |
 | `remove-entrant <NAME>` (`remove`) | Removes an entrant. |
 | `add-phase [FORMAT [FIELD=VALUE]...] [--name <NAME>] [--from <SOURCE>]...` | Adds a phase: the format named, or, without a format, the phase configured at the prompt, see below. `--from` takes places of the registration or of a phase, e.g. `registration:1-8`, `1:9-` or `2`; by default the whole registration for the first phase, else every place of the phase before. A phase played in several divisions (groups) is added with `divisions=<N>` and, if they are not dealt in order, `draw=<DRAW>` (e.g. `in-blocks`). |
 | `phases` / `start-phase <PHASE>` | Lists the phases, or starts one taking entrants from phases that are finished. |
 | `edit-phase` | Changes the configuration of the phase at the prompt, see below. |
-| `start` | Starts the competition and schedules the first matches. Entrants cannot be changed afterwards. |
+| `start` | Starts the competition and schedules the first matches. Entrants and ratings cannot be changed afterwards. |
 | `matches [--open] [--round <ROUND>] [--phase <PHASE>] [--division <LETTER>]` | Lists the matches of a phase (by default the only running one), of all its divisions or of one, with their number, round, stage (for a format that names its stages, e.g. "Quarterfinals" in a knockout) and result, followed by the byes, i.e. who has no match in which round. `--open` leaves the byes out. |
 | `report <NUMBER> <a\|b\|draw>` | Reports the result of a match: team a wins, team b wins, or a draw. |
 | `report <NUMBER> <SCORE>... [a\|b\|draw]` | Reports the scores of a match whose phase enters them (its results are a score, or a best of games), team a's first, e.g. `21-17`, `21:17` or `21–17` (as `matches` shows them, so they can be copied from there): the match's score, or that of each game in order. The result is the one they give, unless one follows them. |

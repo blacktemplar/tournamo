@@ -93,7 +93,7 @@ fn competition_with_a_phase() -> CompetitionStateMachine {
 /// first round exist.
 fn started_competition() -> CompetitionStateMachine {
     let mut sm = competition_with_a_phase();
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
     sm
 }
 
@@ -362,7 +362,7 @@ fn a_competition_with_a_bye_round_trips() {
         .unwrap();
     sm.apply_new(AddPhase::new(phase_id(), plugins).into())
         .unwrap();
-    sm.apply_new(StartCompetition.into()).unwrap();
+    sm.apply_new(StartCompetition::default().into()).unwrap();
     let bye = sm.current().phases()[&phase_id()].divisions()[0]
         .data()
         .byes()
@@ -386,8 +386,8 @@ fn a_round_tripped_competition_can_be_started() {
 
     // the phase format, the ranker and all metrics calculators are only used from here on, so
     // this is what shows that they survived the round trip as their concrete types
-    sm.apply_new(StartCompetition.into()).unwrap();
-    apply_directly(&mut competition, &StartCompetition);
+    sm.apply_new(StartCompetition::default().into()).unwrap();
+    apply_directly(&mut competition, &StartCompetition::default());
 
     assert_eq!(
         competition.phases()[&phase_id()].divisions()[0]

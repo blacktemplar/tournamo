@@ -6,6 +6,8 @@ use super::*;
 use crate::{
     error::{RemovePhaseError, StartPhaseError},
     form::End,
+    i18n::Text,
+    people::Rating,
     view::{Advance, Advancing, Cut, PhaseState, SourceProgress, SourceRow},
 };
 
@@ -62,6 +64,73 @@ fn the_first_phase_takes_everyone_registered() {
 
     assert!(view.everyone_registered);
     assert!(view.rows.is_empty());
+}
+
+/// Asked for, the first phase takes only some places of the registration, e.g. to leave the best
+/// rated for a later phase.
+#[test]
+fn the_first_phase_takes_some_places_of_the_registration_when_asked() {
+    let mut session = Session::new("cup");
+    let mut form = session.phase_form().unwrap();
+
+    form.take_some_places();
+    form.enter_place(0, End::From, "3");
+
+    let view = form.view().entry;
+    assert!(!view.everyone_registered);
+    assert_eq!(view.rows.len(), 1);
+    assert_eq!(view.rows[0].of, None);
+    assert_eq!((&*view.rows[0].from, &*view.rows[0].to), ("3", ""));
+    session.add_phase(&form).unwrap();
+    assert_eq!(
+        session.competition().only_phase().unwrap().sources()[..],
+        [Source::new(
+            SourceOf::Registration,
+            NonZeroU32::new(3).unwrap(),
+            None
+        )]
+    );
+}
+
+/// The lot decides who of the registration a source takes where its cut goes through entrants
+/// of equal ratings or none.
+#[test]
+fn a_cut_through_equal_ratings_or_none_is_decided_by_lot() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol", "Dave", "Eve"])
+        .added();
+    let ids: Vec<_> = session.entrants().iter().map(|row| row.id).collect();
+    for (id, rating) in ids.iter().zip(["1900", "1800", "1800", "1700"]) {
+        session.set_rating(*id, Rating::parse(rating)).unwrap();
+    }
+    let places = |from: u32, to: Option<u32>| {
+        [Source::new(
+            SourceOf::Registration,
+            NonZeroU32::new(from).unwrap(),
+            to.and_then(NonZeroU32::new),
+        )]
+    };
+    let cuts = |session: &Session, sources: &[Source]| -> Vec<usize> {
+        let warnings = session.lot_cuts(sources);
+        (1..5)
+            .filter(|&place| {
+                warnings.contains(&Text::new("warning-lot-decides-cut").with("place", place))
+            })
+            .collect()
+    };
+
+    // 1900 | 1800 1800 | 1700 | none
+    assert_eq!(cuts(&session, &places(1, Some(1))), Vec::<usize>::new());
+    assert_eq!(cuts(&session, &places(1, Some(2))), [2]);
+    assert_eq!(cuts(&session, &places(2, Some(3))), Vec::<usize>::new());
+    assert_eq!(cuts(&session, &places(4, None)), Vec::<usize>::new());
+    assert_eq!(cuts(&session, &places(3, Some(4))), [2]);
+    session.set_rating(ids[4], None).unwrap();
+    session.set_rating(ids[3], None).unwrap();
+    // 1900 | 1800 1800 | none none
+    assert_eq!(cuts(&session, &places(1, Some(4))), [4]);
+    session.start().unwrap();
+    assert!(session.lot_cuts(&places(1, Some(2))).is_empty());
 }
 
 #[test]

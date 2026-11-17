@@ -21,6 +21,8 @@ struct Converter {
     log_entry: fn(&mut Value),
     /// The competition stored next to the log.
     competition: fn(&mut Value),
+    /// One of the people, as the JSON of a `Person`.
+    person: fn(&mut Value),
 }
 
 /// `CONVERTERS[n]` converts format `n + 1` to format `n + 2`.
@@ -28,18 +30,22 @@ const CONVERTERS: &[Converter] = &[
     Converter {
         log_entry: v2::log_entry,
         competition: v2::competition,
+        person: |_| {},
     },
     Converter {
         log_entry: v3::log_entry,
         competition: |_| {},
+        person: |_| {},
     },
     Converter {
         log_entry: v4::log_entry,
         competition: v4::competition,
+        person: |_| {},
     },
     Converter {
         log_entry: v5::log_entry,
         competition: v5::competition,
+        person: v5::person,
     },
 ];
 
@@ -49,11 +55,15 @@ const _: () = assert!(
 );
 
 /// Brings `file`, the JSON of a file of the format `from`, to [`Format::CURRENT`]: every entry of
-/// its `"log"` and its `"competition"`, if any, and sets its `"format"`.
+/// its `"log"`, every one of its `"people"` and its `"competition"`, if any, and sets its
+/// `"format"`.
 pub(crate) fn upgrade(file: &mut Value, from: Format) {
     for converter in converters(from) {
         if let Some(Value::Array(log)) = file.get_mut("log") {
             log.iter_mut().for_each(converter.log_entry);
+        }
+        if let Some(Value::Array(people)) = file.get_mut("people") {
+            people.iter_mut().for_each(converter.person);
         }
         if let Some(competition) = file.get_mut("competition") {
             (converter.competition)(competition);
@@ -360,28 +370,35 @@ mod v4 {
 /// and the phase keeps the plugins, the `"seed"` of its data and whether it has `"started"`, as
 /// the competition has. A phase has a `"name"` (none) and `"sources"` (the whole registration),
 /// as an `AddPhase` has, and no `"columns"`, so that its tables of standings show what the rule
-/// shows. A started competition holds its `"lots"`, the order its phase started
-/// in, and every ranking its `"lot"`, its initial unique rank; the competition holds the
-/// `"highest_number"` of a match or of a pairing of a bracket, a division the `"number_base"` 0.
-/// The plugins of a phase, of a division and of an `AddPhase` are played in one division
-/// (`"divisions"`), dealt back and forth (`"draw"`), seeded in order (`"seeding"`) and compared
-/// across divisions by nothing (`"across"`).
+/// shows. A started competition holds its `"lots"`, the order its phase started in, as its
+/// `"registration"` too, and every ranking its `"lot"`, its initial unique rank; the competition
+/// holds the `"highest_number"` of a match or of a pairing of a bracket, a division the
+/// `"number_base"` 0. The plugins of a phase, of a division and of an `AddPhase` are played in one
+/// division (`"divisions"`), dealt back and forth (`"draw"`), seeded in order (`"seeding"`) and
+/// compared across divisions by nothing (`"across"`). The start, saved as `null`, gives no
+/// `"order"`. A person has no `"rating"`.
 mod v5 {
     use serde_json::{Map, Value, json};
 
     /// An `AddPhase`, applied or replacing another, gets no name, the whole registration as its
-    /// source and no columns.
+    /// source and no columns; a `StartCompetition` gets an empty order.
     pub(super) fn log_entry(entry: &mut Value) {
         let transition = if entry.pointer("/kind/Apply").is_some() {
-            "/kind/Apply/AddPhase"
+            "/kind/Apply"
         } else {
-            "/kind/Replace/with/AddPhase"
+            "/kind/Replace/with"
         };
-        if let Some(Value::Object(add_phase)) = entry.pointer_mut(transition) {
+        let Some(Value::Object(transition)) = entry.pointer_mut(transition) else {
+            return;
+        };
+        if let Some(Value::Object(add_phase)) = transition.get_mut("AddPhase") {
             entry_of_phase(add_phase);
             if let Some(Value::Object(plugins)) = add_phase.get_mut("plugins") {
                 one_division(plugins);
             }
+        }
+        if let Some(start @ Value::Null) = transition.get_mut("StartCompetition") {
+            *start = json!({ "order": [] });
         }
     }
 
@@ -401,6 +418,12 @@ mod v5 {
             json!({ "type": "tournament_engine::seeded_in_order", "value": null }),
         );
         plugins.insert("across".to_owned(), json!([]));
+    }
+
+    pub(super) fn person(person: &mut Value) {
+        if let Some(person) = person.as_object_mut() {
+            person.entry("rating").or_insert(Value::Null);
+        }
     }
 
     pub(super) fn competition(competition: &mut Value) {
@@ -425,9 +448,11 @@ mod v5 {
             converted |= divisions(phase, started);
         }
         if converted && let Some(competition) = competition.as_object_mut() {
-            competition
+            let lots = competition
                 .entry("lots")
-                .or_insert_with(|| lots.unwrap_or_default().into());
+                .or_insert_with(|| lots.unwrap_or_default().into())
+                .clone();
+            competition.entry("registration").or_insert(lots);
             competition
                 .entry("highest_number")
                 .or_insert_with(|| highest_number.into());
@@ -859,7 +884,8 @@ mod tests {
     /// started.
     fn as_of_format_4(competition: &mut Value) {
         let competition_of = competition.as_object_mut().unwrap();
-        competition_of.remove("lots").unwrap();
+        let lots = competition_of.remove("lots").unwrap();
+        assert_eq!(competition_of.remove("registration"), Some(lots));
         competition_of.remove("highest_number").unwrap();
         for phase in competition["phases"].as_array_mut().unwrap() {
             let phase = phase.as_object_mut().unwrap();
@@ -1136,8 +1162,8 @@ mod tests {
         );
     }
 
-    /// A started competition of format 4 gets its lots in the order its phase started in, and the
-    /// highest number of a match or a pairing of a bracket.
+    /// A started competition of format 4 gets its lots in the order its phase started in, as its
+    /// registration too, and the highest number of a match or a pairing of a bracket.
     #[test]
     fn a_started_competition_of_format_4_gets_its_lots_and_highest_number() {
         let session = double_elimination_under_way();
@@ -1148,6 +1174,7 @@ mod tests {
         upgrade_competition(&mut held, Format(4));
 
         assert_eq!(held["lots"], competition["lots"]);
+        assert_eq!(held["registration"], competition["lots"]);
         assert_eq!(held["highest_number"], competition["highest_number"]);
         let matches = competition["phases"][0]["divisions"][0]["data"]["matches"]
             .as_array()
@@ -1161,6 +1188,39 @@ mod tests {
                     .max()
                     .unwrap()
         );
+    }
+
+    /// The start of format 4, which gave no order, gives an empty one; one with an order stays.
+    #[test]
+    fn the_start_gets_an_empty_order_in_format_5() {
+        let apply = |start: Value| json!({ "id": "start", "kind": { "Apply": { "StartCompetition": start } } });
+        let ordered = json!({ "order": [["alice"]] });
+
+        assert_eq!(
+            converted_by(v5::log_entry, apply(Value::Null)),
+            apply(json!({ "order": [] }))
+        );
+        assert_eq!(
+            converted_by(v5::log_entry, apply(ordered.clone())),
+            apply(ordered)
+        );
+    }
+
+    /// A person of format 4 has no rating; one rated already keeps it.
+    #[test]
+    fn a_person_gets_no_rating_in_format_5() {
+        let converted = |mut person: Value| {
+            v5::person(&mut person);
+            person
+        };
+
+        assert_eq!(
+            converted(json!({ "id": "alice", "name": "Alice" })),
+            json!({ "id": "alice", "name": "Alice", "rating": null })
+        );
+        let rated = json!({ "id": "alice", "name": "Alice", "rating": 1500 });
+        assert_eq!(converted(rated.clone()), rated);
+        assert_eq!(converted(json!("damaged")), json!("damaged"));
     }
 
     /// A phase of an unexpected shape, or holding its divisions already, stays as it is.

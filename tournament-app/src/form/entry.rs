@@ -42,6 +42,9 @@ pub(crate) struct Entry {
     pub(crate) sources: Vec<Source>,
     /// What was typed for a place and not taken, by the index of its source and its end.
     pub(crate) rejected: Rejections<(usize, End)>,
+    /// Whether the operator asked to choose the places of the first phase, which otherwise takes
+    /// every entrant registered without asking, see [`PhaseForm::take_some_places`].
+    pub(crate) some_places: bool,
 }
 
 impl Default for Entry {
@@ -51,6 +54,7 @@ impl Default for Entry {
             name: String::new(),
             sources: vec![Source::registration()],
             rejected: Rejections::default(),
+            some_places: false,
         }
     }
 }
@@ -70,8 +74,9 @@ pub struct EntryView {
     /// The number of the phase, which with the label of its format is what it is called without a
     /// name, see [`PhaseName`].
     pub number: usize,
-    /// Whether the phase is the first, which takes every entrant registered, so that its sources
-    /// are no choice: [`Self::rows`] is empty.
+    /// Whether the phase is the first and takes every entrant registered, which is no choice
+    /// unless the operator asks for one ([`PhaseForm::take_some_places`]): [`Self::rows`] is
+    /// empty.
     pub everyone_registered: bool,
     /// One per source, in order.
     pub rows: Vec<SourceRowView>,
@@ -127,6 +132,12 @@ impl PhaseForm {
     pub fn set_sources(&mut self, sources: Vec<Source>) {
         self.entry.sources = sources;
         self.entry.rejected.clear();
+    }
+
+    /// Shows the sources of the first phase as those of any other, to take only some places of
+    /// the registration, e.g. to leave the best rated for a later phase.
+    pub fn take_some_places(&mut self) {
+        self.entry.some_places = true;
     }
 
     /// Adds a source after the others: of the phase before this one, or the registration if
@@ -275,9 +286,12 @@ impl PhaseForm {
         }
     }
 
-    /// Whether the phase is the first and takes every entrant registered, which is no choice.
+    /// Whether the phase is the first and takes every entrant registered, which is no choice
+    /// unless the operator asked for one.
     fn is_first(&self) -> bool {
-        self.context.number == 1 && self.entry.sources == [Source::registration()]
+        self.context.number == 1
+            && self.entry.sources == [Source::registration()]
+            && !self.entry.some_places
     }
 
     /// What is wrong with the source at `index` alone.

@@ -197,7 +197,9 @@ fn qualification_then_knockouts() -> CompetitionStateMachine {
             knockout(),
         ),
     );
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     machine
 }
 
@@ -285,7 +287,9 @@ fn a_phase_is_not_started_before_the_competition_nor_one_of_the_registration() {
         StartPhaseError::CompetitionNotStarted
     );
 
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
 
     assert_eq!(
         refusal::<StartPhaseError>(&machine, StartPhase::new(phase(99))),
@@ -299,14 +303,149 @@ fn a_competition_needs_a_phase_fed_by_the_registration_alone() {
     // a phase of places of the registration together with another phase cannot be added before the
     // phase, so only an empty competition has no phase fed by the registration alone
     assert!(matches!(
-        refusal::<StartCompetitionError>(&machine, StartCompetition),
+        refusal::<StartCompetitionError>(&machine, StartCompetition::default()),
         StartCompetitionError::NoPhases
     ));
     add(
         &mut machine,
         AddPhase::new(phase(QUALIFICATION), round_robin()),
     );
-    assert!(machine.apply_new(StartCompetition.into()).is_ok());
+    assert!(
+        machine
+            .apply_new(StartCompetition::default().into())
+            .is_ok()
+    );
+}
+
+fn entrant(entrant: u128) -> EntrantId {
+    EntrantId::new(Uuid::from_u128(entrant))
+}
+
+/// A competition of `entrants` entrants and a round robin of the registration, started in
+/// `order`.
+fn started_in(entrants: u128, order: Vec<Vec1<EntrantId>>) -> CompetitionStateMachine {
+    let mut machine = registered(entrants);
+    add(
+        &mut machine,
+        AddPhase::new(phase(QUALIFICATION), round_robin()),
+    );
+    machine
+        .apply_new(StartCompetition::new(order).into())
+        .unwrap();
+    machine
+}
+
+#[test]
+fn the_registration_is_ordered_by_tiers_each_by_lot_then_the_rest_by_lot() {
+    let machine = started_in(6, vec![vec1![entrant(3)], vec1![entrant(5), entrant(1)]]);
+    let competition = machine.current();
+    let by_lot = |entrants: &[EntrantId]| {
+        entrants
+            .iter()
+            .copied()
+            .sorted_by_key(|entrant| competition.lot(entrant))
+            .collect_vec()
+    };
+
+    let registration = competition.registration();
+
+    assert_eq!(registration[0], entrant(3));
+    assert_eq!(registration[1..3], by_lot(&[entrant(5), entrant(1)]));
+    assert_eq!(
+        registration[3..],
+        by_lot(&[entrant(0), entrant(2), entrant(4)])
+    );
+    // the order changes the registration, not the lots
+    assert_eq!(competition.lots(), started_in(6, vec![]).current().lots());
+    assert_eq!(seeding(&machine, phase(QUALIFICATION)), registration);
+}
+
+#[test]
+fn without_an_order_the_registration_is_by_lot() {
+    let machine = started_in(6, vec![]);
+
+    assert_eq!(machine.current().registration(), machine.current().lots());
+}
+
+#[test]
+fn an_order_naming_an_entrant_not_registered_or_twice_is_refused() {
+    let mut machine = registered(4);
+    add(
+        &mut machine,
+        AddPhase::new(phase(QUALIFICATION), round_robin()),
+    );
+
+    assert_eq!(
+        refusal::<StartCompetitionError>(
+            &machine,
+            StartCompetition::new(vec![vec1![entrant(1), entrant(9)]])
+        ),
+        StartCompetitionError::UnknownEntrant(entrant(9))
+    );
+    assert_eq!(
+        refusal::<StartCompetitionError>(
+            &machine,
+            StartCompetition::new(vec![vec1![entrant(1)], vec1![entrant(2), entrant(1)]])
+        ),
+        StartCompetitionError::EntrantTwice(entrant(1))
+    );
+}
+
+/// The seeded scenario: the best four of the registration go straight to the main phase, the rest
+/// play a qualification for the other four places.
+#[test]
+fn the_best_of_the_registration_go_straight_to_the_main_phase() {
+    const MAIN: u128 = UPPER;
+    let mut machine = registered(10);
+    add(
+        &mut machine,
+        phase_of(
+            phase(QUALIFICATION),
+            vec1![Source::new(SourceOf::Registration, place(5), None)],
+            round_robin(),
+        ),
+    );
+    add(
+        &mut machine,
+        phase_of(
+            phase(MAIN),
+            vec1![
+                Source::new(SourceOf::Registration, place(1), Some(place(4))),
+                places(phase(QUALIFICATION), 1, Some(4)),
+            ],
+            knockout(),
+        ),
+    );
+    let seeded = (0..4).map(|e| vec1![entrant(e)]).collect();
+    machine
+        .apply_new(StartCompetition::new(seeded).into())
+        .unwrap();
+    assert!(!machine.current().phases()[&phase(MAIN)].is_started());
+    assert_eq!(
+        seeding(&machine, phase(QUALIFICATION)),
+        machine.current().registration()[4..]
+    );
+
+    play_out(&mut machine, phase(QUALIFICATION));
+    let qualified = standings(&machine, phase(QUALIFICATION));
+    start(&mut machine, phase(MAIN));
+
+    let field = seeding(&machine, phase(MAIN));
+    assert_eq!(field[..4], (0..4).map(entrant).collect_vec());
+    assert_eq!(field[4..], qualified[..4]);
+    assert_eq!(
+        machine.current().field_of(&phase(MAIN))[3].origin,
+        Origin::Registration { place: place(4) }
+    );
+    let json: CompetitionStateMachine =
+        serde_json::from_str(&serde_json::to_string(&machine).unwrap()).unwrap();
+    let binary: Competition =
+        postcard::from_bytes(&postcard::to_stdvec(machine.current()).unwrap()).unwrap();
+    assert_eq!(
+        json.current().registration(),
+        machine.current().registration()
+    );
+    assert_eq!(binary.registration(), machine.current().registration());
 }
 
 #[test]
@@ -385,7 +524,9 @@ fn a_phase_is_added_after_the_start_unless_it_takes_the_registration_alone() {
             Some(place(2)),
         )]),
     );
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
 
     let registration = Source::new(SourceOf::Registration, place(3), None);
     assert_eq!(
@@ -451,7 +592,9 @@ fn three_layers() -> CompetitionStateMachine {
             knockout(),
         ),
     );
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     play_out(&mut machine, phase(QUALIFICATION));
     start(&mut machine, phase(INTERMEDIATE));
     start(&mut machine, phase(CONSOLATION));
@@ -725,7 +868,9 @@ fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on()
             knockout(),
         ),
     );
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     play_out(&mut machine, phase(QUALIFICATION));
     start(&mut machine, phase(UPPER));
     play_out(&mut machine, phase(UPPER));
@@ -786,7 +931,9 @@ fn groups_then_a_knockout() -> CompetitionStateMachine {
             knockout,
         ),
     );
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     machine
 }
 
@@ -1011,7 +1158,9 @@ fn knockouts_in_blocks_play_for_places_of_their_own() {
             knockouts,
         ),
     );
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     play_out(&mut machine, phase(QUALIFICATION));
     let qualified = standings(&machine, phase(QUALIFICATION));
     start(&mut machine, phase(KNOCKOUT));
@@ -1073,7 +1222,9 @@ fn two_knockouts_in_blocks_of_the_registration() {
         .build()
         .unwrap();
     add(&mut machine, AddPhase::new(phase(KNOCKOUT), knockouts));
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
     let lots = machine.current().lots().to_vec();
 
     assert_eq!(
@@ -1100,7 +1251,9 @@ fn two_knockouts_in_blocks_of_the_registration() {
 fn a_phase_has_no_more_divisions_than_leave_each_the_entrants_its_format_needs() {
     let mut machine = registered(5);
     add(&mut machine, AddPhase::new(phase(GROUPS), groups(3)));
-    machine.apply_new(StartCompetition.into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
 
     assert_eq!(
         divisions(&machine, phase(GROUPS))

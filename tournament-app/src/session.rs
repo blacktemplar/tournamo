@@ -150,6 +150,7 @@ impl Session {
             add_entrant: !started,
             remove_entrant: !started && !competition.entrants().is_empty(),
             rename_entrant: !competition.entrants().is_empty(),
+            rate_entrant: !started && !competition.entrants().is_empty(),
             // after the start, a phase takes entrants from another one
             add_phase: !started || has_phase,
             edit_phase: has_phase,
@@ -191,7 +192,9 @@ impl Session {
         }
     }
 
-    /// Starts the competition, which schedules the first matches.
+    /// Starts the competition, which schedules the first matches. The registration is ordered by
+    /// rating, best first, entrants of equal ratings and those without one by lot (see
+    /// [`Self::set_rating`]); only that order is in the log, not the ratings.
     ///
     /// # Errors
     /// Returns an error if the competition has started already, has no phase, or fewer than two
@@ -203,8 +206,9 @@ impl Session {
         {
             return Err(needed);
         }
+        let start = StartCompetition::new(self.order_by_rating());
         self.history
-            .apply_new(&mut self.machine, StartCompetition.into())
+            .apply_new(&mut self.machine, start.into())
             .map_err(|error| {
                 refused(error, StartError::Rejected, |refusal| match refusal {
                     Refusal::Started => Some(StartError::Started),

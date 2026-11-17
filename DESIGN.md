@@ -730,7 +730,7 @@ and its **seeding** orders each division.
 
 The entry of a phase is one ordered list going through steps, each keeping
 the order it gets unless changing it is its job: the **registration** (the
-entrants by lot), the **field** (which places of which sources, in order:
+entrants in the order the start gave, the rest by lot), the **field** (which places of which sources, in order:
 `AddPhase::sources`), the **draw** (which division a qualifier goes to, and
 whether the divisions are parallel or levels: `PhasePlugins::draw`) and the
 **seeding** (the order within a division: `PhasePlugins::seeding`).
@@ -758,10 +758,21 @@ whether the divisions are parallel or levels: `PhasePlugins::draw`) and the
 - **Lots, and the order of the registration.** At the start every entrant
   gets a lot: their place in the entrants sorted by uuid and shuffled with
   `Entropy::CompetitionStart`, exactly the order the start drew before, so an
-  old log replays into the same competition. The registration is ordered by
-  lot (`Competition::lots`). A ranking's lot is the best of its entrants', and
-  the unique rank of a standing breaks a tie by it, not by the initial rank,
-  which may come from an earlier phase. No rating is ever in the log.
+  old log replays into the same competition (`Competition::lots`). A ranking's
+  lot is the best of its entrants', and the unique rank of a standing breaks a
+  tie by it, not by the initial rank, which may come from a given order or an
+  earlier phase.
+- **The order of the registration comes from a rating.** `StartCompetition`
+  carries an `order`: tiers of entrant ids, best first. The registration
+  (`Competition::registration`, saved next to the lots) is the tiers in order,
+  each ordered by lot, then everyone in no tier by lot; without an order it is
+  the lots, which is how an old log replays. The app keeps an optional rating
+  per person, next to the names outside the log (higher is better), and starts
+  with the rated entrants by rating, equal ratings one tier. No rating is ever
+  in the log, only the order of ids: a rating could identify a person, and the
+  log cannot be partly deleted. A source of the registration taking a range
+  whose cut goes through a tier, or through the unrated, is decided by lot,
+  which the app warns of (`Session::lot_cuts`) before the start.
 - **A tie at a cut is decided by lot, and the operator is told.** A source
   takes places by unique rank, so the engine always has an answer and never
   refuses a start; where rows sharing a rank end up on both sides of a cut, the
@@ -913,6 +924,12 @@ Rejected:
 - Breaking ties of the standings by the initial rank: it may come from a
   given order or an earlier phase, so a lot that is the same for every phase
   is fairer, and in an old log both are the same.
+- The start carrying a total order made by the app, rather than tiers: the
+  engine would not know which neighbours the app ordered by lot, so equal
+  ratings would be decided by a lot of the app's, outside the competition's
+  seed and its replay; with tiers the engine's lot decides them, as it decides
+  every other tie. The ratings themselves in the log: personal data, which the
+  log cannot drop. Arranging the entrants by hand: not in the first version.
 - Empty divisions from the moment a phase is added, with the plugins split
   into a configuration and a state type: saves the copy, but needs divisions
   before the draw has dealt the entrants.

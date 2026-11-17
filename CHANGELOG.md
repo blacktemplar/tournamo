@@ -44,6 +44,17 @@ later one: a file whose `"format"` changes is migrated, not refused.
   losses), marked by an outlined tick; ticking or unticking shows or hides a
   metric anyway, also while the phase is played, and a metric ticked is
   calculated. The summary of a phase names what is shown or hidden so.
+- Entrants can be rated (e.g. by Elo), higher is better: a switch “Ratings”
+  above the entrants shows a field per entrant and their seed, and a list
+  pasted gives a rating after a `;` or a tab. The start orders the
+  registration by rating, equal ratings and the unrated by lot, so a
+  knockout seeds its bracket by rating and groups are dealt by it. Only that
+  order is saved in the competition's history; the ratings are saved with
+  the names, and no longer change once the competition has started. The
+  first phase can take only some places of the registration (“Only some
+  places”), so the best rated can go straight to a later phase while the
+  others play a qualification; the form warns where the lot decides who of
+  the registration is in a phase. CLI: `add-entrant --rating`, `rate`.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
   `ranking` and `edit-phase`; `--division <letter>` for `matches` and
@@ -69,9 +80,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   (`"divisions": [{"plugins", "data"}]`, one once it has started, none before),
   next to its `"plugins"` as configured, its `"seed"` and whether it has
   `"started"`. A phase and the change adding it hold their `"name"` and
-  `"sources"`, the competition its `"lots"` and `"highest_number"`, a division
-  its `"number_base"`, a ranking its `"lot"`; the log can hold the new change
-  `"StartPhase"`. The plugins of a phase, of a division and of the change adding
+  `"sources"`, the competition its `"lots"`, `"registration"` and
+  `"highest_number"`, a division its `"number_base"`, a ranking its `"lot"`, a
+  person their `"rating"`; the start holds its `"order"` (`{"order": []}` where
+  it was `null`), and the log can hold the new change `"StartPhase"`. The plugins of a phase, of a division and of the change adding
   a phase hold their `"divisions"`, `"draw"` and `"across"` (one division,
   dealt in order, compared by nothing in a competition of an earlier format).
   Competitions of formats 1 to 4 open unchanged; earlier versions refuse

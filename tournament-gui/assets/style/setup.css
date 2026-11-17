@@ -55,3 +55,49 @@
   border-top: 1px solid var(--border);
   margin-top: var(--space-4);
 }
+
+/* Ratings: the seed and the field of each entrant, right of its name */
+#entrant-list.rated li {
+  flex-wrap: wrap;
+}
+
+#entrant-list .seed {
+  min-width: 2.5em;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* room for a name's words, its controls wrapping below it, to the right, where there is too
+ * little */
+#entrant-list.rated .name {
+  min-width: 7em;
+}
+
+#entrant-list .controls {
+  display: contents;
+}
+
+#entrant-list.rated .controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
+  gap: var(--space-2);
+}
+
+#entrant-list .rating {
+  width: 5em;
+}
+
+/* below the row, after its buttons; no room while it says nothing, staying a live region all
+ * the same */
+#entrant-list .rating-error {
+  width: 100%;
+  order: 1;
+  margin: 0;
+}
+
+#entrant-list .rating-error:empty {
+  display: contents;
+}

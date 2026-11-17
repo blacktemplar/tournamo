@@ -69,6 +69,8 @@ fn undo_and_redo_tell_the_action_they_walked_through() {
     let alice = EntrantRow {
         id: alice,
         name: Some("Alice".to_owned()),
+        rating: None,
+        seed: None,
     };
     assert_eq!(
         session.undo().unwrap(),

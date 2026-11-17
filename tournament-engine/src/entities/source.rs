@@ -20,7 +20,8 @@ pub struct Source {
 /// What a [`Source`] takes places of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SourceOf {
-    /// The registration: every entrant on their own, by lot, see [`Competition::lots`].
+    /// The registration: every entrant on their own, in the order of the registration, see
+    /// [`Competition::registration`].
     Registration,
     /// The overall standings of the phase, by unique rank.
     Phase(PhaseId),
@@ -97,7 +98,7 @@ pub struct Qualifier {
 /// Where a [`Qualifier`] comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Origin {
-    /// The registration, at its place by lot.
+    /// The registration, at its place in the order of the registration.
     Registration { place: NonZeroU32 },
     /// A row of the standings of an earlier phase: its ranks in its division's [`Standings`] and
     /// in the overall standings of the phase.

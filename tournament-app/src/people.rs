@@ -3,30 +3,76 @@
 //! It is kept apart from the competition, whose transition log holds only the ids of the entrants:
 //! the log has to replay as it was written, whereas personal data can be deleted.
 
+use std::fmt::{self, Display};
+
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    EntrantId,
+    EntrantId, Score,
     map::{IdAble, IdMap},
 };
+
+use crate::result_form::number_parts;
 
 /// Who an entrant is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Person {
     id: EntrantId,
     name: String,
+    rating: Option<Rating>,
 }
 
 impl Person {
-    /// The person `id` is the entrant of, shown and addressed by `name`.
+    /// The person `id` is the entrant of, shown and addressed by `name`, without a rating.
     pub fn new(id: EntrantId, name: impl Into<String>) -> Self {
         Self {
             id,
             name: name.into(),
+            rating: None,
         }
+    }
+
+    /// This person, rated `rating`.
+    pub fn with_rating(mut self, rating: Option<Rating>) -> Self {
+        self.rating = rating;
+        self
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// How strong the entrant is rated, higher is better; the registration is ordered by it.
+    pub fn rating(&self) -> Option<Rating> {
+        self.rating
+    }
+}
+
+/// How strong an entrant is rated, higher is better, e.g. an Elo rating: a finite number, not
+/// negative.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Rating(Score);
+
+impl Rating {
+    /// The rating `text` says, spaces around it ignored: digits, or digits with a point or a comma
+    /// between them, as a score is typed (see [`read_score`](crate::result_form::read_score)).
+    pub fn parse(text: &str) -> Option<Self> {
+        let (whole, fraction) = number_parts(text.trim())?;
+        format!("{whole}.{}", fraction.unwrap_or("0"))
+            .parse()
+            .ok()
+            .map(Self)
+    }
+
+    pub fn get(self) -> f64 {
+        self.0.get()
+    }
+}
+
+/// Shows the rating as its number, e.g. `1500` or `7.5`.
+impl Display for Rating {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -74,6 +120,20 @@ impl People {
         self.get(id).map(Person::name)
     }
 
+    /// Rates the entrant `id` `rating`, or unrates it if `None`. Returns whether this knows who it
+    /// is; if not, nothing changes.
+    pub fn set_rating(&mut self, id: &EntrantId, rating: Option<Rating>) -> bool {
+        self.0
+            .get_mut(id)
+            .map(|person| person.rating = rating)
+            .is_some()
+    }
+
+    /// The rating of the entrant `id`, if this knows one.
+    pub fn rating(&self, id: &EntrantId) -> Option<Rating> {
+        self.get(id).and_then(Person::rating)
+    }
+
     /// Everyone, in the order they were added.
     pub fn iter(&self) -> impl Iterator<Item = &Person> {
         self.0.values()
@@ -100,11 +160,33 @@ mod tests {
         assert_eq!(
             value,
             json!([
-                { "id": "00000000-0000-0000-0000-000000000002", "name": "Bob" },
-                { "id": "00000000-0000-0000-0000-000000000001", "name": "Alice" },
+                { "id": "00000000-0000-0000-0000-000000000002", "name": "Bob", "rating": null },
+                { "id": "00000000-0000-0000-0000-000000000001", "name": "Alice", "rating": null },
             ])
         );
         assert_eq!(serde_json::from_value::<People>(value).unwrap(), people);
+    }
+
+    #[test]
+    fn a_rating_serializes_as_its_number() {
+        let person = Person::new(EntrantId::new(Uuid::from_u128(1)), "Alice")
+            .with_rating(Rating::parse("1500"));
+
+        let value = serde_json::to_value(&person).unwrap();
+
+        assert_eq!(value["rating"], json!(1500.0));
+        assert_eq!(serde_json::from_value::<Person>(value).unwrap(), person);
+    }
+
+    #[test]
+    fn a_rating_is_read_as_a_number_of_a_score() {
+        assert_eq!(Rating::parse(" 1500 ").map(Rating::get), Some(1500.0));
+        assert_eq!(Rating::parse("7,5").map(Rating::get), Some(7.5));
+        assert_eq!(Rating::parse("7.5").map(Rating::get), Some(7.5));
+        assert_eq!(Rating::parse("70000").map(Rating::get), Some(70000.0));
+        for not_a_rating in ["", "-3", "1e3", "abc", "1 500", "1.2.3", &"9".repeat(400)] {
+            assert_eq!(Rating::parse(not_a_rating), None, "{not_a_rating:?}");
+        }
     }
 
     #[test]

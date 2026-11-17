@@ -32,11 +32,12 @@ use super::*;
 use crate::{
     error::{
         AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
-        PhaseDraftError, RedoError, RemoveEntrantError, RenameEntrantError, ReportEnteredError,
-        ReportError, SourcesError, StartError, UndoError, UndoReportError,
+        PhaseDraftError, RateEntrantError, RedoError, RemoveEntrantError, RenameEntrantError,
+        ReportEnteredError, ReportError, SourcesError, StartError, UndoError, UndoReportError,
     },
     file::{self},
     form::PhaseForm,
+    people::Rating,
     storage::{CompetitionKey, Listing, MemoryStorage, Progress, Save, Storage, Stored},
     view::{
         Action, BracketColumn, BracketEntry, BracketLine, BracketPart, BracketSection,

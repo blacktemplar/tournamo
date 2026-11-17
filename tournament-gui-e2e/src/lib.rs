@@ -1171,6 +1171,23 @@ impl Gui {
         Ok(())
     }
 
+    /// Takes the places of the source at `index` of the form of the phase shown from what the
+    /// option `text` of its choice says, e.g. `"the registration"`.
+    pub async fn choose_source(&self, index: usize, text: &str) -> WebDriverResult<()> {
+        self.choose(&format!("source-{index}"), text).await
+    }
+
+    /// Waits until the form of the phase shown warns of `warnings` about where it takes its
+    /// entrants from, in this order.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with the warnings shown instead.
+    pub async fn expect_source_warnings(&self, warnings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#source-warnings li"), warnings)
+            .await
+    }
+
     /// Goes to the phase or the ranking whose link under the bar says `text`.
     pub async fn go_to_phase(&self, text: &str) -> WebDriverResult<()> {
         let by = By::XPath(format!(
@@ -1279,6 +1296,37 @@ impl Gui {
             .await
     }
 
+    /// Waits until the standings of the division of the letter `letter`, e.g. `Some('A')`, or
+    /// those of the only division for `None`, list the entrants `names`, in any order.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the entrants listed instead.
+    pub async fn expect_standings_entrants(
+        &self,
+        letter: Option<char>,
+        names: &[&str],
+    ) -> WebDriverResult<()> {
+        let suffix = letter.map_or_else(String::new, |letter| {
+            format!("-{}", letter.to_ascii_lowercase())
+        });
+        self.page
+            .expect_script(
+                &format!(
+                    "const marks = /[{}]/g;
+                    const shown = [...document.querySelectorAll(
+                        '#standing-list{suffix} tbody th.name')]
+                        .map((name) => name.textContent.replace(marks, '').trim())
+                        .sort();
+                    return JSON.stringify(shown) === JSON.stringify([...arguments[0]].sort())
+                        ? null : `it lists ${{shown.join(', ')}}`;",
+                    ISOLATION_MARKS.iter().collect::<String>()
+                ),
+                vec![serde_json::json!(names)],
+                &format!("the standings {suffix} must list {names:?}"),
+            )
+            .await
+    }
+
     /// Waits until the headers of the columns of the cards comparing a place across the groups
     /// are `headers`, in order, those of each card after those of the one before.
     ///
@@ -1321,6 +1369,95 @@ impl Gui {
     pub async fn expect_ranking(&self, rows: &[&str]) -> WebDriverResult<()> {
         self.page
             .expect_texts(By::Css("#ranking-list tbody tr"), rows)
+            .await
+    }
+
+    /// Shows the ratings of the entrants, by the switch above them.
+    pub async fn show_ratings(&self) -> WebDriverResult<()> {
+        self.toggle("Ratings").await
+    }
+
+    /// Rates the entrant `name` by typing `rating` into its field, which the ratings shown have,
+    /// and leaving it, as the field takes the rating.
+    pub async fn rate_entrant(&self, name: &str, rating: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::XPath(format!(
+                "//input[{}='Rating of {name}']",
+                without_isolation_marks("@aria-label")
+            )))
+            .and_enabled()
+            .first()
+            .await?;
+        self.scroll_to_middle(&input).await?;
+        input.clear().await?;
+        input.send_keys(rating).await?;
+        Page::pause().await;
+        input.send_keys(Key::Enter).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the seeds of the entrants listed, in this order, are `seeds`, e.g. `"#1"`,
+    /// empty for an entrant without a rating.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with the seeds shown instead.
+    pub async fn expect_seeds(&self, seeds: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_script(
+                "const shown = [...document.querySelectorAll('#entrant-list .seed')]
+                    .map((seed) => seed.querySelector('[aria-hidden]')?.textContent ?? '');
+                return JSON.stringify(shown) === JSON.stringify(arguments[0])
+                    ? null : `the seeds are ${JSON.stringify(shown)}`;",
+                vec![serde_json::json!(seeds)],
+                &format!("the seeds must be {seeds:?}"),
+            )
+            .await
+    }
+
+    /// Waits until the ratings in the fields of the entrants listed, in this order, are `ratings`,
+    /// empty for an entrant without one.
+    ///
+    /// # Panics
+    /// Panics if they are not in time, with the ratings shown instead.
+    pub async fn expect_ratings(&self, ratings: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_script(
+                "const shown = [...document.querySelectorAll('#entrant-list input.rating')]
+                    .map((input) => input.value);
+                return JSON.stringify(shown) === JSON.stringify(arguments[0])
+                    ? null : `the ratings are ${JSON.stringify(shown)}`;",
+                vec![serde_json::json!(ratings)],
+                &format!("the ratings must be {ratings:?}"),
+            )
+            .await
+    }
+
+    /// Waits until the matches listed pair the entrants of `pairings`, each pair either way round
+    /// and in any order: a test must not depend on the sides.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the pairings listed instead.
+    pub async fn expect_pairings(&self, pairings: &[(&str, &str)]) -> WebDriverResult<()> {
+        let expected: Vec<[&str; 2]> = pairings.iter().map(|&(a, b)| [a, b]).collect();
+        self.page
+            .expect_script(
+                &format!(
+                    "const marks = /[{}]/g;
+                    const normal = (pairs) => pairs
+                        .map((pair) => JSON.stringify([...pair].sort()))
+                        .sort();
+                    const shown = normal([...document.querySelectorAll('#match-list li.match')]
+                        .map((match) => [...match.querySelectorAll('.side')]
+                            .map((side) => side.textContent.replace(marks, '').trim())));
+                    return JSON.stringify(shown) === JSON.stringify(normal(arguments[0]))
+                        ? null : `the pairings are ${{shown.join(', ')}}`;",
+                    ISOLATION_MARKS.iter().collect::<String>()
+                ),
+                vec![serde_json::json!(expected)],
+                &format!("the matches must pair {pairings:?}"),
+            )
             .await
     }
 

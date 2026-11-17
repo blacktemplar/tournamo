@@ -6,6 +6,8 @@ error-duplicate-name = there already is an entrant named “{ $name }”
 error-entrant-added-after-start = the competition has started, so no entrant can be added anymore
 error-unknown-entrant = there is no such entrant
 error-entrant-removed-after-start = the competition has started, so no entrant can be removed anymore
+error-no-rating = “{ $rating }” is no rating: a rating is a number, such as 1500
+error-rating-after-start = the competition has started, so the ratings can no longer change
 error-unknown-format = there is no format “{ $format }”
 # $reason: in English, from the format's code
 error-format-misconfigured = { $reason }
@@ -116,6 +118,7 @@ number-range = { $whole ->
     }
 # what an answer leads to that the operator may not want, although the phase can be played so
 warning-unranked = ranked by nothing, every entrant is tied in the standings
+warning-lot-decides-cut = the entrants on both sides of the cut after place { $place } of the registration have equal ratings or none, so the lot decides who is on which side
 # what looks like a typo in a result entered, though it is taken
 # $winning: the score a winner usually has
 warning-below-winning-score = neither side has { $winning }, which a winner usually has

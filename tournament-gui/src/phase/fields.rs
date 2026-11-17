@@ -398,7 +398,7 @@ pub(super) fn Issues(id: String, issues: Vec<Text>) -> Element {
 /// What the answer of a field leads to that the operator may not want, although the phase can be
 /// played with it, as a list with the id `id`; nothing if there is nothing to say.
 #[component]
-fn Warnings(id: String, warnings: Vec<Text>) -> Element {
+pub(super) fn Warnings(id: String, warnings: Vec<Text>) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     rsx! {

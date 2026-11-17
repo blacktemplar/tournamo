@@ -57,7 +57,7 @@ fn play_out(entrants: usize, plugins: PhasePlugins, result: MatchResult) -> Opti
     machine
         .apply_new(AddPhase::new(phase, plugins).into())
         .ok()?;
-    machine.apply_new(StartCompetition.into()).ok()?;
+    machine.apply_new(StartCompetition::default().into()).ok()?;
     for _ in 0..=MOST_MATCHES {
         let matches = || {
             machine

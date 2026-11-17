@@ -7,6 +7,7 @@ use std::{
 
 use tournament_engine::{
     AddEntrant, Entrant, EntrantId, RemoveEntrant,
+    undoable_state_machine::{LogEntry, LogEntryKind, TransitionId},
     uuid::Uuid,
     vec1::{Vec1, vec1},
 };
@@ -59,13 +60,16 @@ impl Session {
     /// [`Self::entrant_like`], or if the competition has started.
     pub fn add_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
         let name = name.trim();
-        self.check_names(std::iter::once(name))?;
-        self.add_named_entrant(name)
+        let [id] = self.add_named_entrants(&[name])?[..] else {
+            unreachable!("one entrant is added for one name")
+        };
+        Ok(id)
     }
 
     /// Adds all of `names` or none if any name is empty, duplicated, or entrants cannot be added.
-    /// Names are kept as supplied; whitespace-only names are empty. Each entrant is a separate
-    /// undoable action, as when calling [`Self::add_entrant`] for each one.
+    /// Names are kept as supplied; whitespace-only names are empty. All of them are one undoable
+    /// action, [`Action::AddEntrants`](crate::view::Action::AddEntrants) (or
+    /// [`Action::AddEntrant`](crate::view::Action::AddEntrant) for one name).
     ///
     /// # Errors
     /// Returns an error if a name is empty or looks like an existing or earlier name,
@@ -75,10 +79,31 @@ impl Session {
         names: &[impl AsRef<str>],
     ) -> Result<Vec<EntrantId>, AddEntrantError> {
         self.check_names(names.iter().map(AsRef::as_ref))?;
-        names
+        let ids: Vec<_> = names
             .iter()
-            .map(|name| self.add_named_entrant(name.as_ref()))
-            .collect()
+            .map(|_| EntrantId::new(Uuid::new_v4()))
+            .collect();
+        let entries = ids.iter().map(|id| {
+            LogEntry::new(
+                TransitionId::new(),
+                LogEntryKind::Apply(AddEntrant::new(Entrant::new(*id)).into()),
+            )
+        });
+        // All names are checked first. The engine accepts adding the first entrant exactly when it
+        // accepts adding every subsequent one, so a refusal comes at the first, before anything is
+        // appended to the log.
+        self.history
+            .apply_all(&mut self.machine, entries)
+            .map_err(|error| {
+                refused(error, AddEntrantError::Rejected, |refusal| {
+                    (refusal == Refusal::Started).then_some(AddEntrantError::Started)
+                })
+            })?;
+        for (id, name) in ids.iter().zip(names) {
+            self.people.add(Person::new(*id, name.as_ref()));
+        }
+        self.people_changes += names.len();
+        Ok(ids)
     }
 
     fn check_names<'a>(
@@ -103,25 +128,9 @@ impl Session {
         Ok(())
     }
 
-    // All names in a batch are checked first. The engine accepts adding its first entrant
-    // exactly when it accepts adding every subsequent one, so a refusal adds none of them.
-    fn add_named_entrant(&mut self, name: &str) -> Result<EntrantId, AddEntrantError> {
-        let id = EntrantId::new(Uuid::new_v4());
-        self.history
-            .apply_new(&mut self.machine, AddEntrant::new(Entrant::new(id)).into())
-            .map_err(|error| {
-                refused(error, AddEntrantError::Rejected, |refusal| {
-                    (refusal == Refusal::Started).then_some(AddEntrantError::Started)
-                })
-            })?;
-        self.people.add(Person::new(id, name));
-        self.people_changes += 1;
-        Ok(id)
-    }
-
     /// Adds an entrant for each line of `lines` that is not blank, e.g. of a list pasted, as
-    /// [`Self::add_entrant`] adds one: all of them, in order, or none if any is refused. Each is
-    /// an action of its own. A line of a name, a tab or a `;`, and a number (see
+    /// [`Self::add_entrant`] adds one: all of them, in order, or none if any is refused, as one
+    /// action. A line of a name, a tab or a `;`, and a number (see
     /// [`Rating::parse`]) rates the entrant by that number, e.g. `Alice;1500`; nothing after the
     /// tab or `;` gives no rating.
     ///

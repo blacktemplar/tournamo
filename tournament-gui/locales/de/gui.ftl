@@ -348,6 +348,7 @@ announce-started = Gestartet: { $count ->
        *[other] { $count } Spiele sind
     } zu spielen.
 action-add-entrant = Hinzufügen von { $name }
+action-add-entrants = Hinzufügen von { $count } Teilnehmern
 action-remove-entrant = Entfernen von { $name }
 action-add-phase = Hinzufügen von { $phase }
 action-edit-phase = Bearbeiten von { $phase }

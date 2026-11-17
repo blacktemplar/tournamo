@@ -52,7 +52,7 @@ fn a_batch_is_checked_before_any_entrant_is_added() {
 }
 
 #[test]
-fn batch_names_are_kept_as_supplied_and_undone_one_at_a_time() {
+fn batch_names_are_kept_as_supplied_and_undone_together() {
     let mut session = Session::new("cup");
     session
         .add_named_entrants(&[" Alice ".to_owned(), "Bob".to_owned()])
@@ -60,10 +60,7 @@ fn batch_names_are_kept_as_supplied_and_undone_one_at_a_time() {
     assert_eq!(names(&session.entrants()), [" Alice ", "Bob"]);
 
     session.undo().unwrap();
-    assert_eq!(names(&session.entrants()), [" Alice "]);
-    session.undo().unwrap();
     assert!(session.entrants().is_empty());
-    session.redo().unwrap();
     session.redo().unwrap();
     assert_eq!(names(&session.entrants()), [" Alice ", "Bob"]);
 }
@@ -117,7 +114,7 @@ fn a_removed_entrant_comes_back_with_its_name_by_undo() {
     assert_eq!(names(&session.entrants()), ["Alice", "Bob"]);
 }
 
-/// A list adds an entrant for each line not blank, each an action of its own.
+/// A list adds an entrant for each line not blank, all of them one action.
 #[test]
 fn a_list_adds_an_entrant_for_each_line() {
     let mut session = Session::new("cup");
@@ -130,8 +127,29 @@ fn a_list_adds_an_entrant_for_each_line() {
         names(&session.entrants()),
         ["Alice", "Bob", "Carol", "Dave"]
     );
-    session.undo().unwrap();
-    assert_eq!(names(&session.entrants()), ["Alice", "Bob", "Carol"]);
+    let added = session.entrants()[1..].to_vec();
+    assert_eq!(
+        session.next_undo(),
+        Some(Action::AddEntrants(added.clone()))
+    );
+    assert_eq!(session.undo().unwrap(), Action::AddEntrants(added.clone()));
+    assert_eq!(names(&session.entrants()), ["Alice"]);
+    assert_eq!(session.redo().unwrap(), Action::AddEntrants(added));
+    assert_eq!(
+        names(&session.entrants()),
+        ["Alice", "Bob", "Carol", "Dave"]
+    );
+}
+
+/// A list of one line adds an entrant as [`Session::add_entrant`] does.
+#[test]
+fn a_list_of_one_line_is_undone_as_one_entrant() {
+    let mut session = Session::new("cup");
+
+    session.add_entrants("Alice\n").unwrap();
+
+    let alice = session.entrants()[0].clone();
+    assert_eq!(session.undo().unwrap(), Action::AddEntrant(alice));
 }
 
 /// A list with a name taken, by an entrant or an earlier line, adds nobody.

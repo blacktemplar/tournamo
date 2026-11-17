@@ -1248,9 +1248,10 @@ lets the operator change it, and hands the built plugins to
 `undo`/`redo` work as in an editor: they undo what the operator did, not what
 the log ends with. `undoable_state_machine::SessionHistory` keeps the ids of the
 entries the session appended as actions (any change, including a targeted undo
-and a reconfiguration); `undo_last` undoes the latest in effect, `redo_last`
-redoes what it undid last while no action was taken since, each by an ordinary
-undo entry naming its target. Operations appending an action take the history
+and a reconfiguration), each a group of one or more entries; `undo_last` undoes
+the latest in effect, `redo_last` redoes what it undid last while no action was
+taken since, each by an ordinary undo entry naming its target, one per entry of
+the action. Operations appending an action take the history
 (`apply_in`, `undo_match_result`, `reconfigure_phase`).
 
 - **Per session, outside the log**: with a shared log, an operator's undo must
@@ -1260,6 +1261,15 @@ undo entry naming its target. Operations appending an action take the history
   has nothing to undo, since a reload or another tab taking over loses it.
 - **A targeted undo is an action**: after `undo-report`, `undo` brings the
   result back.
+- **Several entries can be one action** (`SessionHistory::apply_all`): who
+  pastes a list of entrants (or, *planned*, applies a preset of several phases)
+  and dislikes it expects one undo to take all of it back. The log keeps one
+  entry per entrant or phase, each edited and removed through its own entry, so
+  the grouping belongs to the history, which is not saved. `apply_all` undoes
+  the entries it applied if a later one is refused, which leaves them and their
+  undos in the log: the session checks first what it can (the names of a list),
+  and the engine refuses adding an entrant for all of them or none. The
+  `Action` of a group says what it was as a whole (`AddEntrants`).
 - **Explicit targets**, so an undo means the same however logs are merged.
 - **Changes of other sessions leave the history as it is**: what this session
   can undo and redo stays after catching up with them.
@@ -1283,7 +1293,10 @@ whose); an origin per user (a user with two sessions); persisting the history
 (not part of the competition); ending the history when catching up with another
 session (a result reported elsewhere would keep the operator from undoing their
 own); keeping an action to try again after it failed (it fails again until the
-other session's change is undone).
+other session's change is undone); a transition adding several entrants or
+phases (editing or removing one of them would need entries of its own); grouping
+actions in the app's `Session` alone (every consumer of the history would repeat
+it).
 
 ## Dependencies this implies
 

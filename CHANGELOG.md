@@ -73,6 +73,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- A list of entrants pasted at once, or added by one `add-entrant` of several
+  names, is one step of undo and redo: one undo takes all of them back, which
+  the page announces as "adding 12 entrants".
 - A competition is saved in format 3: each change in its log is written under
   its name, `{"AddEntrant": {...}}`, rather than as its `"type"`
   (`"tournament_engine::add_entrant"`) and `"value"`. Competitions of formats 1

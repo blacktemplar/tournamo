@@ -107,6 +107,28 @@ fn half_points_for_draws_add_up_without_rounding() {
 }
 
 #[test]
+fn tenths_of_points_add_up_to_what_they_are_worth() {
+    let matches = vec![
+        (1, vec![0], vec![1]),
+        (2, vec![0], vec![1]),
+        (3, vec![0], vec![1]),
+    ];
+    let mut phase = phase_with(
+        2,
+        matches,
+        PointsCalculator::new(Score::ONE, Score::new(0.1)),
+    );
+
+    for round in 1..=3 {
+        let match_id = match_id(&phase, round, &[0], &[1]);
+        phase.report_match_result(match_id, MatchResult::Draw);
+    }
+
+    assert_eq!(metric_of(&phase, 0), points("0.3"));
+    assert_eq!(metric_of(&phase, 0).0.to_string(), "0.3");
+}
+
+#[test]
 fn a_loss_is_worth_no_points() {
     let mut phase = phase_with(2, vec![(1, vec![0], vec![1])], THREE_ONE);
     let match_id = match_id(&phase, 1, &[0], &[1]);

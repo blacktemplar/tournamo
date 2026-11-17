@@ -163,6 +163,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   touched it.
 - Pressing Enter in a score completes it as leaving it does (7 becomes 7–21
   where 21 is the winning score), so the match is reported, as by the button.
+- Points of decimals (e.g. 0.1 for a draw) add up to what they are worth,
+  whatever the order of the matches: the standings show 0.3, not
+  0.30000000000000004, and entrants with equal points or tiebreaks are tied
+  rather than ranked apart. Scores are counted to nine decimal places, also
+  those of competitions saved before.
 
 ## [0.4.0] - 2026-11-09
 

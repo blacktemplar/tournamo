@@ -486,7 +486,10 @@ pub struct StandingRow {
     pub played: usize,
     /// One cell per column of [`Standings::columns`], `None` where the metric is not calculated.
     pub cells: Vec<Option<StandingCell>>,
-    /// The medal of its rank, once every match has a result; `None` before that.
+    /// The medal of its place in the competition, once every match has a result, if it goes on to
+    /// no other phase; never in the standings of a division side by side with others, e.g. a
+    /// group, whose places in the competition are not by its ranks, nor in rows compared across
+    /// them.
     pub medal: Option<Medal>,
     /// Where the row goes on to from here, as the standings are now; `None` if no phase takes it.
     pub advances: Option<Advance>,

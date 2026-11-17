@@ -1246,6 +1246,17 @@ impl Gui {
         self.choose(&format!("source-{index}"), text).await
     }
 
+    /// Waits until the form of the phase shown says `text` of where the places of its source at
+    /// `index` lie in the groups of their phase.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_source_in_groups(&self, index: usize, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Id(format!("source-{index}-groups")), &[text])
+            .await
+    }
+
     /// Waits until the form of the phase shown warns of `warnings` about where it takes its
     /// entrants from, in this order.
     ///

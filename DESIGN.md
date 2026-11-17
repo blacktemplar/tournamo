@@ -956,8 +956,11 @@ order of the new list: `PhasePlugins::teams`).
   other rank shown is one in a division. A tie in a division or of the
   overall rank that the cut goes through shows only in the warning on
   starting the next phase. There is no table of the overall standings in the
-  GUI; the cards of the groups and of the comparison say it all. Medals follow
-  the overall ranks.
+  GUI; the cards of the groups and of the comparison say it all. Medals are of
+  the competition's places, which are not the ranks of a group, so the tables
+  of groups side by side and the comparison show none; a source taking places
+  of them says where its places lie in the groups ("places 1–6 are places 1–2
+  of each group").
 - **Points per match** compare groups of different sizes: the points divided
   by the matches played and the byes reached.
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",

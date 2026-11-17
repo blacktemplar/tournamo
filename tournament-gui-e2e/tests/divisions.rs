@@ -24,6 +24,12 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
     gui.choose_format("Single elimination").await?;
     gui.choose_plugin("seeding", "Groups kept apart").await?;
     gui.enter_place(0, "to", "8").await?;
+    gui.expect_source_in_groups(
+        0,
+        "With 3 groups side by side, places 1–8 are places 1–2 of each group and the best 2 of \
+         those in place 3 of their group, those of one place compared across the groups.",
+    )
+    .await?;
     gui.click("Add phase").await?;
     gui.expect_announcement("The phase is added.").await
 }

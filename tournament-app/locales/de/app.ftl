@@ -102,6 +102,31 @@ number-range = { $whole ->
     }
 warning-unranked = ohne Kriterium sind in der Tabelle alle Teilnehmer gleichauf
 warning-lot-decides-cut = die Teilnehmer beiderseits des Schnitts nach Platz { $place } der Anmeldung haben gleiche Wertungszahlen oder keine, daher entscheidet das Los, wer auf welcher Seite ist
+places-in-groups = bei { $groups } Gruppen nebeneinander { $count ->
+        [one] ist Platz { $from }
+       *[other] sind die Plätze { $from }–{ $to }
+    } { $parts }{ $compared ->
+        [yes] , die eines Platzes im Vergleich der Gruppen
+       *[no] {""}
+    }
+places-on-in-groups = bei { $groups } Gruppen nebeneinander sind die Plätze ab { $from } { $parts }{ $compared ->
+        [yes] , die eines Platzes im Vergleich der Gruppen
+       *[no] {""}
+    }
+group-place = Platz { $rank } jeder Gruppe
+group-places = die Plätze { $first }–{ $last } jeder Gruppe
+group-places-on = die Plätze ab { $rank } jeder Gruppe
+group-places-best = { $count ->
+        [one] der Beste
+       *[other] die besten { $count }
+    } auf Platz { $rank } ihrer Gruppe
+group-places-worst = { $count ->
+        [one] der Schlechteste
+       *[other] die schlechtesten { $count }
+    } auf Platz { $rank } ihrer Gruppe
+group-place-between = Platz { $place } unter denen auf Platz { $rank } ihrer Gruppe
+group-places-between = die Plätze { $first }–{ $last } unter denen auf Platz { $rank } ihrer Gruppe
+list = { $first } und { $last }
 warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger üblicherweise hat
 warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt

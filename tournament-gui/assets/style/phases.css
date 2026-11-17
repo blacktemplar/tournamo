@@ -149,6 +149,11 @@ fieldset.sources legend {
   flex-basis: 100%;
 }
 
+.source-row > .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .place-field {
   display: inline-flex;
   align-items: center;

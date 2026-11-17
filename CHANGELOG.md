@@ -36,7 +36,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   standings of each group and, where the cut of the next phase goes through a
   place, how that place compares across the groups, a dashed line below the
   place in a group going on as things stand; a bracket or cross table per
-  group. Who won the competition is shown above the phases, not in the phase
+  group. The form of a phase taking places of groups says where they lie in
+  the groups, e.g. places 1–6 of three groups are places 1–2 of each group.
+  Medals go by the places of the competition, so the group tables show none.
+  Who won the competition is shown above the phases, not in the phase
   shown.
 - What a table of standings shows is chosen per metric: the metrics of a
   phase are a checkbox per table, the group tables and, where groups are

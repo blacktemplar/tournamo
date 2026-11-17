@@ -125,6 +125,36 @@ number-range = { $whole ->
 # what an answer leads to that the operator may not want, although the phase can be played so
 warning-unranked = ranked by nothing, every entrant is tied in the standings
 warning-lot-decides-cut = the entrants on both sides of the cut after place { $place } of the registration have equal ratings or none, so the lot decides who is on which side
+# where the places a source takes of a phase played in groups side by side lie in its groups,
+# e.g. "with 3 groups side by side, places 1–8 are places 1–2 of each group and the best 2 of
+# those in place 3 of their group, those of one place compared across the groups"; $parts: a list
+# of the group-place messages below; $compared: "yes" where a part takes some of one place
+places-in-groups = with { $groups } groups side by side, { $count ->
+        [one] place { $from } is
+       *[other] places { $from }–{ $to } are
+    } { $parts }{ $compared ->
+        [yes] , those of one place compared across the groups
+       *[no] {""}
+    }
+places-on-in-groups = with { $groups } groups side by side, the places from { $from } on are { $parts }{ $compared ->
+        [yes] , those of one place compared across the groups
+       *[no] {""}
+    }
+group-place = place { $rank } of each group
+group-places = places { $first }–{ $last } of each group
+group-places-on = the places from { $rank } on of each group
+group-places-best = { $count ->
+        [one] the best
+       *[other] the best { $count }
+    } of those in place { $rank } of their group
+group-places-worst = { $count ->
+        [one] the worst
+       *[other] the worst { $count }
+    } of those in place { $rank } of their group
+group-place-between = place { $place } of those in place { $rank } of their group
+group-places-between = places { $first }–{ $last } of those in place { $rank } of their group
+# the last two items of a list, e.g. "a, b and c" with $first "a, b"
+list = { $first } and { $last }
 # what looks like a typo in a result entered, though it is taken
 # $winning: the score a winner usually has
 warning-below-winning-score = neither side has { $winning }, which a winner usually has

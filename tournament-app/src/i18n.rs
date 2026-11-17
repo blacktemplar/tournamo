@@ -162,6 +162,8 @@ pub enum Arg {
     /// Phases with the matches each played of those it has: `Group phase (12 of 18 matches)`,
     /// joined by commas.
     Waiting(Vec<(PhaseName, usize, usize)>),
+    /// Texts, each said by [`Translator::text`], joined as a list: `a, b and c`.
+    List(Vec<Text>),
 }
 
 impl From<PhaseName> for Arg {
@@ -306,7 +308,7 @@ impl Translator {
 
     /// The messages of this crate in English, with no marks around the values of variables: what
     /// [`english`] says.
-    fn plain_english() -> Self {
+    pub(crate) fn plain_english() -> Self {
         let mut bundle = bundle(Language::English, &[]);
         bundle.set_use_isolating(false);
         Self {
@@ -366,6 +368,20 @@ impl Translator {
                             .collect::<Vec<_>>()
                             .join(", "),
                     ),
+                    Arg::List(texts) => {
+                        let mut said: Vec<String> =
+                            texts.iter().map(|text| self.text(text)).collect();
+                        let last = said.pop().unwrap_or_default();
+                        FluentValue::from(if said.is_empty() {
+                            last
+                        } else {
+                            self.text(
+                                &Text::new("list")
+                                    .with("first", said.join(", "))
+                                    .with("last", last),
+                            )
+                        })
+                    }
                 },
             );
         }

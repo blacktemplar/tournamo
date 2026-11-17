@@ -17,7 +17,7 @@
 //! standings shows it. What the operator says about the columns is kept beside the draft, see
 //! [`PhaseForm::columns`].
 
-pub(crate) use entry::Context;
+pub(crate) use entry::{Context, Groups};
 pub use entry::{End, EntryView, SourceChoice, SourceRowView};
 pub use plugin_factory::config::Path;
 use plugin_factory::{

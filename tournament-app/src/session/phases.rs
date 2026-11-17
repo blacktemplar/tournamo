@@ -32,18 +32,7 @@ impl Session {
             .map(|phase| PhaseOverview {
                 id: phase.id(),
                 name: self.phase_name(phase),
-                sources: phase
-                    .sources()
-                    .iter()
-                    .map(|source| SourceRow {
-                        phase: match source.of() {
-                            SourceOf::Registration => None,
-                            SourceOf::Phase(id) => Some(id),
-                        },
-                        from: source.from(),
-                        to: source.to(),
-                    })
-                    .collect(),
+                sources: phase.sources().iter().map(SourceRow::of).collect(),
                 state: self.phase_state(phase),
                 configured_divisions: phase.plugins().divisions().get() as usize,
                 order: phase.plugins().draw().order(),
@@ -477,7 +466,7 @@ impl Session {
 }
 
 /// What the phase `number` with `name`, played in `format`, is called.
-fn named(number: usize, name: Option<&str>, format: &dyn PhaseFormat) -> PhaseName {
+pub(crate) fn named(number: usize, name: Option<&str>, format: &dyn PhaseFormat) -> PhaseName {
     let id = plugin_factory::id_of(format);
     let entry = AnyAxis::of::<dyn PhaseFormat>().entry(id);
     PhaseName {

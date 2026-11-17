@@ -5,7 +5,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::{RemovePhaseError, StartPhaseError},
-    form::End,
+    form::{Editable as _, End},
     i18n::Text,
     people::Rating,
     view::{Advance, Advancing, Cut, PhaseState, SourceProgress, SourceRow},

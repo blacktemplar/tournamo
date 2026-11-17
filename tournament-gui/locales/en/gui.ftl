@@ -459,6 +459,8 @@ action-add-entrant = adding { $name }
 action-add-entrants = adding { $count } entrants
 action-remove-entrant = removing { $name }
 action-add-phase = adding { $phase }
+# $count: at least two
+action-add-phases = adding { $count } phases
 action-edit-phase = editing { $phase }
 action-remove-phase = removing { $phase }
 action-start-phase = the start of { $phase }

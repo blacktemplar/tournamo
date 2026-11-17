@@ -239,3 +239,24 @@ plugin-tournament_engine-later_first_loss =
 plugin-tournament_engine-later_elimination =
     .label = späteres Ausscheiden
     .description = nach der Runde des Ausscheidens; noch dabei zu sein ist am besten
+
+## Presets
+
+plugin-tournament_engine-groups_then_knockout =
+    .label = Gruppen mit anschließendem K.-o.-System
+    .description = alle spielen gegen alle anderen ihrer Gruppe, dann spielen die Besten jeder Gruppe im K.-o.-System weiter
+    .field-groups = Gruppen
+    .field-advancing = Aufsteiger je Gruppe
+    .phase-group-phase = Gruppenphase
+    .phase-knockout = K.-o.-Phase
+plugin-tournament_engine-qualification_then_knockouts =
+    .label = Qualifikation mit anschließenden K.-o.-Turnieren
+    .description = einige Runden gegen zufällige Gegner ordnen alle, die dann nach ihren Plätzen in K.-o.-Turnieren spielen: die Besten im ersten, die Nächsten im zweiten und so weiter
+    .field-rounds = Runden
+    .field-knockouts = K.-o.-Turniere
+    .phase-qualification = Qualifikation
+    .phase-knockouts = K.-o.-Turniere
+plugin-tournament_engine-dyp =
+    .label = DYP
+    .description = Draw Your Partner: die Teilnehmer werden zu Paaren gelost, die im Doppel-K.-o.-System spielen
+    .phase-dyp = DYP

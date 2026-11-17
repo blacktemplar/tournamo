@@ -127,6 +127,7 @@ fn action_text(tr: &Translator, action: &Action) -> String {
             name = team_name(tr, std::slice::from_ref(entrant)),
         ),
         Action::AddPhase(phase) => t!(tr, "action-add-phase", phase = tr.phase_name(phase)),
+        Action::AddPhases(phases) => t!(tr, "action-add-phases", count = phases.len()),
         Action::EditPhase(phase) => t!(tr, "action-edit-phase", phase = tr.phase_name(phase)),
         Action::RemovePhase(phase) => {
             t!(tr, "action-remove-phase", phase = tr.phase_name(phase))

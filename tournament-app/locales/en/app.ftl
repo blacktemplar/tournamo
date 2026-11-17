@@ -11,6 +11,10 @@ error-rating-after-start = the competition has started, so the ratings can no lo
 error-unknown-format = there is no format “{ $format }”
 # $reason: in English, from the format's code
 error-format-misconfigured = { $reason }
+error-unknown-preset = there is no preset “{ $preset }”
+error-preset-misconfigured = { $reason }
+error-preset-does-not-expand = the preset does not work: { $reason }
+error-has-phases = the competition has phases already; a preset sets up a competition without any
 error-invalid-phase = the phase cannot be played this way; the form shows what to change
 error-no-sources = choose where the phase takes its entrants from
 error-source-empty = a range of places ends before it starts
@@ -130,6 +134,7 @@ warning-more-than-decided = more is entered than it took to decide the match
 # $a, $b: the parts, e.g. games, each side had won when the match was decided, side A's first
 warning-more-than-decided-at = the match was decided at { $a }–{ $b } already, yet more is entered
 # what is wrong with the answer of a field, or with a plugin chosen
+issue-preset-incomplete = the preset is not complete; its fields show what to change
 issue-unanswered = this needs an answer
 # the variables of number-range
 issue-out-of-range = this takes { number-range }

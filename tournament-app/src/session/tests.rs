@@ -54,6 +54,7 @@ mod entrants;
 mod entry;
 mod phase;
 mod phases;
+mod presets;
 mod report;
 mod scale;
 mod storage;

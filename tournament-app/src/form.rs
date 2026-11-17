@@ -25,7 +25,7 @@ use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{ConfigError, PluginConfig, Segment, Value},
     draft::{Draft, FieldNode, Issue, Problem},
-    schema::{DecimalRange, FieldKind, IntegerRange, NumberRange},
+    schema::{Configurable, DecimalRange, IntegerRange, NumberRange},
 };
 use tournament_engine::{
     Columns, PhasePlugins, Table,
@@ -41,7 +41,12 @@ use crate::{
     rejected::Rejections,
 };
 
+mod edit;
 mod entry;
+mod preset;
+
+use edit::{Answering, Generator};
+pub use preset::{PresetForm, PresetView, PreviewPhase};
 
 /// The plugins of a phase being configured, see the [module](self), with its name and where it
 /// takes its entrants from, see [`Self::entry_view`].
@@ -210,7 +215,7 @@ pub enum Input {
         /// The numbers it takes, e.g. "a number of at least 0".
         hint: Text,
     },
-    /// An answer of `inner` that may be left out, see [`PhaseForm::answer_optional`].
+    /// An answer of `inner` that may be left out, see [`Editable::answer_optional`].
     Optional { answered: bool, inner: Box<Input> },
     /// One plugin.
     Plugin(PluginInput),
@@ -361,7 +366,7 @@ impl SetEntry<'_> {
 /// A plugin chosen in a list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
-    /// Where it is, which [`PhaseForm::remove`] and the moves take.
+    /// Where it is, which [`Editable::remove`] and the moves take.
     pub path: Path,
     pub plugin: PluginOption,
     pub fields: Vec<FormField>,
@@ -391,6 +396,164 @@ impl PluginOption {
             label: entry.label(),
             description: entry.description(),
             recommended,
+        }
+    }
+}
+
+/// The edits of the fields of a form, by the [`Path`] of the field: a [`PhaseForm`] or a
+/// [`PresetForm`].
+pub trait Editable {
+    /// Answers the field at `path`, which takes yes or no, with `answer`.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, or it takes something else.
+    fn set_bool(&mut self, path: &Path, answer: bool) -> Result<(), ConfigError>;
+
+    /// Answers the field at `path`, which takes a number, with the number `entered`, as an operator
+    /// typed it: with a point or a comma before its decimals, possibly with an exponent (`1e3`).
+    /// Something else, nothing, or a number the field does not take, leaves the answer as it was,
+    /// and the field shows what was entered with why it was not taken until the next change other
+    /// than entering a number; meanwhile the form is not complete (e.g.
+    /// [`FormView::complete`]).
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, or it takes no number.
+    fn enter(&mut self, path: &Path, entered: &str) -> Result<(), ConfigError>;
+
+    /// Why the field at `path`, which takes a number, would not take `entered`, as
+    /// [`Self::enter`] would show it, e.g. while it is being typed; `None` if it would take it.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, or it takes no number.
+    fn issue_entering(&self, path: &Path, entered: &str) -> Result<Option<Text>, ConfigError>;
+
+    /// Answers the field at `path`, which may be left without an answer, if `answered`, or else
+    /// leaves it without one. An answer it is given is what it offers, or else no, or the number of
+    /// its range closest to 0.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, or it takes an answer that cannot be left out.
+    fn answer_optional(&mut self, path: &Path, answered: bool) -> Result<(), ConfigError>;
+
+    /// Answers the field at `path`, which takes one plugin, with the plugin `plugin`, configured as
+    /// it offers, or with none for `None`.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, it takes no plugin, or no plugin of this id;
+    /// for `None`, if it has to take one.
+    fn choose(&mut self, path: &Path, plugin: Option<&str>) -> Result<(), ConfigError>;
+
+    /// Adds the plugin `plugin` to the end of the list at `path`, configured as it offers.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such field, it takes no list, or no plugin of this id, or
+    /// has it already.
+    fn add(&mut self, path: &Path, plugin: &str) -> Result<(), ConfigError>;
+
+    /// Removes the plugin at `item`, a position in a list, from it.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such position.
+    fn remove(&mut self, item: &Path) -> Result<(), ConfigError>;
+
+    /// Moves the plugin at `item`, a position in a list, one up, before the plugin before it;
+    /// the first stays where it is.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such position.
+    fn move_up(&mut self, item: &Path) -> Result<(), ConfigError>;
+
+    /// Moves the plugin at `item`, a position in a list, one down, after the plugin after it; the
+    /// last stays where it is.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such position.
+    fn move_down(&mut self, item: &Path) -> Result<(), ConfigError>;
+}
+
+// a form answering a draft is edited by the functions of `edit`
+impl<F: Answering> Editable for F {
+    fn set_bool(&mut self, path: &Path, answer: bool) -> Result<(), ConfigError> {
+        edit::set_bool(self, path, answer)
+    }
+
+    fn enter(&mut self, path: &Path, entered: &str) -> Result<(), ConfigError> {
+        edit::enter(self, path, entered)
+    }
+
+    fn issue_entering(&self, path: &Path, entered: &str) -> Result<Option<Text>, ConfigError> {
+        edit::issue_entering(self, path, entered)
+    }
+
+    fn answer_optional(&mut self, path: &Path, answered: bool) -> Result<(), ConfigError> {
+        edit::answer_optional(self, path, answered)
+    }
+
+    fn choose(&mut self, path: &Path, plugin: Option<&str>) -> Result<(), ConfigError> {
+        edit::choose(self, path, plugin)
+    }
+
+    fn add(&mut self, path: &Path, plugin: &str) -> Result<(), ConfigError> {
+        edit::add(self, path, plugin)
+    }
+
+    fn remove(&mut self, item: &Path) -> Result<(), ConfigError> {
+        edit::remove(self, item)
+    }
+
+    fn move_up(&mut self, item: &Path) -> Result<(), ConfigError> {
+        edit::move_up(self, item)
+    }
+
+    fn move_down(&mut self, item: &Path) -> Result<(), ConfigError> {
+        edit::move_down(self, item)
+    }
+}
+
+impl Answering for PhaseForm {
+    type Of = PhasePlugins;
+
+    fn draft(&self) -> &Draft<PhasePlugins> {
+        &self.draft
+    }
+
+    fn rejected(&self) -> &Rejections<Path> {
+        &self.rejected
+    }
+
+    fn rejected_mut(&mut self) -> &mut Rejections<Path> {
+        &mut self.rejected
+    }
+
+    fn change(
+        &mut self,
+        path: &Path,
+        change: impl FnOnce(&mut Draft<PhasePlugins>) -> Result<(), ConfigError>,
+    ) -> Result<(), ConfigError> {
+        let mut draft = self.draft.clone();
+        change(&mut draft)?;
+        let following = self.following_suggestions && !is_suggested(path);
+        self.draft = if following {
+            suggested(draft)?
+        } else {
+            draft.with_defaults()?
+        };
+        // a metric that leaves the list takes what was said about its columns with it
+        let calculated = answered(&self.completed(), PhasePlugins::METRICS);
+        self.columns.retain(|id| calculated.contains(&id));
+        self.following_suggestions = following;
+        if is_suggested(path) || following {
+            self.rejected.clear();
+        } else {
+            // Basic settings do not move customized ranking or metric fields.
+            self.rejected.retain(is_suggested);
+        }
+        Ok(())
+    }
+
+    fn not_taken(&mut self, path: &Path) {
+        if is_suggested(path) {
+            self.following_suggestions = false;
         }
     }
 }
@@ -481,7 +644,7 @@ impl PhaseForm {
         let metrics = Path::ROOT.field(PhasePlugins::METRICS);
         let completed = self.completed();
         if shown && !answered(&completed, PhasePlugins::METRICS).contains(&calculator) {
-            self.add(&metrics, calculator)?;
+            edit::add(self, &metrics, calculator)?;
         }
         let by_rule = self
             .rule(&self.completed(), table)
@@ -519,10 +682,19 @@ impl PhaseForm {
                     .flatten()
             });
             if let Some(chosen) = chosen {
-                self.remove(&chosen)?;
+                edit::remove(self, &chosen)?;
             }
         }
         Ok(())
+    }
+
+    /// What the fields of the draft are shown from.
+    fn generator(&self) -> Generator<'_, PhasePlugins> {
+        Generator {
+            draft: &self.draft,
+            rejected: &self.rejected,
+            offered: PhasePlugins::default_value,
+        }
     }
 
     /// The draft with the plugins it implies, see [`Draft::add_implied`].
@@ -579,7 +751,9 @@ impl PhaseForm {
             completed: &completed_nodes,
             irrelevant: &irrelevant,
         };
-        let mut fields = self.fields(&nodes, None, &completed_nodes, &whole);
+        let mut fields = self
+            .generator()
+            .fields(&nodes, None, &completed_nodes, &whole);
         if let Some(FormField {
             input: Input::List(metrics),
             ..
@@ -618,413 +792,6 @@ impl PhaseForm {
             issues: unplaced,
             entry: self.entry_view(),
         }
-    }
-
-    /// Answers the field at `path`, which takes yes or no, with `answer`.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such field, or it takes something else.
-    pub fn set_bool(&mut self, path: &Path, answer: bool) -> Result<(), ConfigError> {
-        self.change(path, |draft| draft.set(path, answer))
-    }
-
-    /// Answers the field at `path`, which takes a number, with the number `entered`, as an operator
-    /// typed it: with a point or a comma before its decimals, possibly with an exponent (`1e3`).
-    /// Something else, nothing, or a number the field does not take, leaves the answer as it was,
-    /// and the field shows what was entered with why it was not taken until the next change other
-    /// than entering a number; meanwhile the form is not [complete](FormView::complete).
-    ///
-    /// # Errors
-    /// Returns an error if there is no such field, or it takes no number.
-    pub fn enter(&mut self, path: &Path, entered: &str) -> Result<(), ConfigError> {
-        let Some(range) = self.kind(path)?.range() else {
-            return Err(ConfigError::WrongKind {
-                path: path.clone(),
-                expected: "an answer that is no number",
-                found: "a number",
-            });
-        };
-        self.rejected.forget(path);
-        let out_of_range = |range| with_range(Text::new("issue-out-of-range"), range);
-        let problem = match number(entered, range) {
-            Ok(number) => {
-                // a number moves no field, so what other number fields did not take stays
-                let others = std::mem::take(&mut self.rejected);
-                let changed = self.change(path, |draft| draft.set(path, number));
-                self.rejected = others;
-                match changed {
-                    Ok(()) => return Ok(()),
-                    Err(ConfigError::OutOfRange { allowed, .. }) => out_of_range(allowed),
-                    Err(error) => return Err(error),
-                }
-            }
-            Err(NotTaken::OutOfRange) => out_of_range(range),
-            Err(NotTaken::NoNumber) => {
-                Text::new("issue-not-a-number").with("entered", entered.trim())
-            }
-        };
-        self.rejected.reject(path.clone(), entered, problem);
-        if is_suggested(path) {
-            self.following_suggestions = false;
-        }
-        Ok(())
-    }
-
-    /// Why the field at `path`, which takes a number, would not take `entered`, as
-    /// [`Self::enter`] would show it, e.g. while it is being typed; `None` if it would take it.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such field, or it takes no number.
-    pub fn issue_entering(&self, path: &Path, entered: &str) -> Result<Option<Text>, ConfigError> {
-        let mut form = self.clone();
-        form.enter(path, entered)?;
-        Ok(form
-            .rejected
-            .get(path)
-            .map(|rejected| rejected.problem.clone()))
-    }
-
-    /// Answers the field at `path`, which may be left without an answer, if `answered`, or else
-    /// leaves it without one. An answer it is given is what it offers, or else no, or the number of
-    /// its range closest to 0.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such field, or it takes an answer that cannot be left out.
-    pub fn answer_optional(&mut self, path: &Path, answered: bool) -> Result<(), ConfigError> {
-        let FieldKind::Optional(inner) = self.kind(path)? else {
-            return Err(ConfigError::WrongKind {
-                path: path.clone(),
-                expected: "an answer that cannot be left out",
-                found: "none",
-            });
-        };
-        if !answered {
-            return self.change(path, |draft| draft.set(path, Value::Null));
-        }
-        let offered = self
-            .draft
-            .default_value(path)?
-            .filter(|offered| !offered.is_null());
-        let answer = match (offered, &*inner) {
-            (Some(offered), _) => offered,
-            (None, FieldKind::Bool) => Value::from(false),
-            // 0 is a multiple of anything, and so are the bounds
-            (None, FieldKind::Integer(range)) => Value::from(0.clamp(range.min(), range.max())),
-            (None, FieldKind::Decimal(range)) => {
-                let at_least = range.min().map_or(0.0, |min| min.max(0.0));
-                Value::from(range.max().map_or(at_least, |max| at_least.min(max)))
-            }
-            (None, _) => Value::Null,
-        };
-        self.change(path, |draft| draft.set(path, answer))
-    }
-
-    /// Answers the field at `path`, which takes one plugin, with the plugin `plugin`, configured as
-    /// it offers, or with none for `None`.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such field, it takes no plugin, or no plugin of this id;
-    /// for `None`, if it has to take one.
-    pub fn choose(&mut self, path: &Path, plugin: Option<&str>) -> Result<(), ConfigError> {
-        let answer = plugin.map_or(Value::Null, |plugin| PluginConfig::new(plugin).into());
-        self.change(path, |draft| draft.set(path, answer))
-    }
-
-    /// Adds the plugin `plugin` to the end of the list at `path`, configured as it offers.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such field, it takes no list, or no plugin of this id, or
-    /// has it already.
-    pub fn add(&mut self, path: &Path, plugin: &str) -> Result<(), ConfigError> {
-        let end = self.items(path)?.len();
-        self.change(path, |draft| {
-            draft.set(&path.clone().index(end), PluginConfig::new(plugin))
-        })
-    }
-
-    /// Removes the plugin at `item`, a position in a list, from it.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such position.
-    pub fn remove(&mut self, item: &Path) -> Result<(), ConfigError> {
-        position(item)?;
-        self.change(item, |draft| draft.unset(item))
-    }
-
-    /// Moves the plugin at `item`, a position in a list, one up, before the plugin before it;
-    /// the first stays where it is.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such position.
-    pub fn move_up(&mut self, item: &Path) -> Result<(), ConfigError> {
-        let (list, index) = position(item)?;
-        self.swap(&list, index.checked_sub(1), index)
-    }
-
-    /// Moves the plugin at `item`, a position in a list, one down, after the plugin after it; the
-    /// last stays where it is.
-    ///
-    /// # Errors
-    /// Returns an error if there is no such position.
-    pub fn move_down(&mut self, item: &Path) -> Result<(), ConfigError> {
-        let (list, index) = position(item)?;
-        self.swap(&list, Some(index), index + 1)
-    }
-
-    /// Swaps the plugins at `first` and `second` of the list at `list`, unless one of them is not
-    /// in it.
-    fn swap(
-        &mut self,
-        list: &Path,
-        first: Option<usize>,
-        second: usize,
-    ) -> Result<(), ConfigError> {
-        let mut items = self.items(list)?;
-        let Some(first) = first.filter(|_| second < items.len()) else {
-            return Ok(());
-        };
-        items.swap(first, second);
-        self.change(list, |draft| draft.set(list, Value::Array(items)))
-    }
-
-    /// The answers in the list at `path`.
-    fn items(&self, path: &Path) -> Result<Vec<Value>, ConfigError> {
-        match self.draft.answers().get_at(path) {
-            Some(Value::Array(items)) => Ok(items.clone()),
-            None if self.kind(path)?.axis().is_some() => Ok(Vec::new()),
-            _ => Err(ConfigError::WrongKind {
-                path: path.clone(),
-                expected: "a list of plugins",
-                found: "something else",
-            }),
-        }
-    }
-
-    /// The kind of answer the field at `path` takes.
-    fn kind(&self, path: &Path) -> Result<FieldKind, ConfigError> {
-        self.draft
-            .field_at(path)
-            .map(|node| node.field.kind().clone())
-            .ok_or_else(|| ConfigError::UnknownField { path: path.clone() })
-    }
-
-    /// Applies an edit and fills new fields with defaults. Nothing changes if either fails.
-    fn change(
-        &mut self,
-        path: &Path,
-        change: impl FnOnce(&mut Draft<PhasePlugins>) -> Result<(), ConfigError>,
-    ) -> Result<(), ConfigError> {
-        let mut draft = self.draft.clone();
-        change(&mut draft)?;
-        let following = self.following_suggestions && !is_suggested(path);
-        self.draft = if following {
-            suggested(draft)?
-        } else {
-            draft.with_defaults()?
-        };
-        // a metric that leaves the list takes what was said about its columns with it
-        let calculated = answered(&self.completed(), PhasePlugins::METRICS);
-        self.columns.retain(|id| calculated.contains(&id));
-        self.following_suggestions = following;
-        if is_suggested(path) || following {
-            self.rejected.clear();
-        } else {
-            // Basic settings do not move customized ranking or metric fields.
-            self.rejected.retain(is_suggested);
-        }
-        Ok(())
-    }
-
-    /// The enumerated fields, belonging to `plugin` unless they are the phase's own.
-    /// `completed` are the same fields with implied plugins appended.
-    fn fields(
-        &self,
-        nodes: &[FieldNode],
-        plugin: Option<&'static str>,
-        completed: &[FieldNode],
-        whole: &Whole,
-    ) -> Vec<FormField> {
-        nodes
-            .iter()
-            .zip(completed)
-            // Rejected input stays visible even when the field becomes irrelevant.
-            .filter(|(node, _)| {
-                !whole.irrelevant.contains(&node.path) || self.rejected.contains(&node.path)
-            })
-            .map(|(node, completed)| {
-                let field = &node.field;
-                FormField {
-                    input: self.input(field.kind(), node, completed, whole),
-                    path: node.path.clone(),
-                    plugin,
-                    name: field.name(),
-                    label: field.label(),
-                    description: field.description(),
-                    issues: Vec::new(),
-                    warnings: Vec::new(),
-                }
-            })
-            .collect()
-    }
-
-    /// How the enumerated field is answered, with any implied plugins.
-    fn input(
-        &self,
-        kind: &FieldKind,
-        node: &FieldNode,
-        completed: &FieldNode,
-        whole: &Whole,
-    ) -> Input {
-        let path = &node.path;
-        let answer = node.answer;
-        let entered = || {
-            self.rejected
-                .get(path)
-                .map(|rejected| rejected.entered.clone())
-        };
-        match kind {
-            FieldKind::Bool => Input::Bool(answer.and_then(Value::as_bool)),
-            FieldKind::Integer(range) => Input::Integer {
-                range: *range,
-                value: answer.and_then(Value::as_i64),
-                entered: entered(),
-                hint: with_range(Text::new("number-range"), NumberRange::Integer(*range)),
-            },
-            FieldKind::Decimal(range) => Input::Decimal {
-                range: *range,
-                value: answer.and_then(Value::as_f64),
-                entered: entered(),
-                hint: with_range(Text::new("number-range"), NumberRange::Decimal(*range)),
-            },
-            FieldKind::Plugin(axis) => Input::Plugin(self.plugin(*axis, node, false, whole)),
-            FieldKind::List { axis, ordered } => {
-                Input::List(self.list(*axis, *ordered, node, completed, whole))
-            }
-            FieldKind::Optional(inner) => match &**inner {
-                FieldKind::Plugin(axis) => Input::Plugin(self.plugin(*axis, node, true, whole)),
-                FieldKind::List { .. } => self.input(inner, node, completed, whole),
-                _ => Input::Optional {
-                    answered: answer.is_some_and(|answer| !answer.is_null()),
-                    inner: Box::new(self.input(inner, node, completed, whole)),
-                },
-            },
-        }
-    }
-
-    /// The field taking one plugin of `axis`.
-    fn plugin(
-        &self,
-        axis: AnyAxis,
-        node: &FieldNode,
-        optional: bool,
-        whole: &Whole,
-    ) -> PluginInput {
-        let chosen = node.plugins().into_iter().next();
-        let recommended = self.recommended(axis, &node.path);
-        let options = self.options(&node.path, &recommended);
-        PluginInput {
-            optional,
-            chosen: chosen.map(|chosen| {
-                let fields = chosen.fields();
-                Chosen {
-                    plugin: PluginOption::of(
-                        chosen.entry,
-                        recommended.contains(&chosen.entry.id()),
-                    ),
-                    // implied plugins are appended only to the composite's lists
-                    fields: self.fields(&fields, Some(chosen.entry.id()), &fields, whole),
-                }
-            }),
-            options,
-        }
-    }
-
-    /// The field taking a list of plugins of `axis`.
-    fn list(
-        &self,
-        axis: AnyAxis,
-        ordered: bool,
-        node: &FieldNode,
-        completed: &FieldNode,
-        whole: &Whole,
-    ) -> ListInput {
-        let path = &node.path;
-        let chosen = node.plugins();
-        // implied plugins are appended to what was chosen
-        let implied = &completed.plugins()[chosen.len()..];
-        let recommended = self.recommended(axis, path);
-        let options = self
-            .options(&path.clone().index(chosen.len()), &recommended)
-            .into_iter()
-            .filter(|option| !implied.iter().any(|plugin| plugin.entry.id() == option.id))
-            .collect();
-        ListInput {
-            ordered,
-            items: chosen
-                .iter()
-                .map(|chosen| {
-                    let entry = chosen.entry;
-                    let fields = chosen.fields();
-                    Item {
-                        plugin: PluginOption::of(entry, recommended.contains(&entry.id())),
-                        fields: self.fields(&fields, Some(entry.id()), &fields, whole),
-                        path: chosen.path.clone(),
-                        issues: Vec::new(),
-                    }
-                })
-                .collect(),
-            shown: Vec::new(),
-            implied: implied
-                .iter()
-                .map(|plugin| Implied {
-                    plugin: PluginOption::of(
-                        plugin.entry,
-                        recommended.contains(&plugin.entry.id()),
-                    ),
-                    needed_by: needed_by(plugin.entry, axis, whole.completed),
-                })
-                .collect(),
-            options,
-        }
-    }
-
-    /// The ids of the plugins the field at `path` offers.
-    fn recommended(&self, axis: AnyAxis, path: &Path) -> Vec<&'static str> {
-        let offered = PhasePlugins::default_value(&self.draft, path)
-            .ok()
-            .flatten();
-        let answers = match &offered {
-            Some(Value::Array(answers)) => answers.iter().collect(),
-            Some(answer) => vec![answer],
-            None => Vec::new(),
-        };
-        answers
-            .into_iter()
-            .filter_map(|answer| axis.entry(PluginConfig::from_answer(answer)?.plugin()))
-            .map(PluginEntry::id)
-            .collect()
-    }
-
-    /// The registered choices at `path`, the plugins of `recommended` first.
-    fn options(&self, path: &Path, recommended: &[&str]) -> Vec<PluginOption> {
-        let mut options: Vec<_> = self
-            .draft
-            .candidates(path)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|entry| PluginOption::of(entry, recommended.contains(&entry.id())))
-            .collect();
-        // the catalog lists plugins by id, which tells an operator nothing
-        options.sort_by_cached_key(|option| {
-            (
-                recommended
-                    .iter()
-                    .position(|id| *id == option.id)
-                    .unwrap_or(usize::MAX),
-                option.label.to_lowercase(),
-            )
-        });
-        options
     }
 }
 
@@ -1164,7 +931,7 @@ pub(crate) enum NotTaken {
     NoNumber,
 }
 
-/// The number `entered` as the answer of a field of `range`, see [`PhaseForm::enter`].
+/// The number `entered` as the answer of a field of `range`, see [`Editable::enter`].
 fn number(entered: &str, range: NumberRange) -> Result<Value, NotTaken> {
     let text = entered.trim().replace(',', ".");
     if text.is_empty() {
@@ -1246,7 +1013,7 @@ fn place(fields: &mut [FormField], path: &Path, text: &Text) -> bool {
 }
 
 /// What `issue` of the enumerated fields says.
-fn issue_text(issue: &Issue, draft: &Draft<PhasePlugins>) -> Text {
+fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
     match issue.problem() {
         Problem::Invalid(ConfigError::Unanswered { .. }) => Text::new("issue-unanswered"),
         Problem::Invalid(ConfigError::OutOfRange { allowed, .. }) => {

@@ -351,6 +351,7 @@ action-add-entrant = Hinzufügen von { $name }
 action-add-entrants = Hinzufügen von { $count } Teilnehmern
 action-remove-entrant = Entfernen von { $name }
 action-add-phase = Hinzufügen von { $phase }
+action-add-phases = Hinzufügen von { $count } Phasen
 action-edit-phase = Bearbeiten von { $phase }
 action-remove-phase = Entfernen von { $phase }
 action-start-phase = Start von { $phase }

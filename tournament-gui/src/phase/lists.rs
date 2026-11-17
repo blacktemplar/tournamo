@@ -3,7 +3,8 @@
 use dioxus::prelude::*;
 use tournament_app::{
     form::{
-        self, Because, By, Item, ListInput, MetricShown, Path, PhaseForm, PluginOption, SetEntry,
+        self, Because, By, Editable as _, Item, ListInput, MetricShown, Path, PhaseForm,
+        PluginOption, SetEntry,
     },
     i18n::Translator,
 };

@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{FormField, Input, Path, PhaseForm, PluginInput, PluginOption},
+    form::{Editable as _, FormField, Input, Path, PhaseForm, PluginInput, PluginOption},
     i18n::{PluginText, Text, Translator},
 };
 use tournament_engine::PhasePlugins;

@@ -7,7 +7,7 @@ use tournament_app::{
     i18n::{Message as _, Text, Translator},
     session::Session,
     storage::CompetitionKey,
-    view::{PhaseOverview, PhaseState, SourceRow},
+    view::{PhaseName, PhaseOverview, PhaseState, SourceRow},
 };
 use tournament_engine::PhaseId;
 
@@ -89,15 +89,28 @@ fn StateIcon(state: PhaseState) -> Element {
 
 /// Where a phase takes its entrants from, as a list says it, e.g. "Places 1–8 of Group phase".
 pub fn sources_text(tr: &Translator, phases: &[PhaseOverview], sources: &[SourceRow]) -> String {
+    sources_named(tr, sources, |id| {
+        phases
+            .iter()
+            .find(|phase| phase.id == id)
+            .map(|phase| &phase.name)
+    })
+}
+
+/// Where a phase takes its entrants from, as [`sources_text`] says it, the phases named by
+/// `name_of`.
+pub fn sources_named<'a>(
+    tr: &Translator,
+    sources: &[SourceRow],
+    name_of: impl Fn(PhaseId) -> Option<&'a PhaseName>,
+) -> String {
     let texts: Vec<_> = sources
         .iter()
         .map(|source| {
-            let of = source.phase.and_then(|id| {
-                phases
-                    .iter()
-                    .find(|phase| phase.id == id)
-                    .map(|phase| tr.phase_name(&phase.name))
-            });
+            let of = source
+                .phase
+                .and_then(&name_of)
+                .map(|name| tr.phase_name(name));
             let everyone = source.from.get() == 1 && source.to.is_none();
             match (of, everyone) {
                 (None, true) => tr.get("everyone-registered"),

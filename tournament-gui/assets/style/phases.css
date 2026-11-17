@@ -97,6 +97,27 @@ ol.phases h3 {
   gap: var(--space-2);
 }
 
+/* how a competition without phases is played: presets, or own phases */
+fieldset.how-played {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+  color: inherit;
+}
+
+fieldset.how-played legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.how-played .choice {
+  margin: var(--space-2) 0;
+}
+
+.how-played .choice .hint {
+  margin: 0 0 0 calc(1.5rem + var(--space-2));
+}
+
 /* where a phase takes its entrants from, in its form */
 fieldset.sources {
   margin: var(--space-3) 0;

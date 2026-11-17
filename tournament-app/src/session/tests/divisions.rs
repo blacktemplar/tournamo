@@ -10,7 +10,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::{StartError, StartPhaseError},
-    form::End,
+    form::{Editable as _, End},
     view::{Advance, Advancing, Cut, division_letter},
 };
 

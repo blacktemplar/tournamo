@@ -20,6 +20,8 @@ pub enum Announcement {
     /// An entrant renamed, as it was and as it is.
     RenamedEntrant(EntrantRow, EntrantRow),
     AddedPhase,
+    /// The phases of a preset added, as many as there are.
+    AddedPhases(usize),
     /// The phase changed, with the number of matches that have a result after the change.
     EditedPhase(usize),
     /// The start, with the number of matches it scheduled.
@@ -53,6 +55,7 @@ impl Announcement {
                 new_name = entrant(is),
             ),
             Self::AddedPhase => tr.get("announce-added-phase"),
+            Self::AddedPhases(count) => t!(tr, "announce-added-phases", count = *count),
             Self::EditedPhase(results) => {
                 let mut sentences = vec![tr.get("announce-edited-phase")];
                 if *results > 0 {
@@ -127,6 +130,7 @@ fn action_text(tr: &Translator, action: &Action) -> String {
             name = team_name(tr, std::slice::from_ref(entrant)),
         ),
         Action::AddPhase(phase) => t!(tr, "action-add-phase", phase = tr.phase_name(phase)),
+        Action::AddPhases(phases) => t!(tr, "action-add-phases", count = phases.len()),
         Action::EditPhase(phase) => t!(tr, "action-edit-phase", phase = tr.phase_name(phase)),
         Action::RemovePhase(phase) => {
             t!(tr, "action-remove-phase", phase = tr.phase_name(phase))

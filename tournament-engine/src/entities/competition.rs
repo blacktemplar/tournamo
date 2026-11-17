@@ -127,12 +127,7 @@ impl Competition {
     /// [`Self::entrants_per_ranking`]. `None` if the sources send qualifiers of different sizes,
     /// take places of a phase this competition does not have, or are none.
     pub fn entrants_per_qualifier(&self, sources: &[Source]) -> Option<NonZeroU32> {
-        let mut sizes = sources.iter().map(|source| match source.of() {
-            SourceOf::Registration => Some(NonZeroU32::MIN),
-            SourceOf::Phase(phase) => self.entrants_per_ranking(&phase),
-        });
-        let first = sizes.next()??;
-        sizes.all(|size| size == Some(first)).then_some(first)
+        entrants_per_qualifier(sources, |phase| self.entrants_per_ranking(phase))
     }
 
     /// How many entrants each ranking of the phase `phase_id` stands for: what its teams make of
@@ -441,4 +436,18 @@ impl Competition {
         placed.sort_by_key(|&(place, unique, index, _)| (place, unique, index));
         placed.into_iter().map(|(.., placed)| placed).collect()
     }
+}
+
+/// How many entrants each qualifier of a field taken from `sources` stands for, each ranking of a
+/// phase standing for `per_ranking` of its id, see [`Competition::entrants_per_qualifier`].
+pub(crate) fn entrants_per_qualifier(
+    sources: &[Source],
+    per_ranking: impl Fn(&PhaseId) -> Option<NonZeroU32>,
+) -> Option<NonZeroU32> {
+    let mut sizes = sources.iter().map(|source| match source.of() {
+        SourceOf::Registration => Some(NonZeroU32::MIN),
+        SourceOf::Phase(phase) => per_ranking(&phase),
+    });
+    let first = sizes.next()??;
+    sizes.all(|size| size == Some(first)).then_some(first)
 }

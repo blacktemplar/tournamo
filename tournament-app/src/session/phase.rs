@@ -351,7 +351,7 @@ pub(super) fn completed(
 }
 
 /// Every plugin of `axis`, in the order of their ids.
-fn plugins(axis: AnyAxis) -> Vec<Plugin> {
+pub(super) fn plugins(axis: AnyAxis) -> Vec<Plugin> {
     axis.entries()
         .map(|entry| Plugin {
             id: entry.id(),

@@ -8,7 +8,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::{SourcesError, StartPhaseError},
-    form::End,
+    form::{Editable as _, End},
     view::Count,
 };
 

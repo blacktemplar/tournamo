@@ -15,6 +15,7 @@ pub mod standings;
 
 pub use annotated::Annotated;
 pub use bye::Bye;
+pub(crate) use competition::entrants_per_qualifier;
 pub use competition::{Competition, Placed};
 #[cfg(feature = "test-util")]
 pub use division::builder::DivisionBuilder;

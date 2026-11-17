@@ -45,12 +45,14 @@ help-title = Help – Tournamo
 help-running = Running a competition
 help-running-steps = A competition is run in four steps:
 help-running-entrants = Enter the entrants by name, one after the other, or paste a list with a name on each line.
-help-running-phase = Choose how they play: the format, and the order of the standings. Then add the phase.
+help-running-phase = Choose how they play: a preset, which sets up all phases at once, e.g. groups then a knockout, or a phase of your own: the format, and the order of the standings. Then add the phases.
 help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on. The phase can still be changed, as long as the change fits the results reported.
 help-running-results = Report the results: choose the side that won or Draw at a match, or enter its score below it, type them in, e.g. “3 1” for a win of the left side of match 3, or choose the winner in the bracket. The standings follow every result.
 help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done. Either way, the score entered stays, so that only what was wrong needs changing.
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
 help-formats = Formats and standings
+help-presets = Presets
+help-presets-text = A preset sets up a whole competition at once, while it has no phase: choose it under “How is it played?”, answer its few questions, and add the phases it shows. They are ordinary phases, each changed or removed as any phase; one undo takes all of them back.
 help-standings = The order of the standings
 help-standings-text = The standings compare the entrants by the criteria of their order in turn: the first decides, the second only between entrants the first leaves tied, and so on. A criterion compares a metric, a number calculated for each entrant from the results, such as the points; the metrics a criterion needs are calculated with it. Further metrics can be calculated and shown without ranking by them.
 help-columns-text = A table of standings shows the metrics it is ranked by and those they are calculated from, e.g. ranked by points also the wins, draws and losses the points are scored for. Where a phase compares several groups, the rows compared show what they are compared by. In the metrics of a phase, a box with an outlined tick is shown by this rule; tick or untick it to show or hide the metric anyway, in the group tables or in the comparison. A metric ticked is calculated, one shown nowhere and needed by nothing is not. This can be changed at any time, also while the phase is played.
@@ -150,6 +152,10 @@ seeding-explained = Seeding explained
 entrant-new-name = New name of { $name }
 # not `phase`, which is the app's message of the fields of a phase
 phase-heading = Phase
+how-played = How is it played?
+own-phases = Own phases, one by one
+preset-preview = Phases added
+add-phases = Add phases
 # the heading once every match is played
 finished = Finished
 # the medals of the first three ranks in the standings, before the rank
@@ -436,6 +442,10 @@ announce-added-entrants = Added { $count } entrants.
 announce-removed-entrant = Removed { $name }.
 announce-renamed-entrant = Renamed { $name } to { $new_name }.
 announce-added-phase = The phase is added.
+announce-added-phases = { $count ->
+        [one] The phase is added.
+       *[other] { $count } phases are added.
+    }
 announce-edited-phase = The phase is changed.
 announce-removed-phase = The phase is removed.
 announce-phase-finished = Every match of the phase has a result.
@@ -459,6 +469,8 @@ action-add-entrant = adding { $name }
 action-add-entrants = adding { $count } entrants
 action-remove-entrant = removing { $name }
 action-add-phase = adding { $phase }
+# $count: at least two
+action-add-phases = adding { $count } phases
 action-edit-phase = editing { $phase }
 action-remove-phase = removing { $phase }
 action-start-phase = the start of { $phase }

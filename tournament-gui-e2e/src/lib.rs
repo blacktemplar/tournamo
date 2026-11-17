@@ -1130,6 +1130,75 @@ impl Gui {
             .await
     }
 
+    /// Chooses how a competition without phases is played: the preset labelled `label`, or
+    /// "Own phases, one by one".
+    pub async fn choose_how_played(&self, label: &str) -> WebDriverResult<()> {
+        let radio = self
+            .driver
+            .query(By::XPath(format!(
+                "//fieldset[contains(@class, 'how-played')]//label[{}='{label}']\
+                 /input[@type='radio']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        self.click_in_sight(&radio).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the choice of how a competition without phases is played is shown, if
+    /// `shown`, or else gone.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_how_played(&self, shown: bool) -> WebDriverResult<()> {
+        let selector = By::Css("fieldset.how-played");
+        if shown {
+            self.page
+                .expect(selector, |query| query, "the choice of how it is played")
+                .await
+        } else {
+            self.page.expect_texts(selector, &[]).await
+        }
+    }
+
+    /// Waits until the preview of a preset shows the phases `phases`, each its name and where it
+    /// takes its entrants from, e.g. `("Knockout", "Places 1–6 of Group phase")`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_preview(&self, phases: &[(&str, &str)]) -> WebDriverResult<()> {
+        let texts: Vec<_> = phases
+            .iter()
+            .flat_map(|(name, from)| [*name, *from])
+            .collect();
+        self.page
+            .expect_texts(
+                By::Css("#new-preset ol.phases > li > h4, #new-preset ol.phases > li > p.sources"),
+                &texts,
+            )
+            .await
+    }
+
+    /// Waits until the list of phases before the start shows the phases `phases`, as
+    /// [`Self::expect_preview`] says them.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_phase_list(&self, phases: &[(&str, &str)]) -> WebDriverResult<()> {
+        let texts: Vec<_> = phases
+            .iter()
+            .flat_map(|(name, from)| [*name, *from])
+            .collect();
+        self.page
+            .expect_texts(
+                By::Css("#phases > li > h3, #phases > li > p.sources"),
+                &texts,
+            )
+            .await
+    }
+
     /// Opens the form of a further phase, in place before the start, else in a dialog, and names
     /// the phase `name`; it starts out at every place of the phase before.
     pub async fn open_new_phase(&self, name: &str) -> WebDriverResult<()> {

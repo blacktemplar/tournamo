@@ -2,10 +2,10 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{FormField, Input, Path, PhaseForm, PluginInput, PluginOption},
+    form::{Editable, FormField, Input, Path, PhaseForm, PluginInput, PluginOption, PresetForm},
     i18n::{PluginText, Text, Translator},
 };
-use tournament_engine::PhasePlugins;
+use tournament_engine::{PhasePlugins, plugin_factory::config::ConfigError};
 
 use super::lists::{MetricsList, OrderedList, UnorderedList};
 use crate::{
@@ -17,8 +17,36 @@ use crate::{
     toggletip::Toggletip,
 };
 
+/// The form whose fields are laid out: of a phase, or of a preset.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum EditedForm {
+    Phase(Signal<PhaseForm>),
+    Preset(Signal<PresetForm>),
+}
+
+impl EditedForm {
+    /// Applies `edit` to the form. Its error is dropped: a field laid out is one of the form, and
+    /// takes what its input hands over.
+    pub(super) fn edit(self, edit: impl FnOnce(&mut dyn Editable) -> Result<(), ConfigError>) {
+        _ = match self {
+            Self::Phase(mut form) => edit(&mut *form.write()),
+            Self::Preset(mut form) => edit(&mut *form.write()),
+        };
+    }
+
+    /// Why the field at `path` would not take `typed`, see [`Editable::issue_entering`].
+    fn issue_entering(self, path: &Path, typed: &str) -> Option<Text> {
+        match self {
+            Self::Phase(form) => form.read().issue_entering(path, typed),
+            Self::Preset(form) => form.read().issue_entering(path, typed),
+        }
+        .ok()
+        .flatten()
+    }
+}
+
 #[component]
-pub(super) fn Fields(form: Signal<PhaseForm>, fields: Vec<FormField>, disabled: bool) -> Element {
+pub(super) fn Fields(form: EditedForm, fields: Vec<FormField>, disabled: bool) -> Element {
     // the rows compared across divisions show metrics where the phase shows its field comparing
     // them
     let compared = fields
@@ -34,7 +62,7 @@ pub(super) fn Fields(form: Signal<PhaseForm>, fields: Vec<FormField>, disabled: 
 /// One field, laid out by the kind of its answer. `compared` is whether the phase compares its
 /// divisions, so that a list of metrics has a column for the comparison.
 #[component]
-fn Field(form: Signal<PhaseForm>, field: FormField, compared: bool, disabled: bool) -> Element {
+fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let id = id(&field.path);
@@ -63,7 +91,9 @@ fn Field(form: Signal<PhaseForm>, field: FormField, compared: bool, disabled: bo
                         checked: value.unwrap_or_default(),
                         disabled,
                         aria_describedby: "{described_by}",
-                        onchange: move |event| _ = form.write().set_bool(&path, event.checked()),
+                        onchange: move |event| {
+                            form.edit(|form| form.set_bool(&path, event.checked()));
+                        },
                     }
                     " {label}"
                 }
@@ -128,7 +158,7 @@ fn Field(form: Signal<PhaseForm>, field: FormField, compared: bool, disabled: bo
                             checked: answered,
                             disabled,
                             onchange: move |event| {
-                                _ = form.write().answer_optional(&path, event.checked());
+                                form.edit(|form| form.answer_optional(&path, event.checked()));
                             },
                         }
                         " {label}"
@@ -160,7 +190,7 @@ fn Field(form: Signal<PhaseForm>, field: FormField, compared: bool, disabled: bo
                 }
                 if list.ordered {
                     OrderedList { form, path, id: id.clone(), list, disabled }
-                } else if !list.shown.is_empty() {
+                } else if let (false, EditedForm::Phase(form)) = (list.shown.is_empty(), form) {
                     MetricsList { form, list_id: id.clone(), list, compared, disabled }
                 } else {
                     UnorderedList { form, path, list_id: id.clone(), list, disabled }
@@ -181,7 +211,7 @@ fn Field(form: Signal<PhaseForm>, field: FormField, compared: bool, disabled: bo
 /// entered, and it would read it otherwise than the form.
 #[component]
 fn NumberField(
-    form: Signal<PhaseForm>,
+    form: EditedForm,
     path: Path,
     id: String,
     label: String,
@@ -197,13 +227,7 @@ fn NumberField(
     // the form
     let mut typed = use_signal(|| None::<String>);
     let issues = match &*typed.read() {
-        Some(typed) => form
-            .read()
-            .issue_entering(&path, typed)
-            .ok()
-            .flatten()
-            .into_iter()
-            .collect(),
+        Some(typed) => form.issue_entering(&path, typed).into_iter().collect(),
         None => issues,
     };
     let invalid = !issues.is_empty();
@@ -230,12 +254,12 @@ fn NumberField(
                     if event.key() == Key::Enter {
                         event.prevent_default();
                         if let Some(typed) = typed.take() {
-                            _ = form.write().enter(&take, &typed);
+                            form.edit(|form| form.enter(&take, &typed));
                         }
                     }
                 },
                 onchange: move |event| {
-                    _ = form.write().enter(&path, &event.value());
+                    form.edit(|form| form.enter(&path, &event.value()));
                     typed.set(None);
                 },
             }
@@ -250,7 +274,7 @@ fn NumberField(
 /// what is said about it, `about`, next to its label.
 #[component]
 fn PluginField(
-    form: Signal<PhaseForm>,
+    form: EditedForm,
     path: Path,
     id: String,
     label: String,
@@ -288,7 +312,7 @@ fn PluginField(
                 // the option of no plugin has no id
                 on_change: move |chosen: String| {
                     let chosen = Some(chosen.as_str()).filter(|chosen| !chosen.is_empty());
-                    _ = form.write().choose(&choose, chosen);
+                    form.edit(|form| form.choose(&choose, chosen));
                     // back from the list, which is hidden once an option is chosen
                     focus_later(&[&trigger]);
                 },

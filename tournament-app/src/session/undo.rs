@@ -125,14 +125,25 @@ impl Session {
     fn action_of(&self, ids: &[TransitionId]) -> Action {
         match ids {
             [id] => self.action_of_entry(*id),
-            _ => Action::AddEntrants(
-                ids.iter()
-                    .map(|id| match self.action_of_entry(*id) {
-                        Action::AddEntrant(row) => row,
-                        _ => unreachable!("the only action of several entries adds entrants"),
-                    })
-                    .collect(),
-            ),
+            _ => {
+                let actions = ids.iter().map(|id| self.action_of_entry(*id));
+                let mut entrants = Vec::new();
+                let mut phases = Vec::new();
+                for action in actions {
+                    match action {
+                        Action::AddEntrant(row) => entrants.push(row),
+                        Action::AddPhase(name) => phases.push(name),
+                        _ => unreachable!(
+                            "the only actions of several entries add entrants or phases"
+                        ),
+                    }
+                }
+                if phases.is_empty() {
+                    Action::AddEntrants(entrants)
+                } else {
+                    Action::AddPhases(phases)
+                }
+            }
         }
     }
 

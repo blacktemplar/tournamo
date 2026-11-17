@@ -9,6 +9,7 @@ use std::{fmt::Display, num::NonZeroU32};
 use plugin_factory::{config::ConfigError, draft::Issue};
 use thiserror::Error;
 use tournament_engine::{
+    plugins::preset::PresetError,
     transitions::{self as engine, CompetitionAlreadyStarted},
     undoable_state_machine::{StateMachineError, TransitionError},
 };
@@ -73,6 +74,33 @@ pub enum PhaseDraftError {
     /// The format offers an answer its own schema does not take.
     #[error(transparent)]
     Configuration(#[from] ConfigError),
+}
+
+/// Why there is no form of a preset.
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum PresetFormError {
+    /// No registered preset has this id.
+    UnknownPreset(String),
+    /// The preset offers an answer its own schema does not take.
+    Configuration(ConfigError),
+}
+
+/// Why the phases of a preset were not added; then none was.
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum AddPresetError {
+    /// The competition has a phase: a preset sets up a competition without one.
+    HasPhases,
+    /// The form of the preset is not complete, as its
+    /// [`PresetView`](crate::form::PresetView) shows.
+    Incomplete,
+    /// The preset does not expand into phases: a bug of the preset.
+    DoesNotExpand(PresetError),
+    #[error(transparent)]
+    Sources(#[from] SourcesError),
+    /// The engine refused a phase for a reason this crate does not know.
+    Rejected(TransitionError),
 }
 
 /// Why a phase was not added.
@@ -513,6 +541,33 @@ impl Message for PhaseDraftError {
             Self::Configuration(error) => {
                 Text::new("error-format-misconfigured").with("reason", error.to_string())
             }
+        }
+    }
+}
+
+impl Message for PresetFormError {
+    fn text(&self) -> Text {
+        match self {
+            Self::UnknownPreset(preset) => {
+                Text::new("error-unknown-preset").with("preset", preset.as_str())
+            }
+            Self::Configuration(error) => {
+                Text::new("error-preset-misconfigured").with("reason", error.to_string())
+            }
+        }
+    }
+}
+
+impl Message for AddPresetError {
+    fn text(&self) -> Text {
+        match self {
+            Self::HasPhases => Text::new("error-has-phases"),
+            Self::Incomplete => Text::new("issue-preset-incomplete"),
+            Self::DoesNotExpand(error) => {
+                Text::new("error-preset-does-not-expand").with("reason", error.to_string())
+            }
+            Self::Sources(error) => error.text(),
+            Self::Rejected(error) => rejected(error),
         }
     }
 }

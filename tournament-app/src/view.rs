@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 use tournament_engine::{
     Decision, Division, EnteredValue, EntrantId, Match, MatchId, MatchResult, Part, PhaseId, Score,
-    Sides,
+    Sides, Source, SourceOf,
     plugins::{
         draw::DivisionOrder,
         match_format::{Level, Parts},
@@ -625,6 +625,20 @@ pub struct SourceRow {
     pub to: Option<NonZeroU32>,
 }
 
+impl SourceRow {
+    /// The row of `source`.
+    pub(crate) fn of(source: &Source) -> Self {
+        Self {
+            phase: match source.of() {
+                SourceOf::Registration => None,
+                SourceOf::Phase(id) => Some(id),
+            },
+            from: source.from(),
+            to: source.to(),
+        }
+    }
+}
+
 /// Where a phase is.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhaseState {
@@ -785,6 +799,9 @@ pub enum Action {
     AddEntrants(Vec<EntrantRow>),
     RemoveEntrant(EntrantRow),
     AddPhase(PhaseName),
+    /// Several phases added at once, by a preset, in the order added: one action, see
+    /// [`Session::add_preset`](crate::session::Session::add_preset).
+    AddPhases(Vec<PhaseName>),
     EditPhase(PhaseName),
     /// A phase removed, as it was called.
     RemovePhase(PhaseName),

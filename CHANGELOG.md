@@ -176,6 +176,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 - Start no longer throws away the form of a further phase left open: it waits,
   saying so, until the phase is added or the form discarded by its new button
   "Discard".
+- A result reported in the bracket keeps the focus on its pairing, rather than
+  moving it to the bracket's heading, so keyboard users keep their place. What
+  the last action did is no longer said once another view or phase is shown.
 
 ## [0.4.0] - 2026-11-09
 

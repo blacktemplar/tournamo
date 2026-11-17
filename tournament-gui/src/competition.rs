@@ -141,7 +141,13 @@ impl Ctx {
         Ok(done)
     }
 
-    /// Tells the operator what the action just done did, until the next action.
+    /// Forgets what the action before did, as once the operator moves on to another view, where
+    /// it would read as being about what is shown.
+    pub fn forget_announcement(mut self) {
+        self.announcement.set(None);
+    }
+
+    /// Tells the operator what the action just done did, until the next action or view.
     pub fn announce(mut self, announcement: Announcement) {
         if matches!(announcement, Announcement::Reported(_)) {
             self.reported_at.set(Some(js_sys::Date::now()));
@@ -595,6 +601,7 @@ fn Play() -> Element {
         view => view,
     };
     let show = move |view: View| {
+        ctx.forget_announcement();
         go_to(&phase_fragment(
             key,
             number,

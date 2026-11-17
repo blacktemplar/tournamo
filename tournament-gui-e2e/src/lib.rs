@@ -2094,7 +2094,8 @@ impl Gui {
         Ok(())
     }
 
-    /// Waits until the focus is on a side of the match numbered `number` in the bracket.
+    /// Waits until the focus is on the pairing of the match numbered `number` in the bracket, or
+    /// on a side of it.
     ///
     /// # Panics
     /// Panics if it is not in time, with the number of the match it is on instead, if any.
@@ -2102,7 +2103,7 @@ impl Gui {
         // the number follows the hidden word "Match", which is a block of its own
         self.page
             .expect_texts(
-                By::Css(".pairing:has(:focus) > .number"),
+                By::Css(".pairing:is(:focus, :has(:focus)) > .number"),
                 &[&format!("Match\n{number}")],
             )
             .await
@@ -2400,7 +2401,7 @@ impl Gui {
         Ok(())
     }
 
-    /// Waits until the page announces that the last action did `text`.
+    /// Waits until the page announces that the last action did `text`, or nothing for `""`.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it announces instead.

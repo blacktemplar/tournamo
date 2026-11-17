@@ -18,6 +18,10 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 /// It is never NaN or infinite, and `-0.0` is `0.0`. An operation whose result is not finite
 /// panics.
 ///
+/// Every score below [`Score::PRECISE_BELOW`] in magnitude is rounded to [`Score::PLACES`]
+/// decimal places, so that scores of decimals are counted exactly, in any order: `0.1 + 0.2` is
+/// `0.3`.
+///
 /// # Examples
 /// ```
 /// use tournament_engine::Score;
@@ -34,6 +38,12 @@ pub struct Score(f64);
 impl Score {
     pub const ZERO: Self = Self(0.0);
     pub const ONE: Self = Self(1.0);
+    /// The decimal places a score is rounded to.
+    pub const PLACES: i32 = 9;
+    /// The magnitude from which a score is not rounded to [`Score::PLACES`]: there an `f64` holds
+    /// not even that many places.
+    pub const PRECISE_BELOW: f64 = (1u64 << f64::MANTISSA_DIGITS) as f64 / Self::SCALE;
+    const SCALE: f64 = 1e9;
 
     /// The score `value` is.
     ///
@@ -51,6 +61,15 @@ impl Score {
         if !value.is_finite() {
             return None;
         }
+        // Sums and products of decimals pick up the error of binary fractions (`0.1 + 0.2` is
+        // `0.30000000000000004`), which depends on the order of the operations and would rank
+        // equal scores apart. The scaled value is an integer below 2^53, so the quotient is the
+        // `f64` nearest to the decimal, as parsing it gives, and rounding again keeps it.
+        let value = if value.abs() < Self::PRECISE_BELOW {
+            (value * Self::SCALE).round() / Self::SCALE
+        } else {
+            value
+        };
         // `-0.0` is `0.0`, so that equal scores are the same
         Some(Self(if value == 0.0 { 0.0 } else { value }))
     }
@@ -237,6 +256,41 @@ mod tests {
     #[should_panic(expected = "a score is a finite number")]
     fn an_operation_that_is_not_finite_panics() {
         let _ = Score::new(f64::MAX) + Score::new(f64::MAX);
+    }
+
+    #[test]
+    fn decimals_are_counted_exactly_in_any_order() {
+        let tenth = Score::new(0.1);
+        let fifth = Score::new(0.2);
+
+        assert_eq!(tenth + fifth, Score::new(0.3));
+        assert_eq!((tenth + fifth).to_string(), "0.3");
+        assert_eq!(fifth + tenth + tenth, tenth + tenth + fifth);
+        assert_eq!(
+            Score::new(0.5) * (Score::new(0.4) + Score::new(0.6) + Score::new(0.5)),
+            Score::new(0.75)
+        );
+        assert_eq!(
+            [2.2, 1.1, 1.1, 1.1]
+                .map(Score::new)
+                .into_iter()
+                .sum::<Score>(),
+            Score::new(5.5)
+        );
+    }
+
+    #[test]
+    fn scores_are_rounded_to_their_places() {
+        assert_eq!(Score::new(2.0 / 3.0).to_string(), "0.666666667");
+        assert_eq!(Score::new(-1e-10), Score::ZERO);
+        assert_eq!(Score::new(1e15 + 0.5).get(), 1e15 + 0.5);
+    }
+
+    #[test]
+    fn a_score_read_is_rounded() {
+        let read: Score = serde_json::from_value(json!(0.30000000000000004)).unwrap();
+
+        assert_eq!(read, Score::new(0.3));
     }
 
     #[test]

@@ -10,7 +10,7 @@ use vec1::{Vec1, vec1};
 
 #[cfg(doc)]
 use crate::{
-    Competition, StartCompetition, StartPhase,
+    AddPhase, Competition, StartCompetition, StartPhase,
     plugins::{draw::Draw, facts::EntrantsPerQualifier},
 };
 use crate::{
@@ -40,8 +40,10 @@ pub trait Teams: Plugin + DynClone {
         true
     }
 
-    /// How many entrants a team stands for, of qualifiers standing for `per_qualifier` each.
-    fn entrants_per_team(&self, per_qualifier: NonZeroU32) -> NonZeroU32;
+    /// How many entrants each team stands for, of qualifiers standing for `per_qualifier`
+    /// entrants each (`None`: for different numbers). `None` if the teams would not all be of one
+    /// size, which [`AddPhase`] refuses.
+    fn entrants_per_team(&self, per_qualifier: Option<NonZeroU32>) -> Option<NonZeroU32>;
 }
 
 dyn_clone::clone_trait_object!(Teams);
@@ -110,7 +112,7 @@ impl Teams for Keep {
             .collect()
     }
 
-    fn entrants_per_team(&self, per_qualifier: NonZeroU32) -> NonZeroU32 {
+    fn entrants_per_team(&self, per_qualifier: Option<NonZeroU32>) -> Option<NonZeroU32> {
         per_qualifier
     }
 }
@@ -125,6 +127,11 @@ fn declare_pairs(declaration: &mut Declaration) {
             |coming_in| coming_in.0 == NonZeroU32::MIN,
         )
         .provide(EntrantsPerRanking(NonZeroU32::new(2).expect("2 is not 0")));
+}
+
+/// How many entrants a pair of qualifiers of `per_qualifier` entrants each stands for.
+fn pairs_of(per_qualifier: Option<NonZeroU32>) -> Option<NonZeroU32> {
+    per_qualifier.map(|entrants| entrants.saturating_mul(NonZeroU32::new(2).expect("2 is not 0")))
 }
 
 /// The teams of `pairs`, pairs of positions in the field of single entrants: ordered by the sum
@@ -180,8 +187,8 @@ impl Teams for RandomPairs {
         qualifiers.is_multiple_of(2)
     }
 
-    fn entrants_per_team(&self, per_qualifier: NonZeroU32) -> NonZeroU32 {
-        per_qualifier.saturating_mul(NonZeroU32::new(2).expect("2 is not 0"))
+    fn entrants_per_team(&self, per_qualifier: Option<NonZeroU32>) -> Option<NonZeroU32> {
+        pairs_of(per_qualifier)
     }
 }
 
@@ -210,8 +217,8 @@ impl Teams for BestWithWorst {
         qualifiers.is_multiple_of(2)
     }
 
-    fn entrants_per_team(&self, per_qualifier: NonZeroU32) -> NonZeroU32 {
-        per_qualifier.saturating_mul(NonZeroU32::new(2).expect("2 is not 0"))
+    fn entrants_per_team(&self, per_qualifier: Option<NonZeroU32>) -> Option<NonZeroU32> {
+        pairs_of(per_qualifier)
     }
 }
 
@@ -241,8 +248,8 @@ impl Teams for Split {
             .collect()
     }
 
-    fn entrants_per_team(&self, _: NonZeroU32) -> NonZeroU32 {
-        NonZeroU32::MIN
+    fn entrants_per_team(&self, _: Option<NonZeroU32>) -> Option<NonZeroU32> {
+        Some(NonZeroU32::MIN)
     }
 }
 

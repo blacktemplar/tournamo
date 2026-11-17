@@ -67,7 +67,12 @@ fn keep_makes_every_qualifier_a_team_of_its_entrants() {
     assert_eq!(form(&Keep, &registered(3)), [[0], [1], [2]]);
     assert_eq!(form(&Keep, &pairs), [[0, 1], [2, 3]]);
     assert!(Keep.fits(3));
-    assert_eq!(Keep.entrants_per_team(place(2)), place(2));
+    assert_eq!(Keep.entrants_per_team(Some(place(2))), Some(place(2)));
+    assert_eq!(
+        Keep.entrants_per_team(None),
+        None,
+        "teams of different sizes"
+    );
 }
 
 #[test]
@@ -79,7 +84,10 @@ fn best_with_worst_pairs_the_ends_ordered_by_the_sum_of_their_places() {
     );
     assert!(BestWithWorst.fits(6));
     assert!(!BestWithWorst.fits(5));
-    assert_eq!(BestWithWorst.entrants_per_team(NonZeroU32::MIN), place(2));
+    assert_eq!(
+        BestWithWorst.entrants_per_team(Some(NonZeroU32::MIN)),
+        Some(place(2))
+    );
 }
 
 #[test]
@@ -114,16 +122,17 @@ fn random_pairs_are_ordered_by_the_sum_of_their_places_then_the_better_place() {
 }
 
 #[test]
-fn split_makes_every_entrant_a_team_in_the_order_of_the_field() {
+fn split_makes_every_entrant_a_team_in_the_order_of_the_field_of_any_sizes() {
     let origin = Origin::Registration { place: place(1) };
     let field = vec![
         Qualifier::new(vec1![entrant(3), entrant(1)], origin),
-        Qualifier::new(vec1![entrant(0), entrant(2)], origin),
+        Qualifier::new(vec1![entrant(0)], origin),
+        Qualifier::new(vec1![entrant(2)], origin),
     ];
 
     assert_eq!(form(&Split, &field), [[3], [1], [0], [2]]);
     assert!(Split.fits(1));
-    assert_eq!(Split.entrants_per_team(place(2)), NonZeroU32::MIN);
+    assert_eq!(Split.entrants_per_team(None), Some(NonZeroU32::MIN));
 }
 
 #[test]

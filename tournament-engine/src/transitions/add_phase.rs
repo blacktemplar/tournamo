@@ -121,8 +121,10 @@ pub enum AddPhaseError {
     #[error("the registration is closed")]
     RegistrationClosed,
     /// The sources send qualifiers standing for different numbers of entrants, e.g. single
-    /// entrants of the registration and pairs of a phase, see
-    /// [`Competition::entrants_per_qualifier`].
+    /// entrants of the registration and pairs of a phase (see
+    /// [`Competition::entrants_per_qualifier`]), and the teams do not make them one size, as
+    /// splitting them up does (see
+    /// [`Teams::entrants_per_team`](crate::plugins::teams::Teams::entrants_per_team)).
     #[error("the sources send teams of different sizes")]
     MixedTeamSizes,
 }
@@ -159,7 +161,13 @@ impl Transition<Competition> for AddPhase {
                 }));
             }
         }
-        if competition.entrants_per_qualifier(&self.sources).is_none() {
+        let per_qualifier = competition.entrants_per_qualifier(&self.sources);
+        if self
+            .plugins
+            .teams()
+            .entrants_per_team(per_qualifier)
+            .is_none()
+        {
             return Err(Box::new(AddPhaseError::MixedTeamSizes));
         }
         if competition.is_started()

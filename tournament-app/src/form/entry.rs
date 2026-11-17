@@ -3,7 +3,12 @@
 
 use std::num::NonZeroU32;
 
-use tournament_engine::{PhaseId, PhasePlugins, Source, SourceOf, vec1::Vec1};
+use plugin_factory::config::PluginConfig;
+use tournament_engine::{
+    PhaseId, PhasePlugins, Source, SourceOf,
+    plugins::teams::{Keep, Teams},
+    vec1::Vec1,
+};
 
 use super::PhaseForm;
 use crate::{error::SourcesError, i18n::Text, rejected::Rejections, view::PhaseName};
@@ -156,6 +161,20 @@ impl PhaseForm {
         });
         let first = sizes.next()??;
         sizes.all(|size| size == Some(first)).then_some(first)
+    }
+
+    /// How many entrants each team of the phase stands for, as the sources and its teams stand
+    /// (as registered while none are chosen): `None` if they would not all be of one size, see
+    /// [`Teams::entrants_per_team`].
+    fn teams_of_one_size(&self) -> Option<NonZeroU32> {
+        let teams = self
+            .draft
+            .answers()
+            .get(PhasePlugins::TEAMS)
+            .and_then(PluginConfig::from_answer)
+            .and_then(|config| config.build::<dyn Teams>().ok())
+            .unwrap_or_else(|| Box::new(Keep));
+        teams.entrants_per_team(self.entrants_per_qualifier())
     }
 
     /// Makes the draft anew for the sources as they stand, with its answers, so that what is
@@ -362,7 +381,7 @@ impl PhaseForm {
         if let Some(issue) = (0..self.entry.sources.len()).find_map(|index| self.issue_of(index)) {
             return Some(issue);
         }
-        if self.entrants_per_qualifier().is_none() {
+        if self.teams_of_one_size().is_none() {
             return Some(SourcesError::MixedTeamSizes);
         }
         let registration_alone = self

@@ -2,7 +2,7 @@
 //! the overall standings of earlier phases, is started once those are finished, and the
 //! competition places every entrant by the latest phase they reached.
 
-use std::num::NonZeroU32;
+use std::{collections::HashSet, num::NonZeroU32};
 
 use itertools::Itertools;
 use tournament_engine::{
@@ -1531,7 +1531,7 @@ fn a_field_that_cannot_be_formed_into_its_teams_is_not_started() {
 }
 
 #[test]
-fn sources_sending_teams_of_different_sizes_are_refused() {
+fn sources_sending_teams_of_different_sizes_are_refused_unless_split_up() {
     let mut machine = registered(8);
     add(
         &mut machine,
@@ -1541,21 +1541,62 @@ fn sources_sending_teams_of_different_sizes_are_refused() {
             dyp(1),
         ),
     );
+    let sources = vec1![
+        Source::new(SourceOf::Registration, place(1), Some(place(2))),
+        places(phase(DYP), 1, Some(2)),
+    ];
 
     assert_eq!(
         refusal::<AddPhaseError>(
             &machine,
-            phase_of(
-                phase(KNOCKOUT),
-                vec1![
-                    Source::new(SourceOf::Registration, place(1), Some(place(2))),
-                    places(phase(DYP), 1, Some(2)),
-                ],
-                knockout(),
-            ),
+            phase_of(phase(KNOCKOUT), sources.clone(), knockout()),
         ),
         AddPhaseError::MixedTeamSizes
     );
+
+    let singles = PhasePluginsBuilder::new()
+        .format(SingleElimination::new())
+        .teams(Split)
+        .add_ranking(LaterFirstLoss)
+        .add_metric(RoundOfFirstLossCalculator)
+        .build()
+        .unwrap();
+    add(&mut machine, phase_of(phase(SINGLES), sources, singles));
+    assert_eq!(
+        machine.current().entrants_per_ranking(&phase(SINGLES)),
+        Some(NonZeroU32::MIN)
+    );
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    play_out(&mut machine, phase(DYP));
+    start(&mut machine, phase(SINGLES));
+
+    let best_pairs: Vec<_> = machine.current().phases()[&phase(DYP)]
+        .standings()
+        .iter()
+        .take(2)
+        .flat_map(|standing| standing.ranking().entrants().to_vec())
+        .collect();
+    let registration = machine.current().registration();
+    assert!(
+        teams(&machine, phase(SINGLES))
+            .iter()
+            .all(|team| team.len() == 1)
+    );
+    assert_eq!(
+        teams(&machine, phase(SINGLES))
+            .into_iter()
+            .flatten()
+            .collect::<HashSet<_>>(),
+        registration[..2]
+            .iter()
+            .chain(&best_pairs)
+            .copied()
+            .collect::<HashSet<_>>(),
+        "the best two of the registration and the members of the best two pairs, each alone"
+    );
+    play_out(&mut machine, phase(SINGLES));
 }
 
 #[test]

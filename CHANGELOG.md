@@ -59,7 +59,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   into pairs by lot at its start or paired best with worst; a pair plays
   together throughout and in the phases after it, unless a later phase
   splits it up (“everyone on their own”), e.g. for a knockout played singles
-  after a DYP. Pairs are seeded by the places their members came in with.
+  after a DYP, which may take single entrants next to the pairs. Pairs are
+  seeded by the places their members came in with.
   Standings, matches and the ranking name a team by its members, and a
   result can be typed with the name of either. An odd number of entrants is
   not drawn into pairs: the start says so. A Monster DYP takes single

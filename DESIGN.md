@@ -884,8 +884,12 @@ order of the new list: `PhasePlugins::teams`).
   the app says so before. How many entrants a ranking stands for follows the
   sources: the registration sends single entrants, a phase rankings of
   `Teams::entrants_per_team` of what came into it
-  (`Competition::entrants_per_ranking`); sources sending different sizes are
-  refused (`MixedTeamSizes`), and a phase edited so that it sends another size
+  (`Competition::entrants_per_ranking`). Sources sending different sizes
+  provide no `EntrantsPerQualifier`; `Teams::entrants_per_team` of `None` says
+  whether the teams make one size of them all the same (`split` does), and
+  `AddPhase` refuses them otherwise (`MixedTeamSizes`), as a refusal of the
+  sources rather than of the plugins, which the form names among the sources.
+  A phase edited so that it sends another size
   than a later phase was built for is refused by the replay of that phase's
   `AddPhase`. A Monster DYP requires single players, so it refuses drawn
   pairs and pairs coming in, unless they are split. The form of a phase makes

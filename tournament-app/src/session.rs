@@ -183,7 +183,7 @@ impl Session {
             Some(StartError::TooFewEntrants)
         } else {
             starting().find_map(|phase| {
-                match self.cannot_start(phase, self.places_taken(phase.sources()))? {
+                match self.cannot_start(phase, self.field_taken(phase.sources()))? {
                     CannotStart::Format(needed) => Some(StartError::TooFewForFormat(needed)),
                     CannotStart::Divisions { divisions, needed } => {
                         Some(StartError::TooFewForDivisions { divisions, needed })
@@ -271,17 +271,28 @@ impl Session {
         Some((index, division, &division.data().matches()[&id]))
     }
 
-    /// The number of places `sources` take, of the registration as it is now and of the phases as
-    /// many as they take in turn: what a phase of these sources starts with, or would.
-    fn places_taken(&self, sources: &[Source]) -> usize {
-        sources
-            .iter()
-            .map(|source| source.count(self.places_of(source.of())))
-            .sum()
+    /// The places `sources` take, of the registration as it is now and of the phases as many as
+    /// they take in turn, and the entrants they stand for: what a phase of these sources starts
+    /// with, or would.
+    fn field_taken(&self, sources: &[Source]) -> Taken {
+        sources.iter().fold(Taken::default(), |taken, source| {
+            let places = source.count(self.places_of(source.of()));
+            let per_place = match source.of() {
+                tournament_engine::SourceOf::Registration => 1,
+                tournament_engine::SourceOf::Phase(id) => self
+                    .competition()
+                    .entrants_per_ranking(&id)
+                    .map_or(1, |size| size.get() as usize),
+            };
+            Taken {
+                qualifiers: taken.qualifiers + places,
+                entrants: taken.entrants + places * per_place,
+            }
+        })
     }
 
     /// The number of places of `of`: the entrants of the registration, or the rankings of a
-    /// started phase, or else the places its sources take.
+    /// started phase, or else the teams it forms of the places its sources take.
     fn places_of(&self, of: tournament_engine::SourceOf) -> usize {
         match of {
             tournament_engine::SourceOf::Registration => self.competition().entrants().len(),
@@ -289,7 +300,11 @@ impl Session {
                 if phase.is_started() {
                     phase.standings().len()
                 } else {
-                    self.places_taken(phase.sources())
+                    teams_formed(
+                        phase.plugins().teams(),
+                        self.field_taken(phase.sources()),
+                        self.competition().entrants_per_qualifier(phase.sources()),
+                    )
                 }
             }),
         }
@@ -344,14 +359,15 @@ pub(crate) enum CannotStart {
 }
 
 impl Session {
-    /// Whether `phase` cannot start with `qualifiers` coming in from its sources: they do not fit
+    /// Whether `phase` cannot start with the field `taken` from its sources: they do not fit
     /// its teams (see [`Teams::fits`]), or its teams are fewer than its format needs, or than it
     /// needs in each of its groups (divisions). The engine starts it with fewer groups all the
     /// same, so that a log never fails to replay; the app refuses, so that the operator lowers
     /// the groups.
     ///
     /// [`Teams::fits`]: tournament_engine::plugins::teams::Teams::fits
-    pub(crate) fn cannot_start(&self, phase: &Phase, qualifiers: usize) -> Option<CannotStart> {
+    pub(crate) fn cannot_start(&self, phase: &Phase, taken: Taken) -> Option<CannotStart> {
+        let qualifiers = taken.qualifiers;
         let plugins = phase.plugins();
         if !plugins.teams().fits(qualifiers) {
             let id = plugin_factory::id_of(plugins.teams());
@@ -368,7 +384,7 @@ impl Session {
         }
         let teams = teams_formed(
             plugins.teams(),
-            qualifiers,
+            taken,
             self.competition().entrants_per_qualifier(phase.sources()),
         );
         let per_division = plugins.format().min_entrants();
@@ -384,16 +400,24 @@ impl Session {
     }
 }
 
-/// How many teams `teams` forms of `qualifiers` coming in, each of `per_qualifier` entrants; as
-/// many as come in if their sizes differ.
+/// The field of a phase as its sources take it: how many qualifiers, and how many entrants those
+/// stand for.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Taken {
+    pub(crate) qualifiers: usize,
+    pub(crate) entrants: usize,
+}
+
+/// How many teams `teams` forms of the field `taken`, each qualifier of `per_qualifier` entrants
+/// (`None`: of different sizes); as many as qualifiers if the teams would not be of one size.
 pub(crate) fn teams_formed(
     teams: &dyn Teams,
-    qualifiers: usize,
+    taken: Taken,
     per_qualifier: Option<NonZeroU32>,
 ) -> usize {
-    let Some(per_qualifier) = per_qualifier else {
-        return qualifiers;
-    };
-    let per_team = teams.entrants_per_team(per_qualifier).get() as usize;
-    qualifiers * per_qualifier.get() as usize / per_team
+    teams
+        .entrants_per_team(per_qualifier)
+        .map_or(taken.qualifiers, |per_team| {
+            taken.entrants / per_team.get() as usize
+        })
 }

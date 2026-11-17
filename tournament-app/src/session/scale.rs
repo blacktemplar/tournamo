@@ -16,10 +16,10 @@ use crate::{
 
 impl Session {
     /// How many entrants the phase `form` configures takes from its sources, as many as there are
-    /// now: those registered for the first phase, else the places of the phases before it, as
-    /// many as their sources take in turn until they start.
+    /// now: those registered for the first phase, else those of the places of the phases before
+    /// it, as many as their sources take in turn until they start. Each member of a team counts.
     pub fn entrants_taken(&self, form: &PhaseForm) -> usize {
-        self.places_taken(form.sources())
+        self.field_taken(form.sources()).entrants
     }
 
     /// How many rounds and matches the phase `form` configures takes with the entrants its sources
@@ -28,13 +28,13 @@ impl Session {
     /// far the numbers depend on the results; `None` if it does not start with them or takes more
     /// than [`MOST_MATCHES`].
     pub fn scale(&self, form: &PhaseForm) -> Option<Scale> {
-        let qualifiers = self.entrants_taken(form);
+        let taken = self.field_taken(form.sources());
         let configured = completed(form.draft()).ok()?;
         let teams = configured.teams();
-        if !teams.fits(qualifiers) {
+        if !teams.fits(taken.qualifiers) {
             return None;
         }
-        let entrants = teams_formed(teams, qualifiers, form.entrants_per_qualifier());
+        let entrants = teams_formed(teams, taken, form.entrants_per_qualifier());
         // played by as many single entrants as there are teams, which take as long
         let mut draft = form.draft().clone();
         draft

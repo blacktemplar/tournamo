@@ -1,6 +1,6 @@
 use tournament_engine::plugins::{
     phase_format::SingleElimination,
-    teams::{BestWithWorst, RandomPairs, Split},
+    teams::{BestWithWorst, Keep, RandomPairs, Split},
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -124,8 +124,8 @@ fn the_scale_of_a_phase_of_pairs_counts_the_pairs() {
 }
 
 /// A phase of pairs, then a Monster DYP of them split up: the form of the Monster DYP follows its
-/// sources, so it fits only once the pairs are split up, and sources sending teams of different
-/// sizes are named.
+/// sources, so it fits only once the pairs are split up, which takes single entrants next to
+/// them too; kept as they are, sources sending teams of different sizes are named.
 #[test]
 fn the_form_of_a_later_phase_follows_the_teams_its_sources_send() {
     let mut session = Session::new("cup");
@@ -149,10 +149,19 @@ fn the_form_of_a_later_phase_follows_the_teams_its_sources_send() {
         .unwrap();
     assert!(form.view().complete, "{:?}", form.view().issues);
 
+    // the best two of the registration as well, single entrants next to the pairs
     form.add_source();
     form.choose_source(1, None);
     form.enter_place(1, End::To, "2");
-    assert!(!form.view().complete, "single entrants and pairs");
+    assert!(form.view().complete, "split up: {:?}", form.view().issues);
+    assert_eq!(session.entrants_taken(&form), 8, "three pairs and two");
+
+    form.choose(&ConfigPath::ROOT.field("teams"), Some(Keep::ID))
+        .unwrap();
+    assert!(
+        !form.view().complete,
+        "single entrants and pairs as they are"
+    );
     assert!(matches!(
         session.add_phase(&form),
         Err(crate::error::AddPhaseError::Sources(
@@ -160,7 +169,8 @@ fn the_form_of_a_later_phase_follows_the_teams_its_sources_send() {
         ))
     ));
 
-    form.remove_source(1);
+    form.choose(&ConfigPath::ROOT.field("teams"), Some(Split::ID))
+        .unwrap();
     let second = session.add_phase(&form).unwrap();
     session.start().unwrap();
     let first = session.first();
@@ -168,7 +178,7 @@ fn the_form_of_a_later_phase_follows_the_teams_its_sources_send() {
     assert!(session.start_phase_refusal(second).is_none());
     session.start_phase(second).unwrap();
     let singles = session.standings(DivisionRef::first(second)).unwrap().rows;
-    assert_eq!(singles.len(), 6);
+    assert_eq!(singles.len(), 8);
     assert!(singles.iter().all(|row| row.entrants.len() == 1));
 }
 

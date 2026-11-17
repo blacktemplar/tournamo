@@ -137,11 +137,13 @@ impl Competition {
 
     /// How many entrants each ranking of the phase `phase_id` stands for: what its teams make of
     /// the qualifiers coming in, see [`Teams::entrants_per_team`]. `None` if there is no such
-    /// phase or its sources send qualifiers of different sizes.
+    /// phase or its teams are not all of one size.
     pub fn entrants_per_ranking(&self, phase_id: &PhaseId) -> Option<NonZeroU32> {
         let phase = self.phase(phase_id)?;
-        let per_qualifier = self.entrants_per_qualifier(phase.sources())?;
-        Some(phase.plugins().teams().entrants_per_team(per_qualifier))
+        phase
+            .plugins()
+            .teams()
+            .entrants_per_team(self.entrants_per_qualifier(phase.sources()))
     }
 
     /// The phases, in the order they were added in; a phase takes entrants only from phases
@@ -268,12 +270,9 @@ impl Competition {
                 .map(|entrant| entrant.uuid())
                 .sorted()
                 .eq(position_of.keys().map(|entrant| entrant.uuid()).sorted())
-                && self
-                    .entrants_per_qualifier(phase.sources())
-                    .is_none_or(|per_qualifier| {
-                        let size = teams.entrants_per_team(per_qualifier).get() as usize;
-                        formed.iter().all(|team| team.len() == size)
-                    }),
+                && self.entrants_per_ranking(phase_id).is_none_or(|size| {
+                    formed.iter().all(|team| team.len() == size.get() as usize)
+                }),
             "teams take every entrant of the field once, each of the size they stand for"
         );
         formed

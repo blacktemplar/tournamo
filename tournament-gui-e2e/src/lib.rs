@@ -307,6 +307,13 @@ impl Gui {
             .await?
             .click()
             .await?;
+        // the list leaves the page only after it faded out, and the page, which it may have made
+        // longer, gets shorter then: at its bottom, what is in sight moves down, away from under a
+        // click aimed at it before
+        self.driver
+            .query(By::Css("[role='listbox']"))
+            .wait_until_gone()
+            .await?;
         Page::pause().await;
         Ok(())
     }

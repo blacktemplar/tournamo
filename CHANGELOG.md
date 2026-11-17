@@ -65,6 +65,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   result can be typed with the name of either. An odd number of entrants is
   not drawn into pairs: the start says so. A Monster DYP takes single
   entrants only. CLI: `teams=drawn-pairs`.
+- Presets set up the phases of a whole competition at once, while it has
+  none: “groups then knockout” (groups, then a knockout of the best of each,
+  groups kept apart), “qualification then knockouts” (random rounds, then
+  knockouts by places in blocks) and “DYP” (drawn pairs, double
+  elimination). The phases card asks how the competition is played: a
+  preset, set up by its fields with a preview of its phases, or own phases.
+  The phases added are ordinary phases, each edited and removed as any
+  phase; one undo takes all of them back. CLI: `presets`, `add-preset`.
 - CLI: `add-phase --name --from`, `start-phase`, `phases`, `ranking
   --competition`, and `--phase` for `matches`, `report`, `undo-report`,
   `ranking` and `edit-phase`; `--division <letter>` for `matches` and

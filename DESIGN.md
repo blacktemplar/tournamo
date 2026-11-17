@@ -1059,6 +1059,47 @@ Rejected:
   metric for show (ticking its box does it), a text next to a box on by rule
   (the look tells it apart, the reason is its description).
 
+### Presets
+
+A preset (`plugins::preset::Preset`, an axis like any other) is a template of
+a whole competition: one or more phases (`PresetPhase`: a name as a `Phrase`,
+sources naming earlier phases of the preset by position, and answers to the
+draft of the phase), configured by fields of its own, so that its schema,
+catalog entry, form and questions come as for every plugin.
+`Competition::expand` turns it into ordinary `AddPhase`s: each phase is
+drafted from its sources (the context of a later one knows what the teams of
+the phases before it send, before any of them is added), answered, completed
+by the format's suggestions and the implied plugins, and built. A phase that
+does not expand is a bug of the preset (`PresetError`); a test over the
+catalog expands every preset registered with its defaults and adds its phases.
+
+- **Only while the competition has no phase** (D19): a preset sets up a
+  competition, its first phase taking the registration. There are no presets
+  of a single phase: a phase added by hand follows the suggestions of its
+  format, and scoring presets (#7) are an idea of their own.
+- **Never saved**: the log records the phases it expanded into, each edited
+  and removed through its own `AddPhase` as any phase, and a competition set
+  up by a preset is one set up by hand. So a preset's id is a translation key,
+  not a persistence contract, and a preset changed later changes nothing
+  saved. Its phases follow the rule of what the standings show; a preset says
+  nothing about columns.
+- **One undo step** (D20): the session adds its phases with
+  `SessionHistory::apply_all`, so one undo takes all of them back.
+- **Names in the operator's language**: the app expands with the names its
+  `Translator` gives the preset's phrases (`.phase-<key>`), as the operator
+  would have typed them; they are names like any other afterwards.
+- **The form of a preset shares the machinery of the form of a phase**: its
+  draft is of the composite `PresetChoice` (the preset as its only field), its
+  fields generated and edited by the same code (`form/edit.rs`, the trait
+  `Editable`), without name, sources and suggestions; its preview expands it
+  into an empty competition, which is the only one it applies to.
+
+Rejected: a transition adding a preset's phases (editing or removing one of
+them would need entries of its own, and the log would hold a template, not
+what is played); saving which preset set up a competition (nothing reads it,
+and the phases may have been edited since); presets as code of the app (a
+third party could not add one, and the CLI would repeat them).
+
 ## Persistence
 
 ### Snapshots
@@ -1262,14 +1303,14 @@ the action. Operations appending an action take the history
 - **A targeted undo is an action**: after `undo-report`, `undo` brings the
   result back.
 - **Several entries can be one action** (`SessionHistory::apply_all`): who
-  pastes a list of entrants (or, *planned*, applies a preset of several phases)
+  pastes a list of entrants or applies a preset of several phases
   and dislikes it expects one undo to take all of it back. The log keeps one
   entry per entrant or phase, each edited and removed through its own entry, so
   the grouping belongs to the history, which is not saved. `apply_all` undoes
   the entries it applied if a later one is refused, which leaves them and their
   undos in the log: the session checks first what it can (the names of a list),
   and the engine refuses adding an entrant for all of them or none. The
-  `Action` of a group says what it was as a whole (`AddEntrants`).
+  `Action` of a group says what it was as a whole (`AddEntrants`, `AddPhases`).
 - **Explicit targets**, so an undo means the same however logs are merged.
 - **Changes of other sessions leave the history as it is**: what this session
   can undo and redo stays after catching up with them.

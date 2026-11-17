@@ -284,11 +284,16 @@ standings = Tabelle
 rank = Platz
 played = Spiele
 cross-table = Kreuztabelle
-cross-table-total = Gesamt
+cross-table-total = Punkte
+cross-table-byes = Freilose
 outcome-win = gewonnen
 outcome-draw = unentschieden
 outcome-loss = verloren
 outcome-with-score = { $outcome }, { $score }
+outcome-with-points = { $outcome }, { $points ->
+        [one] { $points } Punkt
+       *[other] { $points } Punkte
+    }
 bracket = Turnierbaum
 bracket-winners = Gewinnerseite
 bracket-losers = Verliererseite

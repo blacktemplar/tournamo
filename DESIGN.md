@@ -1741,25 +1741,34 @@ pairing (every slot grows); the bracket in half the width.
   place: a row and column per team, each cell the matches between them from the
   row's side, each at the highest level of its result (`CrossMatch::score`: its
   own score, else the parts won, so `3–2` for a best of five rather than its
-  games), or else `1`, `½`, `0`; said as won/drawn/lost, followed by the score
-  if it shows one (`won, 3–2`), as an overridden result need not follow from
-  the score. A click on a match with more than who won opens its details, as in
-  the list. `Session::cross_table` offers it where every match is between two
-  single rankings and the format plays no bracket (round robin, random rounds;
-  not Monster DYP or knockouts), so no table of formats beyond the bracket's.
+  games), or else the points of the result (`CrossMatch::points`, e.g. `3`,
+  `1`, `0`), or else, in a phase counting no points, `1`, `½`, `0`; said as
+  won/drawn/lost, followed by the score or the points it shows (`won, 3–2`,
+  `won, 3 points`), as an overridden result need not follow from the score. A
+  click on a match with more than who won opens its details, as in the list.
+  `Session::cross_table` offers it where every match is between two single
+  rankings and the format plays no bracket (round robin, random rounds; not
+  Monster DYP or knockouts), so no table of formats beyond the bracket's.
 - **Rows by rank**, as published cross tables are; columns headed by row
   numbers (names would make 20 columns too wide), names said to screen readers
   and kept in sight while scrolling.
 - **Read-only**, an open match's cell empty: with rows by rank, reporting in the
   table would move the cell under the operator's hand, and narrow cells fit
   many teams.
-- **A total last** (`CrossRow::total`), the sum of the row's `1`, `½`, `0`, as
-  published tables have, whatever the points of the phase; wins and losses
-  are tinted (`--win-subtle`, `--error-subtle`), a win also bold, so that it
-  reads without colours where a score does not say who won.
+- **The points last** (`CrossRow::total`), the `Points` metric the standings
+  show, so the two views never disagree; before them the points of byes
+  (`CrossRow::byes`), where a bye scored any, so the row adds up. A phase
+  counting no points has neither column. The points of a result come from the
+  phase's `PointsCalculator` (`plugin_factory::downcast_ref`): what a result
+  is worth is its configuration, which no metric records per match. Wins and
+  losses are tinted (`--win-subtle`, `--error-subtle`), a win also bold, so
+  that it reads without colours where a score does not say who won.
 
 Rejected: rows in entry or draw order (stable, but an order seen nowhere else);
-open matches shown by number (wider columns, the list tells it anyway).
+open matches shown by number (wider columns, the list tells it anyway); a total
+of `1`, `½`, `0` whatever the points of the phase (it disagreed with the
+standings, e.g. 4 against 14 points with 3 for a win and 2 for a bye); the
+points of byes only in the total (the row would not add up).
 
 ### Layout
 

@@ -161,6 +161,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `PhasePlugins` has `divisions`, `draw` and `across`, and the plugin axis
   `plugins::draw::Draw` is new. In the app, `Session::compared`,
   `StandingRow::division` and `PhaseOverview::{configured_divisions, order}`.
+- Library users: `plugin_factory::downcast_ref` reaches a plugin behind a
+  `dyn` of its axis as its type; `PointsCalculator` tells its points
+  (`points_for_win`, `points_for_draw`, `points_for_bye`). In the app,
+  `CrossRow::total` is the row's points, `None` without them, next to
+  `CrossRow::byes` and `CrossMatch::points`.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time, and of which phase,
@@ -170,6 +175,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
+- The cross table counts the points of the phase: a result shows its points
+  where it shows no score (e.g. 3, 1 or 0), and the last column is the points
+  of the standings, byes included, which a column of their own shows where a
+  bye scored any. It used to add up 1 for a win and ½ for a draw whatever the
+  points of the phase. A phase counting no points shows neither column.
 - In the browser, undoing or redoing what another tab has undone, redone or
   built on since no longer breaks the page: it says that a change made
   elsewhere keeps it from being undone (or redone), and nothing more can be

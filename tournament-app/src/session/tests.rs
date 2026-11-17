@@ -111,6 +111,10 @@ struct Given {
     across: Vec<PluginConfig>,
     /// Who plays together; as registered if `None`.
     teams: Option<PluginConfig>,
+    /// The criteria of the ranking; the format's suggestion if `None`.
+    ranking: Option<Vec<PluginConfig>>,
+    /// The metrics configured, those it needs implied; the format's suggestion if `None`.
+    metrics: Option<Vec<PluginConfig>>,
 }
 
 impl Given {
@@ -122,6 +126,24 @@ impl Given {
             divisions: 1,
             across: Vec::new(),
             teams: None,
+            ranking: None,
+            metrics: None,
+        }
+    }
+
+    /// Ranked by `ranking`.
+    fn ranking(self, ranking: Vec<PluginConfig>) -> Self {
+        Self {
+            ranking: Some(ranking),
+            ..self
+        }
+    }
+
+    /// The metrics `metrics` configured, and those they or the ranking need implied.
+    fn metrics(self, metrics: Vec<PluginConfig>) -> Self {
+        Self {
+            metrics: Some(metrics),
+            ..self
         }
     }
 
@@ -177,6 +199,12 @@ impl Given {
         }
         if let Some(teams) = self.teams {
             draft = draft.with(PhasePlugins::TEAMS, teams).unwrap();
+        }
+        if let Some(ranking) = self.ranking {
+            draft = draft.with(PhasePlugins::RANKING, ranking).unwrap();
+        }
+        if let Some(metrics) = self.metrics {
+            draft = draft.with(PhasePlugins::METRICS, metrics).unwrap();
         }
         let draft = draft
             .with(PhasePlugins::DIVISIONS, self.divisions)

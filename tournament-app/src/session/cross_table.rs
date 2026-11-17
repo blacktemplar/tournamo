@@ -2,13 +2,13 @@
 
 use std::collections::HashMap;
 
-use tournament_engine::{Match, MatchResult, RankingId, Score, Sides};
+use tournament_engine::{
+    Match, MatchResult, RankingId, Score, Sides,
+    plugins::metrics_calculator::{Points, PointsCalculator, WinsDrawsLosses},
+};
 
 use super::{Session, bracket::plays_bracket};
 use crate::view::{self, Chart, CrossMatch, CrossRow, CrossTable, DivisionRef, Outcome};
-
-/// What a draw adds to the total of a row.
-const HALF: Score = Score::new(0.5);
 
 impl Session {
     /// What the division `of` shows of all its matches at once: its [`bracket`](Self::bracket),
@@ -56,12 +56,30 @@ impl Session {
             .enumerate()
             .map(|(index, ranking)| (ranking.id(), index))
             .collect();
+        // what a result is worth, if the phase counts points
+        let points = division.plugins().metrics().iter().find_map(|calculator| {
+            plugin_factory::downcast_ref::<PointsCalculator, _>(&**calculator)
+        });
+        let byes = |ranking: &tournament_engine::Ranking| {
+            ranking
+                .metric::<WinsDrawsLosses>()
+                .map_or(0, |record| record.byes)
+        };
+        // the points of byes, where a bye scored any
+        let bye_points = points
+            .map(PointsCalculator::points_for_bye)
+            .filter(|points| !points.is_zero() && ranked.iter().any(|ranking| byes(ranking) > 0));
         let mut rows: Vec<CrossRow> = ranked
             .iter()
             .map(|ranking| CrossRow {
                 entrants: self.team(data, &[ranking.id()]),
                 cells: vec![Vec::new(); ranked.len()],
-                total: Score::ZERO,
+                byes: bye_points.map(|points| points * byes(ranking).into()),
+                total: points.map(|_| {
+                    ranking
+                        .metric::<Points>()
+                        .map_or(Score::ZERO, |points| points.0)
+                }),
             })
             .collect();
         for (a, b, r#match) in pairs {
@@ -78,14 +96,14 @@ impl Session {
             for (((team, against), outcome), score) in
                 [(a, b), (b, a)].into_iter().zip(outcomes).zip(scores)
             {
-                rows[team].total += match outcome {
-                    Some(Outcome::Win) => Score::ONE,
-                    Some(Outcome::Draw) => HALF,
-                    Some(Outcome::Loss) | None => Score::ZERO,
-                };
                 rows[team].cells[against].push(CrossMatch {
                     row: row.clone(),
                     outcome,
+                    points: points.zip(outcome).map(|(points, outcome)| match outcome {
+                        Outcome::Win => points.points_for_win(),
+                        Outcome::Draw => points.points_for_draw(),
+                        Outcome::Loss => Score::ZERO,
+                    }),
                     score,
                 });
             }

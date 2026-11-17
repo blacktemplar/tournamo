@@ -480,8 +480,8 @@ async fn a_reopened_match_has_the_focus_and_is_announced() {
 }
 
 /// A round robin's cross table shows the result of every two entrants' match, nothing while it
-/// is open, in the order of the standings: Bob, who was entered last, first once he won. Each row
-/// ends with what its results add up to, and a win and a loss are tinted apart.
+/// is open, in the order of the standings: Bob, who was entered last, first once he won. A result
+/// shows its points, each row ends with its points, and a win and a loss are tinted apart.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_cross_table_shows_the_results_by_rank() {
@@ -496,8 +496,10 @@ async fn the_cross_table_shows_the_results_by_rank() {
         gui.click_labelled("Bob wins").await?;
         gui.click("Cross table").await?;
 
-        gui.expect_cross_table_row(1, &["", "1\nwon", "1"]).await?;
-        gui.expect_cross_table_row(2, &["0\nlost", "", "0"]).await?;
+        gui.expect_cross_table_row(1, &["", "1\nwon, 1 point", "1"])
+            .await?;
+        gui.expect_cross_table_row(2, &["0\nlost, 0 points", "", "0"])
+            .await?;
         gui.page
             .expect_texts(By::Css("#cross-table-grid tbody th"), &["1 Bob", "2 Alice"])
             .await?;

@@ -420,8 +420,11 @@ pub struct CrossRow {
     /// One per column, i.e. per row of the table, in the same order: the matches of this team
     /// against that row's team, by their numbers; none against itself.
     pub cells: Vec<Vec<CrossMatch>>,
-    /// What its matches with a result add up to: 1 for a win, ½ for a draw, 0 for a loss.
-    pub total: Score,
+    /// The points of its byes, if a bye scored points in the division: of every row then.
+    pub byes: Option<Score>,
+    /// Its points, those of its results and of its byes, as the standings show them, if the
+    /// phase counts points: of every row then.
+    pub total: Option<Score>,
 }
 
 /// A match in a cell of a [`CrossTable`], seen from the team of the cell's row.
@@ -430,6 +433,9 @@ pub struct CrossMatch {
     pub row: MatchRow,
     /// How it ended for the team of the cell's row, once it has a result.
     pub outcome: Option<Outcome>,
+    /// What the result is worth for the team of the cell's row, once it has one, if the phase
+    /// counts points.
+    pub points: Option<Score>,
     /// Its result at the highest level entered, the row's team first, once finished: its own
     /// score, else the parts each side won, e.g. 3–2 in games of a best of; none if it has neither.
     pub score: Option<Sides<Option<EnteredValue>>>,

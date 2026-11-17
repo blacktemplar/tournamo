@@ -367,9 +367,13 @@ played = Played
 # a table with a row and a column per team, each cell the matches of the row's team against the
 # column's
 cross-table = Cross table
-# the column of what the results of a row add up to: 1 for a win, ½ for a draw
-cross-table-total = Total
-# how a match ended for the team of the row, said by screen readers for 1, ½ and 0
+# the column of the points of a row, those of its results and of its byes, as the standings show
+# them
+cross-table-total = Points
+# the column of the points of the byes of a row, where a bye scored points
+cross-table-byes = Byes
+# how a match ended for the team of the row, said by screen readers for what it shows: 1, ½ and 0,
+# or the points of the result
 outcome-win = won
 outcome-draw = drawn
 outcome-loss = lost
@@ -377,6 +381,11 @@ outcome-loss = lost
 # readers; $outcome: what `outcome-win`, `outcome-draw` or `outcome-loss` say; $score: e.g. 2–1, the
 # row's first
 outcome-with-score = { $outcome }, { $score }
+# how a match ended for the team of the row, followed by its points for it; $points: e.g. 3
+outcome-with-points = { $outcome }, { $points ->
+        [one] { $points } point
+       *[other] { $points } points
+    }
 # the bracket of a knockout, every match in it from the start
 bracket = Bracket
 bracket-winners = Winners bracket

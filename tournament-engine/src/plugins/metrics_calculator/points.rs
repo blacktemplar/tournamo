@@ -105,6 +105,21 @@ impl PointsCalculator {
         self
     }
 
+    /// The points of a win.
+    pub const fn points_for_win(&self) -> Score {
+        self.points_for_win
+    }
+
+    /// The points of a draw.
+    pub const fn points_for_draw(&self) -> Score {
+        self.points_for_draw
+    }
+
+    /// The points of a bye.
+    pub const fn points_for_bye(&self) -> Score {
+        self.points_for_bye
+    }
+
     fn points_of(&self, ranking_id: &RankingId, phase_data: &DivisionData) -> Points {
         let WinsDrawsLosses {
             wins, draws, byes, ..

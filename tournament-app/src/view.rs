@@ -50,6 +50,11 @@ pub struct Plugin {
 /// [`Session::scale`](crate::session::Session::scale).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Scale {
+    /// The entrants it takes, each member of a team counted, see
+    /// [`Session::entrants_taken`](crate::session::Session::entrants_taken).
+    pub entrants: usize,
+    /// The teams it forms of them, as many as entrants where everyone plays on their own.
+    pub teams: usize,
     pub rounds: Count,
     pub matches: Count,
 }

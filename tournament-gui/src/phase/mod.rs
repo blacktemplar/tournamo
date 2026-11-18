@@ -129,7 +129,8 @@ pub fn AddPhaseDialog() -> Element {
 }
 
 /// How many rounds and matches the phase takes with the entrants its sources take as many as
-/// there are now, until it starts: the phase of `form`, or else the phase `phase`. Said as it
+/// there are now, or why it cannot form its teams of them, until it starts: the phase of `form`,
+/// or else the phase `phase`. Said as it
 /// changes, since it is what a format is chosen by.
 #[component]
 fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Element {
@@ -151,8 +152,10 @@ fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Elemen
             }
             (None, None) => return None,
         };
-        let scale = session.scale(&form)?;
-        Some((session.entrants_taken(&form), scale))
+        match session.unfit(&form) {
+            Some(unfit) => Some(Err(unfit)),
+            None => session.scale(&form).map(Ok),
+        }
     });
     let tr = ctx.translator.read();
     let count = |count: Count, exact: &'static str, range: &'static str| {
@@ -165,14 +168,28 @@ fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Elemen
         };
         tr.text(&text)
     };
-    let text = scale().map(|(entrants, scale)| {
-        t!(
-            tr,
-            "phase-scale",
-            entrants = entrants,
-            rounds = count(scale.rounds, "scale-rounds", "scale-rounds-range"),
-            matches = count(scale.matches, "scale-matches", "scale-matches-range"),
-        )
+    let text = scale().map(|scale| match scale {
+        Ok(scale) => {
+            let key = if scale.teams == scale.entrants {
+                "phase-scale"
+            } else {
+                "phase-scale-teams"
+            };
+            tr.text(
+                &Text::new(key)
+                    .with("entrants", scale.entrants)
+                    .with("teams", scale.teams)
+                    .with(
+                        "rounds",
+                        count(scale.rounds, "scale-rounds", "scale-rounds-range"),
+                    )
+                    .with(
+                        "matches",
+                        count(scale.matches, "scale-matches", "scale-matches-range"),
+                    ),
+            )
+        }
+        Err(unfit) => tr.sentence(&unfit),
     });
     rsx! {
         p { class: "hint phase-scale", role: "status", {text} }

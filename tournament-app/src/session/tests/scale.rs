@@ -31,6 +31,8 @@ fn the_scale_of_a_phase_is_known_before_the_start() {
     assert_eq!(
         scale(&session, RoundRobin::ID),
         Some(Scale {
+            entrants: 24,
+            teams: 24,
             rounds: exactly(23),
             matches: exactly(276)
         })

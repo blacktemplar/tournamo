@@ -70,7 +70,9 @@ error-started-already = the competition has started already
 error-too-few-entrants = a competition needs at least two entrants
 error-too-few-for-format = the format needs at least { $count } entrants
 error-too-few-for-divisions = { $divisions } groups need at least { $count } entrants: lower the number of groups
-error-field-does-not-fit = { $phase } cannot form its teams ({ $teams }) of { $count } entrants, e.g. an odd number into pairs
+error-field-does-not-fit = { $phase } cannot form its teams ({ $teams }) of { $count } entrants, as the number does not come out even
+# of a phase being configured
+warning-teams-unfit = its teams ({ $teams }) cannot be formed of { $count } entrants, as the number does not come out even
 error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already

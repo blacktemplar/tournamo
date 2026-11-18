@@ -8,9 +8,10 @@ use tournament_engine::{
     uuid::Uuid,
 };
 
-use super::{MOST_MATCHES, Session, phase::completed, teams_formed};
+use super::{MOST_MATCHES, Session, phase::completed, teams_formed, teams_plugin};
 use crate::{
     form::PhaseForm,
+    i18n::Text,
     view::{Count, Scale},
 };
 
@@ -20,6 +21,20 @@ impl Session {
     /// it, as many as their sources take in turn until they start. Each member of a team counts.
     pub fn entrants_taken(&self, form: &PhaseForm) -> usize {
         self.field_taken(form.sources()).entrants
+    }
+
+    /// What keeps the phase `form` configures from forming its teams of the places its sources
+    /// take, as many as there are now, e.g. an odd number of them into pairs; `None` if it can,
+    /// or if the form is not complete.
+    pub fn unfit(&self, form: &PhaseForm) -> Option<Text> {
+        let taken = self.field_taken(form.sources());
+        let configured = completed(form.draft()).ok()?;
+        let teams = configured.teams();
+        (!teams.fits(taken.qualifiers)).then(|| {
+            Text::new("warning-teams-unfit")
+                .with("count", taken.qualifiers)
+                .with("teams", teams_plugin(teams))
+        })
     }
 
     /// How many rounds and matches the phase `form` configures takes with the entrants its sources
@@ -34,7 +49,7 @@ impl Session {
         if !teams.fits(taken.qualifiers) {
             return None;
         }
-        let entrants = teams_formed(teams, taken, form.entrants_per_qualifier());
+        let formed = teams_formed(teams, taken, form.entrants_per_qualifier());
         // played by as many single entrants as there are teams, which take as long
         let mut draft = form.draft().clone();
         draft
@@ -45,13 +60,15 @@ impl Session {
             .ok()?;
         let plugins = completed(&draft).ok()?;
         let [a, b] = [MatchResult::AWins, MatchResult::BWins]
-            .map(|result| play_out(entrants, plugins.clone(), result));
+            .map(|result| play_out(formed, plugins.clone(), result));
         let ((a_rounds, a_matches), (b_rounds, b_matches)) = (a?, b?);
         let count = |a: usize, b: usize| Count {
             least: a.min(b),
             most: a.max(b),
         };
         Some(Scale {
+            entrants: taken.entrants,
+            teams: formed,
             rounds: count(a_rounds, b_rounds),
             matches: count(a_matches, b_matches),
         })

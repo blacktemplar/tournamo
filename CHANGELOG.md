@@ -70,7 +70,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   competition a pair is one row: a pair out before a phase of singles is
   placed after all of its players, and gets no medal for a place counted in
   pairs. An odd number of entrants is
-  not drawn into pairs: the start says so. A Monster DYP takes single
+  not drawn into pairs: the form of the phase and the start say so. The form
+  says how many teams the phase forms of its entrants, and what each choice
+  of teams does (“unchanged” keeps them as they come in). A Monster DYP takes single
   entrants only. CLI: `teams=drawn-pairs`.
 - Presets set up the phases of a whole competition at once, while it has
   none: “groups then knockout” (groups, then a knockout of the best of each,

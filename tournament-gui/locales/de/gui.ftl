@@ -152,6 +152,7 @@ every-place-of = alle Plätze von { $phase }
 places-of = Plätze { $from }–{ $to } von { $phase }
 places-from-of = Plätze ab { $from } von { $phase }
 phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
+phase-scale-teams = Mit { $entrants } Teilnehmern in { $teams } Teams dauert die Phase { $rounds } mit { $matches }.
 scale-rounds = { $count ->
         [one] eine Runde
        *[other] { $count } Runden

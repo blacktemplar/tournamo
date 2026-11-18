@@ -185,6 +185,7 @@ places-from-of = places from { $from } of { $phase }
 # how long the phase takes with the entrants entered, before the start; $rounds and $matches: what
 # the messages below say
 phase-scale = With { $entrants } entrants, the phase takes { $rounds } and { $matches }.
+phase-scale-teams = With { $entrants } entrants in { $teams } teams, the phase takes { $rounds } and { $matches }.
 scale-rounds = { $count ->
         [one] one round
        *[other] { $count } rounds

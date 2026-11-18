@@ -73,8 +73,8 @@ fn a_field_that_cannot_be_formed_into_pairs_is_not_started() {
     assert_eq!(does_not_fit.teams.id, RandomPairs::ID);
     assert_eq!(
         crate::i18n::english(&StartError::FieldDoesNotFit(does_not_fit)),
-        "1 · Round robin cannot form its teams (drawn pairs) of 5 entrants, e.g. an odd \
-         number into pairs"
+        "1 · Round robin cannot form its teams (drawn pairs) of 5 entrants, as the number \
+         does not come out even"
     );
     assert!(matches!(
         session.start(),
@@ -119,8 +119,24 @@ fn the_scale_of_a_phase_of_pairs_counts_the_pairs() {
 
     let scale = session.scale(&form).unwrap();
 
+    assert_eq!((scale.entrants, scale.teams), (8, 4));
     assert_eq!(scale.rounds, Count { least: 3, most: 3 });
     assert_eq!(scale.matches, Count { least: 6, most: 6 });
+    assert_eq!(session.unfit(&form), None);
+}
+
+#[test]
+fn a_phase_says_while_configured_that_its_pairs_cannot_be_formed() {
+    let session = Given::new()
+        .entrants(&["A", "B", "C", "D", "E", "F", "G"])
+        .teams::<RandomPairs>()
+        .added();
+    let form = session.phase_form_to_edit(session.first()).unwrap();
+
+    let unfit = session.unfit(&form).unwrap();
+
+    assert_eq!(unfit.key(), "warning-teams-unfit");
+    assert_eq!(session.scale(&form), None);
 }
 
 /// A phase of pairs, then a Monster DYP of them split up: the form of the Monster DYP follows its

@@ -67,16 +67,26 @@ async fn a_result_is_typed_with_the_name_of_either_member() {
 async fn an_odd_number_of_entrants_is_not_drawn_into_pairs() {
     run_in_new_competition(async |gui| {
         drawn_pairs(&gui, &SIX[..5], "Round robin").await?;
+        // said while the phase is configured already
+        gui.expect_phase_scale(Some(
+            "Its teams (drawn pairs) cannot be formed of 5 entrants, as the number does not come \
+             out even.",
+        ))
+        .await?;
         gui.click("Add phase").await?;
 
         gui.expect_start_refusal(Some(
-            "1 · Round robin cannot form its teams (drawn pairs) of 5 entrants, e.g. an odd \
-             number into pairs.",
+            "1 · Round robin cannot form its teams (drawn pairs) of 5 entrants, as the number \
+             does not come out even.",
         ))
         .await?;
         gui.expect_disabled("Start").await?;
         gui.add_entrant("Frank").await?;
-        gui.expect_start_refusal(None).await
+        gui.expect_start_refusal(None).await?;
+        gui.expect_phase_scale(Some(
+            "With 6 entrants in 3 teams, the phase takes 3 rounds and 3 matches.",
+        ))
+        .await
     })
     .await;
 }

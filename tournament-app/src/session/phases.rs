@@ -387,18 +387,21 @@ impl Session {
         let mut last_ranking = None;
         for placed in competition.ranking() {
             let entrant = self.entrant_row(&placed.entrant);
-            // the entrants of a ranking follow each other, being placed by their ranking
+            // the entrants of a ranking follow each other, being placed by their ranking; one
+            // waiting for a phase has a row of their own
             if let Some(row) = rows.last_mut()
-                && last_ranking == Some((placed.phase, placed.ranking))
+                && let Some(ranking) = placed.ranking
+                && last_ranking == Some((placed.phase, ranking))
             {
                 row.entrants.push(entrant);
                 continue;
             }
-            last_ranking = Some((placed.phase, placed.ranking));
+            last_ranking = placed.ranking.map(|ranking| (placed.phase, ranking));
             rows.push(PlacedRow {
                 place: placed.place,
                 entrants: vec![entrant],
                 phase: placed.phase,
+                waiting: placed.ranking.is_none(),
                 medal: is_final.then(|| Medal::of(placed.place)).flatten(),
             });
         }

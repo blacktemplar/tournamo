@@ -408,3 +408,4 @@ compared-heading = Platz { $rank } im Vergleich der Gruppen
 compared-hint = Derselbe Platz aller Gruppen wird durch den Vergleich der Gruppen gereiht, zuletzt durch das Los.
 skip-to-content = Zum Inhalt springen
 skip-to-phases = Zu den Phasen springen
+phase-not-started-yet = { $phase } (noch nicht begonnen)

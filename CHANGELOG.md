@@ -266,6 +266,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   thousand and `1.800,5` is 1800.5, in English `1,000` is a thousand; the
   other separator still works as a decimal point (`1.5` in German). Ratings
   may be negative. No number takes an exponent (`1e3`) any more.
+- The ranking lists entrants of the registration going straight to a later
+  phase before it starts, at the place their range of the registration starts
+  at, with the phase "(not started)". Before a phase is finished, entrants tied
+  across the cut of a later phase share their place in the ranking, as in the
+  standings, rather than being placed apart by the lot already.
 
 ## [0.4.0] - 2026-11-09
 

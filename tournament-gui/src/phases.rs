@@ -7,7 +7,7 @@ use tournament_app::{
     i18n::{Message as _, Text, Translator},
     session::Session,
     storage::CompetitionKey,
-    view::{PhaseName, PhaseOverview, PhaseState, SourceRow},
+    view::{PhaseName, PhaseOverview, PhaseState, PlacedRow, SourceRow},
 };
 use tournament_engine::PhaseId;
 
@@ -272,6 +272,16 @@ pub fn Ranking() -> Element {
     let phases = session.phases();
     drop(session);
     let tr = ctx.translator.read();
+    // the phase a row reached, or waits for
+    let reached = |row: &PlacedRow| {
+        let phase = phases.iter().find(|phase| phase.id == row.phase)?;
+        let name = tr.phase_name(&phase.name);
+        Some(if row.waiting {
+            t!(tr, "phase-not-started-yet", phase = name.as_str())
+        } else {
+            name
+        })
+    };
     rsx! {
         div { class: "columns play",
             div { class: "column wide",
@@ -307,14 +317,7 @@ pub fn Ranking() -> Element {
                                         th { class: "name", scope: "row",
                                             {team_name(&tr, &row.entrants)}
                                         }
-                                        td { class: "phase",
-                                            {
-                                                phases
-                                                    .iter()
-                                                    .find(|phase| phase.id == row.phase)
-                                                    .map(|phase| tr.phase_name(&phase.name))
-                                            }
-                                        }
+                                        td { class: "phase", {reached(&row)} }
                                     }
                                 }
                             }

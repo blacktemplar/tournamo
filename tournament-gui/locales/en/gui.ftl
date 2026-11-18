@@ -533,3 +533,5 @@ compared-hint = The same place of every group is ranked by the comparison across
 # and past the list of entrants
 skip-to-content = Skip to content
 skip-to-phases = Skip to the phases
+# in the ranking, the phase entrants wait for; $phase: its name
+phase-not-started-yet = { $phase } (not started)

@@ -709,8 +709,11 @@ pub struct PlacedRow {
     /// Shared by rows placed equal.
     pub place: NonZeroU32,
     pub entrants: Vec<EntrantRow>,
-    /// The phase they stopped in, i.e. the latest started phase they are in.
+    /// The phase they stopped in, i.e. the latest started phase they are in, or the phase they
+    /// wait for if [`Self::waiting`].
     pub phase: PhaseId,
+    /// Whether they wait for [`Self::phase`] to start, entrants of the registration it takes.
+    pub waiting: bool,
     /// The medal of the place, once the ranking is final.
     pub medal: Option<Medal>,
 }

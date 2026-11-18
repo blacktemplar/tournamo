@@ -96,6 +96,13 @@ later one: a file whose `"format"` changes is migrated, not refused.
   “Semikolon”, “benötigt für”, “Monster-DYP”), clumsy sentences are
   rewritten, and the places a phase takes read “Plätze 1–3 der Anmeldung”
   and “Plätze 1–3 aus „1 · Jeder gegen jeden“”.
+- The help covers what testers looked for: what a phase shows (matches,
+  standings, bracket, cross table, ranking), that undo goes back only as far
+  as the page was open and can take back the start, typing in a draw, what
+  the short column headers such as SB mean, the choices of teams, and what
+  an exported file holds and how an import names it. Criteria and metrics
+  are listed under the order of the standings, where they belong; the
+  version is no longer surrounded by invisible marks.
 - The ranking of the competition is laid out as the standings: the place in a
   narrow column, the names as in every table, the phase reached next to them.
 - A list of entrants pasted at once, or added by one `add-entrant` of several

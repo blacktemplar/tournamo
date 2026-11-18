@@ -41,10 +41,11 @@ pub struct Placed {
     /// One more than the rows placed before the entrant's, a team one row; shared by entrants
     /// placed equal.
     pub place: NonZeroU32,
-    /// The latest started phase the entrant is in, which places them.
+    /// The latest started phase the entrant is in, which places them; for an entrant of the
+    /// registration waiting for a phase not started yet, that phase.
     pub phase: PhaseId,
-    /// The ranking of the entrant in that phase.
-    pub ranking: RankingId,
+    /// The ranking of the entrant in that phase, `None` while it has not started.
+    pub ranking: Option<RankingId>,
 }
 
 impl Competition {
@@ -422,11 +423,14 @@ impl Competition {
                 Some(before)
             })
             .collect();
-        // the entrants before the first row of each rank and taker
+        // the entrants before the first row of each rank and taker; until the phase is finished,
+        // a cut through a rank is not decided, so its rows stay together
+        let finished = phase.is_finished();
+        let side = |taker: Option<PhaseId>| taker.filter(|_| finished);
         let mut first_of: Map<(NonZeroU32, Option<PhaseId>), u32> = Map::default();
         for (standing, &before) in standings.iter().zip(&before) {
             first_of
-                .entry((standing.rank(), taker(standing.unique_rank())))
+                .entry((standing.rank(), side(taker(standing.unique_rank()))))
                 .or_insert(before);
         }
         standings
@@ -434,7 +438,7 @@ impl Competition {
             .zip(before)
             .map(|(standing, before)| {
                 let taker = taker(standing.unique_rank());
-                let first = first_of[&(standing.rank(), taker)];
+                let first = first_of[&(standing.rank(), side(taker))];
                 (standing.ranking(), start + first, start + before, taker)
             })
             .collect()
@@ -446,7 +450,7 @@ impl Competition {
         self.ranking()
             .into_iter()
             .filter(|placed| placed.phase == *phase_id)
-            .map(|placed| (placed.ranking, placed.place))
+            .filter_map(|placed| Some((placed.ranking?, placed.place)))
             .collect()
     }
 
@@ -454,17 +458,20 @@ impl Competition {
     /// first. An entrant is placed by the latest started phase they are in, by their row there;
     /// the members of a team share its row. A row's place is one more than the rows ranked before
     /// it, rows of one rank of a phase sharing the place of the first; where the cut of a source
-    /// goes through rows sharing a rank, each side of the cut shares the place of its first row,
-    /// so that the rows the lot left behind are placed after those it took on. A phase's rows
+    /// goes through rows sharing a rank of a finished phase, each side of the cut shares the place
+    /// of its first row, so that the rows the lot left behind are placed after those it took on,
+    /// while until the phase is finished they all share it. A phase's rows
     /// come where those of its sources it took on were: a phase starts where the first of them
     /// was, a source of the registration at its first place. A row going on to a phase not
     /// started yet counts as the rows that phase will form of its entrants, but at least as one:
     /// a pair to be split up counts as two, so that the places after it are those they will be,
     /// while entrants to be paired keep a row each until they are.
     ///
-    /// Final once every phase is finished. Entrants of the registration in no started phase are
-    /// not placed, each keeping a place free; entrants of places of a phase that no phase takes
-    /// are placed by the phase they stopped in.
+    /// An entrant of the registration that a phase not started yet takes is placed by that
+    /// phase, without a ranking, a row of their own, sharing the place where their range of the
+    /// registration starts with the others of it. Final once every phase is finished. Entrants of
+    /// the registration in no phase are not placed, each keeping a place free; entrants of places
+    /// of a phase that no phase takes are placed by the phase they stopped in.
     pub fn ranking(&self) -> Vec<Placed> {
         // (slot, index of the phase, unique slot, rows counted, placed) of every entrant placed
         // so far, see `slots`
@@ -481,9 +488,34 @@ impl Competition {
                         entrant: *entrant,
                         place: NonZeroU32::MIN,
                         phase: phase.id(),
-                        ranking: ranking.id(),
+                        ranking: Some(ranking.id()),
                     };
                     placed.insert(*entrant, (slot, index, unique, rows, entry));
+                }
+            }
+        }
+        // the entrants of the registration a phase not started yet takes, a row each, sharing
+        // the place their range of the registration starts at
+        for (index, phase) in self.phases.values().enumerate() {
+            if phase.is_started() {
+                continue;
+            }
+            for source in phase.sources() {
+                if source.of() != SourceOf::Registration {
+                    continue;
+                }
+                for (entrant, place) in self.registration.iter().zip(NonZeroU32::MIN..) {
+                    if !source.takes(place) || placed.contains_key(entrant) {
+                        continue;
+                    }
+                    let entry = Placed {
+                        entrant: *entrant,
+                        place: NonZeroU32::MIN,
+                        phase: phase.id(),
+                        ranking: None,
+                    };
+                    let slot = source.from().get();
+                    placed.insert(*entrant, (slot, index, place.get(), 1, entry));
                 }
             }
         }
@@ -494,7 +526,7 @@ impl Competition {
         let mut next_slot = 1;
         let mut rows_before = 0;
         let mut last_group = None;
-        let mut last_row = None;
+        let mut last_row: Option<(usize, Result<RankingId, EntrantId>)> = None;
         let mut place = NonZeroU32::MIN;
         for (slot, index, _, rows, placed) in &mut placed {
             if last_group != Some((*slot, *index)) {
@@ -503,8 +535,10 @@ impl Competition {
                 next_slot = next_slot.max(*slot);
                 place = NonZeroU32::MIN.saturating_add(rows_before);
             }
-            if last_row != Some((*index, placed.ranking)) {
-                last_row = Some((*index, placed.ranking));
+            // a row of a ranking, or of an entrant waiting for a phase
+            let row = (*index, placed.ranking.ok_or(placed.entrant));
+            if last_row != Some(row) {
+                last_row = Some(row);
                 rows_before += *rows;
             }
             next_slot += 1;

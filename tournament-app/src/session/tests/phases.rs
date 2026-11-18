@@ -436,3 +436,70 @@ fn the_ranking_places_everyone_by_the_phase_they_stopped_in() {
     );
     assert!(matches!(session.progress(), Progress::Won { .. }));
 }
+
+/// Before a phase is finished, a cut through a rank of it is not decided: the rows of the rank
+/// share their place in the ranking, as they share it in the standings.
+#[test]
+fn a_cut_through_a_tie_of_a_phase_still_played_splits_nothing() {
+    let mut session = qualification_and_final();
+    session.start().unwrap();
+
+    let places: Vec<_> = session
+        .ranking()
+        .rows
+        .iter()
+        .map(|row| row.place.get())
+        .collect();
+
+    assert_eq!(places, [1, 1, 1, 1]);
+}
+
+/// Entrants of the registration that a phase not started yet takes are placed by it, waiting,
+/// each a row of their own sharing the place their range of the registration starts at.
+#[test]
+fn entrants_waiting_for_a_phase_are_in_the_ranking() {
+    let mut session = Session::new("cup");
+    for name in ["A", "B", "C", "D", "E", "F"] {
+        session.add_entrant(name).unwrap();
+    }
+    // a qualification of the registration from place 3
+    let mut qualification = session.phase_form().unwrap();
+    qualification.take_some_places();
+    qualification.enter_place(0, End::From, "3");
+    session.add_phase(&qualification).unwrap();
+    // its best two, and the best two of the registration
+    let mut knockout = session.phase_form().unwrap();
+    knockout
+        .choose(
+            &ConfigPath::ROOT.field("format"),
+            Some(SingleElimination::ID),
+        )
+        .unwrap();
+    knockout.enter_place(0, End::To, "2");
+    knockout.add_source();
+    knockout.choose_source(1, None);
+    knockout.enter_place(1, End::From, "1");
+    knockout.enter_place(1, End::To, "2");
+    session.add_phase(&knockout).unwrap();
+    session.start().unwrap();
+
+    let ranking = session.ranking();
+
+    let rows: Vec<_> = ranking
+        .rows
+        .iter()
+        .map(|row| (row.place.get(), row.entrants.len(), row.waiting))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (1, 1, true),
+            (1, 1, true),
+            (3, 1, false),
+            (3, 1, false),
+            (3, 1, false),
+            (3, 1, false),
+        ]
+    );
+    assert_eq!(ranking.rows[0].phase, phase(&session, 2));
+}

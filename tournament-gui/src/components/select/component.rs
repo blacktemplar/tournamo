@@ -33,7 +33,9 @@ pub fn Select(
     });
     // changed: Escape closes only the list, before the document hears it, where a dialog around
     // the select would close as well, and the focus is back at the trigger rather than on the
-    // list, which is gone once closed
+    // list, which is gone once closed; and the list opened is moved left as far as it would
+    // reach past the right edge of the page, e.g. of a trigger right of its label on a phone,
+    // where it made the page scroll sideways
     let trigger = id.clone();
     use_effect(move || {
         _ = document::eval(&format!(
@@ -50,6 +52,22 @@ pub fn Select(
                         trigger.focus();
                     }}
                 }});
+                const fit = () => {{
+                    const list = select.querySelector("[role='listbox']");
+                    if (!list) return;
+                    list.style.left = "";
+                    // its width without the scale it opens with; a margin as the page's
+                    const margin = 16;
+                    const left = list.getBoundingClientRect().left;
+                    const over = left + list.offsetWidth
+                        - (document.documentElement.clientWidth - margin);
+                    if (over > 0) {{
+                        list.style.left = `${{-Math.min(over, left - margin)}}px`;
+                    }}
+                }};
+                new MutationObserver(() => {{
+                    if (select.dataset.state === "open") requestAnimationFrame(fit);
+                }}).observe(select, {{ attributes: true, attributeFilter: ["data-state"] }});
             }}
             "#
         ));

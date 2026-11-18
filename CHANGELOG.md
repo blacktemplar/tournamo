@@ -11,6 +11,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Added
 
+- The page prints what it shows of the competition (matches, standings,
+  cross table, bracket, ranking) without the bars, buttons and notices
+  operating it. A table of standings and the ranking can be copied as text
+  ("Copy" below it), which pastes as a table into a spreadsheet and as lines
+  into a message.
 - A competition is played in several phases: each takes its entrants from the
   registration or from places of the standings of phases before it, e.g. a
   qualification, then knockouts of its places 1–8 and 9–16. A phase can be
@@ -271,6 +276,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   at, with the phase "(not started)". Before a phase is finished, entrants tied
   across the cut of a later phase share their place in the ranking, as in the
   standings, rather than being placed apart by the lot already.
+- On a phone, a list of choices right of its label (e.g. Teams, Seeding) opens
+  within the screen rather than reaching past its edge and making the page
+  scroll sideways. A long text in a table of standings or in the ranking, e.g.
+  a round's name in German, wraps rather than pushing the columns after it out
+  of sight.
 
 ## [0.4.0] - 2026-11-09
 

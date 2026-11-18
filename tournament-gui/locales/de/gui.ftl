@@ -409,3 +409,6 @@ compared-hint = Derselbe Platz aller Gruppen wird durch den Vergleich der Gruppe
 skip-to-content = Zum Inhalt springen
 skip-to-phases = Zu den Phasen springen
 phase-not-started-yet = { $phase } (noch nicht begonnen)
+copy = Kopieren
+copy-table = { $table } als Text kopieren
+announce-copied = Als Text kopiert, zum Einfügen in eine Tabellenkalkulation oder eine Nachricht.

@@ -777,3 +777,44 @@ async fn the_field_of_a_new_entrant_keeps_room_in_german() {
     })
     .await;
 }
+
+/// A list of choices right of its label opens within a phone's width, rather than reaching past
+/// its edge.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_list_of_choices_opens_within_a_phone() {
+    run_in_new_competition(async |gui| {
+        gui.page.resize(390, 844).await?;
+        gui.add_entrant("Alice").await?;
+
+        gui.open_choice("teams").await?;
+
+        gui.page.expect_no_sideways_scroll().await
+    })
+    .await;
+}
+
+/// The page prints what it shows of the competition, the matches and the standings, without the
+/// bars and controls operating it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_page_prints_the_competition_without_its_controls() {
+    run_in_new_competition(async |gui| {
+        start_round_robin_of(&gui, &["Alice", "Bob", "Carol", "Dave"]).await?;
+
+        gui.page.emulate_print().await?;
+
+        gui.expect_displayed(
+            &[".standing-list", ".match"],
+            &[
+                "header.bar",
+                "footer",
+                ".view-switch",
+                ".report .win",
+                ".copy",
+            ],
+        )
+        .await
+    })
+    .await;
+}

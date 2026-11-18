@@ -938,3 +938,36 @@ fn score(level: &Level, part: &Part) -> Option<Sides<Option<EnteredValue>>> {
         .iter()
         .find_map(|field| part.value(&field.key).copied())
 }
+
+/// `rows` of cells as text to copy, e.g. a table of standings: the cells of a row apart by tabs,
+/// the rows by line breaks, which a spreadsheet pastes as a table and a message shows as lines.
+/// A tab or a line break within a cell becomes a space.
+pub fn tab_separated(rows: &[Vec<String>]) -> String {
+    rows.iter()
+        .map(|row| {
+            row.iter()
+                .map(|cell| cell.replace(['\t', '\r', '\n'], " "))
+                .collect::<Vec<_>>()
+                .join("\t")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    #[test]
+    fn a_table_is_copied_as_tab_separated_lines() {
+        let rows = [
+            vec!["Rank".to_owned(), "Name".to_owned()],
+            vec!["1".to_owned(), "Ann\tLee\nJr.".to_owned()],
+        ];
+
+        assert_eq!(tab_separated(&rows), "Rank\tName\n1\tAnn Lee Jr.");
+    }
+}

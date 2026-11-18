@@ -535,3 +535,8 @@ skip-to-content = Skip to content
 skip-to-phases = Skip to the phases
 # in the ranking, the phase entrants wait for; $phase: its name
 phase-not-started-yet = { $phase } (not started)
+# a button below a table, copying it as text to paste into a spreadsheet or a message
+copy = Copy
+# $table: what the table is called, e.g. "Standings"
+copy-table = Copy { $table } as text
+announce-copied = Copied as text, to paste into a spreadsheet or a message.

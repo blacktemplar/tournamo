@@ -904,10 +904,11 @@ fn scores_entered_replace_everything_entered() {
     score(&mut form, &[2], 21, 15);
     form.choose(&[0], Some(MatchResult::BWins));
 
-    assert!(form.enter_scores(&[
+    form.enter_scores(&[
         Sides::new(count(21), count(17)),
-        Sides::new(count(21), count(19))
-    ]));
+        Sides::new(count(21), count(19)),
+    ])
+    .unwrap();
 
     assert!(!form.is_chosen());
     assert_eq!(

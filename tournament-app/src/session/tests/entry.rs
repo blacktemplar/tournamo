@@ -2,7 +2,7 @@
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::i18n::Text;
+use crate::{i18n::Text, result_form::ScoresRefused};
 
 #[test]
 fn a_result_is_entered_as_the_number_of_its_match_and_1_x_or_2() {
@@ -58,8 +58,18 @@ fn a_result_entered_is_refused_unless_it_reads_as_one_of_a_match() {
         Err(ReportEnteredError::MissingResult(1))
     ));
     assert_eq!(numbers(&entered.found), [1], "the match is shown");
+    // the number of a match followed by what is no result, which no name has either
+    for (entry, word) in [("1 3", "3"), ("1 1 1", "1"), ("1 x 1", "x")] {
+        assert!(
+            matches!(
+                session.report_entered(session.all(), entry),
+                Err(ReportEnteredError::NotAResult { number: 1, word: w }) if w == word
+            ),
+            "{entry:?}"
+        );
+    }
     // read as part of a name, which nobody has
-    for entry in ["1 3", "one 1", "1 1 1", "-1 1", "1x1", "1 x 1", "1:1"] {
+    for entry in ["one 1", "-1 1", "1x1", "1:1"] {
         assert!(
             matches!(
                 session.report_entered(session.all(), entry),
@@ -154,7 +164,10 @@ fn scores_entered_are_refused_unless_they_fit_the_result() {
     ));
     assert!(matches!(
         session.report_entered(session.all(), "1 1-0 1-0 1-0 1-0"),
-        Err(ReportEnteredError::ScoresNotTaken(1))
+        Err(ReportEnteredError::ScoresNotTaken {
+            number: 1,
+            why: ScoresRefused::TooMany(3)
+        })
     ));
     assert!(matches(&session).iter().all(|row| row.result.is_none()));
 
@@ -163,7 +176,10 @@ fn scores_entered_are_refused_unless_they_fit_the_result() {
         .started();
     assert!(matches!(
         session.report_entered(session.all(), "1 21.5-17"),
-        Err(ReportEnteredError::ScoresNotTaken(1))
+        Err(ReportEnteredError::ScoresNotTaken {
+            number: 1,
+            why: ScoresRefused::NotWhole
+        })
     ));
     assert_eq!(
         session
@@ -178,7 +194,10 @@ fn scores_entered_are_refused_unless_they_fit_the_result() {
     let mut session = Given::new().started();
     assert!(matches!(
         session.report_entered(session.all(), "1 3-1"),
-        Err(ReportEnteredError::ScoresNotTaken(1))
+        Err(ReportEnteredError::ScoresNotTaken {
+            number: 1,
+            why: ScoresRefused::TooMany(0)
+        })
     ));
     assert!(
         session.report_entered(session.all(), "1-1").is_ok(),
@@ -405,4 +424,84 @@ fn a_match_entered_with_a_result_is_shown_but_not_reported() {
         entered.report,
         Err(ReportEnteredError::AlreadyFinished(1))
     ));
+}
+
+/// A match of a bracket that waits for others is no match yet, but says what it waits for.
+#[test]
+fn a_match_of_a_bracket_to_come_says_what_it_waits_for() {
+    let session = Given::new().format(SingleElimination::ID).started();
+
+    assert!(matches!(
+        session.read_entered(session.all(), "3 1").report,
+        Err(ReportEnteredError::NotPlayableYet { number: 3, waiting }) if waiting == [1, 2]
+    ));
+    assert!(matches!(
+        session.read_entered(session.all(), "9 1").report,
+        Err(ReportEnteredError::NoMatch(9))
+    ));
+}
+
+/// What follows the number of a match that is neither a result nor a score is named, rather than
+/// looked for as a name.
+#[test]
+fn what_follows_a_number_unreadably_is_named() {
+    let session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    let report = |entry| session.read_entered(session.all(), entry).report;
+
+    assert!(matches!(
+        report("1 70000-1"),
+        Err(ReportEnteredError::ScoreTooLarge { number: 1, value }) if value == "70000"
+    ));
+    assert!(matches!(
+        report("1 3"),
+        Err(ReportEnteredError::NotAResult { number: 1, word }) if word == "3"
+    ));
+    assert!(matches!(
+        report("1 draw"),
+        Err(ReportEnteredError::NotAResult { number: 1, word }) if word == "draw"
+    ));
+}
+
+/// A name beginning with a number is still found, also with what follows it.
+#[test]
+fn a_name_beginning_with_a_number_is_found() {
+    let session = Given::new()
+        .entrants(&["3 Musketeers", "Bob", "Carol", "Dave"])
+        .started();
+
+    let entered = session.read_entered(session.all(), "3 musk");
+
+    assert_eq!(entered.found.len(), 3, "the matches of 3 Musketeers");
+}
+
+/// A match a player cannot play yet, having a match of an earlier round open, is reported with a
+/// warning, as the list of its round reports it.
+#[test]
+fn a_match_of_a_later_round_is_entered_with_a_warning() {
+    let mut session = Given::new().started();
+    let later = matches(&session)
+        .into_iter()
+        .find(|row| row.round.get() == 2)
+        .unwrap();
+
+    let entered = session.read_entered(session.all(), &format!("{} 1", later.number));
+
+    assert!(entered.report.is_ok());
+    assert_eq!(entered.warnings.len(), 1);
+    assert_eq!(entered.warnings[0].key(), "warning-earlier-round");
+    session
+        .report_entered(session.all(), &format!("{} 1", later.number))
+        .unwrap();
+    let first = matches(&session)
+        .into_iter()
+        .find(|row| row.round.get() == 1)
+        .unwrap();
+    assert!(
+        session
+            .read_entered(session.all(), &format!("{} 1", first.number))
+            .warnings
+            .is_empty()
+    );
 }

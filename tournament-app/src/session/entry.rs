@@ -1,13 +1,16 @@
 //! Reading and reporting a result typed as one line, see [`Session::read_entered`].
 
-use tournament_engine::{EnteredValue, MatchResult, Sides, Team};
+use tournament_engine::{
+    Division, EnteredValue, MatchResult, Sides, Team,
+    plugins::phase_format::{Advance, PairingId},
+};
 
 use super::Session;
 use crate::{
     error::{ReportEnteredError, ReportError},
     i18n::Text,
     result_form::read_score,
-    view::{Entered, EntrantRow, MatchRow, MatchesOf, NameSearch, Reported},
+    view::{DivisionRef, Entered, EntrantRow, MatchRow, MatchesOf, NameSearch, Reported},
 };
 
 impl Session {
@@ -28,7 +31,7 @@ impl Session {
         } else {
             let mut form = self.result_form(row.phase, row.id)?;
             let entered = form.enter_scores(&row.scores);
-            debug_assert!(entered, "the scores of an entry fit its match");
+            debug_assert!(entered.is_ok(), "the scores of an entry fit its match");
             form.choose(&[], Some(result));
             self.report_form(&form)
         };
@@ -91,11 +94,12 @@ impl Session {
         if entry.is_empty() {
             return nothing(ReportEnteredError::Unreadable);
         }
-        let Some(NumberedEntry {
+        let numbered = read_entry(entry);
+        let Some(Ok(NumberedEntry {
             number,
             scores,
             result,
-        }) = read_entry(entry)
+        })) = numbered
         else {
             let mut open: Vec<_> = divisions
                 .iter()
@@ -111,6 +115,12 @@ impl Session {
             open.sort_by_key(|row| row.number);
             let any_draws = open.iter().any(draws);
             let Named { found, says } = read_named(&open, entry, any_draws);
+            // the number of a match followed by what is no result, unless a name has it all
+            if let Some(Err((number, unreadable))) = numbered
+                && found.is_empty()
+            {
+                return nothing(unreadable.error(number));
+            }
             let report = says.and_then(|Says { row, scores }| {
                 let result = row.result;
                 let draws = draws(&row);
@@ -126,7 +136,10 @@ impl Session {
                 .find(|r#match| super::views::number(r#match) == number)
                 .map(|r#match| (index, division, r#match))
         }) else {
-            return nothing(ReportEnteredError::NoMatch(number));
+            return nothing(match waiting_in_bracket(&divisions, number) {
+                Some(waiting) => ReportEnteredError::NotPlayableYet { number, waiting },
+                None => ReportEnteredError::NoMatch(number),
+            });
         };
         let row = self.match_row(of.phase, index, division, r#match);
         let report = match result {
@@ -160,9 +173,11 @@ impl Session {
             (result, Vec::new())
         } else {
             let mut form = self.result_form(row.phase, row.id)?;
-            if !form.enter_scores(&scores) {
-                return Err(ReportEnteredError::ScoresNotTaken(row.number));
-            }
+            form.enter_scores(&scores)
+                .map_err(|why| ReportEnteredError::ScoresNotTaken {
+                    number: row.number,
+                    why,
+                })?;
             let result = match (result, form.result()) {
                 (Some(entered), Some(suggested)) if entered != suggested => {
                     return Err(ReportEnteredError::AgainstScores(row.number));
@@ -176,6 +191,8 @@ impl Session {
         if result == MatchResult::Draw && !draws {
             return Err(ReportError::DrawNotAllowed.into());
         }
+        let mut warnings = warnings;
+        warnings.extend(self.earlier_round(&row));
         let row = MatchRow {
             result: Some(result),
             scores,
@@ -183,6 +200,64 @@ impl Session {
         };
         Ok((row, warnings))
     }
+
+    /// The warning that an entrant of the open match `row` still has a match of an earlier round
+    /// to play, which [`Self::playable`] would wait for: the first such entrant, side A's first,
+    /// and their earliest such match. `None` if the match can be played now.
+    fn earlier_round(&self, row: &MatchRow) -> Option<Text> {
+        let division = self.division(DivisionRef {
+            phase: row.phase,
+            division: row.division,
+        })?;
+        let data = division.data();
+        let mut earlier: Vec<_> = data
+            .matches()
+            .values()
+            .filter(|other| !other.is_finished() && other.round() < row.round)
+            .collect();
+        earlier.sort_by_key(|other| (other.round(), other.number()));
+        row.a.iter().chain(&row.b).find_map(|entrant| {
+            let other = earlier.iter().find(|other| {
+                other
+                    .team_a()
+                    .iter()
+                    .chain(other.team_b())
+                    .any(|ranking| data.rankings()[ranking].entrants().contains(&entrant.id))
+            })?;
+            Some(
+                Text::new("warning-earlier-round")
+                    .with("name", entrant.name.as_deref().unwrap_or("?"))
+                    .with("earlier", super::views::number(other)),
+            )
+        })
+    }
+}
+
+/// The numbers of the matches that the match numbered `number` of a bracket of `divisions`,
+/// not scheduled yet, waits for: those whose winner or loser takes a side of it not taken yet,
+/// in the order of its sides. `None` if no bracket has a match of that number to come.
+fn waiting_in_bracket(divisions: &[(usize, &Division)], number: usize) -> Option<Vec<usize>> {
+    divisions.iter().find_map(|(_, division)| {
+        let bracket = division.format().bracket()?;
+        let base = usize::try_from(division.number_base()).expect("a number fits a usize");
+        let pairings = bracket.pairings();
+        let number_of = |id: PairingId| {
+            let pairing = pairings.iter().find(|pairing| pairing.id == id)?;
+            Some(base + usize::try_from(pairing.number?.get()).expect("a number fits a usize"))
+        };
+        let pairing = pairings
+            .iter()
+            .find(|pairing| pairing.r#match.is_none() && number_of(pairing.id) == Some(number))?;
+        Some(
+            [pairing.sides.a, pairing.sides.b]
+                .into_iter()
+                .filter(|side| side.seat.is_none())
+                .filter_map(|side| match side.from? {
+                    Advance::WinnerOf(id) | Advance::LoserOf(id) => number_of(id),
+                })
+                .collect(),
+        )
+    })
 }
 
 impl Entered {
@@ -311,8 +386,48 @@ struct NumberedEntry {
     result: Option<MatchResult>,
 }
 
-/// What `entry` says, if it starts with the number of a match, see [`Session::read_entered`].
-fn read_entry(entry: &str) -> Option<NumberedEntry> {
+/// What is wrong with what follows the number of a match in an entry, see [`read_entry`].
+#[derive(Debug, PartialEq)]
+enum Unreadable {
+    /// A number of a score too large for a score of whole numbers.
+    TooLarge(String),
+    /// A word with a score's separator that is no score.
+    NotAScore(String),
+    /// A word that is neither a result nor a score.
+    NotAResult(String),
+}
+
+impl Unreadable {
+    /// What is wrong, after the number `number` of a match.
+    fn error(self, number: usize) -> ReportEnteredError {
+        match self {
+            Self::TooLarge(value) => ReportEnteredError::ScoreTooLarge { number, value },
+            Self::NotAScore(word) => ReportEnteredError::NotAScore { number, word },
+            Self::NotAResult(word) => ReportEnteredError::NotAResult { number, word },
+        }
+    }
+
+    /// What is wrong with `word`, which [`read_score`] does not read.
+    fn of(word: &str) -> Self {
+        let Some((a, b)) = word.split_once(['-', ':', '–']) else {
+            return Self::NotAResult(word.to_owned());
+        };
+        let digits =
+            |text: &str| !text.is_empty() && text.chars().all(|char| char.is_ascii_digit());
+        match [a, b]
+            .into_iter()
+            .find(|side| digits(side) && side.parse::<u16>().is_err())
+        {
+            Some(large) => Self::TooLarge(large.to_owned()),
+            None => Self::NotAScore(word.to_owned()),
+        }
+    }
+}
+
+/// What `entry` says, if it starts with the number of a match followed by whitespace or a `-`,
+/// or by nothing, a result or scores; the number and what is wrong with what follows it if that
+/// is unreadable; `None` if it does not start with a number. See [`Session::read_entered`].
+fn read_entry(entry: &str) -> Option<Result<NumberedEntry, (usize, Unreadable)>> {
     let entry = entry.trim();
     let digits = entry
         .find(|char: char| !char.is_ascii_digit())
@@ -320,11 +435,11 @@ fn read_entry(entry: &str) -> Option<NumberedEntry> {
     let (number, rest) = entry.split_at(digits);
     let number = number.parse().ok()?;
     let numbered = |scores, result| {
-        Some(NumberedEntry {
+        Some(Ok(NumberedEntry {
             number,
             scores,
             result,
-        })
+        }))
     };
     if rest.is_empty() {
         return numbered(Vec::new(), None);
@@ -343,11 +458,14 @@ fn read_entry(entry: &str) -> Option<NumberedEntry> {
     if result.is_some() {
         words.pop();
     }
-    let scores = words
+    match words
         .into_iter()
-        .map(read_score)
-        .collect::<Option<Vec<_>>>()?;
-    numbered(scores, result)
+        .map(|word| read_score(word).ok_or_else(|| Unreadable::of(word)))
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(scores) => numbered(scores, result),
+        Err(unreadable) => Some(Err((number, unreadable))),
+    }
 }
 
 /// The result `text` says: `1`, `2` (if `separated` from the number of its match) or `X`.
@@ -477,11 +595,11 @@ mod tests {
     #[test]
     fn a_number_is_followed_by_its_result_or_scores() {
         let numbered = |number, scores, result| {
-            Some(NumberedEntry {
+            Some(Ok(NumberedEntry {
                 number,
                 scores,
                 result,
-            })
+            }))
         };
         assert_eq!(
             read_entry("3 1"),
@@ -517,10 +635,38 @@ mod tests {
     }
 
     #[test]
+    fn what_follows_a_number_unreadably_says_what_is_wrong() {
+        let unreadable = |number, unreadable| Some(Err((number, unreadable)));
+        assert_eq!(
+            read_entry("3 70000-1"),
+            unreadable(3, Unreadable::TooLarge("70000".to_owned()))
+        );
+        assert_eq!(
+            read_entry("3 1-2-3"),
+            unreadable(3, Unreadable::NotAScore("1-2-3".to_owned()))
+        );
+        assert_eq!(
+            read_entry("3 -1-2"),
+            unreadable(3, Unreadable::NotAScore("-1-2".to_owned()))
+        );
+        assert_eq!(
+            read_entry("3 12"),
+            unreadable(3, Unreadable::NotAResult("12".to_owned()))
+        );
+        assert_eq!(
+            read_entry("1 draw"),
+            unreadable(1, Unreadable::NotAResult("draw".to_owned()))
+        );
+    }
+
+    #[test]
     fn an_entry_not_starting_with_a_number_is_none() {
         assert_eq!(read_entry("ali"), None);
         assert_eq!(read_entry("3ali"), None);
-        assert_eq!(read_entry("3 ali"), None);
+        assert_eq!(
+            read_entry("3 ali"),
+            Some(Err((3, Unreadable::NotAResult("ali".to_owned()))))
+        );
     }
 
     /// The open match numbered `number`, of Alice and Bob.

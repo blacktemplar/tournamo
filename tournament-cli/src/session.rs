@@ -998,7 +998,7 @@ impl Session {
             self.session.report(phase, match_id, result)?
         } else {
             let mut form = self.session.result_form(phase, match_id)?;
-            if !form.enter_scores(&scores) {
+            if form.enter_scores(&scores).is_err() {
                 return Err(Error::ScoresNotTaken(number));
             }
             form.choose(&[], result);

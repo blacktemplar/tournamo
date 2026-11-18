@@ -190,6 +190,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   of the standings, byes included, which a column of their own shows where a
   bye scored any. It used to add up 1 for a win and ½ for a draw whatever the
   points of the phase. A phase counting no points shows neither column.
+- Where a cut goes through a tie, the line below the places going on names
+  who the lot put below it (“Eve: tied, below the line by lot”), so that a
+  rank 1 below the line no longer reads as a mistake; the question before
+  starting the next phase says who of the tie the lot takes and who not.
 - A metric needing what the match format does not keep, e.g. the points
   difference in a phase of “winner only”, says what it needs in turn (“needs
   points scored and conceded, which needs the points scored”), where it named

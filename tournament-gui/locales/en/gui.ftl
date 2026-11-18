@@ -288,6 +288,8 @@ cut-by-place = { $count ->
 } on to { $phase }
 cut-compared = Place { $place } goes on to { $phase } as things stand, compared across the groups
 cut-comparison = Go on to { $phase } as things stand
+# $names: the teams right below the line that share the rank of the last above it
+cut-below-by-lot = { $names }: tied, below the line by lot
 
 matches = Matches
 # what a narrow screen shows: the matches or the standings (or a knockout's bracket); a wide screen

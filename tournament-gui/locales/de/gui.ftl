@@ -231,6 +231,7 @@ cut-by-place = { $count ->
 } weiter in { $phase }
 cut-compared = Platz { $place } kommt nach jetzigem Stand weiter in { $phase }, im Vergleich der Gruppen
 cut-comparison = Kommen nach jetzigem Stand weiter in { $phase }
+cut-below-by-lot = { $names }: gleichauf, durch das Los unter der Linie
 
 matches = Spiele
 view = Ansicht

@@ -336,6 +336,27 @@ fn of_parallel_divisions_a_cut_through_a_tie_in_a_group_is_decided_by_its_lot() 
             .filter(|tie| tie.division.is_some())
             .all(|tie| { tie.rank.get() == 1 && tie.favoured.len() + tie.others.len() == 4 })
     );
+    let tie = ties.iter().find(|tie| tie.division.is_some()).unwrap();
+    let said = crate::i18n::english(&StartPhaseError::CutThroughTie(vec![tie.clone()]));
+    assert!(
+        said.contains("more entrants share place 1 than go on: the lot takes"),
+        "{said}"
+    );
+    // the line below the places going on names who of the tie the lot put below it
+    for division in 0..3 {
+        let standings = session
+            .standings(DivisionRef {
+                phase: groups,
+                division,
+            })
+            .unwrap();
+        let cut = standings.rows[1].cut.clone().unwrap();
+        let below: Vec<_> = standings.rows[2..]
+            .iter()
+            .map(|row| row.entrants.clone())
+            .collect();
+        assert_eq!(cut.below_by_lot, below);
+    }
 }
 
 /// A line follows the places going on by their place, and one the place going on for now by
@@ -351,6 +372,7 @@ fn a_line_follows_the_rows_going_on() {
             how,
             from: NonZeroU32::new(from).unwrap(),
             through: NonZeroU32::new(through).unwrap(),
+            below_by_lot: Vec::new(),
         })
     };
     let mut thirds_going_on = 0;
@@ -363,7 +385,7 @@ fn a_line_follows_the_rows_going_on() {
             .unwrap()
             .rows
             .iter()
-            .map(|row| row.cut)
+            .map(|row| row.cut.clone())
             .collect();
         assert_eq!(cuts[..2], [None, cut(Advancing::ByPlace, 1, 2)]);
         assert_eq!(cuts[3], None);
@@ -376,7 +398,7 @@ fn a_line_follows_the_rows_going_on() {
     let compared: Vec<_> = session.compared(groups)[0]
         .rows
         .iter()
-        .map(|row| row.cut)
+        .map(|row| row.cut.clone())
         .collect();
     assert_eq!(compared, [None, cut(Advancing::Compared, 3, 3), None]);
 }

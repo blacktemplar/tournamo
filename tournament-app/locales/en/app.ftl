@@ -39,8 +39,8 @@ error-phase-in-use = { $count ->
 error-later-phase-started = { $phase } has started with the entrants of this phase; undo its start first
 # a tie that a cut between places goes through; $favoured and $others: the names of the teams
 # before and after the cut
-warning-cut-through-tie = { $favoured } and { $others } share place { $rank } of { $phase }; the lot puts { $favoured } ahead
-warning-cut-through-tie-in-group = { $favoured } and { $others } share place { $rank } of group { $group } of { $phase }; the lot puts { $favoured } ahead
+warning-cut-through-tie = in { $phase }, more entrants share place { $rank } than go on: the lot takes { $favoured }, not { $others }
+warning-cut-through-tie-in-group = in group { $group } of { $phase }, more entrants share place { $rank } than go on: the lot takes { $favoured }, not { $others }
 # a phase without a name: its number and the label of its format
 phase-unnamed = { $number } · { $format }
 # a phase that is not finished: e.g. "Group phase: 12 of 18 matches played"

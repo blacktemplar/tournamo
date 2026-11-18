@@ -510,7 +510,7 @@ pub struct StandingRow {
 
 /// A line below the last of the rows that go on alike, from the row after the line before (or
 /// the first): to the phase `to`, all by their place or all compared across the divisions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Cut {
     pub to: PhaseId,
     pub how: Advancing,
@@ -518,6 +518,10 @@ pub struct Cut {
     /// same for rows compared across the divisions.
     pub from: NonZeroU32,
     pub through: NonZeroU32,
+    /// The teams right after the line sharing the rank of the last row before it in its division,
+    /// which the lot put after the line; none before that row played a match, when everyone is
+    /// tied.
+    pub below_by_lot: Vec<Vec<EntrantRow>>,
 }
 
 /// That a row of the standings goes on to the phase `to`, and how sure that is as the standings

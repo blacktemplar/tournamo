@@ -919,8 +919,8 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
                             }
                             if let Some(cut) = row.cut {
                                 CutLine {
-                                    cut,
                                     phase: name_of(cut.to),
+                                    cut,
                                     span,
                                     comparison: false,
                                 }
@@ -998,8 +998,8 @@ fn ComparedStandings(compared: Compared) -> Element {
                             }
                             if let Some(cut) = row.cut {
                                 CutLine {
-                                    cut,
                                     phase: name_of(cut.to),
+                                    cut,
                                     span,
                                     comparison: true,
                                 }
@@ -1014,7 +1014,8 @@ fn ComparedStandings(compared: Compared) -> Element {
 
 /// The line below the rows of a table of standings going on alike to the phase named `phase`,
 /// across `span` columns, saying where they go and how: solid for places going on by their place,
-/// dashed for those compared across the divisions, in the `comparison` itself too.
+/// dashed for those compared across the divisions, in the `comparison` itself too; and who of a
+/// tie the lot put below it.
 #[component]
 fn CutLine(cut: Cut, phase: String, span: usize, comparison: bool) -> Element {
     let ctx = use_context::<Ctx>();
@@ -1032,13 +1033,31 @@ fn CutLine(cut: Cut, phase: String, span: usize, comparison: bool) -> Element {
         ),
         Advancing::Compared => t!(tr, "cut-compared", place = cut.from.get(), phase = phase),
     };
+    // a row below the line tied with the last above it would read as a mistake
+    let by_lot = (!cut.below_by_lot.is_empty()).then(|| {
+        let names: Vec<_> = cut
+            .below_by_lot
+            .iter()
+            .map(|team| team_name(&tr, team))
+            .collect();
+        t!(tr, "cut-below-by-lot", names = names.join(", "))
+    });
     rsx! {
         tr { class: if cut.how == Advancing::ByPlace { "cut" } else { "cut compared" },
             td { colspan: "{span}",
                 // in sight while the table scrolls sideways
                 span { class: "cut-text",
                     icons::ArrowUp {}
-                    "{text}"
+                    span {
+                        span { class: "cut-where", "{text}" }
+                        if let Some(by_lot) = by_lot {
+                            span {
+                                class: "cut-lot",
+                                "data-teams": cut.below_by_lot.len(),
+                                " · {by_lot}"
+                            }
+                        }
+                    }
                 }
             }
         }

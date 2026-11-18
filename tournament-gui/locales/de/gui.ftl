@@ -33,7 +33,7 @@ help-running = Ein Turnier durchführen
 help-running-steps = Ein Turnier läuft in vier Schritten ab:
 help-running-entrants = Trage die Teilnehmer mit ihren Namen ein, einen nach dem anderen, oder füge eine Liste mit einem Namen pro Zeile ein.
 help-running-phase = Wähle, wie sie spielen: eine Vorlage, die alle Phasen auf einmal einrichtet, z. B. Gruppen mit anschließendem K.-o.-System, oder eine eigene Phase: das Format und die Reihenfolge der Tabelle. Füge dann die Phasen hinzu.
-help-running-start = Starte. Das Format setzt die Spiele an, und die Teilnehmer stehen von da an fest. Die Phase lässt sich noch ändern, solange die Änderung zu den gemeldeten Ergebnissen passt.
+help-running-start = Starte. Das Format setzt die Spiele an, und die Teilnehmer stehen von da an fest; ihre Namen lassen sich unter „Teilnehmer“ aber noch berichtigen. Die Phase lässt sich noch ändern, solange die Änderung zu den gemeldeten Ergebnissen passt.
 help-running-results = Melde die Ergebnisse: Wähle bei einem Spiel die Seite, die gewonnen hat, oder Unentschieden, oder trage darunter die Punkte ein, tippe sie ein, z. B. „3 1“ für einen Sieg der linken Seite von Spiel 3, oder wähle den Sieger im Turnierbaum. Die Tabelle folgt jedem Ergebnis.
 help-running-mistakes = Ein irrtümlich gemeldetes Ergebnis wird zurückgenommen, indem sein Spiel wieder geöffnet wird. Rückgängig nimmt zurück, was seit dem Öffnen des Turniers getan wurde, in der Reihenfolge, in der es getan wurde. In beiden Fällen bleiben die eingetragenen Punkte stehen, sodass nur noch zu ändern ist, was falsch war.
 help-running-byes = Bleibt ein Teilnehmer in einer Runde ohne Gegner, hat er ein Freilos: Er kommt ohne Spiel weiter und erhält, was die Phase dafür vorsieht, z. B. die Punkte für ein Freilos.
@@ -113,6 +113,7 @@ read-only = Dieses Turnier ist in einem anderen Tab geöffnet und wird hier nur 
 
 ## Before the start
 
+entrants-after-start = Das Turnier hat begonnen, die Teilnehmer stehen also fest; ihre Namen lassen sich noch berichtigen.
 entrants = Teilnehmer
 no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile, gefolgt von einer Wertungszahl nach einem Strichpunkt oder Tabulator, wo es eine gibt.
 name = Name

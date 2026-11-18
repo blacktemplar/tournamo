@@ -214,6 +214,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   reports it. The number of games of a best of is labelled "best of" (German
   "Best of (Sätze)", the match format "nach Sätzen" rather than
   "Gewinnsätze", which read as the games needed to win).
+- A name can be corrected after the start: “Entrants” beside “Add phase”
+  lists the entrants, each renamed in place, which changes nothing else since
+  names are not part of the competition's history. Adding, removing and
+  rating stay closed once it has started.
 
 ## [0.4.0] - 2026-11-09
 

@@ -46,7 +46,7 @@ help-running = Running a competition
 help-running-steps = A competition is run in four steps:
 help-running-entrants = Enter the entrants by name, one after the other, or paste a list with a name on each line.
 help-running-phase = Choose how they play: a preset, which sets up all phases at once, e.g. groups then a knockout, or a phase of your own: the format, and the order of the standings. Then add the phases.
-help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on. The phase can still be changed, as long as the change fits the results reported.
+help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on, though their names can still be corrected under “Entrants”. The phase can still be changed, as long as the change fits the results reported.
 help-running-results = Report the results: choose the side that won or Draw at a match, or enter its score below it, type them in, e.g. “3 1” for a win of the left side of match 3, or choose the winner in the bracket. The standings follow every result.
 help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done. Either way, the score entered stays, so that only what was wrong needs changing.
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
@@ -134,6 +134,8 @@ read-only = This competition is open in another tab, so it is only shown here. I
 
 ## Before the start
 
+# the dialog listing the entrants after the start, to correct a name
+entrants-after-start = The competition has started, so its entrants are fixed; their names can still be corrected.
 entrants = Entrants
 no-entrants = No entrants yet. Each one is added by its name, or several at once by pasting a list with a name on each line, followed by a rating after a semicolon or a tab where there is one.
 name = Name

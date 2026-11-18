@@ -1,4 +1,4 @@
-use tournament_gui_e2e::{Key, run_in_new_competition};
+use tournament_gui_e2e::{Key, run_in_new_competition, thirtyfour::By};
 
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -32,6 +32,40 @@ async fn the_keyboard_skips_the_bars_and_the_list_of_entrants() {
         gui.page.check_accessibility().await?;
         gui.press(Key::Enter).await?;
         gui.expect_focus_on("#phase").await
+    })
+    .await;
+}
+
+/// Once the competition has started, its entrants are fixed, but a name is still corrected in a
+/// dialog listing them, which offers no removal; the matches show the new name.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_name_is_corrected_after_the_start() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bbo"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+
+        gui.click("Entrants").await?;
+        gui.expect_entrants(&["Alice", "Bbo"]).await?;
+        gui.page
+            .expect_texts(By::Css("#entrant-list .remove"), &[])
+            .await?;
+        // Escape gives up renaming, not the dialog
+        gui.click_labelled("Rename Bbo").await?;
+        gui.press(Key::Escape).await?;
+        gui.expect_focus_labelled("Rename Bbo").await?;
+        gui.rename_entrant("Bbo", "Bob", Key::Enter).await?;
+        gui.expect_entrants(&["Alice", "Bob"]).await?;
+        gui.expect_announcement("Renamed Bbo to Bob.").await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Close").await?;
+
+        gui.expect_no_dialog().await?;
+        gui.expect_focus("Entrants").await?;
+        gui.expect_enabled("Bob wins").await
     })
     .await;
 }

@@ -13,6 +13,7 @@ use crate::{
     competition::Ctx,
     components::select::{Select, SelectOption},
     focus::focus_later,
+    i18n::collation_key,
     icons, sentence,
     toggletip::Toggletip,
 };
@@ -290,6 +291,7 @@ fn PluginField(
         .as_ref()
         .map(|chosen| chosen.plugin.id.to_owned());
     let none = plugin.optional.then(|| tr.get("no-plugin"));
+    let options = in_label_order(&tr, &plugin.options);
     let choose = path.clone();
     let trigger = format!("#{id}");
     // what the plugin chosen does, below the choice, rather than a second ⓘ next to the field's
@@ -316,12 +318,12 @@ fn PluginField(
                     // back from the list, which is hidden once an option is chosen
                     focus_later(&[&trigger]);
                 },
-                for (index, option) in plugin.options.iter().enumerate() {
+                for (index, option) in options.into_iter().enumerate() {
                     PluginChoice {
                         key: "{option.id}",
                         select: id.clone(),
                         index,
-                        option: *option,
+                        option,
                     }
                 }
                 if let Some(none) = none {
@@ -453,4 +455,18 @@ pub(super) fn id(path: &Path) -> String {
         .replace(['.', '[', ']'], "-")
         .replace("--", "-");
     format!("field-{}", path.trim_end_matches('-'))
+}
+
+/// `options`, those recommended first as they are, the others in the order of their labels in the
+/// language of `tr`, rather than in that of their English labels.
+pub(super) fn in_label_order(tr: &Translator, options: &[PluginOption]) -> Vec<PluginOption> {
+    let mut options = options.to_vec();
+    let recommended = options
+        .iter()
+        .take_while(|option| option.recommended)
+        .count();
+    options[recommended..].sort_by_cached_key(|option| {
+        collation_key(&tr.plugin(option.id, PluginText::Label, option.label))
+    });
+    options
 }

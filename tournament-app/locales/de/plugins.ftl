@@ -26,7 +26,7 @@ phase =
 
 plugin-tournament_engine-winner_only =
     .label = nur Sieger
-    .description = wer ein Spiel gewonnen hat oder dass es unentschieden ausging, ohne Spielstand
+    .description = wer gewonnen hat oder ob es unentschieden ausging, ohne Spielstand
     .level-match = Spiel
 plugin-tournament_engine-scored =
     .label = Spielstand
@@ -75,7 +75,7 @@ plugin-tournament_engine-double_elimination =
     .label = Doppel-K.-o.-System
     .description = wer zum zweiten Mal verliert, scheidet aus; Unentschieden sind nicht erlaubt
     .field-grand_final_reset = Wiederholung des großen Finales
-    .field-grand_final_reset-description = verliert der Sieger der Gewinnerrunde das große Finale, spielen die beiden es noch einmal; ohne sie scheidet aus, wer das große Finale verliert
+    .field-grand_final_reset-description = verliert der Sieger der Gewinnerrunde das große Finale, spielen die beiden es noch einmal; ohne Wiederholung scheidet aus, wer das große Finale verliert
     .stage-winners-round = Gewinnerrunde { $round }
     .stage-winners-final = Finale der Gewinnerrunde
     .stage-losers-round = Verliererrunde { $round }

@@ -11,7 +11,11 @@ use tournament_app::{
     view::Plugin,
 };
 
-use crate::{Page, REPOSITORY, capitalized, i18n::t, icons, sentence};
+use crate::{
+    Page, REPOSITORY, capitalized,
+    i18n::{collation_key, t},
+    icons, sentence,
+};
 
 /// The media owner the help names, name and town (e.g. `Jane Doe, Vienna`), from the environment
 /// variable `TOURNAMO_MEDIA_OWNER` at build time; without it (or with it empty) the help names
@@ -53,6 +57,9 @@ pub fn Help() -> Element {
     });
     let tr = page.translator.read();
     let glossary = Session::glossary();
+    // a version reads left to right in any language, so it needs no isolating marks, which a
+    // screen reader may say
+    let version = t!(tr, "help-version", version = VERSION).replace(['\u{2068}', '\u{2069}'], "");
     rsx! {
         main { class: "narrow help", tabindex: "-1",
             section { class: "card", aria_labelledby: RUNNING,
@@ -64,7 +71,9 @@ pub fn Help() -> Element {
                     li { {tr.get("help-running-start")} }
                     li { {tr.get("help-running-results")} }
                 }
+                p { {tr.get("help-running-views")} }
                 p { {tr.get("help-running-mistakes")} }
+                p { {tr.get("help-running-undo")} }
                 p { {tr.get("help-running-byes")} }
             }
             section { class: "card", aria_labelledby: FORMATS,
@@ -76,15 +85,15 @@ pub fn Help() -> Element {
                 h3 { {tr.get("help-standings")} }
                 p { {tr.get("help-standings-text")} }
                 p { {tr.get("help-columns-text")} }
+                h4 { {tr.get("help-criteria")} }
+                Glossary { plugins: glossary.criteria }
+                h4 { {tr.get("help-metrics")} }
+                Glossary { plugins: glossary.metrics }
                 h3 { {tr.get("help-groups")} }
                 p { {tr.get("help-groups-text")} }
                 h3 { {tr.get("help-teams")} }
                 p { {tr.get("help-teams-text")} }
                 p { {tr.get("help-teams-later")} }
-                h4 { {tr.get("help-criteria")} }
-                Glossary { plugins: glossary.criteria }
-                h4 { {tr.get("help-metrics")} }
-                Glossary { plugins: glossary.metrics }
             }
             section { class: "card", aria_labelledby: SEEDING,
                 h2 { id: SEEDING, {tr.get("help-seeding")} }
@@ -108,7 +117,7 @@ pub fn Help() -> Element {
             section { class: "card", aria_labelledby: "help-open-source",
                 h2 { id: "help-open-source", {tr.get("help-open-source")} }
                 p { {tr.get("help-open-source-text")} }
-                p { {t!(tr, "help-version", version = VERSION)} }
+                p { {version} }
                 p {
                     a { href: REPOSITORY,
                         icons::GitHub {}
@@ -130,7 +139,7 @@ fn Glossary(plugins: Vec<Plugin>) -> Element {
     let page = use_context::<Page>();
     let tr = page.translator.read();
     let mut entries: Vec<_> = plugins.iter().map(|plugin| entry(&tr, plugin)).collect();
-    entries.sort_by_cached_key(|(label, _)| label.to_lowercase());
+    entries.sort_by_cached_key(|(label, _)| collation_key(label));
     rsx! {
         dl { class: "glossary",
             for (label , description) in entries {

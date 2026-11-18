@@ -90,6 +90,21 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- German: the lists of options are in the order of their German labels, the
+  recommended first; terms are used alike everywhere (“Reihenfolge der
+  Tabelle” and “Kennzahlen” where the form said “Rangfolge und Wertung”,
+  “Semikolon”, “benötigt für”, “Monster-DYP”), clumsy sentences are
+  rewritten, and the places a phase takes read “Plätze 1–3 der Anmeldung”
+  and “Plätze 1–3 aus „1 · Jeder gegen jeden“”.
+- The help covers what testers looked for: what a phase shows (matches,
+  standings, bracket, cross table, ranking), that undo goes back only as far
+  as the page was open and can take back the start, typing in a draw, what
+  the short column headers such as SB mean, the choices of teams, and what
+  an exported file holds and how an import names it. Criteria and metrics
+  are listed under the order of the standings, where they belong; the
+  version is no longer surrounded by invisible marks.
+- The ranking of the competition is laid out as the standings: the place in a
+  narrow column, the names as in every table, the phase reached next to them.
 - A list of entrants pasted at once, or added by one `add-entrant` of several
   names, is one step of undo and redo: one undo takes all of them back, which
   the page announces as "adding 12 entrants".

@@ -71,6 +71,17 @@ pub fn set_page_language(language: Language) {
     }
 }
 
+/// What `label` is sorted by in a list ordered by label: in lower case, an umlaut as its vowel and
+/// ß as ss, as German dictionaries order them.
+pub fn collation_key(label: &str) -> String {
+    label
+        .to_lowercase()
+        .replace('ä', "a")
+        .replace('ö', "o")
+        .replace('ü', "u")
+        .replace('ß', "ss")
+}
+
 #[cfg(test)]
 mod tests {
     use tournament_app::i18n::check;
@@ -82,5 +93,25 @@ mod tests {
     #[test]
     fn the_messages_of_the_gui_are_in_every_language() {
         check(resources).unwrap();
+    }
+
+    #[test]
+    fn a_label_with_an_umlaut_is_sorted_as_its_vowel() {
+        let mut labels = [
+            "Zufällige Runden",
+            "K.-o.-System",
+            "Doppel-K.-o.-System",
+            "Ärger",
+        ];
+        labels.sort_by_cached_key(|label| collation_key(label));
+        assert_eq!(
+            labels,
+            [
+                "Ärger",
+                "Doppel-K.-o.-System",
+                "K.-o.-System",
+                "Zufällige Runden"
+            ]
+        );
     }
 }

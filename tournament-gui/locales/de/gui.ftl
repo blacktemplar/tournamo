@@ -34,14 +34,16 @@ help-running-steps = Ein Turnier läuft in vier Schritten ab:
 help-running-entrants = Trage die Teilnehmer mit ihren Namen ein, einen nach dem anderen, oder füge eine Liste mit einem Namen pro Zeile ein.
 help-running-phase = Wähle, wie sie spielen: eine Vorlage, die alle Phasen auf einmal einrichtet, z. B. Gruppen mit anschließendem K.-o.-System, oder eine eigene Phase: das Format und die Reihenfolge der Tabelle. Füge dann die Phasen hinzu.
 help-running-start = Starte. Das Format setzt die Spiele an, und die Teilnehmer stehen von da an fest; ihre Namen lassen sich unter „Teilnehmer“ aber noch berichtigen. Die Phase lässt sich noch ändern, solange die Änderung zu den gemeldeten Ergebnissen passt.
-help-running-results = Melde die Ergebnisse: Wähle bei einem Spiel die Seite, die gewonnen hat, oder Unentschieden, oder trage darunter die Punkte ein, tippe sie ein, z. B. „3 1“ für einen Sieg der linken Seite von Spiel 3, oder wähle den Sieger im Turnierbaum. Die Tabelle folgt jedem Ergebnis.
+help-running-results = Melde die Ergebnisse: Wähle bei einem Spiel die Seite, die gewonnen hat, oder Unentschieden, oder trage seinen Spielstand in seiner Zeile ein; oder tippe ein Ergebnis unter „Ergebnisse eintippen“ ein, z. B. „3 1“ für einen Sieg der linken Seite von Spiel 3, „3 x“ für ein Unentschieden oder einen Teil des Namens des Siegers; oder wähle den Sieger im Turnierbaum. Die Tabelle folgt jedem Ergebnis.
+help-running-views = Eine Phase zeigt ihre Spiele, die jetzt spielbaren oder Runde für Runde, und ihre Tabelle, mit einer Linie unter den Plätzen, die in eine spätere Phase weiterkommen. Ein K.-o.-System zeigt auch seinen Turnierbaum; eine Phase, in der die Teilnehmer paarweise aufeinandertreffen, etwa Jeder gegen jeden, eine Kreuztabelle mit jedem Ergebnis jedes Teilnehmers gegen jeden anderen. Die Rangliste reiht alle nach der Phase, die sie erreicht haben.
 help-running-mistakes = Ein irrtümlich gemeldetes Ergebnis wird zurückgenommen, indem sein Spiel wieder geöffnet wird. Rückgängig nimmt zurück, was seit dem Öffnen des Turniers getan wurde, in der Reihenfolge, in der es getan wurde. In beiden Fällen bleiben die eingetragenen Punkte stehen, sodass nur noch zu ändern ist, was falsch war.
+help-running-undo = Rückgängig reicht nur so weit zurück, wie die Seite offen war: Neu laden oder das Turnier verlassen vergisst, was sich rückgängig machen ließe, aber nicht, was getan wurde. Ein Spiel wieder öffnen geht jederzeit. Rückgängig nimmt auch den Start zurück, sobald alles danach rückgängig gemacht ist (es fragt vorher): Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phasen geändert werden können, und ein neuer Start lost wieder gleich.
 help-running-byes = Bleibt ein Teilnehmer in einer Runde ohne Gegner, hat er ein Freilos: Er kommt ohne Spiel weiter und erhält, was die Phase dafür vorsieht, z. B. die Punkte für ein Freilos.
 help-formats = Formate und Tabelle
 help-presets = Vorlagen
 help-presets-text = Eine Vorlage richtet einen ganzen Wettbewerb auf einmal ein, solange er keine Phase hat: unter „Wie wird gespielt?“ wählen, ihre wenigen Fragen beantworten und die Phasen hinzufügen, die sie zeigt. Es sind gewöhnliche Phasen, jede wie jede Phase änderbar oder entfernbar; ein Rückgängig nimmt alle zurück.
 help-standings = Die Reihenfolge der Tabelle
-help-standings-text = Die Tabelle vergleicht die Teilnehmer nach den Kriterien ihrer Reihenfolge, eines nach dem anderen: Das erste entscheidet, das zweite nur zwischen Teilnehmern, die nach dem ersten gleich sind, und so weiter. Ein Kriterium vergleicht eine Kennzahl, eine Zahl, die für jeden Teilnehmer aus den Ergebnissen berechnet wird, etwa die Punkte; die Kennzahlen, die ein Kriterium braucht, werden mit ihm berechnet. Weitere Kennzahlen lassen sich berechnen und anzeigen, ohne nach ihnen zu reihen.
+help-standings-text = Die Tabelle vergleicht die Teilnehmer nach den Kriterien ihrer Reihenfolge, eines nach dem anderen: Das erste entscheidet, das zweite nur zwischen Teilnehmern, die nach dem ersten gleich sind, und so weiter, z. B. mehr Punkte, dann eine höhere Sonneborn-Berger-Wertung, eine Feinwertung zugunsten derer, die gegen starke Gegner gepunktet haben. Ein Kriterium vergleicht eine Kennzahl, eine Zahl, die für jeden Teilnehmer aus den Ergebnissen berechnet wird, etwa die Punkte; die Kennzahlen, die ein Kriterium braucht, werden mit ihm berechnet. Weitere Kennzahlen lassen sich berechnen und anzeigen, ohne nach ihnen zu reihen. Das „i“ neben einer kurzen Spaltenüberschrift wie SB sagt, was die Spalte zählt; alle Kriterien und Kennzahlen sind unten erklärt.
 help-columns-text = Eine Tabelle zeigt die Kennzahlen, nach denen sie gereiht ist, und die, aus denen diese berechnet werden, z. B. gereiht nach Punkten auch die Siege, Unentschieden und Niederlagen, für die es die Punkte gibt. Vergleicht eine Phase mehrere Gruppen, zeigen die verglichenen Zeilen, wonach sie verglichen werden. Bei den Kennzahlen einer Phase ist ein Kästchen mit umrandetem Häkchen nach dieser Regel angezeigt; mit einem Klick wird die Kennzahl trotzdem angezeigt oder ausgeblendet, in den Gruppentabellen oder im Vergleich. Eine angehakte Kennzahl wird berechnet, eine nirgends angezeigte, die nichts braucht, nicht. Das lässt sich jederzeit ändern, auch während die Phase gespielt wird.
 help-groups = Gruppen
 help-groups-text = Eine Phase kann in mehreren Gruppen gespielt werden, jede für sich im selben Format; die Auslosung verteilt die Teilnehmer auf sie, und die Setzung ordnet die jeder Gruppe, nach der ein K.-o.-System seinen Turnierbaum setzt: „Gruppen getrennt“ lässt Teilnehmer derselben Gruppe so spät wie möglich aufeinandertreffen. In Blöcken ausgeloste Gruppen spielen um eigene Plätze, z. B. K.-o.-Runden A und B um die Plätze 1–4 und 5–8. Sonst stehen die Gruppen nebeneinander: Erst kommen die Ersten aller Gruppen, dann die Zweiten und so weiter (in ihrer Gruppe Gleichstehende nach dem Los), und nimmt eine nächste Phase nur einige eines Platzes, z. B. die besten zwei von drei Dritten, werden sie nach den gruppenübergreifenden Kriterien verglichen, vorgeschlagen für Formate, die nach Punkten ordnen: den Punkten pro Spiel, die zu verschieden großen Gruppen passen, dann den Punkten.
@@ -51,15 +53,15 @@ help-seeding-places = Eine Phase kann nur einige Plätze der Anmeldung nehmen: D
 help-seeding-draw = In Gruppen gespielt, verteilt die Auslosung die Anmeldung in ihrer Reihenfolge auf sie, z. B. hin und her, sodass die Besten in verschiedene Gruppen kommen; die Setzung ordnet dann die Teilnehmer jeder Gruppe.
 help-seeding-log = Die Wertungszahlen werden bei den Namen gespeichert, nicht im Verlauf des Turniers: Der hält nur die Reihenfolge, die der Start der Anmeldung gegeben hat. Nach dem Start ändern sich die Wertungszahlen nicht mehr.
 help-teams = Teams (DYP)
-help-teams-text = Eine Phase kann zwischen Teams gespielt werden: mit „geloste Paare“ werden die Teilnehmer zu ihrem Beginn zu Paaren gelost, die durchgehend zusammen spielen, wie bei einem DYP (draw your partner); mit „Beste mit Schlechtesten“ spielt der Erste mit dem Letzten, der Zweite mit dem Vorletzten und so weiter. Beides braucht eine gerade Zahl von Teilnehmern, sonst beginnt die Phase nicht. Tabellen, Spiele und Rangliste nennen ein Team mit seinen Mitgliedern, und ein Ergebnis kann mit dem Namen jedes der beiden eingetippt werden.
-help-teams-later = Ein Team bleibt in den Phasen danach zusammen, außer eine spätere Phase teilt es mit „alle allein“ auf: etwa ein DYP, danach ein K.-o.-System im Einzel um den einen Sieger. Nur eine Phase, die Teams aufteilt, nimmt Teams verschiedener Größe, etwa die Paare eines DYP und die Besten der Anmeldung. Ein Monster DYP lost für jedes Spiel neue Partner, es nimmt daher nur einzelne Teilnehmer.
+help-teams-text = Eine Phase kann zwischen Teams gespielt werden: mit „geloste Paare“ werden die Teilnehmer zu ihrem Beginn zu Paaren gelost, die durchgehend zusammen spielen, wie bei einem DYP (draw your partner); mit „Beste mit Schlechtesten“ spielt der Erste mit dem Letzten, der Zweite mit dem Vorletzten und so weiter, aus der Anmeldung nach Wertungszahl, aus einer Phase nach Platz. Beides braucht eine gerade Zahl von Teilnehmern, sonst beginnt die Phase nicht. „Unverändert“, die Vorgabe, lässt alle spielen, wie sie kommen: aus der Anmeldung allein, aus einer Phase mit Teams in ihren Teams. Tabellen, Spiele und Rangliste nennen ein Team mit seinen Mitgliedern, und ein Ergebnis kann mit dem Namen jedes der beiden eingetippt werden.
+help-teams-later = Ein Team bleibt in den Phasen danach zusammen, außer eine spätere Phase teilt es mit „alle allein“ auf: etwa ein DYP, danach ein K.-o.-System im Einzel um den einen Sieger. Nur eine Phase, die Teams aufteilt, nimmt Teams verschiedener Größe, etwa die Paare eines DYP und die Besten der Anmeldung. Ein Monster-DYP lost für jedes Spiel neue Partner, es nimmt daher nur einzelne Teilnehmer.
 help-criteria = Kriterien
 help-metrics = Kennzahlen
 help-stored = Deine Daten bleiben auf deinem Gerät
 help-stored-here = Tournamo speichert alle Turniere lokal in deinem Browser (in dessen IndexedDB). Nichts, was du eingibst, verlässt dein Gerät: Es werden keine Daten an einen Server übertragen, es gibt kein Tracking, und du benötigst kein Konto.
 help-stored-hosting = Die Seite selbst wird von GitHub Pages ausgeliefert, das wie jeder Webserver beim Laden deine IP-Adresse erhält.
 help-stored-lost = Deine Turniere sind daher nur in diesem Browser auf diesem Gerät verfügbar. Sie werden gelöscht, wenn du die Websitedaten deines Browsers löschst oder ein privates Fenster schließt.
-help-stored-export = Um eine Sicherungskopie zu erstellen oder auf einem anderen Gerät weiterzuarbeiten, exportiere das Turnier als Datei und importiere es dort.
+help-stored-export = Um eine Sicherungskopie zu erstellen oder auf einem anderen Gerät weiterzuarbeiten, exportiere das Turnier als Datei und importiere es dort mit „Aus einer Datei importieren“ in der Liste der Turniere; heißt schon ein gespeichertes Turnier so, bekommt es eine Nummer dazu, z. B. „Cup (2)“. Die Datei hält alles, was getan wurde, das der Import noch einmal durchspielt, und die Namen; zum Lesen ist sie nicht gedacht.
 help-offline = Offline-Nutzung und Installation
 help-offline-text = Nach dem ersten Laden funktioniert Tournamo auch ohne Internetverbindung. Über das Menü deines Browsers kannst du es als App installieren; installierte Apps dürfen ihre Daten in der Regel dauerhaft speichern.
 help-tabs = Ist ein Turnier in mehreren Tabs geöffnet, kann es jeweils nur in einem davon bearbeitet werden. Die anderen Tabs zeigen es schreibgeschützt an und werden automatisch aktualisiert.
@@ -115,7 +117,7 @@ read-only = Dieses Turnier ist in einem anderen Tab geöffnet und wird hier nur 
 
 entrants-after-start = Das Turnier hat begonnen, die Teilnehmer stehen also fest; ihre Namen lassen sich noch berichtigen.
 entrants = Teilnehmer
-no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile, gefolgt von einer Wertungszahl nach einem Strichpunkt oder Tabulator, wo es eine gibt.
+no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile, gefolgt von einer Wertungszahl nach einem Semikolon oder Tabulator, wo es eine gibt.
 name = Name
 add-entrant = Teilnehmer hinzufügen
 entrant-like = „{ $name }“ ist schon eingetragen.
@@ -148,9 +150,11 @@ remove-phase-named = Phase entfernen: { $phase }
 everyone-registered = alle Angemeldeten
 only-some-places = Nur einige Plätze
 registration = die Anmeldung
-every-place-of = alle Plätze von { $phase }
-places-of = Plätze { $from }–{ $to } von { $phase }
-places-from-of = Plätze ab { $from } von { $phase }
+every-place-of = alle Plätze aus „{ $phase }“
+places-of = Plätze { $from }–{ $to } aus „{ $phase }“
+places-from-of = Plätze ab { $from } aus „{ $phase }“
+registration-places = Plätze { $from }–{ $to } der Anmeldung
+registration-places-from = Plätze ab { $from } der Anmeldung
 phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
 phase-scale-teams = Mit { $entrants } Teilnehmern in { $teams } Teams dauert die Phase { $rounds } mit { $matches }.
 scale-rounds = { $count ->
@@ -180,22 +184,22 @@ add-source = Quelle hinzufügen
 choose-plugin = Auswählen …
 no-plugin = (keines)
 recommended = (empfohlen)
-following-suggestions = Rangfolge und Wertung folgen den Empfehlungen für das Format, bis du sie bearbeitest.
-customized-settings = Deine Einstellungen für Rangfolge und Wertung bleiben bei einem Formatwechsel erhalten. Empfehlungen übernehmen ersetzt sie und aktiviert wieder automatische Anpassungen.
-apply-suggested-ranking = Empfohlene Rangfolge übernehmen
+following-suggestions = Reihenfolge der Tabelle und Kennzahlen folgen den Empfehlungen für das Format, bis du sie bearbeitest.
+customized-settings = Deine Reihenfolge der Tabelle und deine Kennzahlen bleiben bei einem Formatwechsel erhalten. Die Empfehlungen zu übernehmen ersetzt sie, und sie folgen wieder dem Format.
+apply-suggested-ranking = Empfehlungen übernehmen
 add-plugin = Hinzufügen
 about = Über { $subject }
 move-up = { $plugin } nach oben schieben
 move-down = { $plugin } nach unten schieben
 remove-plugin = { $plugin } entfernen
 implied-plugin = { $plugin }, da ein anderes es braucht
-implied-plugin-needed-by = { $plugin }, gebraucht für { $needed_by }
+implied-plugin-needed-by = { $plugin }, benötigt für { $needed_by }
 metrics-name = Kennzahl
 shown-in-divisions = Gruppentabellen
 shown-in-comparison = Vergleich
 show-in-divisions = { $metric } in den Gruppentabellen anzeigen
 show-in-comparison = { $metric } im Vergleich anzeigen
-metric-needed-by = gebraucht für { $needed_by }
+metric-needed-by = benötigt für { $needed_by }
 shown-ranked-in-divisions = angezeigt, da die Tabelle danach gereiht ist
 shown-ranked-in-comparison = angezeigt, da die verglichenen Zeilen danach gereiht sind
 shown-calculated-from = angezeigt, da { $metric } daraus berechnet wird
@@ -317,7 +321,7 @@ typing-results = das Eintippen von Ergebnissen
 enter-result-hint = Tippe die Nummer des Spiels, dann 1, wenn die linke Seite gewonnen hat{ $draws ->
         [yes] , X für ein Unentschieden
        *[no] {""}
-    } oder 2, wenn die rechte Seite gewonnen hat, z. B. „3 1“. Oder tippe einen Teil des Namens des Siegers, falls er auf mehrere passt, mit der Nummer des Spiels{ $draws ->
+    } oder 2, wenn die rechte Seite gewonnen hat, z. B. „3 1“. Oder tippe einen Teil des Namens des Siegers, bei mehreren Treffern mit der Nummer des Spiels{ $draws ->
         [yes] {" "}und X für ein Unentschieden, z. B. „ali“, „ali 5“ oder „ali X“.
        *[no] , z. B. „ali“ oder „ali 5“.
     }
@@ -364,8 +368,8 @@ announce-results-stay = { $count ->
        *[other] Die { $count } gemeldeten Ergebnisse bleiben.
     }
 announce-started = Gestartet: { $count ->
-        [one] ein Spiel ist
-       *[other] { $count } Spiele sind
+        [one] ein Spiel
+       *[other] { $count } Spiele
     } zu spielen.
 action-add-entrant = Hinzufügen von { $name }
 action-add-entrants = Hinzufügen von { $count } Teilnehmern

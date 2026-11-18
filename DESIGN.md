@@ -130,11 +130,22 @@ before configuring) and `declare` for what depends on configuration.
 ```rust
 impl Declaration {
     pub fn provide<T>(&mut self, value: T) -> &mut Self;
-    pub fn require<T>(&mut self, name: &'static str) -> &mut Self;  // present at all
-    pub fn require_that<T>(&mut self, name: &'static str, description: &'static str,
+    pub fn require<T>(&mut self, name: Phrase) -> &mut Self;  // present at all
+    pub fn require_that<T>(&mut self, name: Phrase, description: Phrase,
                            holds: fn(&T) -> bool) -> &mut Self;
 }
 ```
+
+- **What does not fit is said in words an operator reads.** A requirement names
+  its fact and condition by a `Phrase` (key, English, numbers), and a fact with
+  a value says it (`Fact::phrase`: "teams of 2"), never its `Debug` form; a
+  consumer translates them by key (the app: attributes of the message `facts`,
+  checked against the engine's plugins by a test). For an unmet condition the
+  draft names the plugin providing the fact (or the context) and the choices
+  that would fit (`Problem::Unmet`), found by trying each plugin of the
+  provider's field, or where the context provides the fact, of the requiring
+  plugin's: the fix is usually the other field (the teams of a Monster DYP, not
+  its format).
 
 - A plugin's declaration includes those of the plugins in its fields. Each slice
   ranker is checked on its own, so an issue names the one that has it.

@@ -1,8 +1,8 @@
-use std::{any::type_name, cmp::Ordering, fmt::Debug, num::NonZeroU32};
+use std::{cmp::Ordering, fmt::Debug, num::NonZeroU32};
 
 use dyn_clone::DynClone;
 use itertools::Itertools;
-use plugin_factory::{Plugin, axis, compatibility::Declaration};
+use plugin_factory::{Phrase, Plugin, axis, compatibility::Declaration};
 
 use crate::{
     entities::{DivisionData, Ranking},
@@ -155,7 +155,10 @@ macro_rules! register_criterion {
 /// [`rank_by`] reads. Given to the derive of a criterion as
 /// `declare_static = requires_metric::<Self>`.
 pub fn requires_metric<C: RankingCriterion>(declaration: &mut Declaration) {
-    declaration.require::<CalculatesMetric<C::Metric>>(type_name::<C::Metric>());
+    declaration.require::<CalculatesMetric<C::Metric>>(Phrase::new(
+        "ranked-metric",
+        "the metric it ranks by",
+    ));
 }
 
 /// Reorders `slice` by `criterion` and assigns the new ranks, as [`SliceRanker::rank`] requires.

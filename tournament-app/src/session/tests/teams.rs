@@ -275,3 +275,68 @@ fn pairs_out_before_a_phase_of_singles_are_placed_after_its_players() {
         .collect();
     assert_eq!(out_first, [(5, 2, None), (6, 2, None)]);
 }
+
+/// What the field `name` of `form` says is wrong, in English without marks around variables.
+fn field_issues(form: &crate::form::PhaseForm, name: &str) -> Vec<String> {
+    let english = crate::i18n::Translator::plain_english();
+    form.view()
+        .fields
+        .iter()
+        .find(|field| field.name == name)
+        .unwrap()
+        .issues
+        .iter()
+        .map(|issue| english.text(issue))
+        .collect()
+}
+
+/// A Monster DYP draws its own pairs: of pairs drawn already, the format says so in plain words,
+/// naming the teams that fit.
+#[test]
+fn a_monster_dyp_of_pairs_names_the_teams_that_fit() {
+    let mut session = Session::new("cup");
+    for name in SIX {
+        session.add_entrant(name).unwrap();
+    }
+    let mut form = session.phase_form().unwrap();
+    form.choose(&ConfigPath::ROOT.field("format"), Some(MonsterDyp::ID))
+        .unwrap();
+
+    form.choose(&ConfigPath::ROOT.field("teams"), Some(RandomPairs::ID))
+        .unwrap();
+
+    assert_eq!(
+        field_issues(&form, "format"),
+        [
+            "Monster DYP needs single players, but drawn pairs (teams) gives teams of 2; as \
+             teams, these fit: unchanged, everyone on their own"
+        ]
+    );
+}
+
+/// Pairs of an earlier phase cannot be paired up again: the teams say so, naming what comes in
+/// and the teams that fit.
+#[test]
+fn pairs_coming_in_are_not_paired_up_again() {
+    let mut session = Session::new("cup");
+    for name in SIX.iter().chain(&["Grace", "Heidi"]) {
+        session.add_entrant(name).unwrap();
+    }
+    let mut pairs = session.phase_form().unwrap();
+    pairs
+        .choose(&ConfigPath::ROOT.field("teams"), Some(RandomPairs::ID))
+        .unwrap();
+    session.add_phase(&pairs).unwrap();
+    let mut form = session.phase_form().unwrap();
+
+    form.choose(&ConfigPath::ROOT.field("teams"), Some(BestWithWorst::ID))
+        .unwrap();
+
+    assert_eq!(
+        field_issues(&form, "teams"),
+        [
+            "best with worst needs single entrants coming in, but teams of 2 come in; as teams, \
+             these fit: unchanged, everyone on their own"
+        ]
+    );
+}

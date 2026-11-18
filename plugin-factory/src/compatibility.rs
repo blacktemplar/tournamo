@@ -17,7 +17,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::Plugin;
+use crate::{Phrase, Plugin};
 
 /// A type whose values are facts about a composite, see the [module](self). A fact is identified
 /// by its type, so two facts of the same type are the same fact, possibly with different values.
@@ -25,15 +25,32 @@ use crate::Plugin;
 /// Implemented explicitly, so that only types meant as facts can be provided or required:
 ///
 /// ```
-/// use plugin_factory::compatibility::Fact;
+/// use plugin_factory::{Phrase, compatibility::Fact};
 ///
 /// /// The matches of the phase are played on a clock.
 /// #[derive(Debug)]
 /// struct Timed;
 ///
 /// impl Fact for Timed {}
+///
+/// /// How many minutes a match is played for.
+/// #[derive(Debug)]
+/// struct Minutes(u32);
+///
+/// impl Fact for Minutes {
+///     fn phrase(&self) -> Option<Phrase> {
+///         Some(Phrase::new("minutes", format!("{} minutes", self.0)).with("minutes", self.0))
+///     }
+/// }
 /// ```
-pub trait Fact: Any + Debug + Send + Sync {}
+pub trait Fact: Any + Debug + Send + Sync {
+    /// What this value of the fact is, said where it does not meet a condition required of it,
+    /// e.g. "teams of 2"; [`None`], the default, if it says nothing more than that it is
+    /// provided. Its key names it among the phrases of the facts.
+    fn phrase(&self) -> Option<Phrase> {
+        None
+    }
+}
 
 /// A fact a declaration provides, together with its value.
 pub(crate) struct ProvidedFact(Box<dyn Fact>);
@@ -70,7 +87,7 @@ type Derive = Box<dyn Fn(&dyn Any) -> ProvidedFact + Send + Sync>;
 /// A fact a declaration requires, with the condition its value has to meet if there is one.
 pub(crate) struct RequiredFact {
     type_id: TypeId,
-    name: &'static str,
+    name: Phrase,
     condition: Option<DynCondition>,
 }
 
@@ -81,8 +98,15 @@ impl RequiredFact {
     }
 
     /// What the fact is called in an error message.
-    pub(crate) fn name(&self) -> &'static str {
-        self.name
+    pub(crate) fn name(&self) -> &Phrase {
+        &self.name
+    }
+
+    /// What the condition its value has to meet is called, if there is one.
+    pub(crate) fn condition(&self) -> Option<&Phrase> {
+        self.condition
+            .as_ref()
+            .map(|condition| &condition.description)
     }
 }
 
@@ -162,8 +186,9 @@ impl Declaration {
     }
 
     /// Declares that a fact of type `T` has to hold. `name` is what the fact is called in an error
-    /// message, e.g. "an elimination annotation on the matches".
-    pub fn require<T: Fact>(&mut self, name: &'static str) -> &mut Self {
+    /// message, e.g. "an elimination annotation on the matches"; its key names it among the
+    /// phrases of the facts.
+    pub fn require<T: Fact>(&mut self, name: Phrase) -> &mut Self {
         self.required.push(RequiredFact {
             type_id: TypeId::of::<T>(),
             name,
@@ -174,11 +199,12 @@ impl Declaration {
 
     /// Declares that a fact of type `T` has to hold and that its value has to meet `holds`. `name`
     /// is what the fact is called in an error message, as for [`Self::require`], and `description`
-    /// what the condition is called, e.g. "rankings of single players".
+    /// what the condition is called, e.g. "rankings of single players", also a phrase of the
+    /// facts.
     pub fn require_that<T: Fact>(
         &mut self,
-        name: &'static str,
-        description: &'static str,
+        name: Phrase,
+        description: Phrase,
         holds: fn(&T) -> bool,
     ) -> &mut Self {
         self.required.push(RequiredFact {
@@ -222,7 +248,7 @@ impl Declaration {
 
 /// A condition on the value of a required fact, see [`Declaration::require_that`].
 struct DynCondition {
-    description: &'static str,
+    description: Phrase,
     holds: Holds,
 }
 
@@ -265,13 +291,12 @@ pub enum Incompatibility {
     #[error("{provider} provides {fact}, which the context provides already")]
     FactProvidedByContext { fact: String, provider: String },
     #[error("{required_by} requires {fact}, which nothing provides")]
-    FactNotProvided {
-        fact: &'static str,
-        required_by: String,
-    },
+    FactNotProvided { fact: Phrase, required_by: String },
+    /// `provided` is what the fact provided says of itself, see [`Fact::phrase`], or else its
+    /// [`Debug`] form.
     #[error("{required_by} requires {condition}, but the composite has {provided}")]
     ConditionNotMet {
-        condition: &'static str,
+        condition: Phrase,
         required_by: String,
         provided: String,
     },
@@ -434,10 +459,19 @@ pub(crate) fn check_facts(
 }
 
 /// Why a plugin does not fit, about the fact of the type `fact`.
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct Conflict {
+pub(crate) struct Conflict<'a> {
     pub(crate) fact: TypeId,
     pub(crate) incompatibility: Incompatibility,
+    /// For a condition not met: the plugin providing the fact, [`None`] for the context, and
+    /// what the fact says of itself, see [`Fact::phrase`].
+    pub(crate) unmet: Option<Unmet<'a>>,
+}
+
+/// Who provides a fact that does not meet a condition, and what it says of itself, see
+/// [`Conflict`].
+pub(crate) struct Unmet<'a> {
+    pub(crate) provider: Option<&'a Declared>,
+    pub(crate) provided: Option<Phrase>,
 }
 
 /// Checks whether the plugin with `addition` fits into a composite with `context` that has the
@@ -473,7 +507,7 @@ pub(crate) fn conflicts<'a>(
     declarations: impl IntoIterator<Item = &'a Declared>,
     addition: &'a Declared,
     open: &OpenFacts,
-) -> Vec<Conflict> {
+) -> Vec<Conflict<'a>> {
     let mut facts = Facts::of(context);
     for declared in declarations {
         facts.add(declared);
@@ -485,9 +519,9 @@ pub(crate) fn conflicts<'a>(
     conflicts
 }
 
-/// The facts of a composite by their type, each with the name of the plugin providing it, or
-/// `None` for a fact of the composite's context.
-struct Facts<'a>(HashMap<TypeId, (Option<&'a str>, FactOf<'a>)>);
+/// The facts of a composite by their type, each with the plugin providing it, or `None` for a fact
+/// of the composite's context.
+struct Facts<'a>(HashMap<TypeId, (Option<&'a Declared>, FactOf<'a>)>);
 
 /// A fact of [`Facts`]: provided as it is, or derived from a fact of the context.
 enum FactOf<'a> {
@@ -540,18 +574,19 @@ impl<'a> Facts<'a> {
     /// Adds every fact the plugin `provider` provides.
     fn add(&mut self, provider: &'a Declared) {
         let derived = self.derived(&provider.declaration);
-        let name = Some(provider.name.as_str());
         for fact in provider.declaration.provided() {
-            self.0.insert(fact.type_id(), (name, FactOf::Given(fact)));
+            self.0
+                .insert(fact.type_id(), (Some(provider), FactOf::Given(fact)));
         }
         for (type_id, fact) in derived {
-            self.0.insert(type_id, (name, FactOf::Derived(fact)));
+            self.0
+                .insert(type_id, (Some(provider), FactOf::Derived(fact)));
         }
     }
 
     /// Why the plugin `provider` cannot be added to these facts, i.e. the fact of it the context
     /// or another plugin provides already.
-    fn conflict_with(&self, provider: &Declared) -> Option<Conflict> {
+    fn conflict_with(&self, provider: &Declared) -> Option<Conflict<'a>> {
         let derived = self.derived(&provider.declaration);
         let provided = provider
             .declaration
@@ -564,7 +599,7 @@ impl<'a> Facts<'a> {
             let incompatibility = match first {
                 Some(first) => Incompatibility::FactProvidedTwice {
                     fact: format!("{:?}", fact.value()),
-                    first: (*first).to_owned(),
+                    first: first.name.clone(),
                     second: provider.name.clone(),
                 },
                 None => Incompatibility::FactProvidedByContext {
@@ -575,6 +610,7 @@ impl<'a> Facts<'a> {
             Some(Conflict {
                 fact: type_id,
                 incompatibility,
+                unmet: None,
             })
         })
     }
@@ -585,7 +621,7 @@ impl<'a> Facts<'a> {
         &'s self,
         required_by: &'s Declared,
         open: &'s OpenFacts,
-    ) -> impl Iterator<Item = Conflict> + 's {
+    ) -> impl Iterator<Item = Conflict<'a>> + 's {
         let Declared {
             name: required_by,
             declaration,
@@ -597,27 +633,40 @@ impl<'a> Facts<'a> {
                 let fact = requirement.type_id();
                 // a provided fact is settled: nothing may provide it a second time, so whether its
                 // value meets the condition is decided however the composite is filled up
-                let incompatibility = match self.0.get(&fact) {
+                let (incompatibility, unmet) = match self.0.get(&fact) {
                     None if open.contains(fact) => return None,
-                    None => Incompatibility::FactNotProvided {
-                        fact: requirement.name(),
-                        required_by: required_by.clone(),
-                    },
-                    Some((_, provided)) => {
+                    None => (
+                        Incompatibility::FactNotProvided {
+                            fact: requirement.name().clone(),
+                            required_by: required_by.clone(),
+                        },
+                        None,
+                    ),
+                    Some((provider, provided)) => {
                         let condition = requirement
                             .condition
                             .as_ref()
                             .filter(|condition| !(condition.holds)(provided.value()))?;
-                        Incompatibility::ConditionNotMet {
-                            condition: condition.description,
+                        let phrase = provided.value().phrase();
+                        let incompatibility = Incompatibility::ConditionNotMet {
+                            condition: condition.description.clone(),
                             required_by: required_by.clone(),
-                            provided: format!("{:?}", provided.value()),
-                        }
+                            provided: phrase.as_ref().map_or_else(
+                                || format!("{:?}", provided.value()),
+                                ToString::to_string,
+                            ),
+                        };
+                        let unmet = Unmet {
+                            provider: *provider,
+                            provided: phrase,
+                        };
+                        (incompatibility, Some(unmet))
                     }
                 };
                 Some(Conflict {
                     fact,
                     incompatibility,
+                    unmet,
                 })
             })
     }
@@ -656,8 +705,8 @@ mod tests {
 
     fn requires_single_players(declaration: &mut Declaration) {
         declaration.require_that::<EntrantsPerRanking>(
-            "the entrants per ranking",
-            "rankings of single players",
+            Phrase::new("fact", "the entrants per ranking"),
+            Phrase::new("condition", "rankings of single players"),
             |entrants| *entrants == SINGLE,
         );
     }
@@ -709,7 +758,7 @@ mod tests {
 
     impl Composite {
         fn declare(&self, declaration: &mut Declaration) {
-            declaration.require::<Derived>("a derived fact");
+            declaration.require::<Derived>(Phrase::new("fact", "a derived fact"));
         }
     }
 
@@ -727,7 +776,7 @@ mod tests {
         fn declare_static(declaration: &mut Declaration) {
             declaration
                 .provide(Derived)
-                .require::<Annotated>("an annotation");
+                .require::<Annotated>(Phrase::new("fact", "an annotation"));
         }
     }
 
@@ -750,7 +799,7 @@ mod tests {
         assert!(declaration.provides_type(TypeId::of::<Annotated>()));
         assert_eq!(
             declaration.required().iter().map(RequiredFact::name).next(),
-            Some("a derived fact")
+            Some(&Phrase::new("fact", "a derived fact"))
         );
     }
 
@@ -770,7 +819,7 @@ mod tests {
         assert_eq!(
             check(|_| {}, &[&composite]),
             Err(Incompatibility::FactNotProvided {
-                fact: "a derived fact",
+                fact: Phrase::new("fact", "a derived fact"),
                 required_by: format!("{composite:?}"),
             })
         );
@@ -859,7 +908,7 @@ mod tests {
     fn plugins_are_ordered_by_any_fact_they_require() {
         let declarations = [
             declared("requiring", |declaration| {
-                declaration.require::<Annotated>("an annotation");
+                declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
             }),
             declared("independent", |_| {}),
             declared("annotating", |declaration| {
@@ -876,12 +925,12 @@ mod tests {
             declared("annotating", |declaration| {
                 declaration
                     .provide(Annotated)
-                    .require::<Derived>("a derived fact");
+                    .require::<Derived>(Phrase::new("fact", "a derived fact"));
             }),
             declared("deriving", |declaration| {
                 declaration
                     .provide(Derived)
-                    .require::<Annotated>("an annotation");
+                    .require::<Annotated>(Phrase::new("fact", "an annotation"));
             }),
         ];
 
@@ -899,10 +948,10 @@ mod tests {
             declared("deriving", |declaration| {
                 declaration
                     .provide(Derived)
-                    .require::<Annotated>("an annotation");
+                    .require::<Annotated>(Phrase::new("fact", "an annotation"));
             }),
             declared("requiring", |declaration| {
-                declaration.require::<Derived>("a derived fact");
+                declaration.require::<Derived>(Phrase::new("fact", "a derived fact"));
             }),
         ];
 
@@ -919,7 +968,7 @@ mod tests {
                 declaration.provide(Annotated);
             }),
             declared("calculator", |declaration| {
-                declaration.require::<Annotated>("an annotation");
+                declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
             }),
         ];
 
@@ -935,12 +984,12 @@ mod tests {
             declared("format", |declaration| {
                 declaration
                     .provide(Annotated)
-                    .require::<EntrantsPerRanking>("the entrants per ranking");
+                    .require::<EntrantsPerRanking>(Phrase::new("fact", "the entrants per ranking"));
             }),
             declared("ranker", |declaration| {
                 declaration
                     .provide(SINGLE)
-                    .require::<Annotated>("an annotation");
+                    .require::<Annotated>(Phrase::new("fact", "an annotation"));
             }),
         ];
 
@@ -953,13 +1002,13 @@ mod tests {
     #[test]
     fn a_fact_nothing_provides_is_an_error() {
         let declarations = [declared("calculator", |declaration| {
-            declaration.require::<Annotated>("an annotation");
+            declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
         })];
 
         assert_eq!(
             check_facts(&Declaration::new(), &declarations, &OpenFacts::NOTHING),
             Err(Incompatibility::FactNotProvided {
-                fact: "an annotation",
+                fact: Phrase::new("fact", "an annotation"),
                 required_by: "calculator".to_owned(),
             })
         );
@@ -968,7 +1017,7 @@ mod tests {
     #[test]
     fn a_fact_a_plugin_still_to_be_chosen_could_provide_is_no_error() {
         let declarations = [declared("calculator", |declaration| {
-            declaration.require::<Annotated>("an annotation");
+            declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
         })];
 
         assert_eq!(
@@ -1039,7 +1088,7 @@ mod tests {
         assert_eq!(
             check_facts(&context, &declarations, &open::<EntrantsPerRanking>()),
             Err(Incompatibility::ConditionNotMet {
-                condition: "rankings of single players",
+                condition: Phrase::new("condition", "rankings of single players"),
                 required_by: "format".to_owned(),
                 provided: format!("{PAIRS:?}"),
             })
@@ -1099,7 +1148,7 @@ mod tests {
             }),
         ];
         let addition = declared("calculator", |declaration| {
-            declaration.require::<Annotated>("an annotation");
+            declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
         });
 
         assert_eq!(
@@ -1116,13 +1165,13 @@ mod tests {
     #[test]
     fn an_addition_requiring_a_fact_nothing_provides_conflicts() {
         let addition = declared("calculator", |declaration| {
-            declaration.require::<Annotated>("an annotation");
+            declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
         });
 
         assert_eq!(
             check_addition(&Declaration::new(), &[], &addition, &OpenFacts::NOTHING),
             Err(Incompatibility::FactNotProvided {
-                fact: "an annotation",
+                fact: Phrase::new("fact", "an annotation"),
                 required_by: "calculator".to_owned(),
             })
         );
@@ -1134,32 +1183,41 @@ mod tests {
             declaration.provide(PAIRS);
         });
         let addition = declared("calculator", |declaration| {
-            declaration.require::<Annotated>("an annotation");
+            declaration.require::<Annotated>(Phrase::new("fact", "an annotation"));
             requires_single_players(declaration);
-            declaration.require::<Derived>("a derived fact");
+            declaration.require::<Derived>(Phrase::new("fact", "a derived fact"));
         });
         let unprovided = |fact| Incompatibility::FactNotProvided {
             fact,
             required_by: "calculator".to_owned(),
         };
 
+        let conflicts = conflicts(&context, &[], &addition, &open::<Derived>());
+
         assert_eq!(
-            conflicts(&context, &[], &addition, &open::<Derived>()),
+            conflicts
+                .iter()
+                .map(|conflict| (conflict.fact, conflict.incompatibility.clone()))
+                .collect::<Vec<_>>(),
             [
-                Conflict {
-                    fact: TypeId::of::<Annotated>(),
-                    incompatibility: unprovided("an annotation"),
-                },
-                Conflict {
-                    fact: TypeId::of::<EntrantsPerRanking>(),
-                    incompatibility: Incompatibility::ConditionNotMet {
-                        condition: "rankings of single players",
+                (
+                    TypeId::of::<Annotated>(),
+                    unprovided(Phrase::new("fact", "an annotation")),
+                ),
+                (
+                    TypeId::of::<EntrantsPerRanking>(),
+                    Incompatibility::ConditionNotMet {
+                        condition: Phrase::new("condition", "rankings of single players"),
                         required_by: "calculator".to_owned(),
                         provided: format!("{PAIRS:?}"),
                     },
-                },
+                ),
             ]
         );
+        // the context provides the fact, which says nothing of itself
+        let unmet = conflicts[1].unmet.as_ref().expect("a condition not met");
+        assert!(unmet.provider.is_none());
+        assert_eq!(unmet.provided, None);
     }
 
     #[test]
@@ -1198,8 +1256,8 @@ mod tests {
             declared("teams", pairing),
             declared("format", |declaration| {
                 declaration.require_that::<EntrantsPerRanking>(
-                    "the entrants per ranking",
-                    "rankings of pairs",
+                    Phrase::new("fact", "the entrants per ranking"),
+                    Phrase::new("condition", "rankings of pairs"),
                     |entrants| *entrants == PAIRS,
                 );
             }),
@@ -1212,7 +1270,7 @@ mod tests {
         assert_eq!(
             check_facts(&coming_in(2), &declarations, &OpenFacts::NOTHING),
             Err(Incompatibility::ConditionNotMet {
-                condition: "rankings of pairs",
+                condition: Phrase::new("condition", "rankings of pairs"),
                 required_by: "format".to_owned(),
                 provided: format!("{:?}", EntrantsPerRanking(4)),
             })
@@ -1229,7 +1287,7 @@ mod tests {
         assert_eq!(
             check_facts(&Declaration::new(), &declarations, &OpenFacts::NOTHING),
             Err(Incompatibility::FactNotProvided {
-                fact: "the entrants per ranking",
+                fact: Phrase::new("fact", "the entrants per ranking"),
                 required_by: "format".to_owned(),
             })
         );
@@ -1248,7 +1306,7 @@ mod tests {
         assert_eq!(
             check_facts(&Declaration::new(), &declarations, &OpenFacts::NOTHING),
             Err(Incompatibility::FactNotProvided {
-                fact: "the entrants per ranking",
+                fact: Phrase::new("fact", "the entrants per ranking"),
                 required_by: "format".to_owned(),
             })
         );

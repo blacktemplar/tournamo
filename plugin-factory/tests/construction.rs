@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
 use plugin_factory::{
-    Plugin, axis,
+    Phrase, Plugin, axis,
     compatibility::{Declaration, Fact},
     config::{ConfigError, Path, PluginConfig},
     draft::{Draft, Problem},
@@ -48,10 +48,10 @@ impl Counted {
     fn declare(&self, declaration: &mut Declaration) {
         match self.value {
             1 => {
-                declaration.require::<Dependency>("the dependency");
+                declaration.require::<Dependency>(Phrase::new("fact", "the dependency"));
             }
             2 => {
-                declaration.require::<Missing>("the missing fact");
+                declaration.require::<Missing>(Phrase::new("fact", "the missing fact"));
             }
             _ => {}
         }

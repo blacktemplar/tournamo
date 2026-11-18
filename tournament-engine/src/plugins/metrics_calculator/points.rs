@@ -1,4 +1,4 @@
-use plugin_factory::{Plugin, compatibility::Declaration};
+use plugin_factory::{Phrase, Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use super::{Cell, MetricColumn, OldMetrics, ToCell};
@@ -135,7 +135,10 @@ impl PointsCalculator {
 
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<WinsDrawsLosses>>("the wins, draws and losses");
+        declaration.require::<CalculatesMetric<WinsDrawsLosses>>(Phrase::new(
+            "wins-draws-losses",
+            "the wins, draws and losses",
+        ));
     }
 }
 
@@ -236,8 +239,11 @@ impl PointsPerMatchCalculator {
 
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Points>>("the points");
-        declaration.require::<CalculatesMetric<WinsDrawsLosses>>("the wins, draws and losses");
+        declaration.require::<CalculatesMetric<Points>>(Phrase::new("points", "the points"));
+        declaration.require::<CalculatesMetric<WinsDrawsLosses>>(Phrase::new(
+            "wins-draws-losses",
+            "the wins, draws and losses",
+        ));
     }
 }
 

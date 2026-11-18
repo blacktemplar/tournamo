@@ -158,3 +158,12 @@ issue-unprovided-lacking = { $plugin } braucht { $count ->
         [one] { $providers }
        *[other] eines davon: { $providers }
     }, und dafür ist { $lacking } nötig, was nichts Gewähltes liefert
+issue-unmet = { $plugin } braucht { $condition }, aber { $provider } ergibt { $provided }
+issue-unmet-unsaid = { $plugin } braucht { $condition }, was { $provider } nicht ergibt
+issue-unmet-coming-in = { $plugin } braucht { $condition }, aber es kommen { $provided } herein
+issue-unmet-context = { $plugin } braucht { $condition }, was nicht hereinkommt
+issue-provider = { $plugin } ({ $field })
+issue-fitting = { $issue }; bei { $field } { $count ->
+        [one] passt
+       *[other] passen
+    } { $choices }

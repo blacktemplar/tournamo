@@ -740,6 +740,19 @@ impl Page {
         Ok(top.unwrap_or_else(|| panic!("{selector} must find an element")))
     }
 
+    /// Lays the page out as it is printed: `@media print` matches from now on.
+    pub async fn emulate_print(&self) -> WebDriverResult<()> {
+        self.driver
+            .cdp()
+            .send_raw(
+                "Emulation.setEmulatedMedia",
+                serde_json::json!({ "media": "print" }),
+            )
+            .await?;
+        Self::pause().await;
+        Ok(())
+    }
+
     /// Makes the page take the pointer for a finger, as on a phone or a tablet: `(pointer: coarse)`
     /// matches from now on.
     ///

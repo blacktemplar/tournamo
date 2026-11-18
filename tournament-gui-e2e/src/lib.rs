@@ -1078,6 +1078,27 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the elements `shown` find are displayed and those `hidden` find are not, e.g.
+    /// as the page is printed.
+    pub async fn expect_displayed(&self, shown: &[&str], hidden: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_script(
+                r#"
+                const [shown, hidden] = arguments;
+                const displayed = (selector) => [...document.querySelectorAll(selector)]
+                    .some((element) => element.checkVisibility());
+                const missing = shown.filter((selector) => !displayed(selector));
+                const extra = hidden.filter(displayed);
+                return missing.length || extra.length
+                    ? `not displayed: ${missing}; displayed: ${extra}`
+                    : null;
+                "#,
+                vec![serde_json::json!(shown), serde_json::json!(hidden)],
+                "the page must display what it shows and nothing it hides",
+            )
+            .await
+    }
+
     /// Waits until the lines of a list of entrants pasted that were not added are `lines`, each a
     /// sentence of its number, the line and why, at the field of the entrant's name.
     pub async fn expect_lines_refused(&self, lines: &[&str]) -> WebDriverResult<()> {

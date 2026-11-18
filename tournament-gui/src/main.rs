@@ -18,6 +18,7 @@ mod bracket;
 mod competition;
 mod competitions;
 mod components;
+mod copy;
 mod cross_table;
 mod focus;
 mod help;
@@ -56,7 +57,7 @@ use crate::{
 const COMPONENTS_THEME: Asset = asset!("/assets/dx-components-theme.css");
 /// The page's own style, by screen (`assets/style/`), in the order of the cascade: where two rules
 /// of the same specificity meet, the later one wins.
-const STYLES: [Asset; 17] = [
+const STYLES: [Asset; 18] = [
     asset!("/assets/style/tokens.css"),
     asset!("/assets/style/page.css"),
     asset!("/assets/style/controls.css"),
@@ -74,6 +75,7 @@ const STYLES: [Asset; 17] = [
     asset!("/assets/style/standings.css"),
     asset!("/assets/style/cross-table.css"),
     asset!("/assets/style/phases.css"),
+    asset!("/assets/style/print.css"),
 ];
 
 /// The database of IndexedDB the competitions are stored in.

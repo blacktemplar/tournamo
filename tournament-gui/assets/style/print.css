@@ -1,0 +1,78 @@
+/* Printing: what the page shows of the competition, e.g. the standings for a wall, without what
+ * is there to operate it, in the light theme whatever the screen shows; last in the cascade, so
+ * that it overrides the screen's layout */
+
+@media print {
+  :root {
+    color-scheme: light;
+  }
+
+  /* what operates the page rather than shows the competition */
+  header.bar,
+  .bar-actions,
+  footer,
+  .skip-link,
+  .segmented,
+  .warning,
+  .notice,
+  .toast,
+  .toolbar,
+  .phase-links,
+  .phase-links-add,
+  #result-entry-toggle,
+  .report .win,
+  .report .draw,
+  .toggletip,
+  .copy,
+  .result-entry,
+  .start-buttons {
+    display: none !important;
+  }
+
+  body,
+  main,
+  #main {
+    background: none;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* one column, each card whole on a page where it fits */
+  .columns {
+    display: block;
+  }
+
+  .card {
+    border: 1px solid var(--border);
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+
+  /* everything in sight: nothing scrolls on paper, and nothing sticks */
+  .scroll {
+    overflow: visible;
+    background: none;
+  }
+
+  th,
+  td,
+  .standing-list .rank {
+    position: static;
+    background: none;
+  }
+
+  /* the names of a match to play, in buttons on screen, as text */
+  button {
+    border: none;
+    background: none;
+    box-shadow: none;
+    color: var(--text);
+  }
+}

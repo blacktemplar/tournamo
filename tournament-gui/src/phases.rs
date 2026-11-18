@@ -15,6 +15,7 @@ use crate::{
     announcement::Announcement,
     competition::{Ctx, phase_fragment, ranking_fragment},
     components::dialog::{Dialog, DialogDescription, DialogTitle},
+    copy::CopyTable,
     focus::focus_later,
     go_to,
     i18n::t,
@@ -282,6 +283,21 @@ pub fn Ranking() -> Element {
             name
         })
     };
+    // the table as text to copy, as it shows it
+    let copied: Vec<Vec<String>> = std::iter::once(vec![
+        tr.get("place"),
+        tr.get("name"),
+        tr.get("phase-reached"),
+    ])
+    .chain(ranking.rows.iter().map(|row| {
+        vec![
+            row.place.to_string(),
+            team_name(&tr, &row.entrants),
+            reached(row).unwrap_or_default(),
+        ]
+    }))
+    .collect();
+    let copy_label = t!(tr, "copy-table", table = tr.get("ranking").as_str());
     rsx! {
         div { class: "columns play",
             div { class: "column wide",
@@ -317,12 +333,13 @@ pub fn Ranking() -> Element {
                                         th { class: "name", scope: "row",
                                             {team_name(&tr, &row.entrants)}
                                         }
-                                        td { class: "phase", {reached(&row)} }
+                                        td { class: "phase words", {reached(&row)} }
                                     }
                                 }
                             }
                         }
                     }
+                    CopyTable { label: copy_label, rows: copied }
                 }
             }
         }

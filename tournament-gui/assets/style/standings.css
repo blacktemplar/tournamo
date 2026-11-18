@@ -166,6 +166,20 @@ td.name {
   left: 0;
 }
 
+/* what reads as words, e.g. the round an entrant went out in or the phase reached, wraps rather
+ * than widening the table, so that a long one, e.g. in German, leaves the columns after it in
+ * sight */
+td.words {
+  min-width: 7rem;
+  white-space: normal;
+}
+
+/* below a table, at its right, copying it as text (copy.rs) */
+.copy {
+  display: flex;
+  margin: var(--space-3) 0 0 auto;
+}
+
 /* the metrics of an entrant yet to play, all alike, recede behind the name */
 .standing-list tr.unplayed td.metric {
   color: var(--text-muted);

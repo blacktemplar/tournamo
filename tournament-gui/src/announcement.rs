@@ -34,6 +34,8 @@ pub enum Announcement {
     Reopened(Reopened),
     Undone(Action),
     Redone(Action),
+    /// A table copied as text.
+    Copied,
 }
 
 impl Announcement {
@@ -111,6 +113,7 @@ impl Announcement {
             }
             Self::Undone(action) => t!(tr, "announce-undone", action = action_text(tr, action)),
             Self::Redone(action) => t!(tr, "announce-redone", action = action_text(tr, action)),
+            Self::Copied => tr.get("announce-copied"),
         }
     }
 }

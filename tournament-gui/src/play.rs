@@ -20,6 +20,7 @@ use crate::{
     announcement::Announcement,
     capitalized,
     competition::{Ctx, PhaseFinished},
+    copy::CopyTable,
     focus::{focus_later, move_focus, use_focus},
     i18n::t,
     icons,
@@ -854,6 +855,30 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
     };
     let heading_id = format!("standings{suffix}");
     let title = heading.clone().unwrap_or_else(|| tr.get("standings"));
+    // the table as text to copy, as it shows it
+    let header = [tr.get("rank"), tr.get("name")]
+        .into_iter()
+        .chain(headers.iter().map(|(header, ..)| header.clone()))
+        .chain([tr.get("played")])
+        .collect();
+    let copied: Vec<Vec<String>> = std::iter::once(header)
+        .chain(standings.rows.iter().map(|row| {
+            [row.rank.to_string(), team_name(&tr, &row.entrants)]
+                .into_iter()
+                .chain(
+                    standings
+                        .columns
+                        .iter()
+                        .zip(&row.cells)
+                        .map(|(column, cell)| {
+                            cell_text(&tr, column.calculator, cell.as_ref()).unwrap_or_default()
+                        }),
+                )
+                .chain([row.played.to_string()])
+                .collect()
+        }))
+        .collect();
+    let copy_label = t!(tr, "copy-table", table = title.as_str());
     rsx! {
         section { class: "card", aria_labelledby: "{heading_id}",
             h2 { id: "{heading_id}", {title.clone()} }
@@ -902,17 +927,8 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
                                 }
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
-                                    td { class: "metric",
-                                        {
-                                            cell.map(|cell| match cell {
-                                                StandingCell::Metric(cell) => {
-                                                    capitalized(&tr.cell(column.calculator, &cell))
-                                                }
-                                                StandingCell::Stage(stage) => {
-                                                    capitalized(&tr.stage(&stage))
-                                                }
-                                            })
-                                        }
+                                    td { class: metric_class(&cell),
+                                        {cell_text(&tr, column.calculator, cell.as_ref())}
                                     }
                                 }
                                 td { class: "played", "{row.played}" }
@@ -929,6 +945,7 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
                     }
                 }
             }
+            CopyTable { label: copy_label, rows: copied }
         }
     }
 }
@@ -981,17 +998,8 @@ fn ComparedStandings(compared: Compared) -> Element {
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
                                 td { class: "division", {division_letter(row.division)} }
                                 for (column , cell) in compared.columns.iter().zip(row.cells) {
-                                    td { class: "metric",
-                                        {
-                                            cell.map(|cell| match cell {
-                                                StandingCell::Metric(cell) => {
-                                                    capitalized(&tr.cell(column.calculator, &cell))
-                                                }
-                                                StandingCell::Stage(stage) => {
-                                                    capitalized(&tr.stage(&stage))
-                                                }
-                                            })
-                                        }
+                                    td { class: metric_class(&cell),
+                                        {cell_text(&tr, column.calculator, cell.as_ref())}
                                     }
                                 }
                                 td { class: "played", "{row.played}" }
@@ -1062,4 +1070,21 @@ fn CutLine(cut: Cut, phase: String, span: usize, comparison: bool) -> Element {
             }
         }
     }
+}
+
+/// The class of the cell of a metric showing `cell`: one that reads as words, e.g. a stage, may
+/// wrap.
+fn metric_class(cell: &Option<StandingCell>) -> &'static str {
+    match cell {
+        Some(StandingCell::Stage(_)) => "metric words",
+        _ => "metric",
+    }
+}
+
+/// What `cell` of a column of the calculator `calculator` shows, nothing if it is empty.
+fn cell_text(tr: &Translator, calculator: &str, cell: Option<&StandingCell>) -> Option<String> {
+    cell.map(|cell| match cell {
+        StandingCell::Metric(cell) => capitalized(&tr.cell(calculator, cell)),
+        StandingCell::Stage(stage) => capitalized(&tr.stage(stage)),
+    })
 }

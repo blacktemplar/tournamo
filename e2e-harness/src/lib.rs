@@ -770,6 +770,35 @@ impl Page {
         Ok(())
     }
 
+    /// Taps the middle of the first element the CSS selector `selector` finds with a finger, as on
+    /// a touch screen, whatever lies on top of it there taking the tap: the finger is down for
+    /// `held`, and the browser makes the click once it is lifted.
+    ///
+    /// # Panics
+    /// Panics if there is no such element.
+    pub async fn tap(&self, selector: &str, held: std::time::Duration) -> WebDriverResult<()> {
+        let [left, top, right, bottom] = self.rects_of(selector).await?.first().map_or_else(
+            || panic!("{selector} must find an element"),
+            |rect| [rect.left, rect.top, rect.right, rect.bottom],
+        );
+        let point =
+            serde_json::json!({ "x": f64::midpoint(left, right), "y": f64::midpoint(top, bottom) });
+        let cdp = self.driver.cdp();
+        cdp.send_raw(
+            "Input.dispatchTouchEvent",
+            serde_json::json!({ "type": "touchStart", "touchPoints": [point] }),
+        )
+        .await?;
+        tokio::time::sleep(held).await;
+        cdp.send_raw(
+            "Input.dispatchTouchEvent",
+            serde_json::json!({ "type": "touchEnd", "touchPoints": [] }),
+        )
+        .await?;
+        Self::pause().await;
+        Ok(())
+    }
+
     /// The computed value of the CSS property `property` of the first element the CSS selector
     /// `selector` finds, e.g. `"rgb(255, 255, 255)"` for `"background-color"`.
     ///

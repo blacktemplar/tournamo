@@ -245,7 +245,7 @@ pub fn Competition(competition: CompetitionKey) -> Element {
             Screen { competition, loaded }
         },
         opening => rsx! {
-            main {
+            main { tabindex: "-1",
                 Notices {}
                 if opening == Opening::Loading {
                     p { {tr.get("opening")} }
@@ -375,7 +375,7 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
                 span { class: "bar-label", {tr.get("export")} }
             }
         }
-        main {
+        main { tabindex: "-1",
             Notices { export: move |()| export() }
             if !changes {
                 p { class: "notice", role: "status", {tr.get(READ_ONLY)} }

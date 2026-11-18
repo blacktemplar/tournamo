@@ -1,3 +1,4 @@
+use tournament_engine::plugins::metrics_calculator::{MorePoints, PointsCalculator};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -72,12 +73,17 @@ fn the_cross_table_shows_the_match_of_every_two_teams() {
     let totals: Vec<_> = table.rows.iter().map(|row| row.total).collect();
     assert_eq!(
         totals,
-        [Score::ONE, Score::ZERO, Score::ZERO, Score::ZERO],
+        [
+            Some(Score::ONE),
+            Some(Score::ZERO),
+            Some(Score::ZERO),
+            Some(Score::ZERO)
+        ],
         "the winner's one win"
     );
 }
 
-/// A draw adds a half to the total of each of its teams.
+/// A draw adds a half to the total of each of its teams, by the points of a round robin.
 #[test]
 fn a_draw_adds_a_half_to_the_cross_table() {
     let mut session = Given::new().started();
@@ -90,9 +96,88 @@ fn a_draw_adds_a_half_to_the_cross_table() {
     let halves = table
         .rows
         .iter()
-        .filter(|row| row.total == Score::new(0.5))
+        .filter(|row| row.total == Some(Score::new(0.5)))
         .count();
     assert_eq!(halves, 2);
+}
+
+/// A result is worth the points of the phase, e.g. 3 for a win and 1 for a draw, and a row's total
+/// is its points as the standings show them, with those of its byes in a column of their own.
+#[test]
+fn the_cross_table_counts_the_points_of_the_phase() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol", "Dave", "Erin"])
+        .ranking(vec![PluginConfig::of::<MorePoints>()])
+        .metrics(vec![
+            PluginConfig::of::<PointsCalculator>()
+                .with("points_for_win", 3.0)
+                .with("points_for_draw", 1.0)
+                .with("points_for_bye", 2.0),
+        ])
+        .started();
+    for (number, result) in [(1, MatchResult::AWins), (2, MatchResult::Draw)] {
+        session
+            .report(session.first(), numbered(&session, number), result)
+            .unwrap();
+    }
+
+    let table = session.cross_table(session.only()).unwrap();
+
+    let mut points: Vec<_> = table
+        .rows
+        .iter()
+        .flat_map(|row| &row.cells)
+        .flatten()
+        .filter_map(|played| played.points)
+        .collect();
+    points.sort_unstable();
+    let [zero, one, three] = [0.0, 1.0, 3.0].map(Score::new);
+    assert_eq!(points, [zero, one, one, three]);
+    for row in &table.rows {
+        let cells = row
+            .cells
+            .iter()
+            .flatten()
+            .filter_map(|played| played.points)
+            .fold(Score::ZERO, |sum, points| sum + points);
+        assert_eq!(row.total, Some(cells + row.byes.unwrap()));
+    }
+    let totals: Vec<_> = table.rows.iter().map(|row| row.total.unwrap()).collect();
+    assert_eq!(totals[0], Score::new(3.0), "the winner first");
+    assert_eq!(
+        table.rows.iter().filter_map(|row| row.byes).max(),
+        Some(Score::new(2.0)),
+        "the bye of the first round"
+    );
+}
+
+/// A phase counting no points has no totals, and its results are worth none.
+#[test]
+fn a_cross_table_without_points_has_no_totals() {
+    let mut session = Given::new()
+        .ranking(vec![PluginConfig::of::<MoreWins>()])
+        .metrics(Vec::new())
+        .started();
+    session
+        .report(session.first(), numbered(&session, 1), MatchResult::AWins)
+        .unwrap();
+
+    let table = session.cross_table(session.only()).unwrap();
+
+    assert!(
+        table
+            .rows
+            .iter()
+            .all(|row| row.total.is_none() && row.byes.is_none())
+    );
+    assert!(
+        table
+            .rows
+            .iter()
+            .flat_map(|row| &row.cells)
+            .flatten()
+            .all(|played| played.points.is_none())
+    );
 }
 
 /// A cell of the cross table has the result at its highest level, seen from the row's team: the

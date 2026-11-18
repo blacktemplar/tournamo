@@ -666,7 +666,7 @@ async fn the_phase_is_edited_after_the_start_in_a_dialog() {
 }
 
 /// The teams of a Monster DYP are pairs, so it never schedules the match of single entrants whose
-/// result was reported.
+/// result was reported. The refusal shows above the buttons, in sight.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn an_edit_a_result_does_not_fit_is_refused_in_the_dialog() {
@@ -680,10 +680,12 @@ async fn an_edit_a_result_does_not_fit_is_refused_in_the_dialog() {
         gui.click("Save changes").await?;
 
         gui.expect_dialog_error(
-            "The phase changed this way does not play match 1, which has a result; reopen that \
-             match first to change the phase this way.",
+            "Changed this way, the phase does not fit the result of its match 1; reopen that \
+             match first.",
         )
         .await?;
+        // next to the buttons, however far the form scrolls
+        gui.page.expect_in_view("#edit-phase [role=alert]").await?;
         gui.click("Cancel").await?;
         gui.expect_no_dialog().await?;
         gui.expect_phase(&[

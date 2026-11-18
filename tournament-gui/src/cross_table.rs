@@ -1,7 +1,8 @@
 //! The cross table of a phase whose teams stay the same, e.g. a round robin: a row and a column
 //! per team in the order of the standings, each cell the matches of the row's team against the
-//! column's, seen from the row, and last what the row's results add up to. It only shows them,
-//! and the details of a match on a click; results are reported in the list of matches.
+//! column's, seen from the row, and last, if the phase counts points, the points of the row's
+//! byes, where a bye scored any, and its points. It only shows them, and the details of a match on
+//! a click; results are reported in the list of matches.
 
 use dioxus::prelude::*;
 use tournament_app::view::{CrossMatch, DivisionRef, Outcome};
@@ -24,6 +25,8 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
         .iter()
         .map(|row| team_name(&tr, &row.entrants))
         .collect();
+    let byes = table.rows.iter().any(|row| row.byes.is_some());
+    let totals = table.rows.iter().any(|row| row.total.is_some());
     rsx! {
         section { class: "card", aria_labelledby: "{id}",
             h2 { id: "{id}", {heading.clone().unwrap_or_else(|| tr.get("cross-table"))} }
@@ -44,7 +47,12 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
                                     span { class: "visually-hidden", "{name}" }
                                 }
                             }
-                            th { class: "total", scope: "col", {tr.get("cross-table-total")} }
+                            if byes {
+                                th { class: "total", scope: "col", {tr.get("cross-table-byes")} }
+                            }
+                            if totals {
+                                th { class: "total", scope: "col", {tr.get("cross-table-total")} }
+                            }
                         }
                     }
                     tbody {
@@ -66,7 +74,12 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
                                         }
                                     }
                                 }
-                                td { class: "total", {tr.number(row.total.get())} }
+                                if let Some(byes) = row.byes {
+                                    td { class: "total", {tr.number(byes.get())} }
+                                }
+                                if let Some(total) = row.total {
+                                    td { class: "total", {tr.number(total.get())} }
+                                }
                             }
                         }
                     }
@@ -78,8 +91,9 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
 
 /// A match in a cell: how it ended for the row's team, nothing while it has no result. It shows
 /// the result at its highest level, the row's team first, e.g. the games won of a best of, or else
-/// `1`, `½`, `0`, and says how it ended, followed by the score it shows, if any, e.g. "won, 2–1";
-/// a click on a match entered in more detail than who won opens its details.
+/// the points of the result, or else `1`, `½`, `0`, and says how it ended, followed by the score
+/// or the points it shows, if any, e.g. "won, 2–1"; a click on a match entered in more detail than
+/// who won opens its details.
 #[component]
 fn Cell(played: CrossMatch) -> Element {
     let ctx = use_context::<Ctx>();
@@ -106,7 +120,18 @@ fn Cell(played: CrossMatch) -> Element {
             );
             (score, said)
         }
-        None => (number.to_owned(), outcome),
+        None => match played.points {
+            Some(points) => {
+                let said = t!(
+                    tr,
+                    "outcome-with-points",
+                    outcome = outcome.as_str(),
+                    points = points.get()
+                );
+                (tr.number(points.get()), said)
+            }
+            None => (number.to_owned(), outcome),
+        },
     };
     let row = played.row;
     rsx! {

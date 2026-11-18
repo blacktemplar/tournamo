@@ -191,7 +191,7 @@ fn an_edit_a_reported_result_does_not_fit_is_refused() {
     let result = session.edit_phase(session.first(), &form(draft.clone()));
 
     assert!(
-        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(numbers)) if *numbers == [1]),
+        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(matches)) if *matches == [own(&[1])]),
         "{result:?}"
     );
     assert_eq!(matches(&session)[0].result, Some(MatchResult::AWins));
@@ -219,9 +219,25 @@ fn an_edit_names_every_reported_result_it_does_not_fit() {
     let result = session.edit_phase(session.first(), &form(draft.clone()));
 
     assert!(
-        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(numbers)) if *numbers == [1, 2]),
+        matches!(
+            &result,
+            Err(EditPhaseError::ResultDoesNotFit(matches)) if *matches == [own(&[1, 2])]
+        ),
         "{result:?}"
     );
+    assert_eq!(
+        crate::i18n::english(&result.unwrap_err()),
+        "changed this way, the phase does not fit the results of its matches 1, 2; reopen those \
+         matches first"
+    );
+}
+
+/// The matches of the phase edited numbered `numbers`.
+fn own(numbers: &[usize]) -> MatchesOfPhase {
+    MatchesOfPhase {
+        phase: None,
+        numbers: numbers.to_vec(),
+    }
 }
 
 /// The matches of the phase that have a result, with that result.

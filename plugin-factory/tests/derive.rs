@@ -271,6 +271,14 @@ fn a_plugin_behind_a_dyn_tells_its_id() {
 }
 
 #[test]
+fn a_plugin_behind_a_dyn_is_reached_as_its_type() {
+    let plugin: Box<dyn Derived> = Box::new(Unit);
+
+    assert!(plugin_factory::downcast_ref::<Unit, _>(&*plugin).is_some());
+    assert!(plugin_factory::downcast_ref::<Counter, _>(&*plugin).is_none());
+}
+
+#[test]
 fn a_skipped_field_is_no_part_of_the_schema_but_of_the_plugin() {
     let schema = entry_of::<Counter>().schema();
     let built = PluginConfig::of::<Counter>()

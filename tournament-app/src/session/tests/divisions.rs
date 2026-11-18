@@ -409,6 +409,52 @@ fn a_phase_of_divisions_gives_medals_by_its_overall_ranks() {
     );
 }
 
+/// A source of a phase played in groups side by side says where its places lie in the groups: as
+/// many as the groups configured before the start, as drawn after it.
+#[test]
+fn a_source_of_groups_says_where_its_places_lie_in_the_groups() {
+    let in_groups = |session: &Session| {
+        let mut form = session.phase_form().unwrap();
+        form.choose_source(0, Some(session.first()));
+        form.enter_place(0, End::To, "4");
+        form.entry_view().rows[0]
+            .in_groups
+            .as_ref()
+            .map(|text| crate::i18n::Translator::plain_english().text(text))
+    };
+    let mut session = Given::new().entrants(&SIX).divisions(2).added();
+
+    let hint = "with 2 groups side by side, places 1–4 are places 1–2 of each group";
+    assert_eq!(in_groups(&session).as_deref(), Some(hint));
+    session.start().unwrap();
+    assert_eq!(in_groups(&session).as_deref(), Some(hint));
+    assert_eq!(
+        in_groups(&Given::new().entrants(&SIX).added()),
+        None,
+        "a phase of one group"
+    );
+}
+
+/// The tables of groups side by side show no medals: their ranks are not the places of the
+/// competition, where the winner of the second group is second.
+#[test]
+fn groups_side_by_side_show_no_medals_in_their_tables() {
+    let mut session = Given::new().entrants(&SIX).divisions(2).started();
+    let groups = session.first();
+    play_out_by_lot(&mut session, groups);
+
+    for division in 0..2 {
+        let standings = session
+            .standings(DivisionRef {
+                phase: groups,
+                division,
+            })
+            .unwrap();
+        assert!(standings.rows.iter().all(|row| row.medal.is_none()));
+    }
+    assert_eq!(session.ranking().rows[0].medal, Some(Medal::Gold));
+}
+
 #[test]
 fn a_phase_of_one_division_compares_nothing() {
     let mut session = Given::new().started();

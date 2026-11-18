@@ -11,7 +11,8 @@ use crate::{competition::Ctx, i18n::t, icons, phases::phase_id_text};
 /// The name of the phase of `form`, and where it takes its entrants from: everyone registered for
 /// the first phase unless the operator asks to take only some places, else a row per source, each
 /// of a phase or the registration and a range of its places, with a button adding one more, and
-/// where the lot decides who of the registration is taken.
+/// where the lot decides who of the registration is taken; under a source of a phase played in
+/// groups side by side, where its places lie in the groups.
 #[component]
 pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
@@ -153,6 +154,11 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                                     .cloned()
                                     .collect::<Vec<_>>(),
                             }
+                            if let Some(in_groups) = &row.in_groups {
+                                p { class: "hint", id: "source-{index}-groups",
+                                    {tr.sentence(in_groups)}
+                                }
+                            }
                         }
                     }
                 }
@@ -204,7 +210,7 @@ fn PlaceField(
                 placeholder: if end == End::To { tr.get("to-last-place") },
                 disabled,
                 aria_invalid: rejected.then_some("true"),
-                aria_describedby: "source-{index}-issues",
+                aria_describedby: "source-{index}-issues source-{index}-groups",
                 onchange: move |event| form.write().enter_place(index, end, &event.value()),
             }
         }

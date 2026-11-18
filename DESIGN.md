@@ -956,8 +956,11 @@ order of the new list: `PhasePlugins::teams`).
   other rank shown is one in a division. A tie in a division or of the
   overall rank that the cut goes through shows only in the warning on
   starting the next phase. There is no table of the overall standings in the
-  GUI; the cards of the groups and of the comparison say it all. Medals follow
-  the overall ranks.
+  GUI; the cards of the groups and of the comparison say it all. Medals are of
+  the competition's places, which are not the ranks of a group, so the tables
+  of groups side by side and the comparison show none; a source taking places
+  of them says where its places lie in the groups ("places 1–6 are places 1–2
+  of each group").
 - **Points per match** compare groups of different sizes: the points divided
   by the matches played and the byes reached.
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",
@@ -1738,25 +1741,34 @@ pairing (every slot grows); the bracket in half the width.
   place: a row and column per team, each cell the matches between them from the
   row's side, each at the highest level of its result (`CrossMatch::score`: its
   own score, else the parts won, so `3–2` for a best of five rather than its
-  games), or else `1`, `½`, `0`; said as won/drawn/lost, followed by the score
-  if it shows one (`won, 3–2`), as an overridden result need not follow from
-  the score. A click on a match with more than who won opens its details, as in
-  the list. `Session::cross_table` offers it where every match is between two
-  single rankings and the format plays no bracket (round robin, random rounds;
-  not Monster DYP or knockouts), so no table of formats beyond the bracket's.
+  games), or else the points of the result (`CrossMatch::points`, e.g. `3`,
+  `1`, `0`), or else, in a phase counting no points, `1`, `½`, `0`; said as
+  won/drawn/lost, followed by the score or the points it shows (`won, 3–2`,
+  `won, 3 points`), as an overridden result need not follow from the score. A
+  click on a match with more than who won opens its details, as in the list.
+  `Session::cross_table` offers it where every match is between two single
+  rankings and the format plays no bracket (round robin, random rounds; not
+  Monster DYP or knockouts), so no table of formats beyond the bracket's.
 - **Rows by rank**, as published cross tables are; columns headed by row
   numbers (names would make 20 columns too wide), names said to screen readers
   and kept in sight while scrolling.
 - **Read-only**, an open match's cell empty: with rows by rank, reporting in the
   table would move the cell under the operator's hand, and narrow cells fit
   many teams.
-- **A total last** (`CrossRow::total`), the sum of the row's `1`, `½`, `0`, as
-  published tables have, whatever the points of the phase; wins and losses
-  are tinted (`--win-subtle`, `--error-subtle`), a win also bold, so that it
-  reads without colours where a score does not say who won.
+- **The points last** (`CrossRow::total`), the `Points` metric the standings
+  show, so the two views never disagree; before them the points of byes
+  (`CrossRow::byes`), where a bye scored any, so the row adds up. A phase
+  counting no points has neither column. The points of a result come from the
+  phase's `PointsCalculator` (`plugin_factory::downcast_ref`): what a result
+  is worth is its configuration, which no metric records per match. Wins and
+  losses are tinted (`--win-subtle`, `--error-subtle`), a win also bold, so
+  that it reads without colours where a score does not say who won.
 
 Rejected: rows in entry or draw order (stable, but an order seen nowhere else);
-open matches shown by number (wider columns, the list tells it anyway).
+open matches shown by number (wider columns, the list tells it anyway); a total
+of `1`, `½`, `0` whatever the points of the phase (it disagreed with the
+standings, e.g. 4 against 14 points with 3 for a win and 2 for a bye); the
+points of byes only in the total (the row would not add up).
 
 ### Layout
 
@@ -1776,10 +1788,13 @@ entrants, but any number and format.
   them keeping the focus.
 - **What can be clicked looks like a button**: bordered, 44px where the pointer
   is coarse; one primary action per card.
-- **A match is a card**: the two sides around its number, each side's button
-  below its name, draw in the middle, columns aligned by subgrid; one per line,
+- **A match is a card**: its number above ("Match 3", with the letter of its
+  group), since a number between the names read as a score; below it the two
+  sides, each name centred above its button, draw in the middle, columns
+  aligned by subgrid; one per line,
   since a list is read to find who plays whom. With a result it shrinks to one
-  row in place, so a round is mostly what is left to play without cards moving.
+  row in place (number, sides with a dash between, result), so a round is
+  mostly what is left to play without cards moving.
   Finished matches share the columns of the list (subgrid), so their pairings
   line up whatever their scores, as in a table; where the list is narrower
   than 40rem, the scores of the games of a best of give way to the games won

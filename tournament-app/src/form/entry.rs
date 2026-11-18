@@ -11,7 +11,12 @@ use tournament_engine::{
 };
 
 use super::PhaseForm;
-use crate::{error::SourcesError, i18n::Text, rejected::Rejections, view::PhaseName};
+use crate::{
+    error::SourcesError,
+    i18n::{Arg, Text},
+    rejected::Rejections,
+    view::PhaseName,
+};
 
 /// What a [`PhaseForm`] knows of the competition its phase is of, to offer and check sources.
 #[derive(Debug, Clone)]
@@ -30,6 +35,108 @@ pub(crate) struct Context {
     /// Whether a phase taking entrants from the registration alone can no longer start: the
     /// competition has started, and the phase did not start with it.
     pub(crate) registration_closed: bool,
+    /// The groups of each phase before it played in groups side by side.
+    pub(crate) groups: Vec<(PhaseId, Groups)>,
+}
+
+/// The groups side by side a phase is played in, whose places are those of the phase in turn: the
+/// firsts of all groups, then the seconds, and so on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Groups {
+    /// How many there are, at least 2.
+    pub(crate) count: usize,
+    /// How many places each has, once the phase has started.
+    pub(crate) sizes: Option<Vec<usize>>,
+}
+
+impl Groups {
+    /// Where the places from `from` to `to` (to the last place if `None`) lie in the groups, e.g.
+    /// "places 1–6 are places 1–2 of each of the 3 groups"; `None` for every place.
+    pub(crate) fn places(&self, from: NonZeroU32, to: Option<NonZeroU32>) -> Option<Text> {
+        if from.get() == 1 && to.is_none() {
+            return None;
+        }
+        let (from, groups) = (from.get(), self.count);
+        let to = to.map(NonZeroU32::get).or_else(|| {
+            self.sizes
+                .as_ref()
+                .map(|sizes| u32::try_from(sizes.iter().sum::<usize>()).unwrap_or(u32::MAX))
+        });
+        let mut parts = Vec::new();
+        // whether a part takes only some of one place, compared across the groups
+        let mut compared = false;
+        // the ranks in a group all of whose places are taken, from and to
+        let mut whole: Option<(u32, u32)> = None;
+        let flush = |whole: &mut Option<(u32, u32)>, parts: &mut Vec<Text>| {
+            if let Some((first, last)) = whole.take() {
+                parts.push(if first == last {
+                    Text::new("group-place").with("rank", first)
+                } else {
+                    Text::new("group-places")
+                        .with("first", first)
+                        .with("last", last)
+                });
+            }
+        };
+        // the first place of the rank `rank` in the phase
+        let (mut start, mut rank) = (1_u32, 1_u32);
+        loop {
+            let block = match &self.sizes {
+                Some(sizes) => sizes.iter().filter(|&&size| size >= rank as usize).count(),
+                None => groups,
+            };
+            let block = u32::try_from(block).unwrap_or(u32::MAX);
+            if block == 0 || to.is_some_and(|to| start > to) {
+                break;
+            }
+            let end = start + block - 1;
+            if end >= from {
+                let first = from.max(start) - start + 1;
+                if to.is_none() && first == 1 {
+                    // every rank from here on, of groups of sizes not known yet
+                    flush(&mut whole, &mut parts);
+                    parts.push(Text::new("group-places-on").with("rank", rank));
+                    break;
+                }
+                let last = to.map_or(block, |to| to.min(end) - start + 1);
+                if first == 1 && last == block {
+                    whole = Some((whole.map_or(rank, |(first, _)| first), rank));
+                } else {
+                    flush(&mut whole, &mut parts);
+                    compared = true;
+                    parts.push(
+                        if first == 1 {
+                            Text::new("group-places-best").with("count", last)
+                        } else if last == block {
+                            Text::new("group-places-worst").with("count", block - first + 1)
+                        } else if first == last {
+                            Text::new("group-place-between").with("place", first)
+                        } else {
+                            Text::new("group-places-between")
+                                .with("first", first)
+                                .with("last", last)
+                        }
+                        .with("rank", rank),
+                    );
+                }
+            }
+            start = end + 1;
+            rank += 1;
+        }
+        flush(&mut whole, &mut parts);
+        let text = match to {
+            Some(to) => Text::new("places-in-groups")
+                .with("count", to.saturating_sub(from) + 1)
+                .with("from", from)
+                .with("to", to),
+            None => Text::new("places-on-in-groups").with("from", from),
+        };
+        Some(
+            text.with("groups", groups)
+                .with("parts", Arg::List(parts))
+                .with("compared", if compared { "yes" } else { "no" }),
+        )
+    }
 }
 
 impl Default for Context {
@@ -41,6 +148,7 @@ impl Default for Context {
             entrants_per_ranking: Vec::new(),
             taken: Vec::new(),
             registration_closed: false,
+            groups: Vec::new(),
         }
     }
 }
@@ -112,6 +220,9 @@ pub struct SourceRowView {
     pub to_rejected: Option<Text>,
     /// What is wrong with the source, e.g. that it takes places another one takes.
     pub issue: Option<Text>,
+    /// Where the places it takes lie in the groups of its phase, if that is played in groups side
+    /// by side, e.g. "places 1–6 are places 1–2 of each of the 3 groups".
+    pub in_groups: Option<Text>,
 }
 
 /// What a source can take places of.
@@ -320,6 +431,13 @@ impl PhaseForm {
                         issue: self
                             .issue_of(index)
                             .map(|error| crate::i18n::Message::text(&error)),
+                        in_groups: self
+                            .context
+                            .groups
+                            .iter()
+                            .find(|(phase, _)| source.of() == SourceOf::Phase(*phase))
+                            .filter(|_| !source.is_empty())
+                            .and_then(|(_, groups)| groups.places(source.from(), source.to())),
                     }
                 })
                 .collect()
@@ -407,5 +525,78 @@ impl PhaseForm {
         let sources =
             Vec1::try_from_vec(self.entry.sources.clone()).map_err(|_| SourcesError::NoSources)?;
         Ok((name, sources))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    /// What the hint says of the places `from` to `to` of `groups`, in English.
+    fn places(groups: &Groups, from: u32, to: Option<u32>) -> Option<String> {
+        let place = |place| NonZeroU32::new(place).unwrap();
+        groups
+            .places(place(from), to.map(place))
+            .map(|text| crate::i18n::Translator::plain_english().text(&text))
+    }
+
+    const THREE: Groups = Groups {
+        count: 3,
+        sizes: None,
+    };
+
+    #[test]
+    fn whole_places_of_each_group() {
+        assert_eq!(
+            places(&THREE, 1, Some(6)).unwrap(),
+            "with 3 groups side by side, places 1–6 are places 1–2 of each group"
+        );
+        assert_eq!(
+            places(&THREE, 4, Some(6)).unwrap(),
+            "with 3 groups side by side, places 4–6 are place 2 of each group"
+        );
+        assert_eq!(
+            places(&THREE, 7, None).unwrap(),
+            "with 3 groups side by side, the places from 7 on are the places from 3 on of each \
+             group"
+        );
+    }
+
+    #[test]
+    fn places_cutting_through_a_place_of_the_groups_are_compared() {
+        assert_eq!(
+            places(&THREE, 1, Some(8)).unwrap(),
+            "with 3 groups side by side, places 1–8 are places 1–2 of each group and the best 2 \
+             of those in place 3 of their group, those of one place compared across the groups"
+        );
+        assert_eq!(
+            places(&THREE, 9, Some(10)).unwrap(),
+            "with 3 groups side by side, places 9–10 are the worst of those in place 3 of their \
+             group and the best of those in place 4 of their group, those of one place compared \
+             across the groups"
+        );
+        assert_eq!(
+            places(&THREE, 2, Some(2)).unwrap(),
+            "with 3 groups side by side, place 2 is place 2 of those in place 1 of their group, \
+             those of one place compared across the groups"
+        );
+    }
+
+    /// Once the groups are drawn, a place only some groups have is shared by fewer.
+    #[test]
+    fn places_of_groups_of_different_sizes() {
+        let groups = Groups {
+            count: 3,
+            sizes: Some(vec![4, 4, 3]),
+        };
+        assert_eq!(
+            places(&groups, 10, None).unwrap(),
+            "with 3 groups side by side, places 10–11 are place 4 of each group"
+        );
+        assert_eq!(places(&groups, 1, None), None);
+        assert_eq!(places(&THREE, 1, None), None);
     }
 }

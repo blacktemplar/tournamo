@@ -255,7 +255,7 @@ fn App() -> Element {
         if *page.screen.read() == Screen::Help {
             Help {}
         } else if !stored {
-            main { Notices {} }
+            main { tabindex: "-1", Notices {} }
         } else if let Screen::Competition(key, _) = *page.screen.read() {
             // made anew for another competition
             Competition { competition: key, key: "{key}" }
@@ -308,6 +308,13 @@ fn Header() -> Element {
         });
     rsx! {
         document::Title { "{title}" }
+        // the first stop of the keyboard, shown only then: past the bars to what the screen shows
+        button {
+            class: "skip-link past-bars",
+            r#type: "button",
+            onclick: |_| focus::focus_later(&["main"]),
+            {tr.get("skip-to-content")}
+        }
         header { class: "bar",
             if help || shown.is_some() {
                 a { class: "back", href: "#",

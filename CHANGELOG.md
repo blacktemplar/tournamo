@@ -36,7 +36,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   standings of each group and, where the cut of the next phase goes through a
   place, how that place compares across the groups, a dashed line below the
   place in a group going on as things stand; a bracket or cross table per
-  group. Who won the competition is shown above the phases, not in the phase
+  group. The form of a phase taking places of groups says where they lie in
+  the groups, e.g. places 1–6 of three groups are places 1–2 of each group.
+  Medals go by the places of the competition, so the group tables show none.
+  Who won the competition is shown above the phases, not in the phase
   shown.
 - What a table of standings shows is chosen per metric: the metrics of a
   phase are a checkbox per table, the group tables and, where groups are
@@ -158,12 +161,33 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `PhasePlugins` has `divisions`, `draw` and `across`, and the plugin axis
   `plugins::draw::Draw` is new. In the app, `Session::compared`,
   `StandingRow::division` and `PhaseOverview::{configured_divisions, order}`.
+- Library users: `plugin_factory::downcast_ref` reaches a plugin behind a
+  `dyn` of its axis as its type; `PointsCalculator` tells its points
+  (`points_for_win`, `points_for_draw`, `points_for_bye`). In the app,
+  `CrossRow::total` is the row's points, `None` without them, next to
+  `CrossRow::byes` and `CrossMatch::points`.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
-  way: all of them at once, rather than one at a time.
+  way: all of them at once, rather than one at a time, and of which phase,
+  e.g. those of a later phase that other entrants would go on to. The page
+  shows why an edit was refused above the buttons of the dialog, rather than
+  below its form, out of sight.
 
 ### Fixed
 
+- The keyboard can skip what it would otherwise go through stop by stop: the
+  first stop of the page skips the bars to the content, and one before the
+  list of entrants skips it to the phases (WCAG 2.4.1). Both show only while
+  they have the focus.
+- A match to play shows its number above the pairing ("Match 3"), where it
+  sat between the names and read like a score, and each name centred above
+  its button; a played match shows its number first, a dash between the
+  names.
+- The cross table counts the points of the phase: a result shows its points
+  where it shows no score (e.g. 3, 1 or 0), and the last column is the points
+  of the standings, byes included, which a column of their own shows where a
+  bye scored any. It used to add up 1 for a win and ½ for a draw whatever the
+  points of the phase. A phase counting no points shows neither column.
 - In the browser, undoing or redoing what another tab has undone, redone or
   built on since no longer breaks the page: it says that a change made
   elsewhere keeps it from being undone (or redone), and nothing more can be
@@ -190,6 +214,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   reports it. The number of games of a best of is labelled "best of" (German
   "Best of (Sätze)", the match format "nach Sätzen" rather than
   "Gewinnsätze", which read as the games needed to win).
+- A name can be corrected after the start: “Entrants” beside “Add phase”
+  lists the entrants, each renamed in place, which changes nothing else since
+  names are not part of the competition's history. Adding, removing and
+  rating stay closed once it has started.
 
 ## [0.4.0] - 2026-11-09
 

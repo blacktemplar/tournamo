@@ -21,19 +21,24 @@ use crate::{
     icons,
     phase::AddPhaseDialog,
     play::MedalOf,
+    setup::EntrantsDialog,
     team_name,
 };
 
 /// The links to the phases, each with its state, and to the ranking of the competition, and the
-/// button adding a phase; nothing while the competition has one phase.
+/// buttons listing the entrants, to correct their names, and adding a phase; no links while the
+/// competition has one phase.
 #[component]
 pub fn PhaseLinks(competition: CompetitionKey, ranking: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let phases = ctx.session.read().phases();
     if phases.len() < 2 {
         return rsx! {
-            if ctx.actions().add_phase {
-                div { class: "phase-links-add", AddPhaseDialog {} }
+            div { class: "phase-links-add",
+                EntrantsDialog {}
+                if ctx.actions().add_phase {
+                    AddPhaseDialog {}
+                }
             }
         };
     }
@@ -64,6 +69,7 @@ pub fn PhaseLinks(competition: CompetitionKey, ranking: bool) -> Element {
                     }
                 }
             }
+            EntrantsDialog {}
             if ctx.actions().add_phase {
                 AddPhaseDialog {}
             }

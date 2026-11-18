@@ -154,17 +154,38 @@ pub enum EditPhaseError {
     NoPhase(#[from] NoPhase),
     /// No phase can be built from the draft, see [`AddPhaseError::Invalid`].
     Invalid(Vec<Issue>),
-    /// The edited phase does not play the matches of these numbers (see
-    /// [`MatchRow::number`](crate::view::MatchRow::number)), ascending and at least one, as they
-    /// were reported, e.g. since its format does not schedule them; reopening them allows the
-    /// edit.
-    ResultDoesNotFit(Vec<usize>),
+    /// The edited phase does not fit the results of these matches, at least one, as they were
+    /// reported: those of its own, e.g. since its format does not schedule them, first, then
+    /// those of each later phase, e.g. since other entrants go on to it, in the order of the
+    /// phases; reopening them allows the edit.
+    ResultDoesNotFit(Vec<MatchesOfPhase>),
     #[error(transparent)]
     Sources(#[from] SourcesError),
     /// A phase that takes entrants from this one has started; undoing its start allows the edit.
     PhaseStarted(PhaseName),
     /// The edited phase does not fit another change made after the phase was added.
     DoesNotFit(TransitionError),
+}
+
+/// Matches of one phase, see [`EditPhaseError::ResultDoesNotFit`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchesOfPhase {
+    /// The phase, `None` for the phase edited.
+    pub phase: Option<PhaseName>,
+    /// The numbers of the matches (see [`MatchRow::number`](crate::view::MatchRow::number)),
+    /// ascending.
+    pub numbers: Vec<usize>,
+}
+
+impl Message for MatchesOfPhase {
+    fn text(&self) -> Text {
+        let text = match &self.phase {
+            None => Text::new("matches-of-edited-phase"),
+            Some(phase) => Text::new("matches-of-later-phase").with("phase", phase.clone()),
+        };
+        text.with("count", self.numbers.len())
+            .with("numbers", listed(&self.numbers))
+    }
 }
 
 /// Why a phase did not start, or a warning about starting it, see
@@ -678,9 +699,15 @@ impl Message for EditPhaseError {
         match self {
             Self::NoPhase(no_phase) => no_phase.text(),
             Self::Invalid(_) => Text::new("error-invalid-phase"),
-            Self::ResultDoesNotFit(numbers) => Text::new("error-result-does-not-fit")
-                .with("count", numbers.len())
-                .with("numbers", listed(numbers)),
+            Self::ResultDoesNotFit(matches) => Text::new("error-result-does-not-fit")
+                .with(
+                    "count",
+                    matches.iter().map(|of| of.numbers.len()).sum::<usize>(),
+                )
+                .with(
+                    "matches",
+                    Arg::List(matches.iter().map(Message::text).collect()),
+                ),
             Self::Sources(error) => error.text(),
             Self::PhaseStarted(phase) => {
                 Text::new("error-later-phase-started").with("phase", phase.clone())

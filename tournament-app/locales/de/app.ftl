@@ -37,10 +37,21 @@ warning-cut-through-tie-in-group = { $favoured } und { $others } teilen sich Pla
 phase-unnamed = { $number } · { $format }
 phase-progress = { $phase }: { $played } von { $matches } Spielen gespielt
 error-no-phase = das Turnier hat noch keine Phase
-error-result-does-not-fit = { $count ->
-        [one] so geändert spielt die Phase Spiel { $numbers } nicht, das schon ein Ergebnis hat; um sie so zu ändern, muss zuerst Spiel { $numbers } wieder geöffnet werden
-       *[other] so geändert spielt die Phase die Spiele { $numbers } nicht, die schon Ergebnisse haben; um sie so zu ändern, müssen zuerst die Spiele { $numbers } wieder geöffnet werden
+error-result-does-not-fit = so geändert passt die Phase nicht zu { $count ->
+        [one] dem Ergebnis
+       *[other] den Ergebnissen
+    } { $matches }; zuerst { $count ->
+        [one] muss dieses Spiel
+       *[other] müssen diese Spiele
+    } wieder geöffnet werden
+matches-of-edited-phase = { $count ->
+        [one] ihres Spiels { $numbers }
+       *[other] ihrer Spiele { $numbers }
     }
+matches-of-later-phase = { $count ->
+        [one] von Spiel { $numbers }
+       *[other] der Spiele { $numbers }
+    } in { $phase }, wohin sie Teilnehmer schickt
 error-phase-change-does-not-fit = so kann die Phase nicht geändert werden, da eine spätere Änderung nicht mehr dazu passt: { $reason }
 error-started-already = das Turnier hat schon begonnen
 error-too-few-entrants = ein Turnier braucht mindestens zwei Teilnehmer
@@ -102,6 +113,31 @@ number-range = { $whole ->
     }
 warning-unranked = ohne Kriterium sind in der Tabelle alle Teilnehmer gleichauf
 warning-lot-decides-cut = die Teilnehmer beiderseits des Schnitts nach Platz { $place } der Anmeldung haben gleiche Wertungszahlen oder keine, daher entscheidet das Los, wer auf welcher Seite ist
+places-in-groups = bei { $groups } Gruppen nebeneinander { $count ->
+        [one] ist Platz { $from }
+       *[other] sind die Plätze { $from }–{ $to }
+    } { $parts }{ $compared ->
+        [yes] , die eines Platzes im Vergleich der Gruppen
+       *[no] {""}
+    }
+places-on-in-groups = bei { $groups } Gruppen nebeneinander sind die Plätze ab { $from } { $parts }{ $compared ->
+        [yes] , die eines Platzes im Vergleich der Gruppen
+       *[no] {""}
+    }
+group-place = Platz { $rank } jeder Gruppe
+group-places = die Plätze { $first }–{ $last } jeder Gruppe
+group-places-on = die Plätze ab { $rank } jeder Gruppe
+group-places-best = { $count ->
+        [one] der Beste
+       *[other] die besten { $count }
+    } auf Platz { $rank } ihrer Gruppe
+group-places-worst = { $count ->
+        [one] der Schlechteste
+       *[other] die schlechtesten { $count }
+    } auf Platz { $rank } ihrer Gruppe
+group-place-between = Platz { $place } unter denen auf Platz { $rank } ihrer Gruppe
+group-places-between = die Plätze { $first }–{ $last } unter denen auf Platz { $rank } ihrer Gruppe
+list = { $first } und { $last }
 warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger üblicherweise hat
 warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt

@@ -11,14 +11,13 @@ use tournament_engine::{
     Standing, Table, TypeMap,
     entities::columns::Rule,
     plugins::{
-        draw::DivisionOrder,
         match_format::Parts,
         metrics_calculator::{Cell, MetricsCalculator},
         phase_format::{PhaseFormat, Stage},
     },
 };
 
-use super::Session;
+use super::{Session, phases::side_by_side};
 use crate::{
     storage::Progress,
     view::{
@@ -374,7 +373,7 @@ impl Session {
             .iter()
             .map(|row| (row.division(), row.in_division(), row.rank()))
             .collect();
-        self.standings_of(phase, rows, Table::Division)
+        self.standings_of(phase, rows, Table::Division, true)
     }
 
     /// The standings of the division `of`, with the columns the standings of a division show, see
@@ -386,7 +385,10 @@ impl Session {
             .iter()
             .map(|&standing| (of.division, standing, standing.rank()))
             .collect();
-        self.standings_of(of.phase, rows, Table::Division)
+        let medals = self
+            .phase(of.phase)
+            .is_some_and(|phase| !side_by_side(phase));
+        self.standings_of(of.phase, rows, Table::Division, medals)
     }
 
     /// For each place (unique rank) in the parallel divisions of the phase `phase` that a cut of
@@ -398,7 +400,7 @@ impl Session {
         let Some(of) = self.phase(phase) else {
             return Vec::new();
         };
-        if of.divisions().len() < 2 || of.plugins().draw().order() != DivisionOrder::Parallel {
+        if !side_by_side(of) {
             return Vec::new();
         }
         let advancing = self.advancing(phase);
@@ -418,7 +420,7 @@ impl Session {
                     .any(|row| advancing(row.1.ranking().id()).map(|advance| advance.to) != first)
             })
             .filter_map(|(rank, rows)| {
-                let standings = self.standings_of(phase, rows, Table::Across)?;
+                let standings = self.standings_of(phase, rows, Table::Across, false)?;
                 Some(view::Compared {
                     rank,
                     columns: standings.columns,
@@ -429,8 +431,8 @@ impl Session {
     }
 
     /// The standings of `rows` of the phase `phase`, each its division, its row in the division's
-    /// standings and the rank shown, with the columns `table` shows, see [`Phase::shown`]; `None`
-    /// before the start of the phase.
+    /// standings and the rank shown, with the columns `table` shows, see [`Phase::shown`], and
+    /// the medals if `medals`; `None` before the start of the phase.
     ///
     /// [`Phase::shown`]: tournament_engine::Phase::shown
     fn standings_of(
@@ -438,6 +440,7 @@ impl Session {
         phase: PhaseId,
         rows: Vec<(usize, Standing, NonZeroU32)>,
         table: Table,
+        medals: bool,
     ) -> Option<Standings> {
         let of = self.phase(phase)?;
         of.divisions().first()?;
@@ -495,7 +498,7 @@ impl Session {
                                 Some(standing_cell(division, ranking, column.cell(ranking)?))
                             })
                             .collect(),
-                        medal: (finished && advances.is_none())
+                        medal: (medals && finished && advances.is_none())
                             .then(|| place.and_then(Medal::of))
                             .flatten(),
                         advances,

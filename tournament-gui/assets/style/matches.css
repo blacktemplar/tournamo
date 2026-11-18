@@ -99,12 +99,13 @@
   margin: 0;
   container: match-list / inline-size;
   gap: var(--space-2);
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
   list-style: none;
 }
 
-/* A card: the pairing around the number, then each side's button below its name. The columns
- * are the same in every card, whether or not a match may end in a draw. */
+/* A card: its number at the top, then the pairing, then each side's button below its name, so
+ * that the number reads as none of a result. The columns are the same in every card, whether or
+ * not a match may end in a draw. */
 .match {
   position: relative;
   display: grid;
@@ -117,10 +118,23 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-/* the pairing on the first line, whatever the order of its elements */
-.match .side,
-.match .number {
+/* "Match 3", and the letter of its division where the phase has several */
+.match .match-label {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  grid-column: 1 / -1;
   grid-row: 1;
+  justify-self: start;
+}
+
+/* the pairing on the line below, whatever the order of its elements */
+.match .side {
+  grid-row: 2;
+}
+
+/* between the names of a played match, on one line; a match to play has its buttons below them */
+.match .versus {
+  display: none;
 }
 
 /* the match whose result Enter in the entry of results reports, as the entry says too */
@@ -133,20 +147,19 @@
   font-weight: 600;
 }
 
+/* each name centred above its button, as wide as the button at least */
 .match .side.a {
+  min-width: min(100%, 12rem);
   grid-column: 1;
-  text-align: right;
-}
-
-.match .number {
-  min-width: 2.5rem;
-  grid-column: 2;
-  color: var(--text-muted);
+  justify-self: end;
   text-align: center;
 }
 
 .match .side.b {
+  min-width: min(100%, 12rem);
   grid-column: 3;
+  justify-self: start;
+  text-align: center;
 }
 
 .match .winner::before {
@@ -220,10 +233,38 @@
 }
 
 /* a match with a result on one line, so that the list of a round is mostly those still to play:
- * the pairing, then a draw said and the button reopening it */
+ * its number, the pairing, then a draw said and the button reopening it */
 .match.finished {
   padding-block: var(--space-2);
   grid-template-columns: subgrid;
+}
+
+.match.finished .match-label {
+  align-self: center;
+  grid-column: 1;
+}
+
+.match.finished .side,
+.match.finished .versus {
+  grid-row: 1;
+}
+
+.match.finished .side.a {
+  min-width: 0;
+  grid-column: 2;
+  text-align: right;
+}
+
+.match.finished .versus {
+  display: block;
+  color: var(--text-muted);
+  grid-column: 3;
+}
+
+.match.finished .side.b {
+  min-width: 0;
+  grid-column: 4;
+  text-align: left;
 }
 
 /* the buttons in line at the end, the scores beside them */
@@ -232,7 +273,7 @@
   align-items: center;
   justify-content: end;
   gap: var(--space-2);
-  grid-column: 4;
+  grid-column: 5;
   grid-row: 1;
 }
 
@@ -259,45 +300,65 @@
   }
 }
 
-/* On a phone the sides are stacked, so that each name has the line beside the number to itself
- * and breaks only between words, unless a word is wider than the line: the number, then each
- * side's name with its button, the draw below them; once played, the button reopening it beside
- * both names, the draw said below them. */
+/* On a phone the sides are stacked, so that each name has the line to itself beside its button and
+ * breaks only between words, unless a word is wider than the line: the number, then each side's
+ * name with its button, the draw below them; once played, the names on the whole line, the draw
+ * said and the button reopening it below them. */
 @media (width < 30rem) {
   .match,
   .match.finished {
     padding: var(--space-2);
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .match button {
     padding-inline: var(--space-3);
   }
 
-  .match .number {
-    min-width: 1.5rem;
-    grid-column: 1;
-    grid-row: 1 / span 2;
+  .match .match-label,
+  .match.finished .match-label {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 
-  .match .side {
+  .match .side,
+  .match.finished .side {
+    min-width: 0;
     overflow-wrap: break-word;
   }
 
   .match .side.a,
-  .match .side.b {
-    grid-column: 2;
+  .match .side.b,
+  .match.finished .side.a,
+  .match.finished .side.b {
+    grid-column: 1;
+    justify-self: stretch;
     text-align: left;
   }
 
-  .match .side.b {
+  .match .side.a,
+  .match.finished .side.a {
     grid-row: 2;
+  }
+
+  .match .side.b,
+  .match.finished .side.b {
+    grid-row: 3;
+  }
+
+  .match.finished .side.a,
+  .match.finished .side.b {
+    grid-column: 1 / -1;
+  }
+
+  .match.finished .versus {
+    display: none;
   }
 
   .match .meta {
     justify-content: start;
-    grid-column: 2;
-    grid-row: 3;
+    grid-column: 1;
+    grid-row: 4;
   }
 
   .match .report,
@@ -309,26 +370,26 @@
   .match .win.a,
   .match .win.b {
     width: auto;
-    grid-column: 3;
+    grid-column: 2;
     justify-self: stretch;
   }
 
   .match .win.a {
-    grid-row: 1;
-  }
-
-  .match .win.b {
     grid-row: 2;
   }
 
-  .match .draw {
-    grid-column: 3;
+  .match .win.b {
     grid-row: 3;
   }
 
+  .match .draw {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
   .match .enter-result {
-    grid-column: 3;
-    grid-row: 1 / span 2;
+    grid-column: 2;
+    grid-row: 2 / span 2;
   }
 
   /* below the pairing, across the card */
@@ -336,24 +397,18 @@
     grid-column: 1 / -1;
   }
 
-  /* the names on the whole line, which no button takes once the match is played */
-  .match.finished .side.a,
-  .match.finished .side.b {
-    grid-column: 2 / -1;
-  }
-
   .match.finished .result {
-    grid-column: 2;
-    grid-row: 3;
-  }
-
-  .match.finished .meta {
+    grid-column: 1;
     grid-row: 4;
   }
 
+  .match.finished .meta {
+    grid-row: 5;
+  }
+
   .match.finished .finished-actions {
-    grid-column: 3;
-    grid-row: 3;
+    grid-column: 2;
+    grid-row: 4;
   }
 }
 
@@ -390,12 +445,8 @@
   color: var(--text-muted);
 }
 
-/* the division of the match, where the phase has several: its letter in the corner of the card */
+/* the division of the match, where the phase has several: its letter after the number */
 .match .division-tag {
-  position: absolute;
-  top: var(--space-1);
-  left: var(--space-2);
-  color: var(--text-muted);
-  font-size: 0.8125rem;
+  margin-inline-start: var(--space-2);
   font-weight: 600;
 }

@@ -76,6 +76,31 @@ h3 {
   font-size: 1rem;
 }
 
+/* a way past what the keyboard would otherwise go through, shown only while it has the focus */
+.skip-link:not(:focus) {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* the one past the bars, over them */
+.skip-link.past-bars:focus {
+  position: fixed;
+  z-index: 30;
+  top: var(--space-2);
+  left: var(--space-2);
+}
+
+/* what a skip link moves the focus to, which the keyboard does not stop at otherwise */
+main:focus {
+  outline: none;
+}
+
 /* hidden from the eye, but read by screen readers */
 .visually-hidden {
   position: absolute;

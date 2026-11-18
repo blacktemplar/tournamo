@@ -1,4 +1,5 @@
-//! What is done before the start: entering the entrants, adding the phase, starting.
+//! What is done before the start: entering the entrants, adding the phase, starting; and the
+//! names of the entrants corrected after it.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -11,6 +12,7 @@ use wasm_bindgen::JsCast as _;
 use crate::{
     announcement::Announcement,
     competition::Ctx,
+    components::dialog::{Dialog, DialogDescription, DialogTitle},
     focus::focus_later,
     help,
     i18n::t,
@@ -76,6 +78,15 @@ pub fn Entrants() -> Element {
                         }
                         {tr.get("ratings")}
                     }
+                }
+            }
+            // past the stops of every entrant, shown only while it has the focus
+            if count > 0 {
+                button {
+                    class: "skip-link",
+                    r#type: "button",
+                    onclick: |_| focus_later(&["#phase"]),
+                    {tr.get("skip-to-phases")}
                 }
             }
             ol { id: "entrant-list", class: if ratings { "rated" },
@@ -173,8 +184,66 @@ pub fn Entrants() -> Element {
     }
 }
 
+/// A button opening a dialog that lists the entrants, for a competition that has started: each
+/// is renamed in place, e.g. to correct a typo, which changes nothing else.
+#[component]
+pub fn EntrantsDialog() -> Element {
+    let ctx = use_context::<Ctx>();
+    let mut open = use_signal(|| false);
+    let tr = ctx.translator.read();
+    let entrants: Vec<_> = ctx
+        .session
+        .read()
+        .entrants()
+        .into_iter()
+        .map(|entrant| {
+            let name = team_name(&tr, std::slice::from_ref(&entrant));
+            (entrant, name)
+        })
+        .collect();
+    rsx! {
+        button {
+            id: "entrants-button",
+            r#type: "button",
+            onclick: move |_| open.set(true),
+            icons::Pencil {}
+            {tr.get("entrants")}
+        }
+        Dialog {
+            open: Some(open()),
+            on_open_change: move |is_open: bool| {
+                open.set(is_open);
+                if !is_open {
+                    focus_later(&["#entrants-button"]);
+                }
+            },
+            DialogTitle { {tr.get("entrants")} }
+            DialogDescription { {tr.get("entrants-after-start")} }
+            if open() {
+                div { class: "dialog-form",
+                    ol { id: "entrant-list",
+                        for (position, (row, name)) in entrants.into_iter().enumerate() {
+                            EntrantItem { key: "{row.id:?}", row, name, position, ratings: false }
+                        }
+                    }
+                    div { class: "dialog-buttons",
+                        button {
+                            r#type: "button",
+                            onclick: move |_| {
+                                open.set(false);
+                                focus_later(&["#entrants-button"]);
+                            },
+                            {tr.get("close")}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// An entrant of the list, `row` shown as `name`, at `position` from 0: its name, which is
-/// renamed in place, its rating and seed if `ratings` are shown, and its removal.
+/// renamed in place, its rating and seed if `ratings` are shown, and its removal until the start.
 #[component]
 fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) -> Element {
     let ctx = use_context::<Ctx>();
@@ -184,6 +253,7 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) ->
     let mut error = use_signal(|| None::<Text>);
     use_cleared_on_language_change(ctx.translator, error);
     let actions = ctx.actions();
+    let started = ctx.session.read().competition().is_started();
     let tr = ctx.translator.read();
     let item = format!("#entrant-list > li:nth-child({})", position + 1);
     let field = format!("entrant-new-name-{position}");
@@ -224,6 +294,8 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) ->
                         onclick: move |_| renaming.set(Some(rename_to.clone())),
                         icons::Pencil {}
                     }
+                    // the entrants are fixed once the competition has started
+                    if !started {
                     button {
                         class: "small quiet remove",
                         aria_label: t!(tr, "remove-entrant", name = name.as_str()),
@@ -240,12 +312,12 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) ->
                         },
                         {tr.get("remove")}
                     }
+                    }
                 }
             }
         };
     };
-    let (mut on_escape, mut on_cancel, mut on_renamed) =
-        (stop_renaming.clone(), stop_renaming.clone(), stop_renaming);
+    let (mut on_cancel, mut on_renamed) = (stop_renaming.clone(), stop_renaming);
     rsx! {
         li {
             form {
@@ -282,27 +354,34 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) ->
                     autocomplete: "off",
                     aria_invalid: error.read().is_some().then_some("true"),
                     aria_describedby: "{field}-error",
+                    // Escape cancels renaming alone, also in the dialog of the entrants, which
+                    // it would close as well: kept from the dialog's listener on the document,
+                    // and so from the page, it presses Cancel
                     onmounted: {
                         let field = field.clone();
                         move |_| {
-                            document::eval(
-                                &format!("document.getElementById('{field}')?.select()"),
-                            );
+                            document::eval(&format!(
+                                r#"
+                                const field = document.getElementById('{field}');
+                                field?.select();
+                                field?.addEventListener("keydown", (event) => {{
+                                    if (event.key === "Escape") {{
+                                        event.stopPropagation();
+                                        field.form?.querySelector(".cancel")?.click();
+                                    }}
+                                }});
+                                "#
+                            ));
                         }
                     },
                     oninput: move |event| {
                         error.set(None);
                         renaming.set(Some(event.value()));
                     },
-                    onkeydown: move |event| {
-                        if event.key() == Key::Escape {
-                            on_escape();
-                        }
-                    },
                 }
                 button { class: "small primary", r#type: "submit", {tr.get("rename")} }
                 button {
-                    class: "small quiet",
+                    class: "small quiet cancel",
                     r#type: "button",
                     onclick: move |_| on_cancel(),
                     {tr.get("cancel")}

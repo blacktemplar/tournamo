@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tournament_gui_e2e::{
     COMPETITION, Gui, Key, run, run_in_new_competition,
     thirtyfour::{By, error::WebDriverResult, stringmatch::StringMatch},
@@ -61,6 +63,29 @@ async fn a_competition_is_renamed_and_deleted_from_the_list() {
         gui.page.check_accessibility().await?;
         gui.open_competition("Cup 2026").await?;
         gui.expect_entrants(&["Alice"]).await
+    })
+    .await;
+}
+
+/// A tap beside a dialog closes it, and nothing below takes the tap, e.g. a link leaving the page.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_tap_beside_a_dialog_only_closes_it() {
+    run(async |gui| {
+        gui.new_competition("Cup").await?;
+        gui.follow("All competitions").await?;
+        gui.click_labelled("Delete Cup").await?;
+        gui.expect_alert_dialog("Delete Cup?").await?;
+
+        // held as long as a finger rests, longer than the backdrop takes to fade
+        gui.page
+            .tap("footer a[href='#help']", Duration::from_millis(300))
+            .await?;
+
+        // closed by the click, so the click is over
+        gui.expect_no_dialog().await?;
+        assert_eq!(gui.page.fragment().await?, "");
+        gui.expect_competitions(&["Cup"]).await
     })
     .await;
 }

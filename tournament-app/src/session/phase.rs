@@ -5,20 +5,21 @@ use tournament_engine::{
     AddPhase, Columns, CompetitionStateMachineExt as _, CompetitionTransition, PhaseId,
     PhasePlugins, Source, SourceOf,
     plugins::{
-        metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
+        draw::DivisionOrder, metrics_calculator::MetricsCalculator, phase_format::PhaseFormat,
+        ranker::SliceRanker,
     },
     transitions::{Change, ConflictsError, ReconfigurePhaseError},
     undoable_state_machine::{StateMachineError, TransitionId},
     uuid::Uuid,
 };
 
-use super::{Session, refused, rejection};
+use super::{Session, phases::side_by_side, refused, rejection};
 use crate::{
     error::{
         AddPhaseError, EditPhaseError, NoPhase, PhaseDraftError, Refusal, SourcesError,
         SourcesRefusal,
     },
-    form::{Context, PhaseForm},
+    form::{Context, Groups, PhaseForm},
     i18n::Text,
     view::{Glossary, PhaseName, Plugin},
 };
@@ -205,6 +206,29 @@ impl Session {
                 && id
                     .and_then(|id| self.phase(id))
                     .is_none_or(|phase| !phase.is_fed_by_registration_alone()),
+            groups: phases
+                .values()
+                .take(index)
+                .filter_map(|phase| {
+                    let groups = if phase.is_started() {
+                        side_by_side(phase).then(|| Groups {
+                            count: phase.divisions().len(),
+                            sizes: Some(
+                                phase
+                                    .divisions()
+                                    .iter()
+                                    .map(|division| division.data().rankings().len())
+                                    .collect(),
+                            ),
+                        })?
+                    } else {
+                        let count = phase.plugins().divisions().get() as usize;
+                        (count > 1 && phase.plugins().draw().order() == DivisionOrder::Parallel)
+                            .then_some(Groups { count, sizes: None })?
+                    };
+                    Some((phase.id(), groups))
+                })
+                .collect(),
         }
     }
 
@@ -303,13 +327,16 @@ impl Session {
         let id = edited.id();
         let edited = edited.into();
         let conflicts = self.machine.added_by(id).map(|target| {
-            self.conflicting_numbers(Change::Replace {
-                target,
-                with: &edited,
-            })
+            self.conflicting_by_phase(
+                Change::Replace {
+                    target,
+                    with: &edited,
+                },
+                id,
+            )
         });
         match conflicts {
-            Some(Ok(numbers)) if !numbers.is_empty() => EditPhaseError::ResultDoesNotFit(numbers),
+            Some(Ok(matches)) if !matches.is_empty() => EditPhaseError::ResultDoesNotFit(matches),
             Some(Err(ConflictsError::Other(entry, error))) => {
                 if let Some(phase) = self.started_by(entry) {
                     return EditPhaseError::PhaseStarted(phase);

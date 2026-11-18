@@ -296,12 +296,13 @@ fn EditPhase(phase: PhaseId) -> Element {
                         }
                     },
                     Form { form, disabled: false }
-                    p { class: "error", role: "alert",
-                        if let Some(error) = error() {
-                            {tr.sentence(&error)}
-                        }
-                    }
+                    // next to the buttons, which stay in sight below a long form
                     div { class: "dialog-buttons",
+                        p { class: "error", role: "alert",
+                            if let Some(error) = error() {
+                                {tr.sentence(&error)}
+                            }
+                        }
                         button { class: "primary", r#type: "submit", {tr.get("save-changes")} }
                         button { r#type: "button", onclick: move |_| editing.set(None),
                             {tr.get("cancel")}

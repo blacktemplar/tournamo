@@ -142,6 +142,9 @@ pub mod __private {
         /// The plugin as a plugin of no particular axis.
         fn as_plugin(&self) -> &dyn Plugin;
 
+        /// The plugin as a value of its type, see [`downcast_ref`](crate::downcast_ref).
+        fn as_any(&self) -> &dyn core::any::Any;
+
         /// Adds everything the plugin declares to `declaration`: its static declaration, what its
         /// configuration declares, and then what its sub-plugins declare, recursively.
         fn declare_all(&self, declaration: &mut Declaration);
@@ -156,6 +159,10 @@ pub mod __private {
         }
 
         fn as_plugin(&self) -> &dyn Plugin {
+            self
+        }
+
+        fn as_any(&self) -> &dyn core::any::Any {
             self
         }
 
@@ -218,4 +225,9 @@ pub trait PluginType: Plugin + Configurable {
 /// The [`PluginType::ID`] of `plugin`, which may be behind a `dyn` of its axis.
 pub fn id_of<P: Plugin + ?Sized>(plugin: &P) -> &'static str {
     __private::Erased::id(plugin)
+}
+
+/// `plugin`, which may be behind a `dyn` of its axis, as the plugin `T`, if it is one.
+pub fn downcast_ref<T: PluginType, P: Plugin + ?Sized>(plugin: &P) -> Option<&T> {
+    __private::Erased::as_any(plugin).downcast_ref()
 }

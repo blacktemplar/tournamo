@@ -895,7 +895,7 @@ impl Gui {
         let scores = self
             .driver
             .query(By::XPath(format!(
-                "//ol[@id = 'match-list']/li[span[@class = 'number'] = '{number}']\
+                "//ol[@id = 'match-list']/li[span/span[@class = 'number'] = '{number}']\
                  //span[contains(concat(' ', @class, ' '), ' scores ')]"
             )))
             .and_displayed()
@@ -1244,6 +1244,17 @@ impl Gui {
     /// option `text` of its choice says, e.g. `"the registration"`.
     pub async fn choose_source(&self, index: usize, text: &str) -> WebDriverResult<()> {
         self.choose(&format!("source-{index}"), text).await
+    }
+
+    /// Waits until the form of the phase shown says `text` of where the places of its source at
+    /// `index` lie in the groups of their phase.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_source_in_groups(&self, index: usize, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Id(format!("source-{index}-groups")), &[text])
+            .await
     }
 
     /// Waits until the form of the phase shown warns of `warnings` about where it takes its
@@ -2341,6 +2352,34 @@ impl Gui {
                 By::Css(":focus"),
                 |query| query.with_value(text.to_owned()),
                 &format!("the focus on the value {text:?}"),
+            )
+            .await
+    }
+
+    /// Presses Tab until the element with the focus shows `text`, e.g. a button shown only then.
+    ///
+    /// # Panics
+    /// Panics if the focus does not reach it within 20 presses.
+    pub async fn tab_to(&self, text: &str) -> WebDriverResult<()> {
+        for _ in 0..20 {
+            self.press(Key::Tab).await?;
+            if self.driver.active_element().await?.text().await? == text {
+                return Ok(());
+            }
+        }
+        panic!("the focus must reach {text:?} within 20 presses of Tab");
+    }
+
+    /// Waits until the focus is on the element the CSS selector `selector` finds, e.g. `main`.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_on(&self, selector: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(format!("{selector}:focus")),
+                |query| query,
+                &format!("the focus on {selector}"),
             )
             .await
     }

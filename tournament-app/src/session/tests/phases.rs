@@ -40,6 +40,56 @@ fn play_out(session: &mut Session, phase: PhaseId) {
     }
 }
 
+/// Reports every open match of the phase `phase`, each won by the entrant registered first, who
+/// is first by name too.
+fn play_out_by_name(session: &mut Session, phase: PhaseId) {
+    while let Some(open) = session.playable(MatchesOf::phase(phase)).first().cloned() {
+        let result = if names(&open.a) < names(&open.b) {
+            MatchResult::AWins
+        } else {
+            MatchResult::BWins
+        };
+        session.report(phase, open.id, result).unwrap();
+    }
+}
+
+/// A refused edit names the results of a later phase it does not fit, by that phase: ranked by
+/// Buchholz alone, Dave and Carol, who lost most, played the strongest and would reach the final
+/// Alice and Bob played.
+#[test]
+fn an_edit_names_the_results_of_a_later_phase_it_does_not_fit() {
+    let mut session = qualification_and_final();
+    session.start().unwrap();
+    let qualification = session.first();
+    play_out_by_name(&mut session, qualification);
+    let r#final = phase(&session, 2);
+    session.start_phase(r#final).unwrap();
+    play_out(&mut session, r#final);
+    let mut draft = session.phase_draft_to_edit(qualification).unwrap();
+    draft
+        .set(
+            &ConfigPath::ROOT.field("ranking"),
+            vec![PluginConfig::of::<MoreBuchholz>()],
+        )
+        .unwrap();
+
+    let result = session.edit_phase(qualification, &form(draft));
+
+    let later = MatchesOfPhase {
+        phase: session.name_of_phase(r#final),
+        numbers: vec![7],
+    };
+    assert!(
+        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(matches)) if *matches == [later]),
+        "{result:?}"
+    );
+    assert_eq!(
+        crate::i18n::english(&result.unwrap_err()),
+        "changed this way, the phase does not fit the result of match 7 of Final, which it sends \
+         entrants to; reopen that match first"
+    );
+}
+
 #[test]
 fn a_further_phase_starts_out_at_every_place_of_the_phase_before() {
     let session = Given::new().added();

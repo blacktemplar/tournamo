@@ -259,8 +259,7 @@ impl Session {
             };
             let standings = from_phase.standings();
             let rows: Vec<PhaseStanding> = standings.iter().copied().collect();
-            let parallel = from_phase.divisions().len() > 1
-                && from_phase.plugins().draw().order() == DivisionOrder::Parallel;
+            let parallel = side_by_side(from_phase);
             let team = |standing: &PhaseStanding| {
                 let data = from_phase.divisions()[standing.division()].data();
                 self.team(data, &[standing.ranking().id()])
@@ -438,8 +437,7 @@ impl Session {
         // for every place compared by, the phases its rows go to
         let mut goes_to: HashMap<NonZeroU32, Vec<Option<PhaseId>>> = HashMap::new();
         if let Some(phase) = competition.phase(&phase) {
-            let across = phase.divisions().len() > 1
-                && phase.plugins().draw().order() == DivisionOrder::Parallel;
+            let across = side_by_side(phase);
             for row in phase.standings().iter() {
                 let by = across.then(|| row.in_division().unique_rank());
                 compared_by.insert(row.ranking().id(), (by, row.unique_rank()));
@@ -463,6 +461,12 @@ impl Session {
             Some(Advance { to, how })
         }
     }
+}
+
+/// Whether the phase `phase` has started with several divisions side by side, e.g. groups, rather
+/// than one or levels.
+pub(super) fn side_by_side(phase: &Phase) -> bool {
+    phase.divisions().len() > 1 && phase.plugins().draw().order() == DivisionOrder::Parallel
 }
 
 /// What the phase `number` with `name`, played in `format`, is called.

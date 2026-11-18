@@ -109,6 +109,7 @@ impl Session {
             matches: 0,
             open: 0,
             stage: None,
+            stages: Vec::new(),
         };
         let mut rounds = BTreeMap::new();
         // the format and stage of every match and bye of each round
@@ -138,9 +139,14 @@ impl Session {
         }
         rounds
             .into_values()
-            .map(|summary| RoundSummary {
-                stage: round_stage(&stages.remove(&summary.round).unwrap_or_default()),
-                ..summary
+            .map(|summary| {
+                let (stage, stages) =
+                    round_stage(&stages.remove(&summary.round).unwrap_or_default());
+                RoundSummary {
+                    stage,
+                    stages,
+                    ..summary
+                }
             })
             .collect()
     }
@@ -612,25 +618,31 @@ pub(super) fn stage(division: &Division, annotations: &TypeMap) -> Option<StageN
 type FormatStage<'a> = (&'a dyn PhaseFormat, Option<Stage>);
 
 /// The stage naming a round whose matches and byes are of `stages`, each with its format: the one
-/// stage they all are, or what the format says if they all are of one and the same format;
-/// `None` if one has no stage.
-fn round_stage(stages: &[FormatStage]) -> Option<StageName> {
-    let (format, _) = stages.first()?;
+/// stage they all are, or what the format says if they all are of one and the same format, and
+/// else the distinct stages they are (see [`RoundSummary::stages`]); neither if one has no stage
+/// or they are of different formats.
+fn round_stage(stages: &[FormatStage]) -> (Option<StageName>, Vec<StageName>) {
+    let Some((format, _)) = stages.first() else {
+        return (None, Vec::new());
+    };
     let id = plugin_factory::id_of(*format);
     let mut distinct: Vec<Stage> = Vec::new();
     for (other, stage) in stages {
-        let stage = stage.clone()?;
+        let Some(stage) = stage.clone() else {
+            return (None, Vec::new());
+        };
         if plugin_factory::id_of(*other) != id {
-            return None;
+            return (None, Vec::new());
         }
         if !distinct.contains(&stage) {
             distinct.push(stage);
         }
     }
-    Some(StageName {
-        format: id,
-        stage: format.round_stage(&distinct)?,
-    })
+    let named = |stage| StageName { format: id, stage };
+    match format.round_stage(&distinct) {
+        Some(stage) => (Some(named(stage)), Vec::new()),
+        None => (None, distinct.into_iter().map(named).collect()),
+    }
 }
 
 /// Draws the [`Cut`]s below `rows`, whose places in their divisions are `places`: below the last

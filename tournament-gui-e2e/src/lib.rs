@@ -2011,52 +2011,26 @@ impl Gui {
             .await
     }
 
-    /// Checks that the bracket, higher than the screen below the bar and the view switch, scrolls
-    /// within a box that fits there, and that the stages of its first section stay on top of it
-    /// when it is scrolled down, which this does.
+    /// Expects the bracket to be as high as it is, scrolling only sideways within its card, so
+    /// that the page scrolls it down rather than a box of its own.
     ///
     /// # Panics
-    /// Panics if the bracket is not higher than its box, the box, scrolled into view, reaches
-    /// below the screen, or a stage scrolls away.
-    pub async fn expect_bracket_stages_stay_on_top(&self) -> WebDriverResult<()> {
-        let problems = self
+    /// Panics if its box scrolls down within the page.
+    pub async fn expect_bracket_scrolls_with_the_page(&self) -> WebDriverResult<()> {
+        let [content, shown] = self
             .driver
             .execute(
                 r#"
                 const box = document.querySelector("[aria-labelledby=bracket] .scroll");
-                const problems = [];
-                if (box.scrollHeight <= box.clientHeight) {
-                    problems.push("the bracket is not higher than its box");
-                }
-                // at the top of the screen below the bar and the view switch, which the page's
-                // scroll padding leaves free
-                box.scrollIntoView({ block: "start" });
-                const bottom = box.getBoundingClientRect().bottom;
-                if (bottom > window.innerHeight + 1) {
-                    problems.push(`its box ends at ${bottom}px, below the screen`);
-                }
-                box.scrollTop = box.scrollHeight / 2;
-                const top = box.getBoundingClientRect().top;
-                box.querySelectorAll(".bracket-section:first-child .bracket-stage")
-                    .forEach((stage) => {
-                        if (stage.closest(".below")) {
-                            return;
-                        }
-                        const at = stage.getBoundingClientRect().top;
-                        if (Math.abs(at - top) > 1) {
-                            problems.push(`${stage.textContent} is at ${at}, not at ${top}`);
-                        }
-                    });
-                return problems;
+                return [box.scrollHeight, box.clientHeight];
                 "#,
                 Vec::new(),
             )
             .await?
-            .json()
-            .clone();
+            .convert::<[u32; 2]>()?;
         assert!(
-            problems.as_array().is_some_and(Vec::is_empty),
-            "the stages of the bracket must stay on top, but {problems:#}"
+            content <= shown + 1,
+            "the bracket must not scroll down within its box, but is {content}px high in {shown}px"
         );
         Ok(())
     }

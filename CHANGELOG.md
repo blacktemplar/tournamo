@@ -302,6 +302,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   rounds. A winning score is at most 65535, points and weights at most 1000,
   which the fields say. “Winner only” no longer says that a match may be
   drawn where the format allows no draws.
+- The bracket: the match to be played now is outlined, a line parts the two
+  sides of a match, the names are a finger's height on a touch screen, and a
+  finished match is reopened by the button below its number. It scrolls with
+  the page rather than in a box of its own. A match for third place of three
+  entrants, against nobody, is left out, and a side yet to be decided is no
+  longer tagged as moving on by a bye. A round playing several stages of a
+  double elimination is named by each ("Round 2: winners round 2, losers
+  round 1").
 
 ## [0.4.0] - 2026-11-09
 

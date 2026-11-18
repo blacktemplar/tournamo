@@ -181,6 +181,10 @@ pub struct RoundSummary {
     /// The stage every match of the round belongs to, which names the round, e.g. the
     /// semifinals; `None` if they belong to several, or to none.
     pub stage: Option<StageName>,
+    /// Where no one stage names the round, the stages its matches and byes belong to, in the order
+    /// they first appear, e.g. a round of a double elimination playing round 2 of the winner
+    /// bracket and round 1 of the loser bracket; empty if one belongs to none.
+    pub stages: Vec<StageName>,
 }
 
 /// The matches and byes of a round.
@@ -359,7 +363,7 @@ pub struct BracketColumn {
     /// of the pairing they meet in.
     pub pairings: Vec<BracketPairing>,
     /// A stage drawn below the pairings, in the bottom quarter of the column, apart from the lines:
-    /// the match for third place below the final.
+    /// the match for third place below the final; none where its one pairing is against a bye.
     pub below: Option<Box<BracketColumn>>,
 }
 
@@ -377,7 +381,7 @@ pub struct BracketPairing {
     /// Sides A and B.
     pub sides: [BracketEntry; 2],
     /// Whether each side moved on from a pairing decided by a bye, which the folded column before
-    /// leaves out, see [`BracketColumn`].
+    /// leaves out, see [`BracketColumn`]; only once it is known who it is.
     pub after_bye: [bool; 2],
     /// The line from it to the pairing its winner plays next, if that is in the next column.
     pub line_out: Option<BracketLine>,

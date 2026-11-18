@@ -1731,20 +1731,30 @@ winners (old listings would not read).
   left out. Twenty entrants take eight rows rather than sixteen. Only a column
   nothing leads into is folded, since the lines into it expect a row per
   pairing.
-- **A bracket higher than the screen scrolls within a box as high as it**, the
-  stages sticky on top, which they could not be with the page scrolling (the
-  box scrolls sideways, so it is their scroll container either way). Its
-  edges fade out where more is out of sight, over the pairings, measured on
-  scroll and resize, since a shadow behind them is covered.
+- **A bracket higher than the screen scrolls with the page**; its box scrolls
+  only sideways. A box of its own, as high as the screen, kept the stages
+  sticky on top, but trapped the wheel in a scrolling page (testers). The
+  stages cannot be sticky against the page, since the box scrolling sideways
+  is their scroll container. Its edges fade out where more is out of sight,
+  over the pairings, measured on scroll and resize, since a shadow behind them
+  is covered.
 - **Shown in place of the columns** by the view switch, the rest kept `hidden`
   so state survives; the URL names the view (`#<key>/bracket`), so that a
   reload and the history keep it, and a competition opened shows its matches
   rather than what was chosen in another.
 - **A result is a click on the winner's name** (a button "Alice wins", styled as
-  a link, since touch has no hover); the focus moves on as in the list.
-  Reopening and typed results stay in the list. A reopen a later result depends
-  on is refused naming that match; knowing beforehand would need a trial replay
-  per result on every render.
+  a link, since touch has no hover; a finger's height where the pointer is
+  coarse); the focus moves on as in the list. The pairing to be played now is
+  outlined in the accent. A finished match is reopened by a small button
+  below its number, which takes no room of its own, so the bracket keeps its
+  size; typed results stay in the list. A reopen a later result depends on is
+  refused naming that match; knowing beforehand would need a trial replay per
+  result on every render.
+- **A match for third place against nobody is left out** (three entrants):
+  the loser of the one semifinal is third without it. A side is tagged as
+  moving on by a bye only once it is known who it is.
+- **A round playing several stages is named by each** in the list of rounds
+  ("Round 2: winners round 2, losers round 1"), as the bracket names them.
 
 Rejected: a trait method for views (moves the table of kinds, self-reported);
 the format drawing itself (the engine knows no display); rebuilding the tree

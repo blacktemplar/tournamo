@@ -286,17 +286,17 @@ async fn the_edges_of_a_bracket_scrolling_fade_out() {
     .await;
 }
 
-/// A knockout of 64 is higher than the screen, so it scrolls within a box as high as the screen
-/// below the view switch, the names of its stages staying on top.
+/// A knockout of 64 is higher than the screen, which the page scrolls, rather than a box of its own
+/// trapping the wheel.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn the_stages_of_a_high_bracket_stay_on_top() {
+async fn a_high_bracket_scrolls_with_the_page() {
     run_in_new_competition(async |gui| {
         let names: Vec<String> = (1..=64).map(|number| format!("Player {number}")).collect();
         gui.paste_entrant_names(&names.join("\n")).await?;
         show_bracket(&gui, "Single elimination", &[]).await?;
 
-        gui.expect_bracket_stages_stay_on_top().await?;
+        gui.expect_bracket_scrolls_with_the_page().await?;
         gui.expect_bracket_lines_meet().await?;
         gui.page.check_accessibility().await
     })

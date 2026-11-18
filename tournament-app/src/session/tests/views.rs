@@ -17,6 +17,7 @@ fn the_matches_are_listed_by_round_with_the_names_of_their_entrants() {
                 matches: 2,
                 open: 2,
                 stage: None,
+                stages: Vec::new(),
             })
             .collect::<Vec<_>>(),
         "a round robin of four plays three rounds of two matches, none of a stage"
@@ -174,6 +175,36 @@ fn a_round_of_one_stage_is_named_by_it() {
         stages,
         [Some("Semifinals".to_owned()), Some("Final".to_owned())]
     );
+}
+
+/// A round of a double elimination playing two stages side by side is named by both.
+#[test]
+fn a_round_of_several_stages_is_named_by_each() {
+    let mut session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol", "Dave", "Erin", "Frank"])
+        .format(DoubleElimination::ID)
+        .started();
+    for number in 1..=2 {
+        session
+            .report(
+                session.first(),
+                numbered(&session, number),
+                MatchResult::AWins,
+            )
+            .unwrap();
+    }
+
+    let second = &session.rounds(session.all())[1];
+
+    assert_eq!(second.stage, None);
+    let stages: Vec<_> = second
+        .stages
+        .iter()
+        .map(|stage| stage.stage.to_string())
+        .collect();
+    assert_eq!(stages.len(), 2, "{stages:?}");
+    assert!(stages[0].starts_with("Winners"), "{stages:?}");
+    assert!(stages[1].starts_with("Losers"), "{stages:?}");
 }
 
 /// A round a cell of the standings names, e.g. that of the first loss, is named by the stage of

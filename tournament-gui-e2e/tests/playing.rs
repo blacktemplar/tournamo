@@ -550,10 +550,11 @@ async fn the_bracket_shows_who_meets_whom() {
 
 /// A click on a side's name in the bracket reports that it won, and the focus stays on its
 /// pairing, rather than moving to a side of the next match, where one more Enter would report it.
-/// What was reported is said until the view changes.
+/// What was reported is said until the view changes. The button at a finished match's number
+/// reopens it.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn results_are_reported_in_the_bracket() {
+async fn results_are_reported_and_reopened_in_the_bracket() {
     run_in_new_competition(async |gui| {
         for name in ["Alice", "Bob", "Carol", "Dave"] {
             gui.add_entrant(name).await?;
@@ -579,6 +580,13 @@ async fn results_are_reported_in_the_bracket() {
         gui.expect_bracket_waiting(&[]).await?;
         gui.expect_focus_in_bracket("2").await?;
         gui.page.check_accessibility().await?;
+
+        // reopened in the bracket too, in the place of its number
+        gui.click_labelled("Reopen match 2").await?;
+
+        gui.expect_bracket_waiting(&["Winner of 2", "Loser of 2"])
+            .await?;
+        gui.expect_focus_in_bracket("2").await?;
         gui.click("Matches & standings").await?;
         gui.expect_announcement("").await
     })

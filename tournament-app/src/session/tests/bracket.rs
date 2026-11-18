@@ -260,6 +260,40 @@ fn a_pairing_decided_by_a_bye_is_left_out_of_its_column() {
     );
 }
 
+/// Of three entrants, the loser of the one semifinal is third without a match for third place,
+/// which the bracket leaves out; a side waiting for a loser is not tagged as moving on by a bye
+/// before it is known who it is.
+#[test]
+fn a_match_for_third_place_against_nobody_is_left_out() {
+    let session = Given::new()
+        .entrants(&["Alice", "Bob", "Carol"])
+        .format(SingleElimination::ID)
+        .started();
+
+    let bracket = session.bracket(session.only()).unwrap();
+
+    let last = bracket.sections[0].columns.last().unwrap();
+    assert_eq!(english(last.stage.clone()).unwrap(), "Final");
+    assert_eq!(last.below, None);
+    let eleven: Vec<&'static str> = (1..=11)
+        .map(|number| &*format!("Entrant {number}").leak())
+        .collect();
+    let session = Given::new()
+        .entrants(&eleven)
+        .format(DoubleElimination::ID)
+        .started();
+    let bracket = session.bracket(session.only()).unwrap();
+    for pairing in bracket.sections[1]
+        .columns
+        .iter()
+        .flat_map(|column| &column.pairings)
+    {
+        for (side, after_bye) in pairing.sides.iter().zip(pairing.after_bye) {
+            assert!(!after_bye || matches!(side, BracketEntry::Team(_)));
+        }
+    }
+}
+
 /// Of twenty entrants, twelve have byes in the round of 32, which is drawn in the eight rows of
 /// the round of 16, half as high as with a row for each of its pairings.
 #[test]
@@ -309,13 +343,14 @@ fn a_bye_is_passed_through_to_whoever_plays_it() {
         [["loser of #1".to_owned(), "loser of #3".to_owned()]],
         "the losers of the winner bracket, rather than the winners of the byes they get first"
     );
-    assert_eq!(losers[0].pairings[0].after_bye, [true, false]);
+    // not tagged while it is not known who they are
+    assert_eq!(losers[0].pairings[0].after_bye, [false, false]);
     assert_eq!(
         column(&losers[1]).1,
         [["winner of #4".to_owned(), "loser of #2".to_owned()]],
         "whoever gets the bye of the pairing of a bye and the loser of #2"
     );
-    assert_eq!(losers[1].pairings[0].after_bye, [false, true]);
+    assert_eq!(losers[1].pairings[0].after_bye, [false, false]);
 }
 
 /// Reports side A as the winner of every match playable, as long as there is one, except

@@ -73,7 +73,20 @@ error-no-name-found = kein offenes Spiel hat einen Teilnehmer, dessen Name „{ 
 error-name-not-in-match = kein offenes Spiel { $number } hat einen Teilnehmer, dessen Name „{ $name }“ enthält
 error-name-in-several-matches = „{ $name }“ passt zu { $matches } offenen Spielen; gib die Nummer von einem dazu, z. B. „{ $name } { $number }“
 error-name-on-both-sides = „{ $name }“ passt zu beiden Seiten von Spiel { $number }; gib mehr vom Namen ein
-error-scores-not-taken = Spiel { $number } nimmt die eingegebenen Spielstände nicht
+error-scores-too-many = { $parts ->
+        [0] Spiel { $number } nimmt keinen Spielstand: gib das Ergebnis ein, 1, X oder 2
+        [one] Spiel { $number } nimmt nur einen Spielstand
+       *[other] Spiel { $number } nimmt höchstens { $parts } Spielstände, einen pro Satz
+    }
+error-scores-not-whole = Spiel { $number } nimmt nur ganze Zahlen als Spielstand
+error-match-not-playable-yet = { $count ->
+        [0] Spiel { $number } kann noch nicht gespielt werden
+        [one] Spiel { $number } kann noch nicht gespielt werden: es wartet auf Spiel { $waiting }
+       *[other] Spiel { $number } kann noch nicht gespielt werden: es wartet auf die Spiele { $waiting }
+    }
+error-score-too-large = { $value } ist zu groß für einen Spielstand von Spiel { $number }: höchstens { $max }
+error-not-a-score = „{ $word }“ ist kein Spielstand von Spiel { $number }: ein Spielstand sind zwei Zahlen, z. B. 21-17
+error-not-a-result = „{ $word }“ ist kein Ergebnis von Spiel { $number }: gib 1, X oder 2 ein oder den Spielstand, z. B. 21-17
 error-scores-undecided = die eingegebenen Spielstände sagen nicht, wer Spiel { $number } gewonnen hat; gib das Ergebnis dazu: 1, X oder 2
 error-result-against-scores = das für Spiel { $number } eingegebene Ergebnis ist nicht das, das seine Spielstände sagen
 error-match-not-reported = das Spiel hat kein Ergebnis, das zurückgenommen werden könnte
@@ -139,6 +152,7 @@ group-places-worst = { $count ->
 group-place-between = Platz { $place } unter denen auf Platz { $rank } ihrer Gruppe
 group-places-between = die Plätze { $first }–{ $last } unter denen auf Platz { $rank } ihrer Gruppe
 list = { $first } und { $last }
+warning-earlier-round = { $name } hat noch Spiel { $earlier } aus einer früheren Runde zu spielen
 warning-below-winning-score = keine Seite hat { $winning }, die ein Sieger üblicherweise hat
 warning-winning-lead = ab { $winning } führt ein Sieger üblicherweise um eins oder zwei
 warning-result-disagrees = das ist nicht das Ergebnis, das der Spielstand nahelegt

@@ -532,7 +532,7 @@ fn enter_scores(form: &mut ResultForm, scores: &[(u16, u16)]) {
         .iter()
         .map(|&(a, b)| Sides::new(Some(EnteredValue::Count(a)), Some(EnteredValue::Count(b))))
         .collect();
-    assert!(form.enter_scores(&scores));
+    form.enter_scores(&scores).unwrap();
 }
 
 /// Enters entrants named `names`, returning their ids.

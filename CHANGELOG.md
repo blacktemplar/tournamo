@@ -248,6 +248,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   but drawn pairs (teams) gives teams of 2; as teams, these fit: unchanged,
   everyone on their own", rather than naming internals such as
   `EntrantsPerRanking(2)`.
+- A result typed in says what is wrong with it rather than looking for a name
+  nobody has: a match of a bracket not to be played yet says which matches it
+  waits for ("match 3 cannot be played yet: it waits for matches 1, 2"); after
+  the number of a match, a number too large for a score, a word that is no
+  score, or one that is no result is named, and scores a match does not take
+  say why (whole numbers only, or at most as many as it has games). A match
+  whose player still has a match of an earlier round open is reported with a
+  warning, as its round's list reports it.
 
 ## [0.4.0] - 2026-11-09
 

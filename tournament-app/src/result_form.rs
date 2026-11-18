@@ -471,10 +471,16 @@ impl ResultForm {
     /// Enters `scores` as [`MatchRow::scores`](crate::view::MatchRow::scores) shows them, in place
     /// of everything entered: the one of the match into its first field, if it has one, or else
     /// one into the first field of each part in order, e.g. the games of a best of; a count goes
-    /// into a field of decimals as its number. Returns whether the match takes them, having
-    /// changed nothing if not: it does not if they are more than its parts, a score is of a part
-    /// without a field, or a decimal is of a field of counts.
-    pub fn enter_scores(&mut self, scores: &[Sides<Option<EnteredValue>>]) -> bool {
+    /// into a field of decimals as its number.
+    ///
+    /// # Errors
+    /// Returns why the match does not take them, having changed nothing: they are more than the
+    /// parts with a score before the first part without one, or a decimal is of a field of
+    /// counts.
+    pub fn enter_scores(
+        &mut self,
+        scores: &[Sides<Option<EnteredValue>>],
+    ) -> Result<(), ScoresRefused> {
         let root = &self.template.root;
         // where each score goes: the path of its part and its field, none for a part without one;
         // of every part there is a score for, not only those the view shows yet
@@ -487,14 +493,15 @@ impl ResultForm {
                 })
                 .collect(),
         };
-        if scores.len() > places.len() {
-            return false;
+        let scored = places.iter().take_while(|place| place.is_some()).count();
+        if scores.len() > scored {
+            return Err(ScoresRefused::TooMany(scored));
         }
         let Some(entries) = places
             .into_iter()
             .zip(scores)
             .map(|(place, score)| {
-                let (path, field) = place?;
+                let (path, field) = place.expect("a score of a part with a field");
                 // `None` if the value does not fit the field, `Some(None)` for no value
                 let fit = |value: Option<EnteredValue>| match value {
                     Some(value) => of_kind(value, field.kind).map(Some),
@@ -505,14 +512,14 @@ impl ResultForm {
             })
             .collect::<Option<Vec<_>>>()
         else {
-            return false;
+            return Err(ScoresRefused::NotWhole);
         };
         self.root = Entry::default();
         for (path, key, score) in entries {
             self.set_value(path.as_slice(), &key, Team::A, score.a);
             self.set_value(&path, &key, Team::B, score.b);
         }
-        true
+        Ok(())
     }
 
     /// What is entered of the match in one row, if its result takes no more than a row: if the
@@ -735,6 +742,16 @@ impl ResultForm {
         };
         (view, part)
     }
+}
+
+/// Why a match does not take scores entered, see [`ResultForm::enter_scores`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoresRefused {
+    /// They are more than the match takes, which is this many, e.g. the games of a best of; none
+    /// for a match decided by its winner alone.
+    TooMany(usize),
+    /// A decimal is of a score of whole numbers.
+    NotWhole,
 }
 
 /// The score `word` says: the numbers of both sides, side A's first, joined by a `-`, a `:` or an

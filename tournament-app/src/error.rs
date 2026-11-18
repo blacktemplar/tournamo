@@ -17,6 +17,7 @@ use tournament_engine::{
 use crate::{
     file::Format,
     i18n::{Arg, Message, Text, english},
+    result_form::ScoresRefused,
     view::{EntrantRow, PhaseName, Plugin, division_letter},
 };
 
@@ -333,10 +334,36 @@ pub enum ReportEnteredError {
         name: String,
         number: usize,
     },
-    /// The match of this number does not take the scores entered: they are more than its parts,
-    /// one is of a part without a score, or a decimal is of a score of whole numbers, see
+    /// The match `number` does not take the scores entered, see
     /// [`ResultForm::enter_scores`](crate::result_form::ResultForm::enter_scores).
-    ScoresNotTaken(usize),
+    ScoresNotTaken {
+        number: usize,
+        why: ScoresRefused,
+    },
+    /// The match `number` of a bracket is not scheduled yet: it waits for the matches `waiting`
+    /// to be decided.
+    NotPlayableYet {
+        number: usize,
+        waiting: Vec<usize>,
+    },
+    /// A number of a score entered for the match `number`, `value`, is above the largest score of
+    /// whole numbers.
+    ScoreTooLarge {
+        number: usize,
+        value: String,
+    },
+    /// What was entered after the number of the match `number`, `word`, looks like a score but
+    /// is none.
+    NotAScore {
+        number: usize,
+        word: String,
+    },
+    /// What was entered after the number of the match `number`, `word`, is neither a result nor
+    /// a score.
+    NotAResult {
+        number: usize,
+        word: String,
+    },
     /// The scores entered for the match of this number say no result, and none was entered.
     Undecided(usize),
     /// The result entered for the match of this number is not the one its scores entered say.
@@ -775,9 +802,30 @@ impl Message for ReportEnteredError {
             Self::BothSides { name, number } => Text::new("error-name-on-both-sides")
                 .with("name", name.as_str())
                 .with("number", *number),
-            Self::ScoresNotTaken(number) => {
-                Text::new("error-scores-not-taken").with("number", *number)
-            }
+            Self::ScoresNotTaken {
+                number,
+                why: ScoresRefused::TooMany(parts),
+            } => Text::new("error-scores-too-many")
+                .with("number", *number)
+                .with("parts", *parts),
+            Self::ScoresNotTaken {
+                number,
+                why: ScoresRefused::NotWhole,
+            } => Text::new("error-scores-not-whole").with("number", *number),
+            Self::NotPlayableYet { number, waiting } => Text::new("error-match-not-playable-yet")
+                .with("number", *number)
+                .with("count", waiting.len())
+                .with("waiting", listed(waiting)),
+            Self::ScoreTooLarge { number, value } => Text::new("error-score-too-large")
+                .with("number", *number)
+                .with("value", value.as_str())
+                .with("max", f64::from(u16::MAX)),
+            Self::NotAScore { number, word } => Text::new("error-not-a-score")
+                .with("number", *number)
+                .with("word", word.as_str()),
+            Self::NotAResult { number, word } => Text::new("error-not-a-result")
+                .with("number", *number)
+                .with("word", word.as_str()),
             Self::Undecided(number) => Text::new("error-scores-undecided").with("number", *number),
             Self::AgainstScores(number) => {
                 Text::new("error-result-against-scores").with("number", *number)

@@ -89,7 +89,24 @@ error-name-not-in-match = no open match { $number } has an entrant whose name co
 # $matches: how many open matches have an entrant whose name contains $name; $number: one of them
 error-name-in-several-matches = “{ $name }” fits { $matches } open matches; add the number of one, e.g. “{ $name } { $number }”
 error-name-on-both-sides = “{ $name }” fits both sides of match { $number }; enter more of the name
-error-scores-not-taken = match { $number } does not take the scores entered
+# $parts: how many scores the match takes, e.g. one per game of a best of
+error-scores-too-many = { $parts ->
+        [0] match { $number } takes no scores: enter its result, 1, X or 2
+        [one] match { $number } takes a single score
+       *[other] match { $number } takes at most { $parts } scores, one per game
+    }
+error-scores-not-whole = match { $number } takes whole numbers as scores
+# $count: how many matches it waits for; $waiting: their numbers, e.g. "1, 2"
+error-match-not-playable-yet = { $count ->
+        [0] match { $number } cannot be played yet
+        [one] match { $number } cannot be played yet: it waits for match { $waiting }
+       *[other] match { $number } cannot be played yet: it waits for matches { $waiting }
+    }
+# $value: a number entered, $max: the largest score
+error-score-too-large = { $value } is too large for a score of match { $number }: at most { $max }
+# $word: what was entered after the number of the match
+error-not-a-score = “{ $word }” is no score of match { $number }: a score is two numbers, e.g. 21-17
+error-not-a-result = “{ $word }” is no result of match { $number }: enter 1, X or 2, or its score, e.g. 21-17
 error-scores-undecided = the scores entered do not say who won match { $number }; add the result: 1, X or 2
 error-result-against-scores = the result entered for match { $number } is not the one its scores say
 error-match-not-reported = the match has no result that could be undone
@@ -171,6 +188,8 @@ group-places-between = places { $first }–{ $last } of those in place { $rank }
 list = { $first } and { $last }
 # what looks like a typo in a result entered, though it is taken
 # $winning: the score a winner usually has
+# $name: an entrant of the match entered, $earlier: a match of theirs of an earlier round, open
+warning-earlier-round = { $name } still has match { $earlier } of an earlier round to play
 warning-below-winning-score = neither side has { $winning }, which a winner usually has
 warning-winning-lead = at { $winning } or more, a winner usually leads by one or two
 warning-result-disagrees = this is not the result the score suggests

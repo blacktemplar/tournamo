@@ -50,7 +50,7 @@ help-running-start = Start. The format schedules the matches, and the entrants a
 help-running-results = Report the results: at a match, choose the side that won, or Draw, or enter its score in its row; or type a result in under “Type in results”, e.g. “3 1” for a win of the left side of match 3, “3 x” for a draw, or part of the winner's name; or choose the winner in the bracket. The standings follow every result.
 help-running-views = A phase shows its matches, those playable now or round by round, and its standings, with a line below the places going on to a later phase. A knockout also shows its bracket; a phase whose entrants meet in pairs, such as a round robin, a cross table of every result of each entrant against each other. The ranking places everyone by the phase they reached.
 help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done. Either way, the score entered stays, so that only what was wrong needs changing.
-help-running-undo = Undo goes back only as far as the page was open: reloading the page or leaving the competition forgets what could be undone, though not what was done. Reopening a match works at any time. Undo takes back the start too, once everything after it is undone (it asks first): the competition goes back to its setup, where the entrants and phases can be changed, and starting again draws the same lots.
+help-running-undo = Undo goes back only as far as the page was open: reloading the page or leaving the competition forgets what could be undone, though not what was done. Reopening a match works at any time. Undo takes back the start too, once everything after it is undone (it asks first): the competition goes back to its setup, where the entrants and phases can be changed. Starting again draws the same lots, groups, pairs and brackets: what is drawn is fixed when the competition is created, so that a draw cannot be repeated until it suits someone, and changes only with what it is drawn of, e.g. the entrants or the phase.
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
 help-formats = Formats and standings
 help-presets = Presets
@@ -137,6 +137,10 @@ read-only = This competition is open in another tab, so it is only shown here. I
 ## Before the start
 
 # the dialog listing the entrants after the start, to correct a name
+entrants-unnamed = { $count ->
+    [one] An entrant has
+   *[other] { $count } entrants have
+} no name; give them one under “Entrants”.
 entrants-after-start = The competition has started, so its entrants are fixed; their names can still be corrected.
 entrants = Entrants
 no-entrants = No entrants yet. Each one is added by its name, or several at once by pasting a list with a name on each line, followed by a rating after a semicolon or a tab where there is one.
@@ -153,6 +157,7 @@ remove = Remove
 remove-entrant = Remove { $name }
 rename-entrant = Rename { $name }
 ratings = Ratings
+ratings-locked = On while an entrant has a rating.
 rating-of = Rating of { $name }
 seed = seed { $seed }
 ratings-note = Entrants are seeded by rating, higher first; those without one follow by lot.
@@ -206,6 +211,9 @@ scale-matches = { $count ->
        *[other] { $count } matches
     }
 scale-matches-range = { $least } to { $most } matches
+# too many to play the phase out beforehand
+scale-rounds-at-least = at least { $count } rounds
+scale-matches-at-least = at least { $count } matches
 start = Start
 # why the start waits while the form of a further phase is open
 start-new-phase-open = Add the new phase, or discard it, first.
@@ -540,3 +548,4 @@ copy = Copy
 # $table: what the table is called, e.g. "Standings"
 copy-table = Copy { $table } as text
 announce-copied = Copied as text, to paste into a spreadsheet or a message.
+announce-imported = Imported as a new competition, “{ $name }”.

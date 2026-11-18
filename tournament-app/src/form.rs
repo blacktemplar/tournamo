@@ -512,6 +512,14 @@ impl<F: Answering> Editable for F {
     }
 }
 
+impl PhaseForm {
+    /// Whether every number field took what was typed into it, so that the draft holds what the
+    /// form shows.
+    pub(crate) fn all_taken(&self) -> bool {
+        self.rejected.is_empty()
+    }
+}
+
 impl Answering for PhaseForm {
     type Of = PhasePlugins;
 

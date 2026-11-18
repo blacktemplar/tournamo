@@ -289,6 +289,14 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
         }
     });
     use_hook(move || ctx.save());
+    use_hook(move || {
+        let mut imported = page.imported;
+        if *imported.peek() {
+            imported.set(false);
+            let name = ctx.session.peek().name().to_owned();
+            ctx.announce(Announcement::Imported(name));
+        }
+    });
     // numbers are typed as the language of the page writes them
     use_effect(move || {
         let language = ctx.translator.read().language();
@@ -298,6 +306,7 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
         }
     });
     use_future(move || follow(ctx, competition));
+    use_future(move || follow_name(ctx, competition));
     let mut shown = page.shown;
     use_effect(move || {
         let session = ctx.session.read();
@@ -321,6 +330,8 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
     let changes = ctx.changes();
     let actions = ctx.actions();
     let started = ctx.session.read().competition().is_started();
+    // e.g. of a file whose people were cut out by hand
+    let unnamed = ctx.session.read().unnamed();
     // whether the operator is asked to confirm undoing the start
     let mut undoing_start = use_signal(|| false);
     let tr = ctx.translator.read();
@@ -387,6 +398,9 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
             Notices { export: move |()| export() }
             if !changes {
                 p { class: "notice", role: "status", {tr.get(READ_ONLY)} }
+            }
+            if unnamed > 0 {
+                p { class: "notice", role: "status", {t!(tr, "entrants-unnamed", count = unnamed)} }
             }
             // always on the page, so that a screen reader notices when its text changes, and
             // hidden, so that it takes no room; the eye gets it from the toast, which the screen
@@ -783,6 +797,32 @@ async fn follow(mut ctx: Ctx, key: CompetitionKey) {
     ctx.lock.set(Some(Rc::new(lock)));
     // e.g. what the other tab, of an older version, left out
     ctx.save();
+}
+
+/// Takes the name the competition `key` was given in another tab (or in the list of this one).
+async fn follow_name(mut ctx: Ctx, key: CompetitionKey) {
+    let channel = Broadcast::new(SAVED);
+    let mut saved = channel.messages();
+    let key_text = key.to_string();
+    while let Some(message) = saved.next().await {
+        if message != key_text {
+            continue;
+        }
+        let storage = ctx
+            .storage
+            .peek()
+            .clone()
+            .expect("a competition is open once the database is");
+        // the listing only, not the record, which may be large
+        let Ok(listings) = storage.list().await else {
+            continue;
+        };
+        if let Some(listing) = listings.into_iter().find(|listing| listing.key == key)
+            && listing.name != ctx.session.peek().name()
+        {
+            ctx.session.write().renamed(listing.name);
+        }
+    }
 }
 
 /// Appends what was stored of the competition `key` since the session loaded or caught up last,

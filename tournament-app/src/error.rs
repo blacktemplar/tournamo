@@ -347,6 +347,14 @@ pub enum ReportEnteredError {
         name: String,
         number: usize,
     },
+    /// The name entered fits the match `number` only as part of a longer name, while an entrant of
+    /// that very name plays in the open match `elsewhere`, e.g. `max 1` for Maxi of match 1 while
+    /// Max plays in match 2.
+    NamedElsewhere {
+        name: String,
+        number: usize,
+        elsewhere: usize,
+    },
     /// The name entered is found in `matches` open matches, e.g. in the match numbered `number`.
     SeveralMatches {
         name: String,
@@ -822,6 +830,14 @@ impl Message for ReportEnteredError {
             Self::NotInMatch { name, number } => Text::new("error-name-not-in-match")
                 .with("name", name.as_str())
                 .with("number", *number),
+            Self::NamedElsewhere {
+                name,
+                number,
+                elsewhere,
+            } => Text::new("error-name-elsewhere")
+                .with("name", name.as_str())
+                .with("number", *number)
+                .with("elsewhere", *elsewhere),
             Self::SeveralMatches {
                 name,
                 matches,

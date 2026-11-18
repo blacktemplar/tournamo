@@ -861,6 +861,12 @@ order of the new list: `PhasePlugins::teams`).
   its index (`Entropy::Division`), the draw its random stream from the phase's
   (`Entropy::Draw`), the seeding of a division its stream from the division's
   (`Entropy::Seeding`).
+- **No redraw.** Everything drawn derives from the competition's seed, set
+  when it is created, and a phase's seed from it when the phase is added. So
+  undoing a start and starting again draws the same: an operator cannot draw
+  again until the draw suits someone. A draw changes only with what it is
+  drawn of (the entrants, the phase). Rejected: a fresh seed carried by each
+  start.
 - **Divisions, draw and seeding are fields of `PhasePlugins`**: `divisions`
   (at least 1, a `NonZeroU32`), `draw` (the axis `Draw`), `seeding` (the axis
   `Seeding`) and `across` (slice rankers), so forms, questionnaire, compatibility and translation cover them

@@ -93,66 +93,19 @@ impl IndexedDb {
 impl Storage for IndexedDb {
     type Error = IndexedDbError;
 
-    async fn list(&self) -> Result<Vec<Listing>, IndexedDbError> {
-        let transaction = self
-            .0
-            .transaction(&[COMPETITIONS], TransactionMode::ReadOnly)?;
-        let records = transaction
-            .object_store(COMPETITIONS)?
-            .get_all(None, None)?
-            .await?;
-        let mut listings = records
-            .into_iter()
-            .map(|record| parse::<ListingRecord>(&record))
-            .collect::<Result<Vec<_>, _>>()?;
-        listings.sort_by_key(|listing| listing.number);
-        Ok(listings
-            .into_iter()
-            .map(|listing| Listing {
-                key: listing.key,
-                name: listing.name,
-                progress: listing.progress,
-            })
-            .collect())
+    /// Runs to its end even if the future is dropped, as every request does.
+    fn list(&self) -> impl Future<Output = Result<Vec<Listing>, IndexedDbError>> {
+        let database = Rc::clone(&self.0);
+        detached(async move { list(&database).await })
     }
 
-    async fn read(&self, key: CompetitionKey) -> Result<Option<Stored>, IndexedDbError> {
-        let transaction = self.0.transaction(&STORES, TransactionMode::ReadOnly)?;
-        let (listing, record, entries, people, replayed) = try_join5(
-            transaction
-                .object_store(COMPETITIONS)?
-                .get(competition(key))?
-                .into_future(),
-            transaction
-                .object_store(SAVES)?
-                .get(competition(key))?
-                .into_future(),
-            transaction
-                .object_store(ENTRIES)?
-                .get_all(Some(records_of(key)?), None)?
-                .into_future(),
-            transaction
-                .object_store(PEOPLE)?
-                .get_all(Some(records_of(key)?), None)?
-                .into_future(),
-            transaction
-                .object_store(REPLAYED)?
-                .get(competition(key))?
-                .into_future(),
-        )
-        .await?;
-        let Some(listing) = listing else {
-            return Ok(None);
-        };
-        let record = match record {
-            Some(record) => text(&record)?,
-            // in the order of their keys, i.e. of their positions
-            None => old_record(&entries, &people, replayed.as_ref())?,
-        };
-        Ok(Some(Stored {
-            name: parse::<ListingRecord>(&listing)?.name,
-            record,
-        }))
+    /// Runs to its end even if the future is dropped.
+    fn read(
+        &self,
+        key: CompetitionKey,
+    ) -> impl Future<Output = Result<Option<Stored>, IndexedDbError>> {
+        let database = Rc::clone(&self.0);
+        detached(async move { read(&database, key).await })
     }
 
     /// Starts the transaction right away, so that saves are stored in the order this is called in.
@@ -162,13 +115,9 @@ impl Storage for IndexedDb {
         // them. The executor of wasm-bindgen-futures continues in such a microtask; another one,
         // e.g. a GUI's, might not. It runs the tasks in the order they are spawned in, and
         // IndexedDB runs transactions over the same stores in the order they are created in.
-        let (sender, receiver) = oneshot::channel();
         let database = Rc::clone(&self.0);
         let save = save.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            _ = sender.send(write(&database, &save).await);
-        });
-        async { receiver.await.unwrap_or(Err(IndexedDbError::Aborted)) }
+        detached(async move { write(&database, &save).await })
     }
 
     /// Starts the transaction right away, as [`Self::write`] does.
@@ -177,26 +126,103 @@ impl Storage for IndexedDb {
         key: CompetitionKey,
         name: &str,
     ) -> impl Future<Output = Result<(), IndexedDbError>> {
-        let (sender, receiver) = oneshot::channel();
         let database = Rc::clone(&self.0);
         let name = name.to_owned();
-        wasm_bindgen_futures::spawn_local(async move {
-            _ = sender.send(rename(&database, key, name).await);
-        });
-        async { receiver.await.unwrap_or(Err(IndexedDbError::Aborted)) }
+        detached(async move { rename(&database, key, name).await })
     }
 
-    async fn delete(&self, key: CompetitionKey) -> Result<(), IndexedDbError> {
-        let transaction = self.0.transaction(&STORES, TransactionMode::ReadWrite)?;
+    /// Runs to its end even if the future is dropped.
+    fn delete(&self, key: CompetitionKey) -> impl Future<Output = Result<(), IndexedDbError>> {
+        let database = Rc::clone(&self.0);
+        detached(async move { delete(&database, key).await })
+    }
+}
+
+/// Runs `request` on the executor of wasm-bindgen-futures, started at once (which orders the
+/// writes, see [`IndexedDb::write`]) and to its end even if the future returned is dropped:
+/// dropping a request of `idb` before the browser answers it frees the callbacks the browser still
+/// calls, which throws ("closure invoked recursively or after being dropped"), e.g. when a screen
+/// listing the competitions lists them anew while listing them.
+fn detached<T: 'static>(
+    request: impl Future<Output = Result<T, IndexedDbError>> + 'static,
+) -> impl Future<Output = Result<T, IndexedDbError>> {
+    let (sender, receiver) = oneshot::channel();
+    wasm_bindgen_futures::spawn_local(async move {
+        _ = sender.send(request.await);
+    });
+    async { receiver.await.unwrap_or(Err(IndexedDbError::Aborted)) }
+}
+
+async fn list(database: &Database) -> Result<Vec<Listing>, IndexedDbError> {
+    let transaction = database.transaction(&[COMPETITIONS], TransactionMode::ReadOnly)?;
+    let records = transaction
+        .object_store(COMPETITIONS)?
+        .get_all(None, None)?
+        .await?;
+    let mut listings = records
+        .into_iter()
+        .map(|record| parse::<ListingRecord>(&record))
+        .collect::<Result<Vec<_>, _>>()?;
+    listings.sort_by_key(|listing| listing.number);
+    Ok(listings
+        .into_iter()
+        .map(|listing| Listing {
+            key: listing.key,
+            name: listing.name,
+            progress: listing.progress,
+        })
+        .collect())
+}
+
+async fn read(database: &Database, key: CompetitionKey) -> Result<Option<Stored>, IndexedDbError> {
+    let transaction = database.transaction(&STORES, TransactionMode::ReadOnly)?;
+    let (listing, record, entries, people, replayed) = try_join5(
         transaction
             .object_store(COMPETITIONS)?
-            .delete(competition(key))?;
-        transaction.object_store(SAVES)?.delete(competition(key))?;
-        delete_old(&transaction, key)?;
-        match transaction.commit()?.await? {
-            TransactionResult::Committed => Ok(()),
-            TransactionResult::Aborted => Err(IndexedDbError::Aborted),
-        }
+            .get(competition(key))?
+            .into_future(),
+        transaction
+            .object_store(SAVES)?
+            .get(competition(key))?
+            .into_future(),
+        transaction
+            .object_store(ENTRIES)?
+            .get_all(Some(records_of(key)?), None)?
+            .into_future(),
+        transaction
+            .object_store(PEOPLE)?
+            .get_all(Some(records_of(key)?), None)?
+            .into_future(),
+        transaction
+            .object_store(REPLAYED)?
+            .get(competition(key))?
+            .into_future(),
+    )
+    .await?;
+    let Some(listing) = listing else {
+        return Ok(None);
+    };
+    let record = match record {
+        Some(record) => text(&record)?,
+        // in the order of their keys, i.e. of their positions
+        None => old_record(&entries, &people, replayed.as_ref())?,
+    };
+    Ok(Some(Stored {
+        name: parse::<ListingRecord>(&listing)?.name,
+        record,
+    }))
+}
+
+async fn delete(database: &Database, key: CompetitionKey) -> Result<(), IndexedDbError> {
+    let transaction = database.transaction(&STORES, TransactionMode::ReadWrite)?;
+    transaction
+        .object_store(COMPETITIONS)?
+        .delete(competition(key))?;
+    transaction.object_store(SAVES)?.delete(competition(key))?;
+    delete_old(&transaction, key)?;
+    match transaction.commit()?.await? {
+        TransactionResult::Committed => Ok(()),
+        TransactionResult::Aborted => Err(IndexedDbError::Aborted),
     }
 }
 

@@ -165,6 +165,13 @@ impl Session {
         &self.name
     }
 
+    /// Takes `name`, which the competition was renamed to in its storage (see
+    /// [`Storage::rename`](crate::storage::Storage::rename)), e.g. by another tab. Nothing is
+    /// saved: a save keeps the name stored.
+    pub fn renamed(&mut self, name: impl Into<String>) {
+        self.name = name.into();
+    }
+
     pub fn competition(&self) -> &Competition {
         self.machine.current()
     }

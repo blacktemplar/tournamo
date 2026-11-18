@@ -76,9 +76,13 @@ pub fn Entrants() -> Element {
                             checked: ratings,
                             // on by itself while an entrant has a rating
                             disabled: rated || !actions.rate_entrant,
+                            aria_describedby: rated.then_some("ratings-locked"),
                             onchange: move |event| ratings_asked.set(event.checked()),
                         }
                         {tr.get("ratings")}
+                    }
+                    if rated {
+                        span { id: "ratings-locked", class: "hint", {tr.get("ratings-locked")} }
                     }
                 }
             }
@@ -141,6 +145,8 @@ pub fn Entrants() -> Element {
                     value: "{name}",
                     autocomplete: "off",
                     placeholder: tr.get("name"),
+                    // what is typed while it cannot be added would be lost
+                    disabled: !actions.add_entrant,
                     aria_invalid: (error.read().is_some() || !refused.read().is_empty())
                         .then_some("true"),
                     aria_describedby: "entrant-name-error entrant-like",

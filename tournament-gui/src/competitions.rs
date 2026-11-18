@@ -337,6 +337,8 @@ async fn rename(
         Ok(()) => {
             asked.set(None);
             changed += 1;
+            // a tab that has it open shows the new name
+            Broadcast::new(SAVED).post(&key.to_string());
         }
         Err(why) => error.set(Some(
             Text::new("error-not-saved").with_detail(why.to_string()),
@@ -420,7 +422,10 @@ async fn import(mut page: Page, file: FileData) {
         }
     };
     match Session::import(&text, name, &stored) {
-        Ok(session) => store(page, session),
+        Ok(session) => {
+            page.imported.set(true);
+            store(page, session);
+        }
         Err(error) => page.error.set(Some(error.text())),
     }
 }

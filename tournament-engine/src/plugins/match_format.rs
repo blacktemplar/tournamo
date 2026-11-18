@@ -210,7 +210,8 @@ pub(crate) fn default() -> Box<dyn MatchFormat> {
 #[plugin(
     id = "tournament_engine::winner_only",
     label = "winner only",
-    description = "who won a match, or that it was drawn, without a score"
+    description = "who won a match, or that it was drawn where the format allows draws, without a \
+                   score"
 )]
 pub struct WinnerOnly;
 

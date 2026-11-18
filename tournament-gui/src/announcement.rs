@@ -36,6 +36,8 @@ pub enum Announcement {
     Redone(Action),
     /// A table copied as text.
     Copied,
+    /// A competition imported, under the name it was given.
+    Imported(String),
 }
 
 impl Announcement {
@@ -114,6 +116,7 @@ impl Announcement {
             Self::Undone(action) => t!(tr, "announce-undone", action = action_text(tr, action)),
             Self::Redone(action) => t!(tr, "announce-redone", action = action_text(tr, action)),
             Self::Copied => tr.get("announce-copied"),
+            Self::Imported(name) => t!(tr, "announce-imported", name = name.as_str()),
         }
     }
 }

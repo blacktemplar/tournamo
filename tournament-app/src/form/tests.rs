@@ -448,7 +448,7 @@ fn a_number_field_shows_the_numbers_it_takes() {
     let Input::Decimal { hint, .. } = &field(&view, "metrics[1].points_for_win").input else {
         panic!("points are a number");
     };
-    assert_eq!(english(hint), "a number of at least 0");
+    assert_eq!(english(hint), "a number from 0 to 1000");
 }
 
 /// A number with a comma is taken as with a point, as operators write it in many languages.
@@ -532,7 +532,7 @@ fn a_number_being_typed_is_checked_without_being_taken() {
 
     assert_eq!(
         issue.as_ref().map(english).as_deref(),
-        Some("this takes a number of at least 0")
+        Some("this takes a number from 0 to 1000")
     );
     assert_eq!(form.issue_entering(&win, "2").unwrap(), None);
     let view = form.view();
@@ -561,7 +561,7 @@ fn a_number_not_taken_says_what_the_field_takes() {
     }
     assert_eq!(
         issues("metrics[1].points_for_win", &huge),
-        ["this takes a number of at least 0"]
+        ["this takes a number from 0 to 1000"]
     );
     for entered in ["abc", "inf", "NaN", "1.0.5", "-", "1e3"] {
         assert_eq!(

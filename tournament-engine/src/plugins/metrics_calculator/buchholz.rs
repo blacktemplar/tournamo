@@ -271,6 +271,7 @@ pub struct SonnebornBergerCalculator {
         label = "weight of a beaten opponent",
         description = "the points of that opponent are multiplied by this",
         min = 0,
+        max = 1000,
         default = Score::ONE
     )]
     weight_for_win: Score,
@@ -278,6 +279,7 @@ pub struct SonnebornBergerCalculator {
         label = "weight of an opponent played to a draw",
         description = "the points of that opponent are multiplied by this",
         min = 0,
+        max = 1000,
         default = Score::new(0.5),
         irrelevant_with = NoDraws
     )]

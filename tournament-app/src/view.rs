@@ -59,12 +59,26 @@ pub struct Scale {
     pub matches: Count,
 }
 
+impl Scale {
+    /// The rounds above which [`Self::warning`] warns.
+    pub const MOST_ROUNDS: usize = 50;
+
+    /// That the phase may take more than [`Self::MOST_ROUNDS`] rounds, e.g. a round robin of
+    /// hundreds of entrants, which may not be meant; a competition that big is slow to save.
+    pub fn warning(&self) -> Option<Text> {
+        let rounds = self.rounds.most.unwrap_or(self.rounds.least);
+        (rounds > Self::MOST_ROUNDS).then(|| Text::new("warning-many-rounds").with("count", rounds))
+    }
+}
+
 /// A number that may depend on the results, e.g. the matches of a double elimination, whose grand
 /// final is played again if its first is lost by the champion of the winner bracket.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Count {
     pub least: usize,
-    pub most: usize,
+    /// `None` where it is not known, since there are too many to count (see
+    /// [`Session::scale`](crate::session::Session::scale)): at least `least`.
+    pub most: Option<usize>,
 }
 
 /// Every plugin a phase can be configured with, by what it is, e.g. for a help explaining them,
@@ -243,6 +257,14 @@ impl NameSearch {
 
     pub fn finds_name(&self, name: &str) -> bool {
         fold(name).contains(&self.text)
+    }
+
+    /// Whether it is all of `entrant`'s name, not just a part.
+    pub fn is_name_of(&self, entrant: &EntrantRow) -> bool {
+        entrant
+            .name
+            .as_deref()
+            .is_some_and(|name| fold(name.trim()) == self.text)
     }
 
     /// Whether it finds `entrant`; one without a name only when nothing was typed.

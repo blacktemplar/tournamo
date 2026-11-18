@@ -81,8 +81,10 @@ pub struct RoundOfEliminationCalculator;
 impl RoundOfEliminationCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration
-            .require::<MatchAnnotation<Eliminates>>("an elimination annotation on the matches");
+        declaration.require::<MatchAnnotation<Eliminates>>(Phrase::new(
+            "eliminations",
+            "a format saying which matches eliminate",
+        ));
     }
 }
 

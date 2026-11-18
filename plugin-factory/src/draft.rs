@@ -32,7 +32,7 @@ pub use fields::{FieldNode, PluginNode};
 use fields::{Node, Position, Slot, locate, preorder};
 
 use crate::{
-    Plugin,
+    Phrase, Plugin,
     catalog::{AnyAxis, PluginEntry},
     compatibility::{self, Declaration, Declared, Incompatibility, OpenFacts, RequiredFact},
     config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Segment, Value},
@@ -351,7 +351,53 @@ impl<T: Configurable> Draft<T> {
     /// An unanswered field is no issue, but still to be answered. A plugin with an unanswered field
     /// counts with its static declaration only.
     pub fn issues(&self) -> Vec<Issue> {
-        issues_in(&self.context, &Tree::of(&self.schema, &self.answers), false)
+        let issues = issues_in(&self.context, &Tree::of(&self.schema, &self.answers), false);
+        self.with_fitting(issues)
+    }
+
+    /// `issues` with the choices that fit filled in, see [`Problem::Unmet`].
+    fn with_fitting(&self, mut issues: Vec<Issue>) -> Vec<Issue> {
+        for issue in &mut issues {
+            if let Problem::Unmet {
+                choices_at,
+                fitting,
+                ..
+            } = &mut issue.problem
+            {
+                *fitting = self.fitting(choices_at);
+            }
+        }
+        issues
+    }
+
+    /// The plugins, by id, that answering the position at `path` with would leave no plugin that
+    /// does not fit next to the others, its fields unanswered, in id order.
+    fn fitting(&self, path: &Path) -> Vec<&'static str> {
+        let current = self.plugin_at(path).map(|plugin| plugin.entry.id());
+        self.candidates(path)
+            .unwrap_or_default()
+            .into_iter()
+            .map(PluginEntry::id)
+            .filter(|&id| Some(id) != current)
+            .filter(|&id| {
+                let mut answers = self.answers.clone();
+                set_in(
+                    &self.schema,
+                    &mut answers,
+                    path,
+                    &PluginConfig::new(id).into(),
+                )
+                .is_ok()
+                    && issues_in(&self.context, &Tree::of(&self.schema, &answers), false)
+                        .iter()
+                        .all(|issue| {
+                            !matches!(
+                                issue.problem,
+                                Problem::Incompatible(_) | Problem::Unmet { .. }
+                            )
+                        })
+            })
+            .collect()
     }
 
     /// Appends to the answers every plugin they imply: for a fact a plugin requires and neither
@@ -392,7 +438,7 @@ impl<T: Configurable> Draft<T> {
         };
         let issues = issues_in(&self.context, &Tree::of(schema, &self.answers), true);
         if !issues.is_empty() {
-            return Err(issues);
+            return Err(self.with_fitting(issues));
         }
         let walked = schema
             .walk(&self.answers, &Path::ROOT, true)
@@ -468,15 +514,35 @@ fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
                 Incompatibility::FactNotProvided { fact, .. } => {
                     unprovided.push((conflict.fact, fact, placed.path.clone()));
                 }
+                Incompatibility::ConditionNotMet { condition, .. }
+                    if let Some(unmet) = conflict.unmet =>
+                {
+                    let provider = unmet.provider.and_then(|provider| {
+                        tree.plugins
+                            .iter()
+                            .find(|other| std::ptr::eq(&other.declared, provider))
+                            .map(|other| other.path.clone())
+                    });
+                    // the provider's choices, or where the context provides the fact, those
+                    // of the plugin requiring it
+                    let choices_at = provider.clone().unwrap_or_else(|| placed.path.clone());
+                    incompatible.get_or_insert(Problem::Unmet {
+                        condition,
+                        provided: unmet.provided,
+                        provider,
+                        choices_at,
+                        fitting: Vec::new(),
+                    });
+                }
                 incompatibility => {
-                    incompatible.get_or_insert(incompatibility);
+                    incompatible.get_or_insert(Problem::Incompatible(incompatibility));
                 }
             }
         }
-        if let Some(incompatibility) = incompatible {
+        if let Some(problem) = incompatible {
             issues.push(Issue {
                 path: placed.path.clone(),
-                problem: Problem::Incompatible(incompatibility),
+                problem,
             });
         }
     }
@@ -504,7 +570,7 @@ fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
             issues.push(Issue {
                 path: path.clone(),
                 problem: Problem::Unprovided {
-                    fact: name,
+                    fact: name.clone(),
                     required_by: required_by.clone(),
                     lacking: lacking(context, &declarations, &providers),
                     providers: providers.into_iter().map(PluginEntry::id).collect(),
@@ -522,8 +588,8 @@ fn lacking(
     context: &Declaration,
     declarations: &[&Declared],
     providers: &[&'static PluginEntry],
-) -> Option<&'static str> {
-    let unprovided = |entry: &PluginEntry| -> Vec<(TypeId, &'static str)> {
+) -> Option<Phrase> {
+    let unprovided = |entry: &PluginEntry| -> Vec<(TypeId, Phrase)> {
         entry
             .declaration()
             .required()
@@ -535,7 +601,7 @@ fn lacking(
                         .iter()
                         .any(|declared| declared.declaration.provides_type(fact))
             })
-            .map(|required| (required.type_id(), required.name()))
+            .map(|required| (required.type_id(), required.name().clone()))
             .collect()
     };
     let (first, others) = providers.split_first()?;
@@ -720,26 +786,64 @@ pub enum Problem {
     Invalid(ConfigError),
     /// The plugin at the issue's path does not fit next to the others.
     Incompatible(Incompatibility),
+    /// The plugin at the issue's path requires `condition` of a fact that the plugin at `provider`
+    /// provides, or the context if [`None`], as `provided` says if the fact says, see
+    /// [`Fact::phrase`](crate::compatibility::Fact::phrase). `fitting` are the plugins, by id,
+    /// that answering the position at `choices_at` with would leave no plugin that does not fit:
+    /// at the provider's, or where the context provides the fact, at the issue's path.
+    Unmet {
+        condition: Phrase,
+        provided: Option<Phrase>,
+        provider: Option<Path>,
+        choices_at: Path,
+        fitting: Vec<&'static str>,
+    },
     /// The plugin at `required_by` requires `fact`, which nothing provides and no unanswered field
     /// could provide. The issue is at each field whose axis could provide it,
     /// with the ids of the plugins of that axis that do, or at `required_by` if there is none.
     /// `lacking` names a fact every one of those providers requires whatever its configuration
     /// and nothing provides, if there is one: choosing one of them would not do on its own.
     Unprovided {
-        fact: &'static str,
+        fact: Phrase,
         required_by: Path,
         providers: Vec<&'static str>,
-        lacking: Option<&'static str>,
+        lacking: Option<Phrase>,
     },
 }
 
 /// Shows an [`Unprovided`](Self::Unprovided) like [`Incompatibility::FactNotProvided`], followed
-/// by the providers in parentheses if there are any, with what they lack.
+/// by the providers in parentheses if there are any, with what they lack, and an
+/// [`Unmet`](Self::Unmet) condition with the provider and the choices that fit.
 impl Display for Problem {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Invalid(error) => error.fmt(formatter),
             Self::Incompatible(incompatibility) => incompatibility.fmt(formatter),
+            Self::Unmet {
+                condition,
+                provided,
+                provider,
+                choices_at,
+                fitting,
+            } => {
+                write!(formatter, "requires {condition}, but ")?;
+                match provider {
+                    Some(provider) => write!(formatter, "{provider}")?,
+                    None => write!(formatter, "the context")?,
+                }
+                match provided {
+                    Some(provided) => write!(formatter, " provides {provided}")?,
+                    None => write!(formatter, " does not provide it")?,
+                }
+                if !fitting.is_empty() {
+                    write!(
+                        formatter,
+                        " (fitting at {choices_at}: {})",
+                        fitting.join(", ")
+                    )?;
+                }
+                Ok(())
+            }
             Self::Unprovided {
                 fact,
                 required_by,
@@ -747,7 +851,7 @@ impl Display for Problem {
                 lacking,
             } => {
                 let unprovided = Incompatibility::FactNotProvided {
-                    fact,
+                    fact: fact.clone(),
                     required_by: required_by.to_string(),
                 };
                 write!(formatter, "{unprovided}")?;

@@ -1,4 +1,4 @@
-use std::{any::type_name, fmt::Debug, num::NonZeroU32};
+use std::{fmt::Debug, num::NonZeroU32};
 
 use plugin_factory::{
     Plugin, PluginType,
@@ -16,7 +16,7 @@ use crate::{
     Source,
     entities::{Bye, Competition, DivisionData, Match, RankingId},
     plugins::{
-        facts::{CalculatesMetric, EntrantsPerQualifier, EntrantsPerRanking, MatchAnnotation},
+        facts::{CalculatesMetric, EntrantsPerQualifier, MatchAnnotation},
         match_format::{BestOf, Scored, WinnerOnly},
         metrics_calculator::{
             Calculator, GamesBalance, GamesBalanceCalculator, GamesDifference,
@@ -50,8 +50,6 @@ const ONE_HALF: PointsCalculator = PointsCalculator::new(Score::ONE, Score::new(
 /// a draw counts half.
 const FULL_HALF: SonnebornBergerCalculator =
     SonnebornBergerCalculator::new(Score::ONE, Score::new(0.5));
-/// Two entrants per ranking, i.e. the rankings of entrants paired up.
-const PAIRS: EntrantsPerRanking = EntrantsPerRanking(NonZeroU32::new(2).unwrap());
 
 /// Whether `plugins` fit together in a competition, i.e. what `AddPhase` checks.
 fn check(plugins: &PhasePlugins) -> Result<(), Incompatibility> {
@@ -363,7 +361,7 @@ fn a_metric_whose_calculator_has_to_be_configured_is_not_added() {
         issues.iter().any(|issue| matches!(
             issue.problem(),
             Problem::Unprovided { fact, providers, .. }
-                if *fact == type_name::<Points>()
+                if fact.key() == "ranked-metric"
                     && providers.contains(&PointsCalculator::ID)
         )),
         "got {issues:?}"
@@ -429,7 +427,7 @@ fn a_metric_a_calculator_reads_has_to_be_calculated_as_well() {
     assert_eq!(
         check(&plugins),
         Err(Incompatibility::FactNotProvided {
-            fact: "the points",
+            fact: Phrase::new("points", "the points"),
             required_by: format!("{FULL_HALF:?}"),
         })
     );
@@ -446,7 +444,7 @@ fn ranking_by_a_metric_nothing_calculates_is_an_error() {
     assert_eq!(
         check(&plugins),
         Err(Incompatibility::FactNotProvided {
-            fact: type_name::<Points>(),
+            fact: Phrase::new("ranked-metric", "the metric it ranks by"),
             required_by: format!("{MorePoints:?}"),
         })
     );
@@ -500,7 +498,7 @@ fn a_criterion_bringing_its_own_order_requires_its_metric_too() {
     assert_eq!(
         check(&plugins),
         Err(Incompatibility::FactNotProvided {
-            fact: type_name::<WinsDrawsLosses>(),
+            fact: Phrase::new("ranked-metric", "the metric it ranks by"),
             required_by: format!("{FewerLosses:?}"),
         })
     );
@@ -522,7 +520,7 @@ fn the_round_of_elimination_needs_a_format_that_knocks_entrants_out() {
     assert_eq!(
         check(&round_robin),
         Err(Incompatibility::FactNotProvided {
-            fact: "an elimination annotation on the matches",
+            fact: Phrase::new("eliminations", "a format saying which matches eliminate"),
             required_by: format!("{RoundOfEliminationCalculator:?}"),
         })
     );
@@ -571,9 +569,9 @@ fn a_monster_dyp_cannot_follow_a_phase_of_pairs_kept_together() {
     assert_eq!(
         check_in(coming_in(2), &plugins),
         Err(Incompatibility::ConditionNotMet {
-            condition: "rankings of single players",
+            condition: Phrase::new("single-players", "single players"),
             required_by: format!("{format:?}"),
-            provided: format!("{PAIRS:?}"),
+            provided: "teams of 2".to_owned(),
         })
     );
 }
@@ -590,9 +588,9 @@ fn a_monster_dyp_cannot_pair_the_entrants_up_itself() {
     assert_eq!(
         check(&plugins),
         Err(Incompatibility::ConditionNotMet {
-            condition: "rankings of single players",
+            condition: Phrase::new("single-players", "single players"),
             required_by: format!("{format:?}"),
-            provided: format!("{PAIRS:?}"),
+            provided: "teams of 2".to_owned(),
         })
     );
 }
@@ -624,9 +622,9 @@ fn entrants_are_paired_up_only_where_they_come_in_on_their_own() {
         assert_eq!(
             check_in(coming_in(2), &plugins),
             Err(Incompatibility::ConditionNotMet {
-                condition: "single entrants coming in",
+                condition: Phrase::new("single-entrants-coming-in", "single entrants coming in"),
                 required_by: format!("{teams:?}"),
-                provided: format!("{:?}", EntrantsPerQualifier(NonZeroU32::new(2).unwrap())),
+                provided: "teams of 2".to_owned(),
             })
         );
     }
@@ -658,7 +656,7 @@ struct CircularCalculator;
 impl CircularCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Cycled>>("the cycled metric");
+        declaration.require::<CalculatesMetric<Cycled>>(Phrase::new("cycled", "the cycled metric"));
     }
 }
 
@@ -674,7 +672,8 @@ struct Cycling;
 impl Cycling {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Circular>>("the circular metric");
+        declaration
+            .require::<CalculatesMetric<Circular>>(Phrase::new("circular", "the circular metric"));
     }
 }
 

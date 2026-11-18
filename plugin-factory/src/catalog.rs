@@ -17,7 +17,7 @@ use std::{
 
 use crate::{
     __private::Index,
-    Plugin, PluginType,
+    Phrase, Plugin, PluginType,
     compatibility::{Declaration, OpenFacts, RequiredFact},
     config::{self, Config, ConfigError, Path, PluginAnswer, PluginConfig, Value},
     schema::Schema,
@@ -129,6 +129,20 @@ impl PluginEntry {
     /// [`PluginType::declare_static`]. Built on every call.
     pub(crate) fn declaration(&self) -> Declaration {
         Declaration::of(self.declare)
+    }
+
+    /// What the plugin says of the facts it requires whatever its configuration, so that a
+    /// translation can find every one: the name of each fact, followed by the condition if it is
+    /// required with one, in the order they are required in. See [`Declaration::require`] and
+    /// [`Declaration::require_that`].
+    pub fn required_phrases(&self) -> Vec<Phrase> {
+        self.declaration()
+            .required()
+            .iter()
+            .flat_map(|required| {
+                std::iter::once(required.name().clone()).chain(required.condition().cloned())
+            })
+            .collect()
     }
 
     /// The plugins of `axis` providing a fact this plugin requires whatever its configuration, in
@@ -378,7 +392,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        axis,
+        Phrase, axis,
         compatibility::Fact,
         register,
         schema::{Configurable, Field},
@@ -562,7 +576,7 @@ mod tests {
             declaration
                 .provide(Downstream)
                 .provide(Crosswise)
-                .require::<Implying>("the implying fact");
+                .require::<Implying>(Phrase::new("fact", "the implying fact"));
         }
     }
 

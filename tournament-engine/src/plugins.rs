@@ -44,6 +44,7 @@
 
 use std::num::NonZeroU32;
 
+pub use plugin_factory::Phrase;
 use plugin_factory::{
     catalog::Axis,
     compatibility::Declaration,
@@ -55,7 +56,6 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[cfg(feature = "test-util")]
 pub use crate::plugins::builder::PhasePluginsBuilder;
-pub use crate::plugins::phrase::Phrase;
 use crate::{
     entities::{DivisionData, DivisionView},
     plugins::{
@@ -76,7 +76,6 @@ pub mod facts;
 pub mod match_format;
 pub mod metrics_calculator;
 pub mod phase_format;
-mod phrase;
 pub mod preset;
 pub mod ranker;
 pub mod seeding;

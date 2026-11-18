@@ -118,7 +118,8 @@ pub struct PointsBalanceCalculator;
 impl PointsBalanceCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<MatchTally<PointsScored>>("the points scored");
+        declaration
+            .require::<MatchTally<PointsScored>>(Phrase::new("points-scored", "the points scored"));
     }
 }
 
@@ -168,7 +169,10 @@ pub struct PointsDifferenceCalculator;
 impl PointsDifferenceCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<PointsBalance>>("the points scored and conceded");
+        declaration.require::<CalculatesMetric<PointsBalance>>(Phrase::new(
+            "points-balance",
+            "the points scored and conceded",
+        ));
     }
 }
 

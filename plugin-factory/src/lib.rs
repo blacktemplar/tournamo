@@ -54,9 +54,12 @@ pub mod catalog;
 pub mod compatibility;
 pub mod config;
 pub mod draft;
+mod phrase;
 pub mod schema;
 
 pub use plugin_factory_derive::{Plugin, axis, register};
+
+pub use crate::phrase::Phrase;
 
 /// What the code [`derive@Plugin`], [`axis`] and [`register`] generate refers to, and what a
 /// plugin behind a `dyn` is asked through. Not part of the API.

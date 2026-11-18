@@ -245,7 +245,7 @@ impl<A: Axis + ?Sized> FieldType for DependencyOrderedSet<A> {
 /// # Examples
 /// ```
 /// use plugin_factory::{
-///     Plugin, axis,
+///     Phrase, Plugin, axis,
 ///     compatibility::{Declaration, Fact},
 ///     register,
 ///     schema::{DependencyOrderedSet, DependencyOrderedSetError},
@@ -283,7 +283,7 @@ impl<A: Axis + ?Sized> FieldType for DependencyOrderedSet<A> {
 ///
 /// impl Buchholz {
 ///     fn declare_static(declaration: &mut Declaration) {
-///         declaration.require::<Wins>("the wins");
+///         declaration.require::<Wins>(Phrase::new("wins", "the wins"));
 ///     }
 /// }
 ///

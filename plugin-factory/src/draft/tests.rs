@@ -109,8 +109,8 @@ struct Monster;
 impl Monster {
     fn declare_static(declaration: &mut Declaration) {
         declaration.require_that::<EntrantsPerRanking>(
-            "the entrants per ranking",
-            "rankings of single players",
+            Phrase::new("fact", "the entrants per ranking"),
+            Phrase::new("condition", "rankings of single players"),
             |entrants| entrants.0 == 1,
         );
     }
@@ -200,8 +200,8 @@ struct Buchholz;
 impl Buchholz {
     fn declare_static(declaration: &mut Declaration) {
         declaration
-            .require::<Points>("points")
-            .require::<Matches>("matches");
+            .require::<Points>(Phrase::new("fact", "points"))
+            .require::<Matches>(Phrase::new("fact", "matches"));
     }
 }
 
@@ -220,7 +220,7 @@ struct Losses;
 
 impl Losses {
     fn declare_static(declaration: &mut Declaration) {
-        declaration.require::<Eliminating>("eliminations");
+        declaration.require::<Eliminating>(Phrase::new("fact", "eliminations"));
     }
 }
 
@@ -240,7 +240,7 @@ struct ExitRound;
 impl ExitRound {
     fn declare_static(declaration: &mut Declaration) {
         declaration
-            .require::<Eliminating>("eliminations")
+            .require::<Eliminating>(Phrase::new("fact", "eliminations"))
             .provide(ExitRounds);
     }
 }
@@ -260,7 +260,7 @@ struct LaterExit;
 
 impl LaterExit {
     fn declare_static(declaration: &mut Declaration) {
-        declaration.require::<ExitRounds>("exit rounds");
+        declaration.require::<ExitRounds>(Phrase::new("fact", "exit rounds"));
     }
 }
 
@@ -744,6 +744,33 @@ fn an_answer_a_plugin_rejects_is_an_issue_at_its_field() {
     );
 }
 
+/// Where the context provides a fact against a plugin's condition, the plugin's own field offers
+/// the plugins that fit: neither the plugin requiring otherwise, nor one providing the fact again.
+#[test]
+fn a_condition_not_met_names_the_provider_and_the_choices_that_fit() {
+    let draft = Draft::<Phase>::new(|declaration| {
+        declaration.provide(EntrantsPerRanking(2));
+    })
+    .with("format", plugin::<Monster>())
+    .unwrap()
+    .with("tie_break", Value::Null)
+    .unwrap();
+
+    assert_eq!(
+        draft.issues(),
+        [Issue {
+            path: path("format"),
+            problem: Problem::Unmet {
+                condition: Phrase::new("condition", "rankings of single players"),
+                provided: None,
+                provider: None,
+                choices_at: path("format"),
+                fitting: vec!["knockout", "round_robin"],
+            },
+        }]
+    );
+}
+
 #[test]
 fn plugins_providing_the_same_fact_are_issues_at_each_of_them() {
     let draft = answered(&[
@@ -786,10 +813,10 @@ fn an_issue_names_what_the_providers_of_a_fact_lack_themselves() {
     draft.add_implied();
 
     let unprovided = || Problem::Unprovided {
-        fact: "exit rounds",
+        fact: Phrase::new("fact", "exit rounds"),
         required_by: path("metrics[0]"),
         providers: vec!["exit_round"],
-        lacking: Some("eliminations"),
+        lacking: Some(Phrase::new("fact", "eliminations")),
     };
     assert_eq!(
         draft.issues(),
@@ -827,7 +854,7 @@ fn a_fact_nothing_provides_is_an_issue_at_each_field_that_could_provide_it() {
         ("tie_break", Value::Null),
     ]);
     let unprovided = |fact, providers: &[&'static str]| Problem::Unprovided {
-        fact,
+        fact: Phrase::new("fact", fact),
         required_by: path("metrics[0]"),
         providers: providers.to_vec(),
         lacking: None,
@@ -983,7 +1010,7 @@ fn building_reports_with_nothing_open() {
             Issue {
                 path: path("format"),
                 problem: Problem::Unprovided {
-                    fact: "eliminations",
+                    fact: Phrase::new("fact", "eliminations"),
                     required_by: path("metrics[0]"),
                     providers: vec!["knockout"],
                     lacking: None,
@@ -1007,17 +1034,17 @@ fn the_implied_plugins_are_added_to_the_answers_and_not_by_building() {
     let unprovided: Vec<_> = issues
         .iter()
         .filter_map(|issue| match issue.problem() {
-            Problem::Unprovided { fact, .. } => Some((issue.path().to_string(), *fact)),
+            Problem::Unprovided { fact, .. } => Some((issue.path().to_string(), fact.to_string())),
             _ => None,
         })
         .collect();
     assert_eq!(
         unprovided,
         [
-            ("metrics".to_owned(), "points"),
-            ("tie_break".to_owned(), "points"),
-            ("metrics".to_owned(), "matches"),
-            ("tie_break".to_owned(), "matches"),
+            ("metrics".to_owned(), "points".to_owned()),
+            ("tie_break".to_owned(), "points".to_owned()),
+            ("metrics".to_owned(), "matches".to_owned()),
+            ("tie_break".to_owned(), "matches".to_owned()),
         ]
     );
 
@@ -1180,7 +1207,7 @@ mod partial_validation {
         fn declare_static(declaration: &mut Declaration) {
             declaration
                 .provide(EliminationRounds)
-                .require::<Eliminating>("eliminations");
+                .require::<Eliminating>(Phrase::new("fact", "eliminations"));
         }
     }
 
@@ -1197,7 +1224,7 @@ mod partial_validation {
 
     impl LaterElimination {
         fn declare_static(declaration: &mut Declaration) {
-            declaration.require::<EliminationRounds>("the elimination rounds");
+            declaration.require::<EliminationRounds>(Phrase::new("fact", "the elimination rounds"));
         }
     }
 
@@ -1423,38 +1450,38 @@ mod resolution {
     impl Requiring {
         fn declare(&self, declaration: &mut Declaration) {
             if self.implying {
-                declaration.require::<Implying>("the implying fact");
+                declaration.require::<Implying>(Phrase::new("fact", "the implying fact"));
             }
             if self.ambiguous {
-                declaration.require::<Ambiguous>("the ambiguous fact");
+                declaration.require::<Ambiguous>(Phrase::new("fact", "the ambiguous fact"));
             }
             if self.downstream {
-                declaration.require::<Downstream>("the downstream fact");
+                declaration.require::<Downstream>(Phrase::new("fact", "the downstream fact"));
             }
             if self.deep {
-                declaration.require::<Deep>("the deep fact");
+                declaration.require::<Deep>(Phrase::new("fact", "the deep fact"));
             }
             if self.crosswise {
-                declaration.require::<Crosswise>("the crosswise fact");
+                declaration.require::<Crosswise>(Phrase::new("fact", "the crosswise fact"));
             }
             if self.lone {
-                declaration.require::<Lone>("the lone fact");
+                declaration.require::<Lone>(Phrase::new("fact", "the lone fact"));
             }
             if self.nested {
-                declaration.require::<Nested>("the nested fact");
+                declaration.require::<Nested>(Phrase::new("fact", "the nested fact"));
             }
             if self.stranded {
-                declaration.require::<Stranded>("the stranded fact");
+                declaration.require::<Stranded>(Phrase::new("fact", "the stranded fact"));
             }
             if self.clash {
-                declaration.require::<Clash>("the clash fact");
+                declaration.require::<Clash>(Phrase::new("fact", "the clash fact"));
             }
             // required in this order, so that the late fact is tried first
             if self.late {
-                declaration.require::<Late>("the late fact");
+                declaration.require::<Late>(Phrase::new("fact", "the late fact"));
             }
             if self.opening {
-                declaration.require::<Opening>("the opening fact");
+                declaration.require::<Opening>(Phrase::new("fact", "the opening fact"));
             }
         }
     }
@@ -1566,7 +1593,7 @@ mod resolution {
         fn declare_static(declaration: &mut Declaration) {
             declaration
                 .provide(Downstream)
-                .require::<Implying>("the implying fact");
+                .require::<Implying>(Phrase::new("fact", "the implying fact"));
         }
     }
 
@@ -1587,7 +1614,7 @@ mod resolution {
         fn declare_static(declaration: &mut Declaration) {
             declaration
                 .provide(Stranded)
-                .require::<Ambiguous>("the ambiguous fact");
+                .require::<Ambiguous>(Phrase::new("fact", "the ambiguous fact"));
         }
     }
 
@@ -1627,7 +1654,7 @@ mod resolution {
         fn declare_static(declaration: &mut Declaration) {
             declaration
                 .provide(Late)
-                .require::<Unlocked>("the unlocked fact");
+                .require::<Unlocked>(Phrase::new("fact", "the unlocked fact"));
         }
     }
 
@@ -1781,7 +1808,7 @@ mod resolution {
         context: impl FnOnce(&mut Declaration),
         requires: &[&str],
         answers: &[(&str, Value)],
-    ) -> Result<Vec<String>, Vec<(String, &'static str)>> {
+    ) -> Result<Vec<String>, Vec<(String, String)>> {
         let requiring = Requiring::schema()
             .fields()
             .iter()
@@ -1821,7 +1848,7 @@ mod resolution {
             Err(issues) => Err(issues
                 .into_iter()
                 .map(|issue| match issue.problem {
-                    Problem::Unprovided { fact, .. } => (issue.path.to_string(), fact),
+                    Problem::Unprovided { fact, .. } => (issue.path.to_string(), fact.to_string()),
                     problem => panic!("{problem:?} is not about a fact nothing provides"),
                 })
                 .collect()),
@@ -1845,7 +1872,7 @@ mod resolution {
     fn a_fact_tried_before_implies_a_plugin_by_what_a_later_addition_provides() {
         assert_eq!(
             built::<Resolved>(|_| {}, &["late"], &[]),
-            Err(vec![("supplies".to_owned(), "the late fact")])
+            Err(vec![("supplies".to_owned(), "the late fact".to_owned())])
         );
         assert_eq!(
             built::<Resolved>(|_| {}, &["late", "opening"], &[]),
@@ -1858,7 +1885,10 @@ mod resolution {
         // the stranding plugin would leave the ambiguous fact unprovided
         assert_eq!(
             built::<Resolved>(|_| {}, &["stranded"], &[]),
-            Err(vec![("supplies".to_owned(), "the stranded fact")])
+            Err(vec![(
+                "supplies".to_owned(),
+                "the stranded fact".to_owned()
+            )])
         );
     }
 
@@ -1874,7 +1904,7 @@ mod resolution {
         );
         assert_eq!(
             built::<Resolved>(given, &["clash"], &[]),
-            Err(vec![("supplies".to_owned(), "the clash fact")])
+            Err(vec![("supplies".to_owned(), "the clash fact".to_owned())])
         );
     }
 
@@ -1891,8 +1921,8 @@ mod resolution {
         assert_eq!(
             built::<Resolved>(|_| {}, &["crosswise"], &[]),
             Err(vec![
-                ("supplies".to_owned(), "the crosswise fact"),
-                ("extras".to_owned(), "the crosswise fact"),
+                ("supplies".to_owned(), "the crosswise fact".to_owned()),
+                ("extras".to_owned(), "the crosswise fact".to_owned()),
             ])
         );
     }
@@ -1913,7 +1943,10 @@ mod resolution {
     fn an_ambiguous_fact_is_left_unprovided_and_the_others_provided() {
         assert_eq!(
             built::<Resolved>(|_| {}, &["ambiguous", "implying"], &[]),
-            Err(vec![("supplies".to_owned(), "the ambiguous fact")])
+            Err(vec![(
+                "supplies".to_owned(),
+                "the ambiguous fact".to_owned()
+            )])
         );
     }
 
@@ -1921,7 +1954,10 @@ mod resolution {
     fn a_single_slot_is_never_added_to() {
         assert_eq!(
             built::<Resolved>(|_| {}, &["lone"], &[]),
-            Err(vec![("requirements".to_owned(), "the lone fact")])
+            Err(vec![(
+                "requirements".to_owned(),
+                "the lone fact".to_owned()
+            )])
         );
     }
 
@@ -1937,8 +1973,8 @@ mod resolution {
                 )]
             ),
             Err(vec![
-                ("supplies".to_owned(), "the nested fact"),
-                ("supplies[0].parts".to_owned(), "the nested fact"),
+                ("supplies".to_owned(), "the nested fact".to_owned()),
+                ("supplies[0].parts".to_owned(), "the nested fact".to_owned()),
             ])
         );
     }
@@ -1948,8 +1984,8 @@ mod resolution {
         assert_eq!(
             built::<Twice>(|_| {}, &["implying"], &[]),
             Err(vec![
-                ("first".to_owned(), "the implying fact"),
-                ("second".to_owned(), "the implying fact"),
+                ("first".to_owned(), "the implying fact".to_owned()),
+                ("second".to_owned(), "the implying fact".to_owned()),
             ])
         );
     }

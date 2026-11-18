@@ -1027,6 +1027,57 @@ fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
         Problem::Incompatible(incompatibility) => {
             Text::new("issue-incompatible").with("reason", incompatibility.to_string())
         }
+        Problem::Unmet {
+            condition,
+            provided,
+            provider,
+            choices_at,
+            fitting,
+        } => {
+            let plugin = |path: &Path| {
+                draft.plugin_at(path).map_or_else(
+                    || Arg::from(path.to_string()),
+                    |plugin| plugin_arg(plugin.entry),
+                )
+            };
+            // the context of a phase is what comes in from its sources
+            let unmet =
+                match (provider, provided) {
+                    (Some(path), provided) => {
+                        let provider = Text::new("issue-provider").with("plugin", plugin(path));
+                        let provider = match field_arg(draft, path) {
+                            Some(field) => provider.with("field", field),
+                            None => provider,
+                        };
+                        match provided {
+                            Some(provided) => Text::new("issue-unmet")
+                                .with("provided", Arg::Fact(provided.clone())),
+                            None => Text::new("issue-unmet-unsaid"),
+                        }
+                        .with("provider", provider)
+                    }
+                    (None, Some(provided)) => Text::new("issue-unmet-coming-in")
+                        .with("provided", Arg::Fact(provided.clone())),
+                    (None, None) => Text::new("issue-unmet-context"),
+                }
+                .with("plugin", plugin(issue.path()))
+                .with("condition", Arg::Fact(condition.clone()));
+            let fitting: Vec<_> = draft
+                .candidates(choices_at)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|entry| fitting.contains(&entry.id()))
+                .map(|entry| (entry.id(), entry.label()))
+                .collect();
+            match field_arg(draft, choices_at) {
+                Some(field) if !fitting.is_empty() => Text::new("issue-fitting")
+                    .with("issue", unmet)
+                    .with("field", field)
+                    .with("count", fitting.len() as f64)
+                    .with("choices", Arg::Plugins(fitting)),
+                _ => unmet,
+            }
+        }
         Problem::Unprovided {
             fact,
             required_by,
@@ -1049,13 +1100,13 @@ fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
             if providers.is_empty() {
                 Text::new("issue-unprovided")
                     .with("plugin", plugin)
-                    .with("fact", *fact)
+                    .with("fact", Arg::Fact(fact.clone()))
             } else if let Some(lacking) = lacking {
                 Text::new("issue-unprovided-lacking")
                     .with("plugin", plugin)
                     .with("count", providers.len())
                     .with("providers", Arg::Plugins(providers))
-                    .with("lacking", *lacking)
+                    .with("lacking", Arg::Fact(lacking.clone()))
             } else {
                 Text::new("issue-unprovided-by")
                     .with("plugin", plugin)
@@ -1092,6 +1143,25 @@ pub(crate) fn with_range(text: Text, range: NumberRange) -> Text {
         .with("min", min.unwrap_or_default())
         .with("max", max.unwrap_or_default())
         .with("multiple", multiple.unwrap_or_default())
+}
+
+/// The label of the field at `path`, or of the list at whose position it is, as a variable of a
+/// [`Text`]; `None` if there is none.
+fn field_arg<T: Configurable>(draft: &Draft<T>, path: &Path) -> Option<Arg> {
+    let field = match path.segments().split_last() {
+        Some((Segment::Index(_), list)) => of(list),
+        _ => path.clone(),
+    };
+    let node = draft.field_at(&field)?;
+    let plugin = match field.segments().split_last() {
+        Some((_, parent)) if !parent.is_empty() => Some(draft.plugin_at(&of(parent))?.entry.id()),
+        _ => None,
+    };
+    Some(Arg::Field {
+        plugin,
+        name: node.field.name(),
+        english: node.field.label(),
+    })
 }
 
 /// The label of the plugin `entry`, as a variable of a [`Text`].

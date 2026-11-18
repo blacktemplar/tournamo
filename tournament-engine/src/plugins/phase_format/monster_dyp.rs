@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
 use itertools::Itertools;
-use plugin_factory::{Plugin, compatibility::Declaration, config::PluginConfig, register};
+use plugin_factory::{Phrase, Plugin, compatibility::Declaration, config::PluginConfig, register};
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use vec1::vec1;
@@ -61,8 +61,8 @@ impl MonsterDyp {
         // the teams are drawn per match, so a ranking that already stands for a team of two
         // cannot be drawn into one
         declaration.require_that::<EntrantsPerRanking>(
-            "the entrants per ranking",
-            "rankings of single players",
+            Phrase::new("entrants-per-ranking", "the entrants ranked"),
+            Phrase::new("single-players", "single players"),
             |entrants| *entrants == EntrantsPerRanking::SINGLE,
         );
     }

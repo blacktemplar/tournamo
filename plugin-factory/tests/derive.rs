@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use plugin_factory::{
-    Plugin, PluginType, axis,
+    Phrase, Plugin, PluginType, axis,
     catalog::{AnyAxis, PluginEntry},
     compatibility::{Declaration, Fact, Incompatibility, check},
     config::{ConfigError, Path, PluginConfig, Value},
@@ -132,7 +132,7 @@ impl Points {
     fn declare_static(declaration: &mut Declaration) {
         declaration
             .provide(Scored)
-            .require::<Matches>("the matches");
+            .require::<Matches>(Phrase::new("fact", "the matches"));
     }
 
     fn declare(&self, declaration: &mut Declaration) {
@@ -522,7 +522,7 @@ fn the_declaration_is_forwarded_to_the_functions_given() {
     assert_eq!(
         check(|_| {}, &[&*uncounted]),
         Err(Incompatibility::FactNotProvided {
-            fact: "the matches",
+            fact: Phrase::new("fact", "the matches"),
             required_by: format!("{uncounted:?}"),
         })
     );

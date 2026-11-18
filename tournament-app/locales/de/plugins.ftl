@@ -1,5 +1,24 @@
 # The plugins of tournament-engine in German, see `PluginText` in `src/i18n.rs` for the keys.
 
+## What plugins require of each other, said where they do not fit together
+
+facts =
+    .points = die Punkte
+    .buchholz = die Buchholz-Wertung
+    .games-won = die gewonnenen Sätze
+    .games-balance = die gewonnenen und verlorenen Sätze
+    .wins-draws-losses = die Siege, Unentschieden und Niederlagen
+    .points-scored = die erzielten Punkte
+    .points-balance = die erzielten und erhaltenen Punkte
+    .eliminations = ein Format, das sagt, welche Spiele ausscheiden lassen
+    .ranked-metric = die Wertung, nach der es ordnet
+    .entrants-per-qualifier = die hereinkommenden Teilnehmer
+    .single-entrants-coming-in = einzeln hereinkommende Teilnehmer
+    .entrants-per-ranking = die gewerteten Teilnehmer
+    .single-players = einzelne Spieler
+    .single-entrants = einzelne Teilnehmer
+    .teams-of = Teams aus { $count }
+
 ## The fields of a phase itself, which are no plugin's
 
 phase =

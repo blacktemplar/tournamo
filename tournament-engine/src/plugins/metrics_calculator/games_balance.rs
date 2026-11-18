@@ -116,7 +116,7 @@ pub struct GamesBalanceCalculator;
 impl GamesBalanceCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<MatchTally<GamesWon>>("the games won");
+        declaration.require::<MatchTally<GamesWon>>(Phrase::new("games-won", "the games won"));
     }
 }
 
@@ -166,7 +166,10 @@ pub struct GamesDifferenceCalculator;
 impl GamesDifferenceCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<GamesBalance>>("the games won and lost");
+        declaration.require::<CalculatesMetric<GamesBalance>>(Phrase::new(
+            "games-balance",
+            "the games won and lost",
+        ));
     }
 }
 

@@ -3,7 +3,7 @@
 use std::num::NonZeroU32;
 
 use dyn_clone::DynClone;
-use plugin_factory::{Plugin, axis, compatibility::Declaration, register};
+use plugin_factory::{Phrase, Plugin, axis, compatibility::Declaration, register};
 use rand::{rngs::StdRng, seq::SliceRandom};
 use serde::{Deserialize, Serialize};
 use vec1::{Vec1, vec1};
@@ -123,8 +123,8 @@ impl Teams for Keep {
 fn declare_pairs(declaration: &mut Declaration) {
     declaration
         .require_that::<facts::EntrantsPerQualifier>(
-            "the entrants per qualifier",
-            "single entrants coming in",
+            Phrase::new("entrants-per-qualifier", "the entrants coming in"),
+            Phrase::new("single-entrants-coming-in", "single entrants coming in"),
             |coming_in| coming_in.0 == NonZeroU32::MIN,
         )
         .provide(EntrantsPerRanking(NonZeroU32::new(2).expect("2 is not 0")));

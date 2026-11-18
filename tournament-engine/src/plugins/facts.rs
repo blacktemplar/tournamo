@@ -8,7 +8,7 @@ use std::{
     num::NonZeroU32,
 };
 
-use plugin_factory::compatibility::Fact;
+use plugin_factory::{Phrase, compatibility::Fact};
 
 use crate::type_map::TypeMapValue;
 
@@ -26,7 +26,12 @@ impl EntrantsPerRanking {
     pub const SINGLE: Self = Self(NonZeroU32::MIN);
 }
 
-impl Fact for EntrantsPerRanking {}
+/// Says "single entrants" or "teams of 2".
+impl Fact for EntrantsPerRanking {
+    fn phrase(&self) -> Option<Phrase> {
+        Some(entrants_phrase(self.0))
+    }
+}
 
 /// How many entrants every qualifier of the field of the phase stands for: one for the
 /// registration, as many as a ranking of an earlier phase stands for for its standings.
@@ -39,7 +44,21 @@ impl Fact for EntrantsPerRanking {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntrantsPerQualifier(pub NonZeroU32);
 
-impl Fact for EntrantsPerQualifier {}
+/// Says "single entrants" or "teams of 2", as [`EntrantsPerRanking`] does.
+impl Fact for EntrantsPerQualifier {
+    fn phrase(&self) -> Option<Phrase> {
+        Some(entrants_phrase(self.0))
+    }
+}
+
+/// What entrants of `entrants` each are: single entrants, or teams of as many.
+fn entrants_phrase(entrants: NonZeroU32) -> Phrase {
+    if entrants == NonZeroU32::MIN {
+        Phrase::new("single-entrants", "single entrants")
+    } else {
+        Phrase::new("teams-of", format!("teams of {entrants}")).with("count", entrants.get())
+    }
+}
 
 /// No match of the phase ends in a draw, e.g. since every match has to produce a winner who moves
 /// on.

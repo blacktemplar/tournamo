@@ -1,4 +1,4 @@
-use plugin_factory::{Plugin, compatibility::Declaration};
+use plugin_factory::{Phrase, Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
 use super::{Cell, MetricColumn, OldMetrics, ToCell};
@@ -70,7 +70,7 @@ pub struct BuchholzCalculator;
 impl BuchholzCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Points>>("the points");
+        declaration.require::<CalculatesMetric<Points>>(Phrase::new("points", "the points"));
     }
 }
 
@@ -167,7 +167,7 @@ pub struct BuchholzOfBuchholzCalculator;
 impl BuchholzOfBuchholzCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Buchholz>>("the Buchholz");
+        declaration.require::<CalculatesMetric<Buchholz>>(Phrase::new("buchholz", "the Buchholz"));
     }
 }
 
@@ -300,7 +300,7 @@ impl SonnebornBergerCalculator {
 
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Points>>("the points");
+        declaration.require::<CalculatesMetric<Points>>(Phrase::new("points", "the points"));
     }
 
     fn weight(&self, result: ResultOfTeam) -> Score {

@@ -243,6 +243,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   lists the entrants, each renamed in place, which changes nothing else since
   names are not part of the competition's history. Adding, removing and
   rating stay closed once it has started.
+- A phase whose settings do not fit together says why in plain words, also in
+  German, and what to choose instead, e.g. "Monster DYP needs single players,
+  but drawn pairs (teams) gives teams of 2; as teams, these fit: unchanged,
+  everyone on their own", rather than naming internals such as
+  `EntrantsPerRanking(2)`.
 
 ## [0.4.0] - 2026-11-09
 

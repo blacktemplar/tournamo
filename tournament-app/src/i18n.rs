@@ -164,6 +164,23 @@ pub enum Arg {
     Waiting(Vec<(PhaseName, usize, usize)>),
     /// Texts, each said by [`Translator::text`], joined as a list: `a, b and c`.
     List(Vec<Text>),
+    /// A text, said by [`Translator::text`].
+    Text(Box<Text>),
+    /// A phrase about a fact of compatibility, see [`Translator::fact`].
+    Fact(Phrase),
+    /// The label of the field `name` of the plugin `plugin`, or of the phase itself if `None`, in
+    /// the language, else `english`, see [`Translator::field_label`].
+    Field {
+        plugin: Option<&'static str>,
+        name: &'static str,
+        english: &'static str,
+    },
+}
+
+impl From<Text> for Arg {
+    fn from(value: Text) -> Self {
+        Self::Text(Box::new(value))
+    }
 }
 
 impl From<PhaseName> for Arg {
@@ -297,6 +314,10 @@ impl PluginText<'_> {
 /// message translate its fields, see [`Translator::field_label`].
 const PHASE: &str = "phase";
 
+/// The message whose attributes translate the phrases about facts of compatibility, each by its
+/// key, see [`Translator::fact`].
+pub(crate) const FACTS: &str = "facts";
+
 /// The messages of one language.
 pub struct Translator {
     language: Language,
@@ -377,6 +398,17 @@ impl Translator {
                             .collect::<Vec<_>>()
                             .join(", "),
                     ),
+                    Arg::Text(text) => FluentValue::from(self.text(text)),
+                    Arg::Fact(phrase) => FluentValue::from(self.fact(phrase)),
+                    Arg::Field {
+                        plugin,
+                        name,
+                        english,
+                    } => FluentValue::from(self.field_text(
+                        *plugin,
+                        PluginText::Field(name),
+                        english,
+                    )),
                     Arg::List(texts) => {
                         let mut said: Vec<String> =
                             texts.iter().map(|text| self.text(text)).collect();
@@ -538,6 +570,18 @@ impl Translator {
             .unwrap_or_else(|| phrase.to_string())
     }
 
+    /// `phrase`, about a fact of compatibility (what a plugin requires, or what a fact is), in the
+    /// language as the attribute of its key of the message `facts`, with the phrase's numbers
+    /// set, or else in English.
+    pub fn fact(&self, phrase: &Phrase) -> String {
+        let mut args = FluentArgs::new();
+        for (name, value) in phrase.numbers() {
+            args.set(*name, *value);
+        }
+        self.format(FACTS, Some(phrase.key()), Some(&args))
+            .unwrap_or_else(|| phrase.to_string())
+    }
+
     /// The name of the phase `phrase` of the preset `preset` in the language, as the preset's
     /// [`PluginText::Phase`] with the phrase's numbers set, or else in English, as the preset's
     /// code names it.
@@ -549,18 +593,23 @@ impl Translator {
     /// translated as the plugin's [`PluginText::Field`]; a field of the phase itself, which is no
     /// plugin's, as the attribute `.field-<name>` of the message `phase`.
     pub fn field_label(&self, field: &FormField) -> String {
-        self.field_text(field, PluginText::Field(field.name), field.label)
+        self.field_text(field.plugin, PluginText::Field(field.name), field.label)
     }
 
     /// The description of `field`, if it has one, translated as [`Self::field_label`] is with
     /// [`PluginText::FieldDescription`].
     pub fn field_description(&self, field: &FormField) -> Option<String> {
         let english = field.description?;
-        Some(self.field_text(field, PluginText::FieldDescription(field.name), english))
+        Some(self.field_text(
+            field.plugin,
+            PluginText::FieldDescription(field.name),
+            english,
+        ))
     }
 
-    fn field_text(&self, field: &FormField, text: PluginText<'_>, english: &str) -> String {
-        match field.plugin {
+    /// `text` of a field of the plugin `plugin`, or of the phase itself if `None`.
+    fn field_text(&self, plugin: Option<&str>, text: PluginText<'_>, english: &str) -> String {
+        match plugin {
             Some(plugin) => self.plugin(plugin, text, english),
             None => self
                 .format(PHASE, Some(&text.attribute()), None)

@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use plugin_factory::{
     PluginType as _,
     catalog::{AnyAxis, PluginEntry},
+    compatibility::Fact as _,
     config::PluginConfig,
     schema::{Configurable as _, Schema},
 };
@@ -11,6 +12,7 @@ use tournament_engine::{
     plugins::{
         Phrase,
         draw::Draw,
+        facts::{EntrantsPerQualifier, EntrantsPerRanking},
         match_format::MatchFormat,
         metrics_calculator::{
             Cell, GamesBalance, GamesBalanceCalculator, MetricsCalculator, PointsBalance,
@@ -494,7 +496,30 @@ fn translatable_fields(schema: &Schema) -> BTreeSet<String> {
     attributes
 }
 
-/// The fields of a phase itself are translated as well, in the message [`PHASE`].
+/// The phrases about facts of compatibility that the engine says, as attributes of [`FACTS`]:
+/// what its plugins require, and what its facts with a value say of themselves, which cannot be
+/// found from the plugins, so they are listed here.
+fn fact_phrases() -> BTreeSet<String> {
+    let pairs = NonZeroU32::new(2).unwrap();
+    engine_plugins()
+        .into_iter()
+        .flat_map(PluginEntry::required_phrases)
+        .chain(
+            [
+                EntrantsPerRanking::SINGLE.phrase(),
+                EntrantsPerRanking(pairs).phrase(),
+                EntrantsPerQualifier(NonZeroU32::MIN).phrase(),
+                EntrantsPerQualifier(pairs).phrase(),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+        .map(|phrase| phrase.key().to_owned())
+        .collect()
+}
+
+/// The fields of a phase itself are translated as well, in the message [`PHASE`], and the phrases
+/// about facts in [`FACTS`].
 #[test]
 fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
     let calculators: Vec<_> = AnyAxis::of::<dyn MetricsCalculator>()
@@ -504,10 +529,13 @@ fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
     let expected: BTreeMap<String, BTreeSet<String>> = engine_plugins()
         .into_iter()
         .map(|entry| (PluginText::key(entry.id()), translatable(entry)))
-        .chain([(
-            PHASE.to_owned(),
-            translatable_fields(&PhasePlugins::schema()),
-        )])
+        .chain([
+            (
+                PHASE.to_owned(),
+                translatable_fields(&PhasePlugins::schema()),
+            ),
+            (FACTS.to_owned(), fact_phrases()),
+        ])
         .collect();
     for language in Language::ALL {
         if language == Language::English {

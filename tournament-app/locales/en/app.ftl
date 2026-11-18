@@ -195,8 +195,25 @@ issue-incompatible = this does not fit next to the others: { $reason }
 issue-unprovided = { $plugin } needs { $fact }, which nothing provides
 # $plugin: a plugin, $providers: the plugins of which it needs one
 issue-unprovided-by = { $plugin } needs one of these: { $providers }
-# $lacking: in English, what each of the providers needs in turn, e.g. what a match format keeps
+# $lacking: what each of the providers needs in turn, e.g. what a match format keeps
 issue-unprovided-lacking = { $plugin } needs { $count ->
         [one] { $providers }, which needs
        *[other] one of these: { $providers }, which need
     } { $lacking }, and nothing chosen provides that
+# $plugin: a plugin, $condition: what it needs, $provider: issue-provider, $provided: what that
+# gives instead
+issue-unmet = { $plugin } needs { $condition }, but { $provider } gives { $provided }
+# as issue-unmet, where what it gives says nothing more
+issue-unmet-unsaid = { $plugin } needs { $condition }, which { $provider } does not give
+# as issue-unmet, where what it gets comes into the phase from its sources
+issue-unmet-coming-in = { $plugin } needs { $condition }, but { $provided } come in
+# as issue-unmet-coming-in, where what comes in says nothing more
+issue-unmet-context = { $plugin } needs { $condition }, which does not come in
+# $plugin: the plugin giving what another one gets, $field: the field it is chosen in
+issue-provider = { $plugin } ({ $field })
+# $issue: issue-unmet or one like it, $field: a field, $count: how many fit, $choices: the
+# plugins that fit as the field's answer
+issue-fitting = { $issue }; as { $field }, { $count ->
+        [one] this fits
+       *[other] these fit
+    }: { $choices }

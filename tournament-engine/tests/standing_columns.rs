@@ -1,7 +1,7 @@
 //! What the tables of standings of a phase show: by rule what a table is ranked by and what that
 //! is calculated from, otherwise what the operator said.
 
-use plugin_factory::{Plugin, PluginType, compatibility::Declaration};
+use plugin_factory::{Phrase, Plugin, PluginType, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
     AddEntrant, AddPhase, Bye, Columns, CompetitionStateMachine, CompetitionStateMachineExt,
@@ -300,7 +300,7 @@ struct DoubledCalculator;
 impl DoubledCalculator {
     fn declare_static(declaration: &mut Declaration) {
         provides_metric::<Self>(declaration);
-        declaration.require::<CalculatesMetric<Points>>("the points");
+        declaration.require::<CalculatesMetric<Points>>(Phrase::new("points", "the points"));
     }
 }
 

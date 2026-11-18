@@ -3,7 +3,7 @@
 //! built, saved and loaded again, and what a phase built elsewhere lacks is resolved.
 
 use plugin_factory::{
-    Plugin, PluginType, axis,
+    Phrase, Plugin, PluginType, axis,
     catalog::{AnyAxis, PluginEntry},
     compatibility::{Declaration, Fact, Incompatibility, check},
     config::{ConfigError, Path, PluginConfig, Value},
@@ -111,8 +111,8 @@ struct Doubles;
 impl Doubles {
     fn declare_static(declaration: &mut Declaration) {
         declaration.require_that::<EntrantsPerRanking>(
-            "the entrants per ranking",
-            "rankings of pairs",
+            Phrase::new("fact", "the entrants per ranking"),
+            Phrase::new("condition", "rankings of pairs"),
             |entrants| entrants.0 == 2,
         );
     }
@@ -157,7 +157,7 @@ impl Wins {
 
     fn declare(&self, declaration: &mut Declaration) {
         if self.counts_byes {
-            declaration.require::<Byes>("byes");
+            declaration.require::<Byes>(Phrase::new("fact", "byes"));
         }
     }
 }
@@ -216,8 +216,8 @@ struct Buchholz;
 impl Buchholz {
     fn declare_static(declaration: &mut Declaration) {
         declaration
-            .require::<Points>("points")
-            .require::<Matches>("the matches");
+            .require::<Points>(Phrase::new("fact", "points"))
+            .require::<Matches>(Phrase::new("fact", "the matches"));
     }
 }
 
@@ -236,7 +236,7 @@ struct Losses;
 
 impl Losses {
     fn declare_static(declaration: &mut Declaration) {
-        declaration.require::<Eliminating>("eliminations");
+        declaration.require::<Eliminating>(Phrase::new("fact", "eliminations"));
     }
 }
 
@@ -339,11 +339,11 @@ fn problems(issues: &[Issue]) -> Vec<(String, &Problem)> {
 ///
 /// # Panics
 /// Panics if an issue is about something else.
-fn unprovided(issues: &[Issue]) -> Vec<(String, &'static str)> {
+fn unprovided(issues: &[Issue]) -> Vec<(String, String)> {
     issues
         .iter()
         .map(|issue| match issue.problem() {
-            Problem::Unprovided { fact, .. } => (issue.path().to_string(), *fact),
+            Problem::Unprovided { fact, .. } => (issue.path().to_string(), fact.to_string()),
             problem => panic!("{problem:?} is not about a fact nothing provides"),
         })
         .collect()
@@ -433,7 +433,7 @@ fn a_built_plugin_is_checked_by_what_its_configuration_declares() {
     assert_eq!(
         check(singles, &[&*buchholz]),
         Err(Incompatibility::FactNotProvided {
-            fact: "points",
+            fact: Phrase::new("fact", "points"),
             required_by: "Buchholz".to_owned(),
         })
     );
@@ -442,7 +442,7 @@ fn a_built_plugin_is_checked_by_what_its_configuration_declares() {
     assert_eq!(
         check(singles, &[&*counting]),
         Err(Incompatibility::FactNotProvided {
-            fact: "byes",
+            fact: Phrase::new("fact", "byes"),
             required_by: format!("{counting:?}"),
         })
     );
@@ -498,10 +498,10 @@ fn an_operator_configures_a_phase_one_answer_at_a_time() {
     assert_eq!(
         unprovided(&draft.issues()),
         [
-            ("metrics".to_owned(), "points"),
-            ("tie_break".to_owned(), "points"),
-            ("metrics".to_owned(), "the matches"),
-            ("tie_break".to_owned(), "the matches"),
+            ("metrics".to_owned(), "points".to_owned()),
+            ("tie_break".to_owned(), "points".to_owned()),
+            ("metrics".to_owned(), "the matches".to_owned()),
+            ("tie_break".to_owned(), "the matches".to_owned()),
         ]
     );
 
@@ -520,8 +520,8 @@ fn an_operator_configures_a_phase_one_answer_at_a_time() {
     assert_eq!(
         unprovided(&issues[1..]),
         [
-            ("metrics".to_owned(), "the matches"),
-            ("tie_break".to_owned(), "the matches"),
+            ("metrics".to_owned(), "the matches".to_owned()),
+            ("tie_break".to_owned(), "the matches".to_owned()),
         ]
     );
     // the match count, the single metric providing the matches, is implied, but that does not fix
@@ -618,7 +618,7 @@ fn a_requirement_of_a_configuration_is_reported_where_it_can_be_met() {
     assert_eq!(
         issues[0].problem(),
         &Problem::Unprovided {
-            fact: "byes",
+            fact: Phrase::new("fact", "byes"),
             required_by: path("metrics[0]"),
             providers: vec!["full::round_robin"],
             lacking: None,
@@ -671,7 +671,7 @@ fn a_saved_phase_loads_as_it_was_built() {
     assert_eq!(
         check(singles, &[plugins[0], plugins[3]]),
         Err(Incompatibility::FactNotProvided {
-            fact: "points",
+            fact: Phrase::new("fact", "points"),
             required_by: format!("{:?}", plugins[3]),
         })
     );

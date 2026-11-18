@@ -11,7 +11,11 @@ use tournament_app::{
     view::Plugin,
 };
 
-use crate::{Page, REPOSITORY, capitalized, i18n::t, icons, sentence};
+use crate::{
+    Page, REPOSITORY, capitalized,
+    i18n::{collation_key, t},
+    icons, sentence,
+};
 
 /// The media owner the help names, name and town (e.g. `Jane Doe, Vienna`), from the environment
 /// variable `TOURNAMO_MEDIA_OWNER` at build time; without it (or with it empty) the help names
@@ -130,7 +134,7 @@ fn Glossary(plugins: Vec<Plugin>) -> Element {
     let page = use_context::<Page>();
     let tr = page.translator.read();
     let mut entries: Vec<_> = plugins.iter().map(|plugin| entry(&tr, plugin)).collect();
-    entries.sort_by_cached_key(|(label, _)| label.to_lowercase());
+    entries.sort_by_cached_key(|(label, _)| collation_key(label));
     rsx! {
         dl { class: "glossary",
             for (label , description) in entries {

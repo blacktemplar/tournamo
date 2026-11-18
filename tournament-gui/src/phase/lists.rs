@@ -10,7 +10,7 @@ use tournament_app::{
 use tournament_engine::Table;
 
 use super::fields::{
-    EditedForm, Fields, Issues, PluginChoice, id, plugin_description, plugin_label,
+    EditedForm, Fields, Issues, PluginChoice, id, in_label_order, plugin_description, plugin_label,
 };
 use crate::{
     capitalized, competition::Ctx, components::select::Select, focus::focus_later, i18n::t, icons,
@@ -31,6 +31,7 @@ pub(super) fn OrderedList(
     let tr = ctx.translator.read();
     let last = list.items.len().saturating_sub(1);
     let implied = implied(&tr, &list.implied);
+    let options = in_label_order(&tr, &list.options);
     // the plugin added, at the end, or the list adding another one
     let added = format!(
         "#{}-remove",
@@ -73,12 +74,12 @@ pub(super) fn OrderedList(
                         form.edit(|form| form.add(&path, &chosen));
                         focus_later(&[&add_trigger, &added]);
                     },
-                    for (index, option) in list.options.iter().enumerate() {
+                    for (index, option) in options.into_iter().enumerate() {
                         PluginChoice {
                             key: "{option.id}",
                             select: "{id}-add",
                             index,
-                            option: *option,
+                            option,
                         }
                     }
                 }

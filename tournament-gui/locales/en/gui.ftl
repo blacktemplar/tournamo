@@ -182,6 +182,8 @@ registration = the registration
 every-place-of = every place of { $phase }
 places-of = places { $from }–{ $to } of { $phase }
 places-from-of = places from { $from } of { $phase }
+registration-places = places { $from }–{ $to } of the registration
+registration-places-from = places from { $from } of the registration
 # how long the phase takes with the entrants entered, before the start; $rounds and $matches: what
 # the messages below say
 phase-scale = With { $entrants } entrants, the phase takes { $rounds } and { $matches }.

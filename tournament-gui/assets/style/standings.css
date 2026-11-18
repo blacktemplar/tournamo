@@ -155,6 +155,12 @@ td.name {
   min-width: 7rem;
 }
 
+/* the ranking: the phase reached follows the name, rather than at the far edge of the table */
+.ranking-list .phase {
+  width: 100%;
+  text-align: left;
+}
+
 /* the comparison across the groups has no rank before the name */
 .compared-list .name {
   left: 0;

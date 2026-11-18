@@ -115,7 +115,7 @@ read-only = Dieses Turnier ist in einem anderen Tab geöffnet und wird hier nur 
 
 entrants-after-start = Das Turnier hat begonnen, die Teilnehmer stehen also fest; ihre Namen lassen sich noch berichtigen.
 entrants = Teilnehmer
-no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile, gefolgt von einer Wertungszahl nach einem Strichpunkt oder Tabulator, wo es eine gibt.
+no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile, gefolgt von einer Wertungszahl nach einem Semikolon oder Tabulator, wo es eine gibt.
 name = Name
 add-entrant = Teilnehmer hinzufügen
 entrant-like = „{ $name }“ ist schon eingetragen.
@@ -148,9 +148,11 @@ remove-phase-named = Phase entfernen: { $phase }
 everyone-registered = alle Angemeldeten
 only-some-places = Nur einige Plätze
 registration = die Anmeldung
-every-place-of = alle Plätze von { $phase }
-places-of = Plätze { $from }–{ $to } von { $phase }
-places-from-of = Plätze ab { $from } von { $phase }
+every-place-of = alle Plätze aus „{ $phase }“
+places-of = Plätze { $from }–{ $to } aus „{ $phase }“
+places-from-of = Plätze ab { $from } aus „{ $phase }“
+registration-places = Plätze { $from }–{ $to } der Anmeldung
+registration-places-from = Plätze ab { $from } der Anmeldung
 phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
 phase-scale-teams = Mit { $entrants } Teilnehmern in { $teams } Teams dauert die Phase { $rounds } mit { $matches }.
 scale-rounds = { $count ->
@@ -180,22 +182,22 @@ add-source = Quelle hinzufügen
 choose-plugin = Auswählen …
 no-plugin = (keines)
 recommended = (empfohlen)
-following-suggestions = Rangfolge und Wertung folgen den Empfehlungen für das Format, bis du sie bearbeitest.
-customized-settings = Deine Einstellungen für Rangfolge und Wertung bleiben bei einem Formatwechsel erhalten. Empfehlungen übernehmen ersetzt sie und aktiviert wieder automatische Anpassungen.
-apply-suggested-ranking = Empfohlene Rangfolge übernehmen
+following-suggestions = Reihenfolge der Tabelle und Kennzahlen folgen den Empfehlungen für das Format, bis du sie bearbeitest.
+customized-settings = Deine Reihenfolge der Tabelle und deine Kennzahlen bleiben bei einem Formatwechsel erhalten. Die Empfehlungen zu übernehmen ersetzt sie, und sie folgen wieder dem Format.
+apply-suggested-ranking = Empfehlungen übernehmen
 add-plugin = Hinzufügen
 about = Über { $subject }
 move-up = { $plugin } nach oben schieben
 move-down = { $plugin } nach unten schieben
 remove-plugin = { $plugin } entfernen
 implied-plugin = { $plugin }, da ein anderes es braucht
-implied-plugin-needed-by = { $plugin }, gebraucht für { $needed_by }
+implied-plugin-needed-by = { $plugin }, benötigt für { $needed_by }
 metrics-name = Kennzahl
 shown-in-divisions = Gruppentabellen
 shown-in-comparison = Vergleich
 show-in-divisions = { $metric } in den Gruppentabellen anzeigen
 show-in-comparison = { $metric } im Vergleich anzeigen
-metric-needed-by = gebraucht für { $needed_by }
+metric-needed-by = benötigt für { $needed_by }
 shown-ranked-in-divisions = angezeigt, da die Tabelle danach gereiht ist
 shown-ranked-in-comparison = angezeigt, da die verglichenen Zeilen danach gereiht sind
 shown-calculated-from = angezeigt, da { $metric } daraus berechnet wird
@@ -317,7 +319,7 @@ typing-results = das Eintippen von Ergebnissen
 enter-result-hint = Tippe die Nummer des Spiels, dann 1, wenn die linke Seite gewonnen hat{ $draws ->
         [yes] , X für ein Unentschieden
        *[no] {""}
-    } oder 2, wenn die rechte Seite gewonnen hat, z. B. „3 1“. Oder tippe einen Teil des Namens des Siegers, falls er auf mehrere passt, mit der Nummer des Spiels{ $draws ->
+    } oder 2, wenn die rechte Seite gewonnen hat, z. B. „3 1“. Oder tippe einen Teil des Namens des Siegers, bei mehreren Treffern mit der Nummer des Spiels{ $draws ->
         [yes] {" "}und X für ein Unentschieden, z. B. „ali“, „ali 5“ oder „ali X“.
        *[no] , z. B. „ali“ oder „ali 5“.
     }
@@ -364,8 +366,8 @@ announce-results-stay = { $count ->
        *[other] Die { $count } gemeldeten Ergebnisse bleiben.
     }
 announce-started = Gestartet: { $count ->
-        [one] ein Spiel ist
-       *[other] { $count } Spiele sind
+        [one] ein Spiel
+       *[other] { $count } Spiele
     } zu spielen.
 action-add-entrant = Hinzufügen von { $name }
 action-add-entrants = Hinzufügen von { $count } Teilnehmern

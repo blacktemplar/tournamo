@@ -28,8 +28,8 @@ error-phase-starts-with-competition = die Phase nimmt ihre Teilnehmer aus der An
 error-phase-waiting = die Phase kann beginnen, sobald ihre Teilnehmer feststehen: { $phases }
 error-phase-removed-after-start = die Phase hat begonnen, daher kann sie nicht mehr entfernt werden
 error-phase-in-use = { $count ->
-        [one] { $phases } nimmt Teilnehmer aus dieser Phase; entferne zuerst diese
-       *[other] { $phases } nehmen Teilnehmer aus dieser Phase; entferne zuerst diese
+        [one] { $phases } nimmt Teilnehmer aus dieser Phase; entferne zuerst { $phases }
+       *[other] { $phases } nehmen Teilnehmer aus dieser Phase; entferne zuerst jene Phasen
     }
 error-later-phase-started = { $phase } hat mit den Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
 warning-cut-through-tie = in { $phase } teilen sich mehr Teilnehmer Platz { $rank }, als weiterkommen: das Los nimmt { $favoured }, nicht { $others }

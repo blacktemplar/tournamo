@@ -123,19 +123,25 @@ pub fn sources_named<'a>(
             match (of, everyone) {
                 (None, true) => tr.get("everyone-registered"),
                 (Some(of), true) => t!(tr, "every-place-of", phase = of),
-                (of, false) => {
-                    let of = of.unwrap_or_else(|| tr.get("registration"));
-                    match source.to {
-                        Some(to) => t!(
-                            tr,
-                            "places-of",
-                            from = source.from.get(),
-                            to = to.get(),
-                            phase = of
-                        ),
-                        None => t!(tr, "places-from-of", from = source.from.get(), phase = of),
-                    }
-                }
+                (Some(of), false) => match source.to {
+                    Some(to) => t!(
+                        tr,
+                        "places-of",
+                        from = source.from.get(),
+                        to = to.get(),
+                        phase = of
+                    ),
+                    None => t!(tr, "places-from-of", from = source.from.get(), phase = of),
+                },
+                (None, false) => match source.to {
+                    Some(to) => t!(
+                        tr,
+                        "registration-places",
+                        from = source.from.get(),
+                        to = to.get()
+                    ),
+                    None => t!(tr, "registration-places-from", from = source.from.get()),
+                },
             }
         })
         .collect();
@@ -279,13 +285,13 @@ pub fn Ranking() -> Element {
                         role: "group",
                         tabindex: "0",
                         aria_labelledby: "ranking",
-                        table { id: "ranking-list",
+                        table { id: "ranking-list", class: "standing-list ranking-list",
                             caption { class: "visually-hidden", {tr.get("ranking")} }
                             thead {
                                 tr {
                                     th { class: "rank", scope: "col", {tr.get("place")} }
                                     th { class: "name", scope: "col", {tr.get("name")} }
-                                    th { scope: "col", {tr.get("phase-reached")} }
+                                    th { class: "phase", scope: "col", {tr.get("phase-reached")} }
                                 }
                             }
                             tbody {
@@ -301,7 +307,7 @@ pub fn Ranking() -> Element {
                                         th { class: "name", scope: "row",
                                             {team_name(&tr, &row.entrants)}
                                         }
-                                        td {
+                                        td { class: "phase",
                                             {
                                                 phases
                                                     .iter()

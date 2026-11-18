@@ -64,7 +64,7 @@ pub fn Competitions() -> Element {
     };
     let taken = Listing::is_taken(&listings, &name.read(), None).then(|| name.read().clone());
     rsx! {
-        main { class: "narrow",
+        main { class: "narrow", tabindex: "-1",
             Notices {}
             section { class: "card", aria_labelledby: "new-competition",
                 h2 { id: "new-competition", {tr.get("new-competition")} }

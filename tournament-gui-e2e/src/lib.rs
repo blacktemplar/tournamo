@@ -2356,6 +2356,34 @@ impl Gui {
             .await
     }
 
+    /// Presses Tab until the element with the focus shows `text`, e.g. a button shown only then.
+    ///
+    /// # Panics
+    /// Panics if the focus does not reach it within 20 presses.
+    pub async fn tab_to(&self, text: &str) -> WebDriverResult<()> {
+        for _ in 0..20 {
+            self.press(Key::Tab).await?;
+            if self.driver.active_element().await?.text().await? == text {
+                return Ok(());
+            }
+        }
+        panic!("the focus must reach {text:?} within 20 presses of Tab");
+    }
+
+    /// Waits until the focus is on the element the CSS selector `selector` finds, e.g. `main`.
+    ///
+    /// # Panics
+    /// Panics if it is not in time.
+    pub async fn expect_focus_on(&self, selector: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css(format!("{selector}:focus")),
+                |query| query,
+                &format!("the focus on {selector}"),
+            )
+            .await
+    }
+
     /// Waits until the element with the focus shows `text`, e.g. a button.
     ///
     /// # Panics

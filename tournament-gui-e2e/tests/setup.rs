@@ -12,6 +12,30 @@ async fn entrants_are_listed_in_the_order_they_were_added() {
     .await;
 }
 
+/// The keyboard skips the bars at the top, and the list of entrants, by buttons shown only while
+/// they have the focus: the first stop of the page, and the one before the list.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_keyboard_skips_the_bars_and_the_list_of_entrants() {
+    run_in_new_competition(async |gui| {
+        gui.add_entrant("Alice").await?;
+        gui.add_entrant("Bob").await?;
+        gui.page.reload().await?;
+
+        gui.press(Key::Tab).await?;
+        gui.expect_focus("Skip to content").await?;
+        gui.page.expect_in_view(":focus").await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_focus_on("main").await?;
+        gui.tab_to("Skip to the phases").await?;
+        gui.page.expect_in_view(":focus").await?;
+        gui.page.check_accessibility().await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_focus_on("#phase").await
+    })
+    .await;
+}
+
 /// A name differing from another only in case is said to look like it while it is typed, and is
 /// refused by the name entered.
 #[tokio::test]

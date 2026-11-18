@@ -78,6 +78,15 @@ pub fn Entrants() -> Element {
                     }
                 }
             }
+            // past the stops of every entrant, shown only while it has the focus
+            if count > 0 {
+                button {
+                    class: "skip-link",
+                    r#type: "button",
+                    onclick: |_| focus_later(&["#phase"]),
+                    {tr.get("skip-to-phases")}
+                }
+            }
             ol { id: "entrant-list", class: if ratings { "rated" },
                 for (position, (row, name)) in entrants.into_iter().enumerate() {
                     EntrantItem { key: "{row.id:?}", row, name, position, ratings }

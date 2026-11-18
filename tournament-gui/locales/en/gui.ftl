@@ -515,3 +515,7 @@ all-divisions = All
 divisions-shown = Groups shown
 compared-heading = Place { $rank } compared across the groups
 compared-hint = The same place of every group is ranked by the comparison across the groups, in the end by lot.
+# buttons shown only while they have the keyboard's focus: past the bars at the top of the page,
+# and past the list of entrants
+skip-to-content = Skip to content
+skip-to-phases = Skip to the phases

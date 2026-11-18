@@ -54,7 +54,7 @@ pub fn Help() -> Element {
     let tr = page.translator.read();
     let glossary = Session::glossary();
     rsx! {
-        main { class: "narrow help",
+        main { class: "narrow help", tabindex: "-1",
             section { class: "card", aria_labelledby: RUNNING,
                 h2 { id: RUNNING, {tr.get("help-running")} }
                 p { {tr.get("help-running-steps")} }

@@ -175,6 +175,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
+- The keyboard can skip what it would otherwise go through stop by stop: the
+  first stop of the page skips the bars to the content, and one before the
+  list of entrants skips it to the phases (WCAG 2.4.1). Both show only while
+  they have the focus.
 - A match to play shows its number above the pairing ("Match 3"), where it
   sat between the names and read like a score, and each name centred above
   its button; a played match shows its number first, a dash between the

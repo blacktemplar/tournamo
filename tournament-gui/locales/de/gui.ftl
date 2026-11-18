@@ -395,3 +395,5 @@ all-divisions = Alle
 divisions-shown = Gezeigte Gruppen
 compared-heading = Platz { $rank } im Vergleich der Gruppen
 compared-hint = Derselbe Platz aller Gruppen wird durch den Vergleich der Gruppen gereiht, zuletzt durch das Los.
+skip-to-content = Zum Inhalt springen
+skip-to-phases = Zu den Phasen springen

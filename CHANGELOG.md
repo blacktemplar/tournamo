@@ -256,6 +256,16 @@ later one: a file whose `"format"` changes is migrated, not refused.
   say why (whole numbers only, or at most as many as it has games). A match
   whose player still has a match of an earlier round open is reported with a
   warning, as its round's list reports it.
+- A list of entrants pasted adds every line it can and lists the others, each
+  by its line number with why, rather than adding nothing and naming only the
+  first problem. A name typed with a `;` is read as a line pasted, so
+  `Bo;1500` adds Bo rated 1500. Spaces inside a name are tidied, so "Zed  Zed"
+  and "Zed Zed" are the same name. A name, of an entrant or a competition, has
+  at most 100 characters; an imported file's longer names are cut.
+- Numbers are read as the page's language writes them: in German `1.000` is a
+  thousand and `1.800,5` is 1800.5, in English `1,000` is a thousand; the
+  other separator still works as a decimal point (`1.5` in German). Ratings
+  may be negative. No number takes an exponent (`1e3`) any more.
 
 ## [0.4.0] - 2026-11-09
 

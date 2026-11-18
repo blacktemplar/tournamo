@@ -410,7 +410,7 @@ fn a_whole_number_typed_is_entered_as_a_count() {
         ("17", 17),
         (" 3 ", 3),
         ("2.0", 2),
-        ("1e3", 1000),
+        ("1,000", 1000),
         ("65535", u16::MAX),
     ] {
         let field = after_typing(typed);
@@ -1049,7 +1049,7 @@ fn a_score_is_read_as_it_is_written() {
         ] {
             let written = translator.scores(&[Sides::new(Some(score.a), Some(score.b))]);
 
-            assert_eq!(read_score(&written), Some(score), "{written}");
+            assert_eq!(read_score(&written, language), Some(score), "{written}");
         }
     }
 }

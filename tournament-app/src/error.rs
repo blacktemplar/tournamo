@@ -27,12 +27,34 @@ use crate::{
 pub enum AddEntrantError {
     EmptyName,
     DuplicateName(String),
+    /// The name is longer than [`MAX_NAME`](crate::session::MAX_NAME) characters.
+    NameTooLong,
     /// A line pasted gives this after its name as its rating, which is no number, see
     /// [`Session::add_entrants`](crate::session::Session::add_entrants).
     NoRating(String),
     Started,
     /// The engine refused the entrant for a reason this crate does not know.
     Rejected(TransitionError),
+}
+
+/// A line of a list of entrants that was not added, see
+/// [`Session::add_entrants`](crate::session::Session::add_entrants).
+#[derive(Debug)]
+pub struct RefusedLine {
+    /// Its number, from 1, blank lines included.
+    pub number: usize,
+    /// The line, without the spaces around it.
+    pub line: String,
+    pub why: AddEntrantError,
+}
+
+impl Message for RefusedLine {
+    fn text(&self) -> Text {
+        Text::new("error-line-refused")
+            .with("number", self.number)
+            .with("line", self.line.as_str())
+            .with("why", self.why.text())
+    }
 }
 
 /// Why an entrant was not removed.
@@ -52,6 +74,8 @@ pub enum RenameEntrantError {
     UnknownEntrant,
     EmptyName,
     DuplicateName(String),
+    /// The name is longer than [`MAX_NAME`](crate::session::MAX_NAME) characters.
+    NameTooLong,
 }
 
 /// Why the rating of an entrant was not changed.
@@ -535,6 +559,7 @@ impl Message for AddEntrantError {
             Self::DuplicateName(name) => {
                 Text::new("error-duplicate-name").with("name", name.as_str())
             }
+            Self::NameTooLong => name_too_long(),
             Self::NoRating(rating) => Text::new("error-no-rating").with("rating", rating.as_str()),
             Self::Started => Text::new("error-entrant-added-after-start"),
             Self::Rejected(error) => rejected(error),
@@ -570,8 +595,14 @@ impl Message for RenameEntrantError {
             Self::DuplicateName(name) => {
                 Text::new("error-duplicate-name").with("name", name.as_str())
             }
+            Self::NameTooLong => name_too_long(),
         }
     }
+}
+
+/// That a name is longer than [`MAX_NAME`](crate::session::MAX_NAME) characters.
+fn name_too_long() -> Text {
+    Text::new("error-name-too-long").with("max", crate::session::MAX_NAME)
 }
 
 impl Message for PhaseDraftError {

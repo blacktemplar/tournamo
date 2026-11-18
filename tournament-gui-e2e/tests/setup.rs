@@ -118,8 +118,8 @@ async fn an_entrant_is_removed() {
     .await;
 }
 
-/// A list pasted adds an entrant for each of its lines, or nobody if a name is taken; a single
-/// name pasted adds nobody by itself.
+/// A list pasted adds an entrant for each of its lines but those refused, e.g. of a name taken,
+/// which are listed with why; a single name pasted adds nobody by itself.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_list_pasted_adds_an_entrant_for_each_line() {
@@ -132,12 +132,12 @@ async fn a_list_pasted_adds_an_entrant_for_each_line() {
             .await?;
         gui.expect_announcement("Added 3 entrants.").await?;
         gui.paste_entrant_names("Eve\nalice").await?;
-        gui.expect_field_error("entrant-name", "There already is an entrant named “Alice”.")
+        gui.expect_lines_refused(&["Line 2, “alice”: there already is an entrant named “Alice”."])
             .await?;
-        gui.expect_entrants(&["Alice", "Bob", "Carol", "Dave"])
+        gui.expect_entrants(&["Alice", "Bob", "Carol", "Dave", "Eve"])
             .await?;
-        gui.paste_entrant_names("Eve").await?;
-        gui.expect_entrants(&["Alice", "Bob", "Carol", "Dave"])
+        gui.paste_entrant_names("Frank").await?;
+        gui.expect_entrants(&["Alice", "Bob", "Carol", "Dave", "Eve"])
             .await
     })
     .await;

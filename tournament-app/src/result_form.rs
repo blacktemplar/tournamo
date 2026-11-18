@@ -43,7 +43,8 @@ use tournament_engine::{
 
 use crate::{
     form::{NotTaken, typed_number, with_range},
-    i18n::Text,
+    i18n::{Language, Text},
+    number,
     rejected::Rejections,
     view,
 };
@@ -56,6 +57,8 @@ pub struct ResultForm {
     format: Box<dyn MatchFormat>,
     template: Template,
     root: Entry,
+    /// The language numbers are typed in, see [`Self::in_language`].
+    language: Language,
 }
 
 /// What was entered for a part.
@@ -332,7 +335,16 @@ impl ResultForm {
             format,
             template,
             root: Entry::default(),
+            language: Language::default(),
         }
+    }
+
+    /// This form with the numbers typed into it read as `language` writes them, see
+    /// [`Self::enter`]; English if not set.
+    #[must_use]
+    pub fn in_language(mut self, language: Language) -> Self {
+        self.language = language;
+        self
     }
 
     /// The form of the match `match_id` as it was reported, `contest`, whose result looks like
@@ -352,6 +364,7 @@ impl ResultForm {
             format,
             template,
             root,
+            language: Language::default(),
         }
     }
 
@@ -413,7 +426,7 @@ impl ResultForm {
             .field(field)
             .expect("a field of the part")
             .kind;
-        match read(entered, kind) {
+        match read(entered, kind, self.language) {
             Ok(value) => self.set_value(path, field, team, value),
             Err(problem) => {
                 self.set_value(path, field, team, None);
@@ -756,35 +769,23 @@ pub enum ScoresRefused {
 
 /// The score `word` says: the numbers of both sides, side A's first, joined by a `-`, a `:` or an
 /// en dash, as [`Translator::scores`](crate::i18n::Translator::scores) joins them, e.g. `21-17`,
-/// `21:17` or `21–17`. Each is digits, a count (so at most 65535), or digits with a point or a
-/// comma between them, a decimal, e.g. `9.5-10` or `9,5–10`.
-pub fn read_score(word: &str) -> Option<Sides<EnteredValue>> {
+/// `21:17` or `21–17`. Each is a whole number, a count (so at most 65535), or one with a
+/// fraction, a decimal, e.g. `9.5-10` or `9,5–10`, written as `language` writes numbers or with
+/// the other decimal separator.
+pub fn read_score(word: &str, language: Language) -> Option<Sides<EnteredValue>> {
     let (a, b) = word.split_once(['-', ':', '–'])?;
-    Some(Sides::new(read_number(a)?, read_number(b)?))
+    Some(Sides::new(
+        read_number(a, language)?,
+        read_number(b, language)?,
+    ))
 }
 
-/// The number `text` is: digits, a count, or digits with a point or a comma between them, a
-/// decimal.
-fn read_number(text: &str) -> Option<EnteredValue> {
-    match number_parts(text)? {
-        (whole, None) => whole.parse().ok().map(EnteredValue::Count),
-        (whole, Some(fraction)) => format!("{whole}.{fraction}")
-            .parse()
-            .ok()
-            .map(EnteredValue::Decimal),
-    }
-}
-
-/// The whole part and the fraction, if any, of `text`, a number as one is typed: digits, or digits
-/// with a point or a comma between them; `None` for anything else.
-pub(crate) fn number_parts(text: &str) -> Option<(&str, Option<&str>)> {
-    let digits = |text: &str| !text.is_empty() && text.chars().all(|char| char.is_ascii_digit());
-    match text.split_once(['.', ',']) {
-        None if digits(text) => Some((text, None)),
-        Some((whole, fraction)) if digits(whole) && digits(fraction) => {
-            Some((whole, Some(fraction)))
-        }
-        _ => None,
+/// The number `text` is: a count if whole, else a decimal, see [`read_score`].
+fn read_number(text: &str, language: Language) -> Option<EnteredValue> {
+    let typed = number::read(text, language, false)?;
+    match typed.fraction {
+        None => typed.whole.parse().ok().map(EnteredValue::Count),
+        Some(_) => typed.plain().parse().ok().map(EnteredValue::Decimal),
     }
 }
 
@@ -806,12 +807,12 @@ fn of_kind(value: EnteredValue, kind: ValueKind) -> Option<EnteredValue> {
 
 /// What `entered`, as an operator typed it, is in a field of `kind`, see [`ResultForm::enter`]:
 /// `None` if nothing, else its value, or why it is none.
-fn read(entered: &str, kind: ValueKind) -> Result<Option<EnteredValue>, Text> {
+fn read(entered: &str, kind: ValueKind, language: Language) -> Result<Option<EnteredValue>, Text> {
     if entered.trim().is_empty() {
         return Ok(None);
     }
     let out_of_range = || with_range(Text::new("issue-out-of-range"), range_of(kind));
-    match typed_number(entered) {
+    match typed_number(entered, language) {
         Ok(number) => of_kind(EnteredValue::Decimal(Score::new(number)), kind)
             .map(Some)
             .ok_or_else(out_of_range),

@@ -2,6 +2,7 @@
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
+use crate::people::Person;
 
 #[test]
 fn entrants_are_listed_by_name_in_the_order_they_were_added() {
@@ -52,17 +53,17 @@ fn a_batch_is_checked_before_any_entrant_is_added() {
 }
 
 #[test]
-fn batch_names_are_kept_as_supplied_and_undone_together() {
+fn batch_names_are_tidied_and_undone_together() {
     let mut session = Session::new("cup");
     session
         .add_named_entrants(&[" Alice ".to_owned(), "Bob".to_owned()])
         .unwrap();
-    assert_eq!(names(&session.entrants()), [" Alice ", "Bob"]);
+    assert_eq!(names(&session.entrants()), ["Alice", "Bob"]);
 
     session.undo().unwrap();
     assert!(session.entrants().is_empty());
     session.redo().unwrap();
-    assert_eq!(names(&session.entrants()), [" Alice ", "Bob"]);
+    assert_eq!(names(&session.entrants()), ["Alice", "Bob"]);
 }
 
 #[test]
@@ -120,9 +121,10 @@ fn a_list_adds_an_entrant_for_each_line() {
     let mut session = Session::new("cup");
     session.add_entrant("Alice").unwrap();
 
-    let added = session.add_entrants("Bob\r\n  Carol \n\n Dave\n").unwrap();
+    let pasted = session.add_entrants("Bob\r\n  Carol \n\n Dave\n").unwrap();
 
-    assert_eq!(added.len(), 3);
+    assert_eq!(pasted.added.len(), 3);
+    assert!(pasted.refused.is_empty());
     assert_eq!(
         names(&session.entrants()),
         ["Alice", "Bob", "Carol", "Dave"]
@@ -152,25 +154,122 @@ fn a_list_of_one_line_is_undone_as_one_entrant() {
     assert_eq!(session.undo().unwrap(), Action::AddEntrant(alice));
 }
 
-/// A list with a name taken, by an entrant or an earlier line, adds nobody.
+/// The lines of a list with a name taken, by an entrant or an earlier line, or a rating that is
+/// no number are refused, each with its number and why; the others are added.
 #[test]
-fn a_list_with_a_name_taken_adds_nobody() {
+fn a_list_adds_its_good_lines_and_names_the_others() {
     let mut session = Session::new("cup");
     session.add_entrant("Alice").unwrap();
 
-    assert!(matches!(
-        session.add_entrants("Bob\nALICE"),
-        Err(AddEntrantError::DuplicateName(name)) if name == "Alice"
-    ));
-    assert!(matches!(
-        session.add_entrants("Bob\nCarol\nbob"),
-        Err(AddEntrantError::DuplicateName(name)) if name == "Bob"
-    ));
+    let pasted = session
+        .add_entrants("Bob\nALICE\n\nCarol; strong \nbob\nDave")
+        .unwrap();
+
+    assert_eq!(names(&session.entrants()), ["Alice", "Bob", "Dave"]);
+    let refused: Vec<_> = pasted
+        .refused
+        .iter()
+        .map(|line| (line.number, line.line.as_str(), line.why.to_string()))
+        .collect();
+    assert_eq!(
+        refused,
+        [
+            (
+                2,
+                "ALICE",
+                "there already is an entrant named “Alice”".to_owned()
+            ),
+            (
+                4,
+                "Carol; strong",
+                "“strong” is no rating: a rating is a number, such as 1500".to_owned()
+            ),
+            (
+                5,
+                "bob",
+                "there already is an entrant named “Bob”".to_owned()
+            ),
+        ]
+    );
+    let added = session.entrants()[1..].to_vec();
+    assert_eq!(session.undo().unwrap(), Action::AddEntrants(added));
     assert!(matches!(
         session.add_entrants(" \n"),
         Err(AddEntrantError::EmptyName)
     ));
-    assert_eq!(names(&session.entrants()), ["Alice"]);
+}
+
+/// A name typed is read as a line pasted: a rating follows a `;`.
+#[test]
+fn a_line_typed_is_read_as_one_pasted() {
+    let mut session = Session::new("cup");
+
+    session.add_entrants("Bo;1500").unwrap();
+
+    assert_eq!(seeds(&session), [(Some(1500.0), Some(1))]);
+    assert_eq!(session.entrant_like("bo;1700"), Some("Bo".to_owned()));
+}
+
+/// Whitespace in a name is tidied, so that names differing in it alone are alike.
+#[test]
+fn whitespace_in_a_name_is_tidied() {
+    let mut session = Session::new("cup");
+
+    session.add_entrant(" Zed   Zed ").unwrap();
+
+    assert_eq!(names(&session.entrants()), ["Zed Zed"]);
+    assert!(matches!(
+        session.add_entrant("zed zed"),
+        Err(AddEntrantError::DuplicateName(name)) if name == "Zed Zed"
+    ));
+    let id = session.entrants()[0].id;
+    session.rename_entrant(id, "Zed\t Zedd").unwrap();
+    assert_eq!(names(&session.entrants()), ["Zed Zedd"]);
+}
+
+/// A name has at most [`MAX_NAME`] characters, an imported one is cut to them.
+#[test]
+fn a_name_has_at_most_its_characters() {
+    let mut session = Session::new("cup");
+    let longest = "x".repeat(MAX_NAME);
+
+    let alice = session.add_entrant(&longest).unwrap();
+
+    assert!(matches!(
+        session.add_entrant(&format!("{longest}y")),
+        Err(AddEntrantError::NameTooLong)
+    ));
+    assert!(matches!(
+        session.rename_entrant(alice, &format!("{longest}y")),
+        Err(RenameEntrantError::NameTooLong)
+    ));
+    let mut long = Session::new(format!("{longest}z"));
+    long.add_entrant("Bob").unwrap();
+    let id = long.entrants()[0].id;
+    long.people.add(Person::new(id, format!("{longest}b")));
+    let imported = Session::import(&long.export(), "cup", &[]).unwrap();
+    assert_eq!(imported.name(), longest);
+    assert_eq!(names(&imported.entrants()), [longest]);
+}
+
+/// A rating is read as the operator's language writes numbers, and may be negative.
+#[test]
+fn a_rating_is_read_in_the_operators_language() {
+    let mut session = Session::new("cup");
+    session.set_language(Language::German);
+
+    session
+        .add_entrants("Alice;1.800,5\nBob;-5\nCarol;1.000")
+        .unwrap();
+
+    assert_eq!(
+        seeds(&session),
+        [
+            (Some(1800.5), Some(1)),
+            (Some(-5.0), Some(3)),
+            (Some(1000.0), Some(2)),
+        ]
+    );
 }
 
 /// Renaming keeps the entrant's place, also after the start, and is saved; it appends nothing to
@@ -263,7 +362,9 @@ fn id_of(session: &Session, name: &str) -> EntrantId {
 /// Rates the entrant named `name` by `rating`, a number as typed.
 fn rate(session: &mut Session, name: &str, rating: &str) {
     let id = id_of(session, name);
-    session.set_rating(id, Rating::parse(rating)).unwrap();
+    session
+        .set_rating(id, Rating::parse(rating, Language::English))
+        .unwrap();
 }
 
 /// The rating and seed of each entrant, in the order they were added.
@@ -383,7 +484,7 @@ fn ratings_do_not_change_after_the_start() {
     let alice = id_of(&session, "Alice");
 
     assert!(matches!(
-        session.set_rating(alice, Rating::parse("1500")),
+        session.set_rating(alice, Rating::parse("1500", Language::English)),
         Err(RateEntrantError::RegistrationClosed)
     ));
     assert!(matches!(
@@ -415,17 +516,6 @@ fn a_list_rates_the_entrants_whose_lines_give_a_rating() {
             (None, None),
         ]
     );
-}
-
-#[test]
-fn a_list_with_a_rating_that_is_no_number_adds_nobody() {
-    let mut session = Session::new("cup");
-
-    assert!(matches!(
-        session.add_entrants("Alice;1500\nBob; strong \n"),
-        Err(AddEntrantError::NoRating(rating)) if rating == "strong"
-    ));
-    assert!(session.entrants().is_empty());
 }
 
 #[test]

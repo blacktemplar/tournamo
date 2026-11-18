@@ -3,6 +3,10 @@
 
 error-empty-name = an entrant name must not be empty
 error-duplicate-name = there already is an entrant named “{ $name }”
+# $max: the most characters a name has
+error-name-too-long = a name has at most { $max } characters
+# $number: the number of a line pasted, $line: the line, $why: why it was not added
+error-line-refused = line { $number }, “{ $line }”: { $why }
 error-entrant-added-after-start = the competition has started, so no entrant can be added anymore
 error-unknown-entrant = there is no such entrant
 error-entrant-removed-after-start = the competition has started, so no entrant can be removed anymore

@@ -289,6 +289,14 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
         }
     });
     use_hook(move || ctx.save());
+    // numbers are typed as the language of the page writes them
+    use_effect(move || {
+        let language = ctx.translator.read().language();
+        let mut session = ctx.session;
+        if session.peek().language() != language {
+            session.write().set_language(language);
+        }
+    });
     use_future(move || follow(ctx, competition));
     let mut shown = page.shown;
     use_effect(move || {

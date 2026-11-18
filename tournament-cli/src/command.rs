@@ -7,7 +7,7 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use thiserror::Error;
-use tournament_app::{people::Rating, result_form::read_score};
+use tournament_app::{i18n::Language, people::Rating, result_form::read_score};
 use tournament_engine::{EnteredValue, Sides};
 
 /// A single command typed at the prompt.
@@ -158,7 +158,8 @@ pub enum Command {
 
 /// The rating `text` says, see [`Rating::parse`].
 fn rating(text: &str) -> Result<Rating, String> {
-    Rating::parse(text).ok_or_else(|| format!("“{text}” is no rating; write a number, e.g. `1500`"))
+    Rating::parse(text, Language::English)
+        .ok_or_else(|| format!("“{text}” is no rating; write a number, e.g. `1500`"))
 }
 
 /// The index of the division of the letter `letter`, as `--division` takes it: `a` (or `A`) for
@@ -240,9 +241,11 @@ impl FromStr for Reported {
         if let Ok(result) = ReportedResult::from_str(text, true) {
             return Ok(Self::Result(result));
         }
-        read_score(text).map(Self::Score).ok_or_else(|| {
-            format!("“{text}” is no result (a, b or draw) and no score (e.g. 21-17)")
-        })
+        read_score(text, Language::English)
+            .map(Self::Score)
+            .ok_or_else(|| {
+                format!("“{text}” is no result (a, b or draw) and no score (e.g. 21-17)")
+            })
     }
 }
 
@@ -344,14 +347,14 @@ mod tests {
             parse("add Alice --rating 1500"),
             Command::AddEntrant {
                 names: vec!["Alice".to_owned()],
-                rating: Rating::parse("1500"),
+                rating: Rating::parse("1500", Language::English),
             }
         );
         assert_eq!(
             parse("rate Alice 7,5"),
             Command::Rate {
                 name: "Alice".to_owned(),
-                rating: Rating::parse("7.5"),
+                rating: Rating::parse("7.5", Language::English),
             }
         );
         assert_eq!(

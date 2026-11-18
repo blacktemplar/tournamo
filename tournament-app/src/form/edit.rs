@@ -12,7 +12,10 @@ use super::{
     Chosen, FormField, Implied, Input, Item, ListInput, NotTaken, Path, PluginInput, PluginOption,
     Whole, needed_by, number, position, with_range,
 };
-use crate::{i18n::Text, rejected::Rejections};
+use crate::{
+    i18n::{Language, Text},
+    rejected::Rejections,
+};
 
 /// A form answering a draft of the composite `Self::Of`, whose fields the functions of this module
 /// edit.
@@ -20,6 +23,9 @@ pub(crate) trait Answering: Clone {
     type Of: Configurable;
 
     fn draft(&self) -> &Draft<Self::Of>;
+
+    /// The language numbers are typed in.
+    fn language(&self) -> Language;
 
     /// What was entered into a number field and not taken, with why, by the path of the field.
     fn rejected(&self) -> &Rejections<Path>;
@@ -64,7 +70,7 @@ pub(crate) fn enter(
     };
     form.rejected_mut().forget(path);
     let out_of_range = |range| with_range(Text::new("issue-out-of-range"), range);
-    let problem = match number(entered, range) {
+    let problem = match number(entered, range, form.language()) {
         Ok(number) => {
             // a number moves no field, so what other number fields did not take stays
             let others = std::mem::take(form.rejected_mut());

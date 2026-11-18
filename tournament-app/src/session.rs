@@ -24,6 +24,7 @@ use tournament_engine::{
 
 use crate::{
     error::{DoesNotFit, MatchesOfPhase, NoPhase, Refusal, StartError},
+    i18n::Language,
     people::People,
     storage::CompetitionKey,
     view::{Actions, DivisionRef, MatchesOf, Plugin},
@@ -32,6 +33,22 @@ use crate::{
 /// The name of a competition imported from a file that names it by nothing but spaces, and whose
 /// own name is blank as well, see [`Session::import`].
 pub const UNNAMED: &str = "Competition";
+
+/// The most characters a name has, of an entrant or of a competition: a longer one is refused,
+/// or cut where a file brings it, see [`tidied`].
+pub const MAX_NAME: usize = 100;
+
+/// `name` as it is kept: without the whitespace around it, each run of whitespace in it one
+/// space, so that names that look alike are alike.
+pub fn tidied(name: &str) -> String {
+    name.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `name` [`tidied`] and cut to [`MAX_NAME`] characters, e.g. of a file.
+pub(crate) fn cut(name: &str) -> String {
+    let tidied: String = tidied(name).chars().take(MAX_NAME).collect();
+    tidied.trim_end().to_owned()
+}
 
 /// The most matches [`Session::scale`] plays out, far more than a day's play.
 pub const MOST_MATCHES: usize = 10_000;
@@ -72,6 +89,8 @@ pub struct Session {
     /// Whether the storage holds the competition the log replays into, which it does not if
     /// nothing is saved yet or it was saved by a version that did not store it.
     competition_saved: bool,
+    /// The language the operator types numbers in, see [`Self::set_language`].
+    language: Language,
 }
 
 impl Session {
@@ -113,6 +132,7 @@ impl Session {
             people_changes: 0,
             saved_changes: 0,
             competition_saved: false,
+            language: Language::default(),
         }
     }
 
@@ -126,6 +146,18 @@ impl Session {
     /// The key the competition is stored under.
     pub fn key(&self) -> CompetitionKey {
         self.key
+    }
+
+    /// Sets the language the operator types numbers in, e.g. ratings and the numbers of a form
+    /// the session makes, which are read as the language writes them, see
+    /// [`Rating::parse`](crate::people::Rating::parse). English until set; not saved.
+    pub fn set_language(&mut self, language: Language) {
+        self.language = language;
+    }
+
+    /// The language the operator types numbers in, see [`Self::set_language`].
+    pub fn language(&self) -> Language {
+        self.language
     }
 
     /// The name the operator gave the competition.

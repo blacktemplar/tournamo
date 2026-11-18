@@ -87,7 +87,7 @@ fn PresetSetup(id: &'static str) -> Element {
     let ctx = use_context::<Ctx>();
     let created = use_hook(|| {
         Session::preset_form(id)
-            .map(Signal::new)
+            .map(|form| Signal::new(form.in_language(ctx.session.peek().language())))
             .map_err(|error| error.text())
     });
     let actions = ctx.actions();

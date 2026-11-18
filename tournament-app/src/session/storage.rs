@@ -3,15 +3,16 @@
 use std::fmt::Display;
 
 use tournament_engine::{
-    Competition, CompetitionStateMachine, CompetitionTransition, undoable_state_machine::LogEntry,
-    uuid::Uuid,
+    Competition, CompetitionStateMachine, CompetitionTransition, map::IdAble as _,
+    undoable_state_machine::LogEntry, uuid::Uuid,
 };
 
-use super::{Session, UNNAMED};
+use super::{Session, UNNAMED, cut};
 use crate::{
     error::{ImportError, LoadError},
     file::{self, File},
-    people::People,
+    i18n::Language,
+    people::{People, Person},
     storage::{CompetitionKey, Listing, Save, Storage, Stored},
 };
 
@@ -33,6 +34,7 @@ impl Session {
         Ok(Self {
             saved_changes: machine.log().len(),
             competition_saved: file.competition.is_some(),
+            language: Language::default(),
             ..Self::open(key, stored.name, machine, file.people)
         })
     }
@@ -181,8 +183,9 @@ impl Session {
     }
 
     /// A new competition with what the file `file` holds, e.g. one [`Self::export`] or the CLI
-    /// wrote, named as in the file or else `name`, or else [`UNNAMED`] where both are blank, and
-    /// without the spaces around it, followed by the first number from 2 on in
+    /// wrote, named as in the file or else `name`, or else [`UNNAMED`] where both are blank,
+    /// [`tidied`](super::tidied) and cut to [`MAX_NAME`](super::MAX_NAME) characters as the names
+    /// of its people are, followed by the first number from 2 on in
     /// parentheses that makes it a name none of `stored` has, if one has it, e.g. `"Cup (2)"`. It
     /// is stored under a key of its own, so that importing a file twice makes two competitions;
     /// nothing of it is saved yet.
@@ -196,10 +199,9 @@ impl Session {
         let name = [file.name.as_deref(), Some(name)]
             .into_iter()
             .flatten()
-            .map(str::trim)
+            .map(cut)
             .find(|name| !name.is_empty())
-            .unwrap_or(UNNAMED)
-            .to_owned();
+            .unwrap_or_else(|| UNNAMED.to_owned());
         let taken = |name: &str| stored.iter().any(|listing| listing.name == name);
         let name = if taken(&name) {
             (2..)
@@ -209,6 +211,15 @@ impl Session {
         } else {
             name
         };
+        let mut file = file;
+        let people: Vec<_> = file
+            .people
+            .iter()
+            .map(|person| Person::new(person.id(), cut(person.name())).with_rating(person.rating()))
+            .collect();
+        for person in people {
+            file.people.add(person);
+        }
         Ok(Self::from_file(file, name))
     }
 }

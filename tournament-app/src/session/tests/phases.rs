@@ -151,7 +151,9 @@ fn a_cut_through_equal_ratings_or_none_is_decided_by_lot() {
         .added();
     let ids: Vec<_> = session.entrants().iter().map(|row| row.id).collect();
     for (id, rating) in ids.iter().zip(["1900", "1800", "1800", "1700"]) {
-        session.set_rating(*id, Rating::parse(rating)).unwrap();
+        session
+            .set_rating(*id, Rating::parse(rating, Language::English))
+            .unwrap();
     }
     let places = |from: u32, to: Option<u32>| {
         [Source::new(

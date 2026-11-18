@@ -407,16 +407,10 @@ impl Session {
         let qualifiers = taken.qualifiers;
         let plugins = phase.plugins();
         if !plugins.teams().fits(qualifiers) {
-            let id = plugin_factory::id_of(plugins.teams());
-            let entry = AnyAxis::of::<dyn Teams>().entry(id);
             return Some(CannotStart::Teams(Box::new(DoesNotFit {
                 phase: self.phase_name(phase),
                 entrants: qualifiers,
-                teams: Plugin {
-                    id,
-                    label: entry.map_or(id, |entry| entry.label()),
-                    description: entry.and_then(|entry| entry.description()),
-                },
+                teams: teams_plugin(plugins.teams()),
             })));
         }
         let teams = teams_formed(
@@ -443,6 +437,17 @@ impl Session {
 pub(crate) struct Taken {
     pub(crate) qualifiers: usize,
     pub(crate) entrants: usize,
+}
+
+/// The plugin `teams`, as a list of them shows it.
+pub(crate) fn teams_plugin(teams: &dyn Teams) -> Plugin {
+    let id = plugin_factory::id_of(teams);
+    let entry = AnyAxis::of::<dyn Teams>().entry(id);
+    Plugin {
+        id,
+        label: entry.map_or(id, |entry| entry.label()),
+        description: entry.and_then(|entry| entry.description()),
+    }
 }
 
 /// How many teams `teams` forms of the field `taken`, each qualifier of `per_qualifier` entrants

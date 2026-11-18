@@ -32,8 +32,8 @@ error-phase-in-use = { $count ->
        *[other] { $phases } nehmen Teilnehmer aus dieser Phase; entferne zuerst diese
     }
 error-later-phase-started = { $phase } hat mit den Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
-warning-cut-through-tie = { $favoured } und { $others } teilen sich Platz { $rank } in { $phase }; das Los reiht { $favoured } vor
-warning-cut-through-tie-in-group = { $favoured } und { $others } teilen sich Platz { $rank } der Gruppe { $group } in { $phase }; das Los reiht { $favoured } vor
+warning-cut-through-tie = in { $phase } teilen sich mehr Teilnehmer Platz { $rank }, als weiterkommen: das Los nimmt { $favoured }, nicht { $others }
+warning-cut-through-tie-in-group = in Gruppe { $group } von { $phase } teilen sich mehr Teilnehmer Platz { $rank }, als weiterkommen: das Los nimmt { $favoured }, nicht { $others }
 phase-unnamed = { $number } · { $format }
 phase-progress = { $phase }: { $played } von { $matches } Spielen gespielt
 error-no-phase = das Turnier hat noch keine Phase
@@ -57,7 +57,8 @@ error-started-already = das Turnier hat schon begonnen
 error-too-few-entrants = ein Turnier braucht mindestens zwei Teilnehmer
 error-too-few-for-format = das Format braucht mindestens { $count } Teilnehmer
 error-too-few-for-divisions = { $divisions } Gruppen brauchen mindestens { $count } Teilnehmer: verringere die Zahl der Gruppen
-error-field-does-not-fit = { $phase } kann aus { $count } Teilnehmern keine Teams bilden ({ $teams }), etwa aus einer ungeraden Zahl keine Paare
+error-field-does-not-fit = { $phase } kann aus { $count } Teilnehmern keine Teams bilden ({ $teams }), weil die Zahl nicht aufgeht
+warning-teams-unfit = aus { $count } Teilnehmern lassen sich keine Teams bilden ({ $teams }), weil die Zahl nicht aufgeht
 error-not-started = das Turnier hat noch nicht begonnen
 error-unknown-match = dieses Spiel gibt es nicht
 error-match-finished-already = das Spiel hat schon ein Ergebnis
@@ -153,3 +154,7 @@ issue-invalid = { $reason }
 issue-incompatible = das passt nicht zu den anderen: { $reason }
 issue-unprovided = { $plugin } braucht { $fact }, was nichts liefert
 issue-unprovided-by = { $plugin } braucht eines davon: { $providers }
+issue-unprovided-lacking = { $plugin } braucht { $count ->
+        [one] { $providers }
+       *[other] eines davon: { $providers }
+    }, und dafür ist { $lacking } nötig, was nichts Gewähltes liefert

@@ -30,7 +30,7 @@ use tournament_engine::{
 
 use crate::{
     form::FormField,
-    view::{PhaseName, StageName},
+    view::{PhaseName, Plugin, StageName},
 };
 
 /// A language the app speaks.
@@ -169,6 +169,15 @@ pub enum Arg {
 impl From<PhaseName> for Arg {
     fn from(value: PhaseName) -> Self {
         Self::Phase(value)
+    }
+}
+
+impl From<Plugin> for Arg {
+    fn from(value: Plugin) -> Self {
+        Self::Plugin {
+            id: value.id,
+            english: value.label,
+        }
     }
 }
 

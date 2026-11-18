@@ -491,6 +491,7 @@ fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
                     fact: name,
                     required_by,
                     providers: Vec::new(),
+                    lacking: None,
                 },
             });
             continue;
@@ -499,19 +500,54 @@ fn issues_in(context: &Declaration, tree: &Tree, complete: bool) -> Vec<Issue> {
             let providers: Vec<_> = axis
                 .entries()
                 .filter(|entry| entry.declaration().provides_type(fact))
-                .map(PluginEntry::id)
                 .collect();
             issues.push(Issue {
                 path: path.clone(),
                 problem: Problem::Unprovided {
                     fact: name,
                     required_by: required_by.clone(),
-                    providers,
+                    lacking: lacking(context, &declarations, &providers),
+                    providers: providers.into_iter().map(PluginEntry::id).collect(),
                 },
             });
         }
     }
     issues
+}
+
+/// What every one of `providers` requires whatever its configuration that neither `context` nor
+/// `declarations` provide, by name: the first such fact the first of them requires; [`None`] if
+/// there is none, or no provider.
+fn lacking(
+    context: &Declaration,
+    declarations: &[&Declared],
+    providers: &[&'static PluginEntry],
+) -> Option<&'static str> {
+    let unprovided = |entry: &PluginEntry| -> Vec<(TypeId, &'static str)> {
+        entry
+            .declaration()
+            .required()
+            .iter()
+            .filter(|required| {
+                let fact = required.type_id();
+                !context.provides_type(fact)
+                    && !declarations
+                        .iter()
+                        .any(|declared| declared.declaration.provides_type(fact))
+            })
+            .map(|required| (required.type_id(), required.name()))
+            .collect()
+    };
+    let (first, others) = providers.split_first()?;
+    let others: Vec<_> = others.iter().map(|entry| unprovided(entry)).collect();
+    unprovided(first)
+        .into_iter()
+        .find(|(fact, _)| {
+            others
+                .iter()
+                .all(|lacks| lacks.iter().any(|(other, _)| other == fact))
+        })
+        .map(|(_, name)| name)
 }
 
 /// Appends to `answers`, the answers to `schema` of a composite with `context`, every plugin they
@@ -687,15 +723,18 @@ pub enum Problem {
     /// The plugin at `required_by` requires `fact`, which nothing provides and no unanswered field
     /// could provide. The issue is at each field whose axis could provide it,
     /// with the ids of the plugins of that axis that do, or at `required_by` if there is none.
+    /// `lacking` names a fact every one of those providers requires whatever its configuration
+    /// and nothing provides, if there is one: choosing one of them would not do on its own.
     Unprovided {
         fact: &'static str,
         required_by: Path,
         providers: Vec<&'static str>,
+        lacking: Option<&'static str>,
     },
 }
 
 /// Shows an [`Unprovided`](Self::Unprovided) like [`Incompatibility::FactNotProvided`], followed
-/// by the providers in parentheses if there are any.
+/// by the providers in parentheses if there are any, with what they lack.
 impl Display for Problem {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -705,6 +744,7 @@ impl Display for Problem {
                 fact,
                 required_by,
                 providers,
+                lacking,
             } => {
                 let unprovided = Incompatibility::FactNotProvided {
                     fact,
@@ -712,7 +752,11 @@ impl Display for Problem {
                 };
                 write!(formatter, "{unprovided}")?;
                 if !providers.is_empty() {
-                    write!(formatter, " (provided by {})", providers.join(", "))?;
+                    write!(formatter, " (provided by {}", providers.join(", "))?;
+                    if let Some(lacking) = lacking {
+                        write!(formatter, ", which require {lacking}")?;
+                    }
+                    write!(formatter, ")")?;
                 }
                 Ok(())
             }

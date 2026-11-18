@@ -1328,7 +1328,30 @@ impl Gui {
     /// Panics if they do not in time.
     pub async fn expect_cuts(&self, texts: &[&str]) -> WebDriverResult<()> {
         self.page
-            .expect_texts(By::Css(".standing-list tr.cut"), texts)
+            .expect_texts(By::Css(".standing-list tr.cut .cut-where"), texts)
+            .await
+    }
+
+    /// Waits until the lines below the rows of the standings going on name as many teams the lot
+    /// put below them, tied with the last row above, as `teams` says, each line in the order of
+    /// [`Self::expect_cuts`].
+    ///
+    /// # Panics
+    /// Panics if they do not in time.
+    pub async fn expect_ties_below_cuts(&self, teams: &[usize]) -> WebDriverResult<()> {
+        let script = "const found = [...document.querySelectorAll('.standing-list tr.cut')]
+                .map(cut => Number(cut.querySelector('.cut-lot')?.dataset.teams ?? 0));
+            return JSON.stringify(found) === JSON.stringify(arguments[0])
+                ? null
+                : `they name ${JSON.stringify(found)}`;";
+        self.page
+            .expect_script(
+                script,
+                vec![serde_json::json!(teams)],
+                &format!(
+                    "the lines below the rows going on must name {teams:?} teams below by lot"
+                ),
+            )
             .await
     }
 

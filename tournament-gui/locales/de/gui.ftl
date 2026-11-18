@@ -152,6 +152,7 @@ every-place-of = alle Plätze von { $phase }
 places-of = Plätze { $from }–{ $to } von { $phase }
 places-from-of = Plätze ab { $from } von { $phase }
 phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
+phase-scale-teams = Mit { $entrants } Teilnehmern in { $teams } Teams dauert die Phase { $rounds } mit { $matches }.
 scale-rounds = { $count ->
         [one] eine Runde
        *[other] { $count } Runden
@@ -230,6 +231,7 @@ cut-by-place = { $count ->
 } weiter in { $phase }
 cut-compared = Platz { $place } kommt nach jetzigem Stand weiter in { $phase }, im Vergleich der Gruppen
 cut-comparison = Kommen nach jetzigem Stand weiter in { $phase }
+cut-below-by-lot = { $names }: gleichauf, durch das Los unter der Linie
 
 matches = Spiele
 view = Ansicht

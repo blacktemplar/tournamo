@@ -89,8 +89,9 @@ impl<'a> TeamsView<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::keep",
-    label = "as registered",
-    description = "everyone plays as they come in: on their own, or in the team they came in with",
+    label = "unchanged",
+    description = "everyone plays as they come in: on their own from the registration, in their \
+                   team from a phase played in teams",
     declare_static = Self::declare_static
 )]
 pub struct Keep;
@@ -198,7 +199,9 @@ impl Teams for RandomPairs {
 #[plugin(
     id = "tournament_engine::best_with_worst",
     label = "best with worst",
-    description = "pairs the first with the last, the second with the second last, and so on",
+    description = "pairs the first with the last, the second with the second last, and so on: from \
+                   the registration in the order of the ratings, by lot where there are none, \
+                   from a phase by its places",
     declare_static = declare_pairs
 )]
 pub struct BestWithWorst;
@@ -228,7 +231,8 @@ impl Teams for BestWithWorst {
 #[plugin(
     id = "tournament_engine::split",
     label = "everyone on their own",
-    description = "teams that come in are split up, so their members play on their own",
+    description = "teams of a phase played in teams are split up, so their members play on their \
+                   own; the same as unchanged for the registration",
     declare_static = Self::declare_static
 )]
 pub struct Split;

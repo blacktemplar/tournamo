@@ -649,11 +649,22 @@ fn cut(rows: &mut [StandingRow], places: &[NonZeroU32]) {
             .get(index + 1)
             .is_none_or(|next| next.advances != advances)
         {
+            let last = &rows[index];
+            let below_by_lot = if last.played == 0 {
+                Vec::new()
+            } else {
+                rows[index + 1..]
+                    .iter()
+                    .take_while(|row| row.division == last.division && row.rank == last.rank)
+                    .map(|row| row.entrants.clone())
+                    .collect()
+            };
             rows[index].cut = Some(Cut {
                 to: advance.to,
                 how: advance.how,
                 from: places[from],
                 through: places[index],
+                below_by_lot,
             });
         }
     }

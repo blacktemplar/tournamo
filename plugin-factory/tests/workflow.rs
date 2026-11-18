@@ -621,6 +621,7 @@ fn a_requirement_of_a_configuration_is_reported_where_it_can_be_met() {
             fact: "byes",
             required_by: path("metrics[0]"),
             providers: vec!["full::round_robin"],
+            lacking: None,
         }
     );
 

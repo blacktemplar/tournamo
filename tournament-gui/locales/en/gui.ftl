@@ -185,6 +185,7 @@ places-from-of = places from { $from } of { $phase }
 # how long the phase takes with the entrants entered, before the start; $rounds and $matches: what
 # the messages below say
 phase-scale = With { $entrants } entrants, the phase takes { $rounds } and { $matches }.
+phase-scale-teams = With { $entrants } entrants in { $teams } teams, the phase takes { $rounds } and { $matches }.
 scale-rounds = { $count ->
         [one] one round
        *[other] { $count } rounds
@@ -287,6 +288,8 @@ cut-by-place = { $count ->
 } on to { $phase }
 cut-compared = Place { $place } goes on to { $phase } as things stand, compared across the groups
 cut-comparison = Go on to { $phase } as things stand
+# $names: the teams right below the line that share the rank of the last above it
+cut-below-by-lot = { $names }: tied, below the line by lot
 
 matches = Matches
 # what a narrow screen shows: the matches or the standings (or a knockout's bracket); a wide screen

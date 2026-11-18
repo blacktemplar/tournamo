@@ -39,8 +39,8 @@ error-phase-in-use = { $count ->
 error-later-phase-started = { $phase } has started with the entrants of this phase; undo its start first
 # a tie that a cut between places goes through; $favoured and $others: the names of the teams
 # before and after the cut
-warning-cut-through-tie = { $favoured } and { $others } share place { $rank } of { $phase }; the lot puts { $favoured } ahead
-warning-cut-through-tie-in-group = { $favoured } and { $others } share place { $rank } of group { $group } of { $phase }; the lot puts { $favoured } ahead
+warning-cut-through-tie = in { $phase }, more entrants share place { $rank } than go on: the lot takes { $favoured }, not { $others }
+warning-cut-through-tie-in-group = in group { $group } of { $phase }, more entrants share place { $rank } than go on: the lot takes { $favoured }, not { $others }
 # a phase without a name: its number and the label of its format
 phase-unnamed = { $number } · { $format }
 # a phase that is not finished: e.g. "Group phase: 12 of 18 matches played"
@@ -70,7 +70,9 @@ error-started-already = the competition has started already
 error-too-few-entrants = a competition needs at least two entrants
 error-too-few-for-format = the format needs at least { $count } entrants
 error-too-few-for-divisions = { $divisions } groups need at least { $count } entrants: lower the number of groups
-error-field-does-not-fit = { $phase } cannot form its teams ({ $teams }) of { $count } entrants, e.g. an odd number into pairs
+error-field-does-not-fit = { $phase } cannot form its teams ({ $teams }) of { $count } entrants, as the number does not come out even
+# of a phase being configured
+warning-teams-unfit = its teams ({ $teams }) cannot be formed of { $count } entrants, as the number does not come out even
 error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
 error-match-finished-already = the match has a result already
@@ -193,3 +195,8 @@ issue-incompatible = this does not fit next to the others: { $reason }
 issue-unprovided = { $plugin } needs { $fact }, which nothing provides
 # $plugin: a plugin, $providers: the plugins of which it needs one
 issue-unprovided-by = { $plugin } needs one of these: { $providers }
+# $lacking: in English, what each of the providers needs in turn, e.g. what a match format keeps
+issue-unprovided-lacking = { $plugin } needs { $count ->
+        [one] { $providers }, which needs
+       *[other] one of these: { $providers }, which need
+    } { $lacking }, and nothing chosen provides that

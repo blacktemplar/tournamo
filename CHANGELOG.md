@@ -70,7 +70,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   competition a pair is one row: a pair out before a phase of singles is
   placed after all of its players, and gets no medal for a place counted in
   pairs. An odd number of entrants is
-  not drawn into pairs: the start says so. A Monster DYP takes single
+  not drawn into pairs: the form of the phase and the start say so. The form
+  says how many teams the phase forms of its entrants, and what each choice
+  of teams does (“unchanged” keeps them as they come in). A Monster DYP takes single
   entrants only. CLI: `teams=drawn-pairs`.
 - Presets set up the phases of a whole competition at once, while it has
   none: “groups then knockout” (groups, then a knockout of the best of each,
@@ -188,6 +190,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   of the standings, byes included, which a column of their own shows where a
   bye scored any. It used to add up 1 for a win and ½ for a draw whatever the
   points of the phase. A phase counting no points shows neither column.
+- Where a cut goes through a tie, the line below the places going on names
+  who the lot put below it (“Eve: tied, below the line by lot”), so that a
+  rank 1 below the line no longer reads as a mistake; the question before
+  starting the next phase says who of the tie the lot takes and who not.
+- A metric needing what the match format does not keep, e.g. the points
+  difference in a phase of “winner only”, says what it needs in turn (“needs
+  points scored and conceded, which needs the points scored”), where it named
+  only another metric to tick, which would not have done on its own.
 - In the browser, undoing or redoing what another tab has undone, redone or
   built on since no longer breaks the page: it says that a change made
   elsewhere keeps it from being undone (or redone), and nothing more can be

@@ -284,13 +284,7 @@ impl Message for DoesNotFit {
         Text::new("error-field-does-not-fit")
             .with("phase", self.phase.clone())
             .with("count", self.entrants)
-            .with(
-                "teams",
-                Arg::Plugin {
-                    id: self.teams.id,
-                    english: self.teams.label,
-                },
-            )
+            .with("teams", self.teams)
     }
 }
 

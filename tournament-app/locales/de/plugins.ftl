@@ -115,17 +115,17 @@ plugin-tournament_engine-group_winners_apart =
 ## Teams
 
 plugin-tournament_engine-keep =
-    .label = wie gemeldet
-    .description = alle spielen, wie sie kommen: allein oder im Team, mit dem sie kommen
+    .label = unverändert
+    .description = alle spielen, wie sie kommen: aus der Anmeldung allein, aus einer Phase mit Teams in ihrem Team
 plugin-tournament_engine-random_pairs =
     .label = geloste Paare
     .description = die Teilnehmer werden zu Paaren gelost, die durchgehend zusammen spielen
 plugin-tournament_engine-best_with_worst =
     .label = Beste mit Schlechtesten
-    .description = paart den Ersten mit dem Letzten, den Zweiten mit dem Vorletzten und so weiter
+    .description = paart den Ersten mit dem Letzten, den Zweiten mit dem Vorletzten und so weiter: aus der Anmeldung in der Reihenfolge der Wertungszahlen, ausgelost, wo es keine gibt, aus einer Phase nach ihren Plätzen
 plugin-tournament_engine-split =
     .label = alle allein
-    .description = Teams, die kommen, werden aufgeteilt, sodass ihre Mitglieder allein spielen
+    .description = die Teams einer Phase mit Teams werden aufgeteilt, sodass ihre Mitglieder allein spielen; für die Anmeldung dasselbe wie unverändert
 
 ## Metrics calculators
 

@@ -71,6 +71,8 @@ async fn groups_then_a_knockout_of_their_best_are_played_through() {
             "Go on to Knockout as things stand",
         ])
         .await?;
+        // everyone of a group tied, the lot put the rest of the group below its lines
+        gui.expect_ties_below_cuts(&[1, 0, 2, 1, 2, 0]).await?;
         gui.page.check_accessibility().await?;
 
         gui.click("Start Knockout").await?;

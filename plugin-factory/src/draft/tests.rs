@@ -24,6 +24,11 @@ struct Eliminating;
 
 impl Fact for Eliminating {}
 
+#[derive(Debug)]
+struct ExitRounds;
+
+impl Fact for ExitRounds {}
+
 /// How many entrants a ranking stands for, the fact the context of the composite provides.
 #[derive(Debug)]
 struct EntrantsPerRanking(u32);
@@ -221,6 +226,46 @@ impl Losses {
 
 #[register]
 impl Metric for Losses {}
+
+/// A metric requiring what only a format provides, and providing what another metric requires.
+#[derive(Debug, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "exit_round",
+    label = "exit_round",
+    description = "a plugin of the draft's tests",
+    declare_static = Self::declare_static
+)]
+struct ExitRound;
+
+impl ExitRound {
+    fn declare_static(declaration: &mut Declaration) {
+        declaration
+            .require::<Eliminating>("eliminations")
+            .provide(ExitRounds);
+    }
+}
+
+#[register]
+impl Metric for ExitRound {}
+
+/// A metric requiring what [`ExitRound`] provides.
+#[derive(Debug, Serialize, Deserialize, Plugin)]
+#[plugin(
+    id = "later_exit",
+    label = "later_exit",
+    description = "a plugin of the draft's tests",
+    declare_static = Self::declare_static
+)]
+struct LaterExit;
+
+impl LaterExit {
+    fn declare_static(declaration: &mut Declaration) {
+        declaration.require::<ExitRounds>("exit rounds");
+    }
+}
+
+#[register]
+impl Metric for LaterExit {}
 
 /// A metric with a field that does not matter in an elimination.
 #[derive(Debug, Serialize, Deserialize, Plugin)]
@@ -611,6 +656,8 @@ fn a_plugin_answering_another_position_of_a_list_is_no_candidate_there() {
         "buchholz",
         "combined",
         "draws",
+        "exit_round",
+        "later_exit",
         "losses",
         "match_count",
         "score",
@@ -620,7 +667,15 @@ fn a_plugin_answering_another_position_of_a_list_is_no_candidate_there() {
     // the wins are left out whatever they are configured with
     assert_eq!(
         ids("metrics[2]"),
-        ["combined", "draws", "losses", "match_count", "score"]
+        [
+            "combined",
+            "draws",
+            "exit_round",
+            "later_exit",
+            "losses",
+            "match_count",
+            "score"
+        ]
     );
     // what answers the position itself stays a candidate, and so does what answers another
     // field
@@ -630,6 +685,8 @@ fn a_plugin_answering_another_position_of_a_list_is_no_candidate_there() {
             "buchholz",
             "combined",
             "draws",
+            "exit_round",
+            "later_exit",
             "losses",
             "match_count",
             "score"
@@ -717,6 +774,46 @@ fn plugins_providing_the_same_fact_are_issues_at_each_of_them() {
     );
 }
 
+/// A metric whose only provider lacks what the format would provide is not added, and its issue
+/// says what that provider lacks; once the format provides it, the provider is implied.
+#[test]
+fn an_issue_names_what_the_providers_of_a_fact_lack_themselves() {
+    let mut draft = answered(&[
+        ("format", plugin::<RoundRobin>().into()),
+        ("metrics", json!([plugin::<LaterExit>()])),
+        ("tie_break", Value::Null),
+    ]);
+    draft.add_implied();
+
+    let unprovided = || Problem::Unprovided {
+        fact: "exit rounds",
+        required_by: path("metrics[0]"),
+        providers: vec!["exit_round"],
+        lacking: Some("eliminations"),
+    };
+    assert_eq!(
+        draft.issues(),
+        ["metrics", "tie_break"].map(|field| Issue {
+            path: path(field),
+            problem: unprovided(),
+        })
+    );
+    assert_eq!(
+        draft.issues()[0].problem().to_string(),
+        "metrics[0] requires exit rounds, which nothing provides (provided by exit_round, \
+         which require eliminations)"
+    );
+
+    draft
+        .set(
+            &path("format"),
+            plugin::<Knockout>().with("third_place", false),
+        )
+        .unwrap();
+    draft.add_implied();
+    assert_eq!(draft.issues(), []);
+}
+
 #[test]
 fn a_fact_nothing_provides_is_an_issue_at_each_field_that_could_provide_it() {
     let losing = answered(&[
@@ -733,6 +830,7 @@ fn a_fact_nothing_provides_is_an_issue_at_each_field_that_could_provide_it() {
         fact,
         required_by: path("metrics[0]"),
         providers: providers.to_vec(),
+        lacking: None,
     };
 
     assert_eq!(
@@ -888,6 +986,7 @@ fn building_reports_with_nothing_open() {
                     fact: "eliminations",
                     required_by: path("metrics[0]"),
                     providers: vec!["knockout"],
+                    lacking: None,
                 },
             },
         ])

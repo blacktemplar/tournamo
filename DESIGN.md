@@ -892,7 +892,7 @@ order of the new list: `PhasePlugins::teams`).
   entrants come from, each once, so `group_winners_apart` keeps a team of
   several groups as a group of its own, and both singles of a pair split up
   in the pair's group, which keeps partners apart. The lot of a team is the
-  best of its entrants'. The engine's teams: `keep` (as registered, the
+  best of its entrants'. The engine's teams: `keep` (unchanged, the
   default), `random_pairs` (drawn pairs), `best_with_worst` and `split`
   (everyone on their own, the members of a qualifier in the order it lists
   them). `Teams::fits` says whether a field can be formed (an even one into
@@ -976,7 +976,7 @@ order of the new list: `PhasePlugins::teams`).
   format 4 moves a started phase's `plugins` and `data` into its only division
   and leaves the phase its plugins whole: knowing no plugin, it cannot tell
   their state from their configuration. It also gives plugins of format 4 their
-  teams as registered and one division dealt in order and compared across
+  `keep` teams and one division dealt in order and compared across
   divisions by nothing. The typed
   read of a phase drops the
   state (`PhasePlugins::without_state`, each plugin built again from its

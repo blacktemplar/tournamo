@@ -293,12 +293,13 @@ fn the_rows_that_go_on_are_marked_with_the_phase_they_go_to() {
         how: Advancing::ByPlace,
     });
     assert_eq!(advances, [by_place, by_place, None, None]);
-    let cuts: Vec<_> = standings.rows.iter().map(|row| row.cut).collect();
+    let cuts: Vec<_> = standings.rows.iter().map(|row| row.cut.clone()).collect();
     let cut = Some(Cut {
         to: last,
         how: Advancing::ByPlace,
         from: NonZeroU32::MIN,
         through: NonZeroU32::new(2).unwrap(),
+        below_by_lot: Vec::new(),
     });
     assert_eq!(cuts, [None, cut, None, None]);
     assert!(standings.rows.iter().all(|row| row.medal.is_none()));

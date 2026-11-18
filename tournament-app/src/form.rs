@@ -1031,6 +1031,7 @@ fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
             fact,
             required_by,
             providers,
+            lacking,
         } => {
             let plugin = draft
                 .plugin_at(required_by)
@@ -1049,6 +1050,12 @@ fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
                 Text::new("issue-unprovided")
                     .with("plugin", plugin)
                     .with("fact", *fact)
+            } else if let Some(lacking) = lacking {
+                Text::new("issue-unprovided-lacking")
+                    .with("plugin", plugin)
+                    .with("count", providers.len())
+                    .with("providers", Arg::Plugins(providers))
+                    .with("lacking", *lacking)
             } else {
                 Text::new("issue-unprovided-by")
                     .with("plugin", plugin)

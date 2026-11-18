@@ -1,10 +1,11 @@
 use plugin_factory::PluginType;
 use tournament_engine::plugins::{
+    match_format::Scored,
     metrics_calculator::{
         BuchholzCalculator, FewerLosses, LaterElimination, LaterFirstLoss, MoreBuchholz,
-        MorePoints, MorePointsPerMatch, MoreSonnebornBerger, MoreWins, PointsCalculator,
-        RoundOfEliminationCalculator, RoundOfFirstLossCalculator, SonnebornBergerCalculator,
-        WinsDrawsLossesCalculator,
+        MorePoints, MorePointsPerMatch, MoreSonnebornBerger, MoreWins, PointsBalanceCalculator,
+        PointsCalculator, PointsDifferenceCalculator, RoundOfEliminationCalculator,
+        RoundOfFirstLossCalculator, SonnebornBergerCalculator, WinsDrawsLossesCalculator,
     },
     phase_format::{DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination},
     seeding::SeededAtRandom,
@@ -633,6 +634,35 @@ fn a_field_does_not_follow_a_change_of_a_field_after_it() {
         english_all(&field(&view, "metrics").issues),
         ["more Sonneborn-Berger needs one of these: Sonneborn-Berger"]
     );
+}
+
+/// The points difference needs the points scored and conceded, which need a match format keeping
+/// scores: the issue says so rather than only naming the metric, which would not do on its own.
+#[test]
+fn an_issue_names_what_the_metric_it_names_needs_in_turn() {
+    let mut form = new_form();
+
+    form.add(&path("metrics"), PointsDifferenceCalculator::ID)
+        .unwrap();
+
+    let view = form.view();
+    assert!(!view.complete);
+    assert_eq!(
+        english_all(&field(&view, "metrics").issues),
+        [
+            "points difference needs points scored and conceded, which needs the points scored, \
+          and nothing chosen provides that"
+        ]
+    );
+    assert!(
+        !items(&view, "metrics").contains(&PointsBalanceCalculator::ID),
+        "not added, since it would not do on its own"
+    );
+
+    form.choose(&path("match_format"), Some(Scored::ID))
+        .unwrap();
+    let view = form.view();
+    assert!(view.complete, "{:?}", view.issues);
 }
 
 /// The points can be scored in many ways, so the operator has to choose them, and the issue is

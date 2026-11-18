@@ -190,6 +190,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   of the standings, byes included, which a column of their own shows where a
   bye scored any. It used to add up 1 for a win and ½ for a draw whatever the
   points of the phase. A phase counting no points shows neither column.
+- A metric needing what the match format does not keep, e.g. the points
+  difference in a phase of “winner only”, says what it needs in turn (“needs
+  points scored and conceded, which needs the points scored”), where it named
+  only another metric to tick, which would not have done on its own.
 - In the browser, undoing or redoing what another tab has undone, redone or
   built on since no longer breaks the page: it says that a change made
   elsewhere keeps it from being undone (or redone), and nothing more can be

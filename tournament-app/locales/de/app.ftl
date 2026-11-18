@@ -154,3 +154,7 @@ issue-invalid = { $reason }
 issue-incompatible = das passt nicht zu den anderen: { $reason }
 issue-unprovided = { $plugin } braucht { $fact }, was nichts liefert
 issue-unprovided-by = { $plugin } braucht eines davon: { $providers }
+issue-unprovided-lacking = { $plugin } braucht { $count ->
+        [one] { $providers }
+       *[other] eines davon: { $providers }
+    }, und dafür ist { $lacking } nötig, was nichts Gewähltes liefert

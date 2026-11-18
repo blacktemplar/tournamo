@@ -8,7 +8,7 @@ use tournament_engine::{
 use super::Session;
 use crate::{
     error::{ReportEnteredError, ReportError},
-    i18n::Text,
+    i18n::{Language, Text},
     result_form::read_score,
     view::{DivisionRef, Entered, EntrantRow, MatchRow, MatchesOf, NameSearch, Reported},
 };
@@ -94,7 +94,7 @@ impl Session {
         if entry.is_empty() {
             return nothing(ReportEnteredError::Unreadable);
         }
-        let numbered = read_entry(entry);
+        let numbered = read_entry(entry, self.language);
         let Some(Ok(NumberedEntry {
             number,
             scores,
@@ -114,7 +114,7 @@ impl Session {
                 .collect();
             open.sort_by_key(|row| row.number);
             let any_draws = open.iter().any(draws);
-            let Named { found, says } = read_named(&open, entry, any_draws);
+            let Named { found, says } = read_named(&open, entry, any_draws, self.language);
             // the number of a match followed by what is no result, unless a name has it all
             if let Some(Err((number, unreadable))) = numbered
                 && found.is_empty()
@@ -299,8 +299,8 @@ struct Says {
 /// What `entry`, part of a name and perhaps the number of a match and a draw, fits of the open
 /// matches `open`, in the order of their numbers, and says, in a phase that takes draws if `draws`,
 /// see [`Session::read_entered`].
-fn read_named(open: &[MatchRow], entry: &str, draws: bool) -> Named {
-    let readings = NamedEntry::readings(entry);
+fn read_named(open: &[MatchRow], entry: &str, draws: bool, language: Language) -> Named {
+    let readings = NamedEntry::readings(entry, language);
     // the longest name that fits
     let Some((reading, fitting)) = readings.iter().find_map(|reading| {
         let fitting = reading.fitting(open);
@@ -427,7 +427,10 @@ impl Unreadable {
 /// What `entry` says, if it starts with the number of a match followed by whitespace or a `-`,
 /// or by nothing, a result or scores; the number and what is wrong with what follows it if that
 /// is unreadable; `None` if it does not start with a number. See [`Session::read_entered`].
-fn read_entry(entry: &str) -> Option<Result<NumberedEntry, (usize, Unreadable)>> {
+fn read_entry(
+    entry: &str,
+    language: Language,
+) -> Option<Result<NumberedEntry, (usize, Unreadable)>> {
     let entry = entry.trim();
     let digits = entry
         .find(|char: char| !char.is_ascii_digit())
@@ -460,7 +463,7 @@ fn read_entry(entry: &str) -> Option<Result<NumberedEntry, (usize, Unreadable)>>
     }
     match words
         .into_iter()
-        .map(|word| read_score(word).ok_or_else(|| Unreadable::of(word)))
+        .map(|word| read_score(word, language).ok_or_else(|| Unreadable::of(word)))
         .collect::<Result<Vec<_>, _>>()
     {
         Ok(scores) => numbered(scores, result),
@@ -493,12 +496,12 @@ impl<'a> NamedEntry<'a> {
     /// The ways to read `entry`, the longest name first: all of it, then without the last word if
     /// that is a number or an `X`, then without the last two if they are one of each; then the
     /// same without the scores at its end, if any.
-    fn readings(entry: &'a str) -> Vec<Self> {
+    fn readings(entry: &'a str, language: Language) -> Vec<Self> {
         let mut readings = Self::without_number(entry, Vec::new());
         let mut name = entry;
         let mut scores = Vec::new();
         while let Some((before, last)) = name.rsplit_once(char::is_whitespace)
-            && let Some(score) = read_score(last)
+            && let Some(score) = read_score(last, language)
         {
             scores.insert(0, score);
             name = before.trim_end();
@@ -602,26 +605,32 @@ mod tests {
             }))
         };
         assert_eq!(
-            read_entry("3 1"),
+            read_entry("3 1", Language::English),
             numbered(3, vec![], Some(MatchResult::AWins))
         );
         assert_eq!(
-            read_entry("3-2"),
+            read_entry("3-2", Language::English),
             numbered(3, vec![], Some(MatchResult::BWins))
         );
         assert_eq!(
-            read_entry("12x"),
+            read_entry("12x", Language::English),
             numbered(12, vec![], Some(MatchResult::Draw))
         );
         assert_eq!(
-            read_entry(" 12 X "),
+            read_entry(" 12 X ", Language::English),
             numbered(12, vec![], Some(MatchResult::Draw))
         );
-        assert_eq!(read_entry("3"), numbered(3, vec![], None));
+        assert_eq!(
+            read_entry("3", Language::English),
+            numbered(3, vec![], None)
+        );
         // a win needs a separator
-        assert_eq!(read_entry("31"), numbered(31, vec![], None));
         assert_eq!(
-            read_entry("3 21-17 19-21 1"),
+            read_entry("31", Language::English),
+            numbered(31, vec![], None)
+        );
+        assert_eq!(
+            read_entry("3 21-17 19-21 1", Language::English),
             numbered(
                 3,
                 vec![count(21, 17), count(19, 21)],
@@ -629,7 +638,7 @@ mod tests {
             )
         );
         assert_eq!(
-            read_entry("3 21-17"),
+            read_entry("3 21-17", Language::English),
             numbered(3, vec![count(21, 17)], None)
         );
     }
@@ -638,33 +647,33 @@ mod tests {
     fn what_follows_a_number_unreadably_says_what_is_wrong() {
         let unreadable = |number, unreadable| Some(Err((number, unreadable)));
         assert_eq!(
-            read_entry("3 70000-1"),
+            read_entry("3 70000-1", Language::English),
             unreadable(3, Unreadable::TooLarge("70000".to_owned()))
         );
         assert_eq!(
-            read_entry("3 1-2-3"),
+            read_entry("3 1-2-3", Language::English),
             unreadable(3, Unreadable::NotAScore("1-2-3".to_owned()))
         );
         assert_eq!(
-            read_entry("3 -1-2"),
+            read_entry("3 -1-2", Language::English),
             unreadable(3, Unreadable::NotAScore("-1-2".to_owned()))
         );
         assert_eq!(
-            read_entry("3 12"),
+            read_entry("3 12", Language::English),
             unreadable(3, Unreadable::NotAResult("12".to_owned()))
         );
         assert_eq!(
-            read_entry("1 draw"),
+            read_entry("1 draw", Language::English),
             unreadable(1, Unreadable::NotAResult("draw".to_owned()))
         );
     }
 
     #[test]
     fn an_entry_not_starting_with_a_number_is_none() {
-        assert_eq!(read_entry("ali"), None);
-        assert_eq!(read_entry("3ali"), None);
+        assert_eq!(read_entry("ali", Language::English), None);
+        assert_eq!(read_entry("3ali", Language::English), None);
         assert_eq!(
-            read_entry("3 ali"),
+            read_entry("3 ali", Language::English),
             Some(Err((3, Unreadable::NotAResult("ali".to_owned()))))
         );
     }
@@ -721,14 +730,14 @@ mod tests {
                 ..open_match(2)
             },
         ];
-        let named = read_named(&open, "dav", true);
+        let named = read_named(&open, "dav", true, Language::English);
         assert_eq!(found(&named), [2]);
         assert_eq!(says(named), (2, Some(MatchResult::BWins), vec![]));
     }
 
     #[test]
     fn the_scores_of_a_name_are_its_sides_first() {
-        let named = read_named(&[open_match(1)], "bob 21-17 15-21", true);
+        let named = read_named(&[open_match(1)], "bob 21-17 15-21", true, Language::English);
         assert_eq!(
             says(named),
             (
@@ -746,15 +755,15 @@ mod tests {
             ..open_match(1)
         }];
         assert_eq!(
-            says(read_named(&open, "Malcolm X", true)).1,
+            says(read_named(&open, "Malcolm X", true, Language::English)).1,
             Some(MatchResult::AWins)
         );
         assert_eq!(
-            says(read_named(&open, "Malcolm X X", true)).1,
+            says(read_named(&open, "Malcolm X X", true, Language::English)).1,
             Some(MatchResult::Draw)
         );
         assert_eq!(
-            says(read_named(&open, "malcolm 1", true)).1,
+            says(read_named(&open, "malcolm 1", true, Language::English)).1,
             Some(MatchResult::AWins)
         );
     }
@@ -762,7 +771,7 @@ mod tests {
     #[test]
     fn a_name_in_several_matches_needs_a_number() {
         let open = [open_match(1), open_match(2)];
-        let named = read_named(&open, "ali", true);
+        let named = read_named(&open, "ali", true, Language::English);
         assert_eq!(found(&named), [1, 2]);
         assert!(matches!(
             named.says,
@@ -772,9 +781,12 @@ mod tests {
                 ..
             })
         ));
-        assert_eq!(says(read_named(&open, "ali 2", true)).0, 2);
+        assert_eq!(
+            says(read_named(&open, "ali 2", true, Language::English)).0,
+            2
+        );
         assert!(matches!(
-            read_named(&open, "ali 3", true).says,
+            read_named(&open, "ali 3", true, Language::English).says,
             Err(ReportEnteredError::NotInMatch { number: 3, .. })
         ));
     }
@@ -788,14 +800,14 @@ mod tests {
         }];
         let both = |entry| {
             matches!(
-                read_named(&open, entry, true).says,
+                read_named(&open, entry, true, Language::English).says,
                 Err(ReportEnteredError::BothSides { number: 1, .. })
             )
         };
         assert!(both("an"));
         // a draw needs no winner, but its scores need a side
         assert_eq!(
-            says(read_named(&open, "an x", true)).1,
+            says(read_named(&open, "an x", true, Language::English)).1,
             Some(MatchResult::Draw)
         );
         assert!(both("an x 1-1"));
@@ -803,7 +815,7 @@ mod tests {
 
     #[test]
     fn a_draw_is_refused_where_there_are_none() {
-        let named = read_named(&[open_match(1)], "ali x", false);
+        let named = read_named(&[open_match(1)], "ali x", false, Language::English);
         assert_eq!(found(&named), [1]);
         assert!(matches!(
             named.says,
@@ -813,7 +825,7 @@ mod tests {
 
     #[test]
     fn a_name_no_open_match_has_is_not_found() {
-        let named = read_named(&[open_match(1)], "carol", true);
+        let named = read_named(&[open_match(1)], "carol", true, Language::English);
         assert!(named.found.is_empty());
         assert!(
             matches!(named.says, Err(ReportEnteredError::NoNameFound(name)) if name == "carol")

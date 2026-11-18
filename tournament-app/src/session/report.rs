@@ -49,10 +49,11 @@ impl Session {
             .get(&(phase, id))
             .filter(|contest| template.root.check(contest).is_ok());
         let format = dyn_clone::clone_box(format);
-        Ok(match reopened {
+        let form = match reopened {
             Some(contest) => ResultForm::reported(phase, id, format, template, contest),
             None => ResultForm::new(phase, id, format, template),
-        })
+        };
+        Ok(form.in_language(self.language))
     }
 
     /// The [template](ResultForm::template) of the [form](Self::result_form) of the match `id` of

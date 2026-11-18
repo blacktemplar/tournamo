@@ -551,7 +551,8 @@ fn a_number_not_taken_says_what_the_field_takes() {
     };
 
     // a Monster DYP of a million rounds would take the page long to schedule
-    for entered in ["2.5", "", "  ", "1000000", "99999999999999999999", "1e400"] {
+    let huge = "9".repeat(400);
+    for entered in ["2.5", "", "  ", "1000000", "99999999999999999999", &huge] {
         assert_eq!(
             issues("format.rounds", entered),
             ["this takes a whole number from 1 to 100"],
@@ -559,10 +560,10 @@ fn a_number_not_taken_says_what_the_field_takes() {
         );
     }
     assert_eq!(
-        issues("metrics[1].points_for_win", "1e400"),
+        issues("metrics[1].points_for_win", &huge),
         ["this takes a number of at least 0"]
     );
-    for entered in ["abc", "inf", "NaN", "1.0.5", "-"] {
+    for entered in ["abc", "inf", "NaN", "1.0.5", "-", "1e3"] {
         assert_eq!(
             issues("format.rounds", entered),
             [format!("“{entered}” is no number")],
@@ -570,13 +571,13 @@ fn a_number_not_taken_says_what_the_field_takes() {
     }
 }
 
-/// A whole number may be written as a float or with an exponent.
+/// A whole number may be written with a fraction of nothing, or grouped by thousands.
 #[test]
 fn a_whole_number_is_taken_however_it_is_written() {
     let mut form = new_form();
     form.choose(&path("format"), Some(MonsterDyp::ID)).unwrap();
 
-    for (entered, rounds) in [("1e1", 10), ("3.0", 3), ("12", 12)] {
+    for (entered, rounds) in [("3.0", 3), ("12", 12), ("3,0", 3)] {
         form.enter(&path("format.rounds"), entered).unwrap();
         assert!(
             matches!(

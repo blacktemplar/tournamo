@@ -7,7 +7,7 @@ use super::{
     Answering, FormField, Generator, Input, Path, PhaseForm, PluginInput, Whole, issue_text, place,
 };
 use crate::{
-    i18n::{Text, Translator},
+    i18n::{Language, Text, Translator},
     rejected::Rejections,
     session::named,
     view::{PhaseName, SourceRow},
@@ -23,6 +23,8 @@ use crate::{
 pub struct PresetForm {
     draft: Draft<PresetChoice>,
     rejected: Rejections<Path>,
+    /// The language numbers are typed in, see [`Self::in_language`].
+    language: Language,
 }
 
 /// What a [`PresetForm`] shows: plain data for a screen to lay out.
@@ -60,7 +62,16 @@ impl PresetForm {
         Ok(Self {
             draft: PresetChoice::draft_of(id)?,
             rejected: Rejections::default(),
+            language: Language::default(),
         })
+    }
+
+    /// This form with the numbers typed into it read as `language` writes them, see
+    /// [`Editable::enter`](super::Editable::enter); English if not set.
+    #[must_use]
+    pub fn in_language(mut self, language: Language) -> Self {
+        self.language = language;
+        self
     }
 
     /// The id of the preset.
@@ -173,6 +184,10 @@ impl PresetForm {
 
 impl Answering for PresetForm {
     type Of = PresetChoice;
+
+    fn language(&self) -> Language {
+        self.language
+    }
 
     fn draft(&self) -> &Draft<PresetChoice> {
         &self.draft

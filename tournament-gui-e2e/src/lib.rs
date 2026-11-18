@@ -1078,6 +1078,17 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the lines of a list of entrants pasted that were not added are `lines`, each a
+    /// sentence of its number, the line and why, at the field of the entrant's name.
+    pub async fn expect_lines_refused(&self, lines: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(
+                By::Css("#entrant-name[aria-invalid=true] ~ [role=alert]#entrant-name-error li"),
+                lines,
+            )
+            .await
+    }
+
     /// Unfolds the detail of the refusal shown, and waits until it contains `part`.
     ///
     /// # Panics

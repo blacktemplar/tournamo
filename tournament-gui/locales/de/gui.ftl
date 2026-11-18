@@ -31,7 +31,7 @@ help = Hilfe
 help-title = Hilfe – Tournamo
 help-running = Ein Turnier durchführen
 help-running-steps = Ein Turnier läuft in vier Schritten ab:
-help-running-entrants = Trage die Teilnehmer mit ihren Namen ein, einen nach dem anderen, oder füge eine Liste mit einem Namen pro Zeile ein.
+help-running-entrants = Trage die Teilnehmer mit ihren Namen ein, einen nach dem anderen, oder füge eine Liste mit einem Namen pro Zeile ein. Nach einem Namen kann hinter einem „;“ eine Wertungszahl folgen, z. B. „Alice;1500“. Von einer Liste werden die Zeilen, die nicht hinzugefügt werden können, mit Grund aufgezählt; die anderen werden hinzugefügt.
 help-running-phase = Wähle, wie sie spielen: eine Vorlage, die alle Phasen auf einmal einrichtet, z. B. Gruppen mit anschließendem K.-o.-System, oder eine eigene Phase: das Format und die Reihenfolge der Tabelle. Füge dann die Phasen hinzu.
 help-running-start = Starte. Das Format setzt die Spiele an, und die Teilnehmer stehen von da an fest; ihre Namen lassen sich unter „Teilnehmer“ aber noch berichtigen. Die Phase lässt sich noch ändern, solange die Änderung zu den gemeldeten Ergebnissen passt.
 help-running-results = Melde die Ergebnisse: Wähle bei einem Spiel die Seite, die gewonnen hat, oder Unentschieden, oder trage seinen Spielstand in seiner Zeile ein; oder tippe ein Ergebnis unter „Ergebnisse eintippen“ ein, z. B. „3 1“ für einen Sieg der linken Seite von Spiel 3, „3 x“ für ein Unentschieden oder einen Teil des Namens des Siegers; oder wähle den Sieger im Turnierbaum. Die Tabelle folgt jedem Ergebnis.
@@ -48,7 +48,7 @@ help-columns-text = Eine Tabelle zeigt die Kennzahlen, nach denen sie gereiht is
 help-groups = Gruppen
 help-groups-text = Eine Phase kann in mehreren Gruppen gespielt werden, jede für sich im selben Format; die Auslosung verteilt die Teilnehmer auf sie, und die Setzung ordnet die jeder Gruppe, nach der ein K.-o.-System seinen Turnierbaum setzt: „Gruppen getrennt“ lässt Teilnehmer derselben Gruppe so spät wie möglich aufeinandertreffen. In Blöcken ausgeloste Gruppen spielen um eigene Plätze, z. B. K.-o.-Runden A und B um die Plätze 1–4 und 5–8. Sonst stehen die Gruppen nebeneinander: Erst kommen die Ersten aller Gruppen, dann die Zweiten und so weiter (in ihrer Gruppe Gleichstehende nach dem Los), und nimmt eine nächste Phase nur einige eines Platzes, z. B. die besten zwei von drei Dritten, werden sie nach den gruppenübergreifenden Kriterien verglichen, vorgeschlagen für Formate, die nach Punkten ordnen: den Punkten pro Spiel, die zu verschieden großen Gruppen passen, dann den Punkten.
 help-seeding = Setzung
-help-seeding-ratings = Teilnehmer können eine Wertungszahl bekommen, irgendeine Zahl, bei der mehr besser ist, z. B. eine Elo-Zahl: Dazu „Wertungszahlen“ über den Teilnehmern einschalten. Der Start ordnet die Anmeldung nach Wertungszahl, die Besten zuerst; Teilnehmer mit gleicher Wertungszahl und die ohne eine, nach denen mit einer, ordnet das Los. Ein K.-o.-System aus der Anmeldung setzt seinen Turnierbaum in dieser Reihenfolge, sodass die Besten so spät wie möglich aufeinandertreffen.
+help-seeding-ratings = Teilnehmer können eine Wertungszahl bekommen, irgendeine Zahl, bei der mehr besser ist, z. B. eine Elo-Zahl, geschrieben wie im Deutschen (1.800,5): Dazu „Wertungszahlen“ über den Teilnehmern einschalten. Der Start ordnet die Anmeldung nach Wertungszahl, die Besten zuerst; Teilnehmer mit gleicher Wertungszahl und die ohne eine, nach denen mit einer, ordnet das Los. Ein K.-o.-System aus der Anmeldung setzt seinen Turnierbaum in dieser Reihenfolge, sodass die Besten so spät wie möglich aufeinandertreffen.
 help-seeding-places = Eine Phase kann nur einige Plätze der Anmeldung nehmen: Die Besten können direkt in eine Hauptphase kommen, während die anderen eine Qualifikation um die übrigen Plätze spielen. Geht ein solcher Schnitt durch Teilnehmer mit gleicher oder keiner Wertungszahl, entscheidet das Los, wer auf welcher Seite ist; das Formular der Phase sagt es.
 help-seeding-draw = In Gruppen gespielt, verteilt die Auslosung die Anmeldung in ihrer Reihenfolge auf sie, z. B. hin und her, sodass die Besten in verschiedene Gruppen kommen; die Setzung ordnet dann die Teilnehmer jeder Gruppe.
 help-seeding-log = Die Wertungszahlen werden bei den Namen gespeichert, nicht im Verlauf des Turniers: Der hält nur die Reihenfolge, die der Start der Anmeldung gegeben hat. Nach dem Start ändern sich die Wertungszahlen nicht mehr.
@@ -121,6 +121,10 @@ no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, m
 name = Name
 add-entrant = Teilnehmer hinzufügen
 entrant-like = „{ $name }“ ist schon eingetragen.
+lines-not-added = { $count ->
+        [one] Diese Zeile wurde nicht hinzugefügt, die anderen schon:
+       *[other] Diese { $count } Zeilen wurden nicht hinzugefügt, die anderen schon:
+    }
 remove = Entfernen
 remove-entrant = { $name } entfernen
 rename-entrant = { $name } umbenennen

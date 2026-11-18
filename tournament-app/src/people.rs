@@ -11,7 +11,7 @@ use tournament_engine::{
     map::{IdAble, IdMap},
 };
 
-use crate::result_form::number_parts;
+use crate::i18n::Language;
 
 /// Who an entrant is.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,18 +47,18 @@ impl Person {
     }
 }
 
-/// How strong an entrant is rated, higher is better, e.g. an Elo rating: a finite number, not
-/// negative.
+/// How strong an entrant is rated, higher is better, e.g. an Elo rating: a finite number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Rating(Score);
 
 impl Rating {
-    /// The rating `text` says, spaces around it ignored: digits, or digits with a point or a comma
-    /// between them, as a score is typed (see [`read_score`](crate::result_form::read_score)).
-    pub fn parse(text: &str) -> Option<Self> {
-        let (whole, fraction) = number_parts(text.trim())?;
-        format!("{whole}.{}", fraction.unwrap_or("0"))
+    /// The rating `text` says as an operator in `language` types it, spaces around it ignored: a
+    /// number, perhaps negative, grouped by thousands or with a fraction, e.g. `1500`, `1.800,5`
+    /// in German or `-5`, but no exponent.
+    pub fn parse(text: &str, language: Language) -> Option<Self> {
+        crate::number::read(text, language, true)?
+            .plain()
             .parse()
             .ok()
             .map(Self)
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn a_rating_serializes_as_its_number() {
         let person = Person::new(EntrantId::new(Uuid::from_u128(1)), "Alice")
-            .with_rating(Rating::parse("1500"));
+            .with_rating(Rating::parse("1500", Language::English));
 
         let value = serde_json::to_value(&person).unwrap();
 
@@ -179,13 +179,20 @@ mod tests {
     }
 
     #[test]
-    fn a_rating_is_read_as_a_number_of_a_score() {
-        assert_eq!(Rating::parse(" 1500 ").map(Rating::get), Some(1500.0));
-        assert_eq!(Rating::parse("7,5").map(Rating::get), Some(7.5));
-        assert_eq!(Rating::parse("7.5").map(Rating::get), Some(7.5));
-        assert_eq!(Rating::parse("70000").map(Rating::get), Some(70000.0));
-        for not_a_rating in ["", "-3", "1e3", "abc", "1 500", "1.2.3", &"9".repeat(400)] {
-            assert_eq!(Rating::parse(not_a_rating), None, "{not_a_rating:?}");
+    fn a_rating_is_read_as_its_language_writes_numbers() {
+        let parse = |text, language| Rating::parse(text, language).map(Rating::get);
+        assert_eq!(parse(" 1500 ", Language::English), Some(1500.0));
+        assert_eq!(parse("7,5", Language::English), Some(7.5));
+        assert_eq!(parse("7.5", Language::German), Some(7.5));
+        assert_eq!(parse("1.800", Language::German), Some(1800.0));
+        assert_eq!(parse("1,800", Language::English), Some(1800.0));
+        assert_eq!(parse("-3", Language::English), Some(-3.0));
+        for not_a_rating in ["", "1e3", "abc", "1 500", "1.2.3", &"9".repeat(400)] {
+            assert_eq!(
+                Rating::parse(not_a_rating, Language::English),
+                None,
+                "{not_a_rating:?}"
+            );
         }
     }
 

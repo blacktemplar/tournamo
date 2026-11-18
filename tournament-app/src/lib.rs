@@ -15,6 +15,7 @@ pub mod error;
 pub mod file;
 pub mod form;
 pub mod i18n;
+mod number;
 pub mod people;
 mod rejected;
 pub mod result_form;

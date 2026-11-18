@@ -44,7 +44,7 @@ help = Help
 help-title = Help – Tournamo
 help-running = Running a competition
 help-running-steps = A competition is run in four steps:
-help-running-entrants = Enter the entrants by name, one after the other, or paste a list with a name on each line.
+help-running-entrants = Enter the entrants by name, one after the other, or paste a list with a name on each line. A rating may follow a name after a “;”, e.g. “Alice;1500”. Of a list, the lines that cannot be added are listed with why; the others are added.
 help-running-phase = Choose how they play: a preset, which sets up all phases at once, e.g. groups then a knockout, or a phase of your own: the format, and the order of the standings. Then add the phases.
 help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on, though their names can still be corrected under “Entrants”. The phase can still be changed, as long as the change fits the results reported.
 help-running-results = Report the results: at a match, choose the side that won, or Draw, or enter its score in its row; or type a result in under “Type in results”, e.g. “3 1” for a win of the left side of match 3, “3 x” for a draw, or part of the winner's name; or choose the winner in the bracket. The standings follow every result.
@@ -61,7 +61,7 @@ help-columns-text = A table of standings shows the metrics it is ranked by and t
 help-groups = Groups
 help-groups-text = A phase can be played in several groups, each on its own in the same format; the draw deals the entrants to them, and the seeding orders those of each, which a knockout seeds its bracket by: “groups kept apart” lets entrants of one group meet as late as possible. Groups dealt in blocks play for places of their own, e.g. knockouts A and B for places 1–4 and 5–8. Otherwise the groups stand side by side: the firsts of all groups come first, then the seconds, and so on (who is tied in their group placed by lot), and where a next phase takes only some of one place, e.g. the best two of three thirds, they are compared by the criteria across the groups, suggested for formats ranking by points: the points per match, which suit groups of different sizes, then the points.
 help-seeding = Seeding
-help-seeding-ratings = Entrants can be rated, by any number where higher is better, e.g. an Elo rating: switch on “Ratings” above the entrants. The start orders the registration by rating, best first; entrants of equal ratings, and those without one after the rated, are ordered by lot. A knockout of the registration seeds its bracket in this order, so that the best rated meet as late as possible.
+help-seeding-ratings = Entrants can be rated, by any number where higher is better, e.g. an Elo rating, written as the page’s language writes numbers (1,800.5): switch on “Ratings” above the entrants. The start orders the registration by rating, best first; entrants of equal ratings, and those without one after the rated, are ordered by lot. A knockout of the registration seeds its bracket in this order, so that the best rated meet as late as possible.
 help-seeding-places = A phase can take only some places of the registration: the best rated can go straight to a main phase while the others play a qualification for the remaining places. Where such a cut goes through entrants of equal ratings or none, the lot decides who is on which side, which the form of the phase says.
 help-seeding-draw = Played in groups, the draw deals the registration to them in its order, e.g. back and forth, so that the best rated end up in different groups; the seeding then orders the entrants of each group.
 help-seeding-log = The ratings are kept with the names, not in the competition's history: it holds only the order the start gave the registration. Once started, the ratings no longer change.
@@ -144,6 +144,11 @@ name = Name
 add-entrant = Add entrant
 # the name typed looks like that of an entrant, e.g. differing in case only, so that it is refused
 entrant-like = “{ $name }” is entered already.
+# $count: how many lines of a list pasted were not added, each listed below with why
+lines-not-added = { $count ->
+        [one] This line was not added; the others were:
+       *[other] These { $count } lines were not added; the others were:
+    }
 remove = Remove
 remove-entrant = Remove { $name }
 rename-entrant = Rename { $name }

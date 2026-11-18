@@ -5,7 +5,7 @@ use dioxus::{html::FileData, prelude::*};
 use futures_util::StreamExt as _;
 use tournament_app::{
     i18n::{Message as _, Text, Translator},
-    session::Session,
+    session::{MAX_NAME, Session},
     storage::{CompetitionKey, Listing, Progress, Storage as _},
 };
 use tournament_browser::{channel::Broadcast, lock};
@@ -90,6 +90,7 @@ pub fn Competitions() -> Element {
                     input {
                         id: "competition-name",
                         value: "{name}",
+                        maxlength: MAX_NAME as i64,
                         autocomplete: "off",
                         placeholder: tr.get("name"),
                         aria_invalid: name_error.read().is_some().then_some("true"),
@@ -258,6 +259,7 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>, listings: Vec<Lis
                         input {
                             id: "new-name",
                             value: "{name}",
+                            maxlength: MAX_NAME as i64,
                             autocomplete: "off",
                             aria_describedby: "new-name-taken",
                             oninput: move |event| name.set(event.value()),

@@ -351,6 +351,8 @@ impl Session {
     }
 
     fn entrant_named(&self, name: &str) -> Option<&Entrant> {
+        // a name is kept tidied
+        let name = tournament_app::session::tidied(name);
         self.competition()
             .entrants()
             .values()
@@ -1494,14 +1496,14 @@ mod tests {
     }
 
     #[test]
-    fn spaces_in_a_quoted_name_are_kept_when_removing_and_undoing() {
+    fn spaces_in_a_quoted_name_are_tidied_when_adding_and_removing() {
         let mut session = Session::new(MemoryStorage::default());
         output(&mut session, "add ' Alice ' Bob");
 
         output(&mut session, "remove ' Alice '");
         assert_eq!(names(&session), ["Bob"]);
         output(&mut session, "undo");
-        assert_eq!(names(&session), [" Alice ", "Bob"]);
+        assert_eq!(names(&session), ["Alice", "Bob"]);
     }
 
     #[test]

@@ -72,12 +72,14 @@ impl Session {
         Ok(match &self.undone_phase {
             Some(undone) => {
                 let draft = self.competition().phase_draft(&undone.sources);
-                PhaseForm::new(draft.with_answers(&undone.config)?).of_phase(
-                    context,
-                    undone.name.as_deref(),
-                    undone.sources.to_vec(),
-                    undone.columns.clone(),
-                )
+                PhaseForm::new(draft.with_answers(&undone.config)?)
+                    .in_language(self.language)
+                    .of_phase(
+                        context,
+                        undone.name.as_deref(),
+                        undone.sources.to_vec(),
+                        undone.columns.clone(),
+                    )
             }
             None => {
                 let draft = self.competition().phase_draft(&self.sources_of_new_phase());
@@ -112,7 +114,7 @@ impl Session {
         id: Option<PhaseId>,
     ) -> Result<PhaseForm, NoPhase> {
         let context = self.form_context(id);
-        let form = PhaseForm::new(draft);
+        let form = PhaseForm::new(draft).in_language(self.language);
         Ok(match id {
             Some(id) => {
                 let phase = self.phase(id).ok_or(NoPhase)?;

@@ -37,7 +37,7 @@ use tournament_engine::{
 };
 
 use crate::{
-    i18n::{Arg, Text},
+    i18n::{Arg, Language, Text},
     rejected::Rejections,
 };
 
@@ -62,6 +62,8 @@ pub struct PhaseForm {
     /// What the operator said about the columns of the tables of standings, only for metrics
     /// calculated.
     columns: Columns,
+    /// The language numbers are typed in, see [`Self::in_language`].
+    language: Language,
 }
 
 /// What a [`PhaseForm`] shows: plain data for a screen to lay out.
@@ -513,6 +515,10 @@ impl<F: Answering> Editable for F {
 impl Answering for PhaseForm {
     type Of = PhasePlugins;
 
+    fn language(&self) -> Language {
+        self.language
+    }
+
     fn draft(&self) -> &Draft<PhasePlugins> {
         &self.draft
     }
@@ -571,7 +577,16 @@ impl PhaseForm {
             entry: entry::Entry::default(),
             context: entry::Context::default(),
             columns: Columns::new(),
+            language: Language::default(),
         }
+    }
+
+    /// This form with the numbers typed into it read as `language` writes them, see
+    /// [`Editable::enter`]; English if not set.
+    #[must_use]
+    pub fn in_language(mut self, language: Language) -> Self {
+        self.language = language;
+        self
     }
 
     /// This form of a phase of the competition `context` describes, named `name`, taking its
@@ -931,17 +946,25 @@ pub(crate) enum NotTaken {
     NoNumber,
 }
 
-/// The number `entered` as the answer of a field of `range`, see [`Editable::enter`].
-fn number(entered: &str, range: NumberRange) -> Result<Value, NotTaken> {
-    let text = entered.trim().replace(',', ".");
-    if text.is_empty() {
+/// The number `entered` as the answer of a field of `range`, typed in `language`, see
+/// [`Editable::enter`].
+pub(crate) fn number(
+    entered: &str,
+    range: NumberRange,
+    language: Language,
+) -> Result<Value, NotTaken> {
+    if entered.trim().is_empty() {
         return Err(NotTaken::OutOfRange);
     }
-    let number = typed_number(&text)?;
+    let typed = crate::number::read(entered, language, true).ok_or(NotTaken::NoNumber)?;
+    let number = typed.get();
+    if !number.is_finite() {
+        return Err(NotTaken::OutOfRange);
+    }
     match range {
         NumberRange::Integer(_) => {
             // exactly, where a float would round
-            if let Ok(whole) = text.parse::<i64>() {
+            if let Ok(whole) = typed.plain().parse::<i64>() {
                 return Ok(Value::from(whole));
             }
             #[expect(
@@ -958,21 +981,12 @@ fn number(entered: &str, range: NumberRange) -> Result<Value, NotTaken> {
     }
 }
 
-/// The number `entered` stands for, as an operator typed it: with a point or a comma before its
-/// decimals, possibly with an exponent (`1e3`), spaces around it ignored. A number too large for a
-/// float is out of range.
-pub(crate) fn typed_number(entered: &str) -> Result<f64, NotTaken> {
-    let text = entered.trim().replace(',', ".");
-    // what Rust reads as a number besides digits, e.g. `inf` and `NaN`, is no number to an
-    // operator
-    let numeric = text
-        .chars()
-        .all(|char| char.is_ascii_digit() || matches!(char, '.' | 'e' | 'E' | '+' | '-'));
-    let number = text
-        .parse::<f64>()
-        .ok()
-        .filter(|_| numeric && text.contains(|char: char| char.is_ascii_digit()))
-        .ok_or(NotTaken::NoNumber)?;
+/// The number `entered` stands for, as an operator in `language` typed it, see
+/// [`crate::number::read`]. A number too large for a float is out of range.
+pub(crate) fn typed_number(entered: &str, language: Language) -> Result<f64, NotTaken> {
+    let number = crate::number::read(entered, language, true)
+        .ok_or(NotTaken::NoNumber)?
+        .get();
     // a number too large for a float is a number all the same
     if !number.is_finite() {
         return Err(NotTaken::OutOfRange);

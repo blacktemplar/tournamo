@@ -3,6 +3,8 @@
 
 error-empty-name = der Name eines Teilnehmers darf nicht leer sein
 error-duplicate-name = es gibt schon einen Teilnehmer namens „{ $name }“
+error-name-too-long = ein Name hat höchstens { $max } Zeichen
+error-line-refused = Zeile { $number }, „{ $line }“: { $why }
 error-entrant-added-after-start = das Turnier hat begonnen, daher kann kein Teilnehmer mehr hinzugefügt werden
 error-unknown-entrant = diesen Teilnehmer gibt es nicht
 error-entrant-removed-after-start = das Turnier hat begonnen, daher kann kein Teilnehmer mehr entfernt werden

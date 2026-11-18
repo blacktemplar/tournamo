@@ -773,6 +773,16 @@ pub struct Actions {
     pub redo: bool,
 }
 
+/// What a list of entrants added, see
+/// [`Session::add_entrants`](crate::session::Session::add_entrants).
+#[derive(Debug)]
+pub struct Pasted {
+    /// The entrants added, in the order of their lines.
+    pub added: Vec<EntrantId>,
+    /// The lines refused, in order.
+    pub refused: Vec<crate::error::RefusedLine>,
+}
+
 /// What an entry of a result fits and says, see
 /// [`Session::read_entered`](crate::session::Session::read_entered).
 #[derive(Debug)]

@@ -4,7 +4,7 @@
 use dioxus::prelude::*;
 use tournament_app::{
     i18n::{Message as _, Text},
-    session::Session,
+    session::{MAX_NAME, Session},
     view::EntrantRow,
 };
 use wasm_bindgen::JsCast as _;
@@ -30,6 +30,8 @@ pub fn Entrants() -> Element {
     // why the name was refused, shown at its field until it is changed
     let mut error = use_signal(|| None::<Text>);
     use_cleared_on_language_change(ctx.translator, error);
+    // the lines of a list pasted that were not added, each with why, until the field is changed
+    let mut refused = use_signal(Vec::<Text>::new);
     let entrants = ctx.session.read().entrants();
     // an entrant whose name the one typed looks like, e.g. differing in case only
     let like = ctx.session.read().entrant_like(&name.read());
@@ -111,7 +113,16 @@ pub fn Entrants() -> Element {
                     if !ctx.changes() {
                         return;
                     }
-                    match ctx.try_act(|session| session.add_entrant(&name.peek())) {
+                    // a line typed as one pasted, so that `Bo;1500` rates Bo
+                    let added = ctx.try_act(|session| {
+                        let pasted = session.add_entrants(&name.peek())?;
+                        match pasted.refused.into_iter().next() {
+                            Some(line) => Err(line.why),
+                            None => Ok(pasted.added[0]),
+                        }
+                    });
+                    refused.set(Vec::new());
+                    match added {
                         Ok(id) => {
                             name.set(String::new());
                             scroll_to_field();
@@ -130,7 +141,8 @@ pub fn Entrants() -> Element {
                     value: "{name}",
                     autocomplete: "off",
                     placeholder: tr.get("name"),
-                    aria_invalid: error.read().is_some().then_some("true"),
+                    aria_invalid: (error.read().is_some() || !refused.read().is_empty())
+                        .then_some("true"),
                     aria_describedby: "entrant-name-error entrant-like",
                     onmounted: move |event| async move {
                         if opened_empty {
@@ -139,6 +151,7 @@ pub fn Entrants() -> Element {
                     },
                     oninput: move |event| {
                         error.set(None);
+                        refused.set(Vec::new());
                         name.set(event.value());
                     },
                     // a list pasted adds an entrant for each of its lines, which a field of one
@@ -152,12 +165,16 @@ pub fn Entrants() -> Element {
                             return;
                         }
                         match ctx.try_act(|session| session.add_entrants(&lines)) {
-                            Ok(added) => {
+                            Ok(pasted) => {
                                 error.set(None);
                                 scroll_to_field();
-                                ctx.announce(Announcement::AddedEntrants(added.len()));
+                                let lines = pasted.refused.iter().map(|line| line.text());
+                                refused.set(lines.collect());
+                                if !pasted.added.is_empty() {
+                                    ctx.announce(Announcement::AddedEntrants(pasted.added.len()));
+                                }
                             }
-                            Err(refused) => error.set(Some(refused)),
+                            Err(why) => error.set(Some(why)),
                         }
                     },
                 }
@@ -167,9 +184,17 @@ pub fn Entrants() -> Element {
                     disabled: !actions.add_entrant,
                     {tr.get("add-entrant")}
                 }
-                p { id: "entrant-name-error", class: "error", role: "alert",
+                div { id: "entrant-name-error", class: "error", role: "alert",
                     if let Some(error) = error() {
-                        {tr.sentence(&error)}
+                        p { {tr.sentence(&error)} }
+                    }
+                    if !refused.read().is_empty() {
+                        p { {t!(tr, "lines-not-added", count = refused.read().len())} }
+                        ul {
+                            for line in refused.read().iter() {
+                                li { {tr.sentence(line)} }
+                            }
+                        }
                     }
                 }
                 // said as it is typed, before Enter refuses the name; once refused, the refusal
@@ -351,6 +376,7 @@ fn EntrantItem(row: EntrantRow, name: String, position: usize, ratings: bool) ->
                 input {
                     id: "{field}",
                     value: "{typed}",
+                    maxlength: MAX_NAME as i64,
                     autocomplete: "off",
                     aria_invalid: error.read().is_some().then_some("true"),
                     aria_describedby: "{field}-error",

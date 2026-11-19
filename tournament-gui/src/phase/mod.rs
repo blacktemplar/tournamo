@@ -10,11 +10,11 @@ mod summary;
 use dioxus::prelude::*;
 use tournament_app::{
     error::PhaseDraftError,
-    form::{FormView, PhaseForm},
-    i18n::{Message as _, Text},
+    form::{FormView, Path, PhaseForm},
+    i18n::{Arg, Message as _, Text},
     view::{Count, MatchesOf},
 };
-use tournament_engine::PhaseId;
+use tournament_engine::{PhaseId, PhasePlugins};
 
 use self::{
     entry::Entry,
@@ -51,7 +51,11 @@ pub fn NewPhase(
     let tr = ctx.translator.read();
     let form = match created {
         Ok(form) => form,
-        Err(error) => return rsx! { p { class: "error", {tr.sentence(&error)} } },
+        Err(error) => {
+            return rsx! {
+                p { class: "error", {tr.sentence(&error)} }
+            };
+        }
     };
     rsx! {
         form {
@@ -118,7 +122,9 @@ pub fn AddPhaseDialog() -> Element {
                 div { class: "dialog-form",
                     NewPhase { on_added: move |()| open.set(false) }
                     div { class: "dialog-buttons",
-                        button { r#type: "button", onclick: move |_| open.set(false),
+                        button {
+                            r#type: "button",
+                            onclick: move |_| open.set(false),
                             {tr.get("cancel")}
                         }
                     }
@@ -281,9 +287,12 @@ fn EditPhase(phase: PhaseId) -> Element {
     let several = ctx.session.read().phases().len() > 1;
     rsx! {
         button {
-            aria_label: several.then(|| {
-                name.as_ref().map(|name| t!(tr, "edit-phase-named", phase = tr.phase_name(name)))
-            }).flatten(),
+            aria_label: several
+                .then(|| {
+                    name.as_ref()
+                        .map(|name| t!(tr, "edit-phase-named", phase = tr.phase_name(name)))
+                })
+                .flatten(),
             onclick: move |_| {
                 if let Ok(form) = ctx.session.peek().phase_form_to_edit(phase) {
                     error.set(None);
@@ -342,7 +351,9 @@ fn EditPhase(phase: PhaseId) -> Element {
                             }
                         }
                         button { class: "primary", r#type: "submit", {tr.get("save-changes")} }
-                        button { r#type: "button", onclick: move |_| editing.set(None),
+                        button {
+                            r#type: "button",
+                            onclick: move |_| editing.set(None),
                             {tr.get("cancel")}
                         }
                     }
@@ -403,15 +414,44 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let mut error = use_signal(|| None::<Text>);
+    let mut update_error = use_signal(|| None::<Text>);
     let FormView {
         fields,
         issues,
         following_suggestions,
         entry,
+        outdated,
         ..
     } = form.read().view();
+    let outdated = (!outdated.is_empty()).then(|| {
+        t!(
+            tr,
+            "outdated-plugins",
+            plugins = Arg::Plugins(
+                outdated
+                    .iter()
+                    .map(|plugin| (plugin.id, plugin.label))
+                    .collect()
+            )
+        )
+    });
     rsx! {
         div { class: "phase-form",
+            if let Some(outdated) = outdated {
+                div { class: "notice",
+                    p { id: "outdated-plugins", "{outdated}" }
+                    button {
+                        r#type: "button",
+                        disabled,
+                        aria_describedby: "outdated-plugins",
+                        onclick: move |_| update_error.set(update(form)),
+                        {tr.get("update-plugins")}
+                    }
+                    if let Some(error) = update_error() {
+                        Issues { id: "update-issues", issues: vec![error] }
+                    }
+                }
+            }
             Entry { form, entry, disabled }
             Fields { form: EditedForm::Phase(form), fields, disabled }
             p { role: "status",
@@ -427,9 +467,14 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
                 aria_disabled: following_suggestions,
                 onclick: move |_| {
                     if !disabled && !form.read().view().following_suggestions {
-                        error.set(form.write().apply_suggestions().err().map(|error| {
-                            PhaseDraftError::Configuration(error).text()
-                        }));
+                        error
+                            .set(
+                                form
+                                    .write()
+                                    .apply_suggestions()
+                                    .err()
+                                    .map(|error| { PhaseDraftError::Configuration(error).text() }),
+                            );
                     }
                 },
                 {tr.get("apply-suggested-ranking")}
@@ -440,6 +485,18 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
             Issues { id: "phase-issues", issues }
         }
     }
+}
+
+/// Updates the plugins of `form` to their latest versions and moves the focus from the button,
+/// which goes with the notice, to the format; or else why not.
+fn update(mut form: Signal<PhaseForm>) -> Option<Text> {
+    let Err(error) = form.write().update_plugins() else {
+        let format = fields::id(&Path::ROOT.field(PhasePlugins::FORMAT));
+        let selectors = [format!("#edit-phase #{format}"), format!("#{format}")];
+        focus_later(&selectors.each_ref().map(String::as_str));
+        return None;
+    };
+    Some(PhaseDraftError::Configuration(error).text())
 }
 
 /// Moves the focus to the first field marked as invalid or list of issues in the form whose element

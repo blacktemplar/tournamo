@@ -308,7 +308,13 @@ impl<T: Configurable> Generator<'_, T> {
     ) -> PluginInput {
         let chosen = node.plugins().into_iter().next();
         let recommended = self.recommended(axis, &node.path);
-        let options = self.options(&node.path, &recommended);
+        let mut options = self.options(&node.path, &recommended);
+        // an earlier version is never offered, but stays chosen until updated
+        if let Some(chosen) = &chosen
+            && chosen.entry.successor().is_some()
+        {
+            options.push(PluginOption::of(chosen.entry, false));
+        }
         PluginInput {
             optional,
             chosen: chosen.map(|chosen| {

@@ -21,7 +21,8 @@ use tournament_engine::{
             RoundOfFirstLossCalculator,
         },
         phase_format::{
-            DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
+            DoubleElimination, DoubleEliminationV1, MonsterDyp, RandomRounds, RoundRobin,
+            SingleElimination,
         },
     },
     uuid::Uuid,

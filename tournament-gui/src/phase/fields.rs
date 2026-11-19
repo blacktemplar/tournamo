@@ -55,7 +55,13 @@ pub(super) fn Fields(form: EditedForm, fields: Vec<FormField>, disabled: bool) -
         .any(|field| field.plugin.is_none() && field.name == PhasePlugins::ACROSS);
     rsx! {
         for field in fields {
-            Field { key: "{field.path}", form, field, compared, disabled }
+            Field {
+                key: "{field.path}",
+                form,
+                field,
+                compared,
+                disabled,
+            }
         }
     }
 }
@@ -79,7 +85,11 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
     let about = rsx! {
         if let Some(text) = description {
             " "
-            Toggletip { id: "{id}-description", subject: tr.field_label(&field), text }
+            Toggletip {
+                id: "{id}-description",
+                subject: tr.field_label(&field),
+                text,
+            }
         }
     };
     match field.input.clone() {
@@ -111,7 +121,11 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
             let shown = entered.or_else(|| value.map(|value| value.to_string()));
             rsx! {
                 NumberField {
-                    form, path, id, label, disabled,
+                    form,
+                    path,
+                    id,
+                    label,
+                    disabled,
                     value: shown,
                     // a minus as well, where the keyboard of the numbers has none
                     keyboard: if range.min() < 0 { "text" } else { "numeric" },
@@ -132,7 +146,11 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
             let negative = range.min().is_none_or(|min| min < 0.0);
             rsx! {
                 NumberField {
-                    form, path, id, label, disabled,
+                    form,
+                    path,
+                    id,
+                    label,
+                    disabled,
                     value: shown,
                     keyboard: if negative { "text" } else { "decimal" },
                     hint: tr.text(&hint),
@@ -166,14 +184,26 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                     }
                     {about}
                     if answered {
-                        Field { form, field: inner, compared, disabled }
+                        Field {
+                            form,
+                            field: inner,
+                            compared,
+                            disabled,
+                        }
                     }
                     {issues}
                 }
             }
         }
         Input::Plugin(plugin) => rsx! {
-            PluginField { form, path, id, label, plugin, disabled, about,
+            PluginField {
+                form,
+                path,
+                id,
+                label,
+                plugin,
+                disabled,
+                about,
                 {issues}
             }
         },
@@ -190,11 +220,29 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                     {about}
                 }
                 if list.ordered {
-                    OrderedList { form, path, id: id.clone(), list, disabled }
+                    OrderedList {
+                        form,
+                        path,
+                        id: id.clone(),
+                        list,
+                        disabled,
+                    }
                 } else if let (false, EditedForm::Phase(form)) = (list.shown.is_empty(), form) {
-                    MetricsList { form, list_id: id.clone(), list, compared, disabled }
+                    MetricsList {
+                        form,
+                        list_id: id.clone(),
+                        list,
+                        compared,
+                        disabled,
+                    }
                 } else {
-                    UnorderedList { form, path, list_id: id.clone(), list, disabled }
+                    UnorderedList {
+                        form,
+                        path,
+                        list_id: id.clone(),
+                        list,
+                        disabled,
+                    }
                 }
                 {issues}
             }
@@ -336,9 +384,7 @@ fn PluginField(
                 }
             }
             if let Some(description) = chosen_description {
-                p { class: "hint chosen-description", id: "{id}-chosen",
-                    {sentence(&description)}
-                }
+                p { class: "hint chosen-description", id: "{id}-chosen", {sentence(&description)} }
             }
             {children}
             if let Some(chosen) = plugin.chosen {
@@ -374,6 +420,10 @@ pub(super) fn PluginChoice(select: String, index: usize, option: PluginOption) -
                 if option.recommended {
                     " "
                     span { class: "recommended", {tr.get("recommended")} }
+                }
+                if option.outdated {
+                    " "
+                    span { class: "recommended", {tr.get("earlier-version")} }
                 }
                 if let Some(description) = description {
                     // no button: a keyboard and a screen reader get the description through the

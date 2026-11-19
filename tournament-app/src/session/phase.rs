@@ -40,7 +40,8 @@ impl Session {
     }
 
     /// A draft of a phase of this competition taking the whole registration, played in the format
-    /// `format`, a [`Plugin::id`], with schema defaults and format suggestions, see
+    /// `format`, a [`Plugin::id`] (of any version of a format, though only the latest are offered,
+    /// see [`Self::formats`]), with schema defaults and format suggestions, see
     /// [`PhasePlugins::with_suggestions`]. It can be changed before it is handed to
     /// [`Self::add_phase`].
     ///
@@ -48,8 +49,7 @@ impl Session {
     /// Returns an error if there is no such format, or it offers an answer it does not take.
     pub fn phase_draft(&self, format: &str) -> Result<Draft<PhasePlugins>, PhaseDraftError> {
         let entry = AnyAxis::of::<dyn PhaseFormat>()
-            .entries()
-            .find(|entry| entry.id() == format)
+            .entry(format)
             .ok_or_else(|| PhaseDraftError::UnknownFormat(format.to_owned()))?;
         Ok(PhasePlugins::with_suggestions(
             self.competition()

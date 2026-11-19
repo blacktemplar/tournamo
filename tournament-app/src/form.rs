@@ -80,6 +80,9 @@ pub struct FormView {
     pub complete: bool,
     /// Its name and where it takes its entrants from.
     pub entry: EntryView,
+    /// The plugins chosen that are an earlier version, wherever in the form, each once, in the
+    /// order of the fields; [`PhaseForm::update_plugins`] replaces them by their latest versions.
+    pub outdated: Vec<PluginOption>,
 }
 
 impl FormView {
@@ -389,6 +392,9 @@ pub struct PluginOption {
     pub description: Option<&'static str>,
     /// Whether the configured format suggests it here.
     pub recommended: bool,
+    /// Whether it is an earlier version of a plugin, which a phase added with it keeps until its
+    /// plugins are updated, see [`PhaseForm::update_plugins`]; never offered otherwise.
+    pub outdated: bool,
 }
 
 impl PluginOption {
@@ -398,6 +404,7 @@ impl PluginOption {
             label: entry.label(),
             description: entry.description(),
             recommended,
+            outdated: entry.successor().is_some(),
         }
     }
 }
@@ -814,7 +821,33 @@ impl PhaseForm {
                 && self.sources_issue().is_none(),
             issues: unplaced,
             entry: self.entry_view(),
+            outdated: self.outdated(),
         }
+    }
+
+    /// See [`FormView::outdated`].
+    fn outdated(&self) -> Vec<PluginOption> {
+        let mut outdated: Vec<_> = Vec::new();
+        for plugin in self.draft.outdated() {
+            let option = PluginOption::of(plugin.plugin, false);
+            if !outdated.contains(&option) {
+                outdated.push(option);
+            }
+        }
+        outdated
+    }
+
+    /// Replaces every plugin chosen that is an earlier version by its latest version, keeping the
+    /// answers that version takes, see [`Draft::update`]; whether the phase can be played with it
+    /// once results are reported is found out on [`Session::edit_phase`].
+    ///
+    /// # Errors
+    /// Returns an error if the latest version of a plugin does not take an answer the earlier one
+    /// did. Nothing is changed then.
+    ///
+    /// [`Session::edit_phase`]: crate::session::Session::edit_phase
+    pub fn update_plugins(&mut self) -> Result<(), ConfigError> {
+        self.change(&Path::ROOT, Draft::update)
     }
 }
 

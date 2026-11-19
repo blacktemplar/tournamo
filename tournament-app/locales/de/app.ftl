@@ -60,6 +60,11 @@ error-too-few-entrants = ein Turnier braucht mindestens zwei Teilnehmer
 error-too-few-for-format = das Format braucht mindestens { $count } Teilnehmer
 error-too-few-for-divisions = { $divisions } Gruppen brauchen mindestens { $count } Teilnehmer: verringere die Zahl der Gruppen
 error-field-does-not-fit = { $phase } kann aus { $count } Teilnehmern keine Teams bilden ({ $teams }), weil die Zahl nicht aufgeht
+warning-many-rounds = { $count } Runden sind mehr, als ein Turnier gewöhnlich spielt, und ein so großes wird langsam gespeichert: Ist die Phase so gemeint?
+warning-too-many-groups = { $divisions } Gruppen brauchen mindestens { $count } Teilnehmer; { $teams } Teilnehmer ergeben höchstens { $most ->
+        [one] eine Gruppe
+       *[other] { $most } Gruppen
+    }
 warning-teams-unfit = aus { $count } Teilnehmern lassen sich keine Teams bilden ({ $teams }), weil die Zahl nicht aufgeht
 error-not-started = das Turnier hat noch nicht begonnen
 error-unknown-match = dieses Spiel gibt es nicht
@@ -72,6 +77,7 @@ error-no-match-numbered = es gibt kein Spiel { $number }
 error-match-numbered-finished-already = Spiel { $number } hat schon ein Ergebnis
 error-result-missing = gib auch das Ergebnis von Spiel { $number } ein: 1, X oder 2
 error-no-name-found = kein offenes Spiel hat einen Teilnehmer, dessen Name „{ $entered }“ enthält
+error-name-elsewhere = „{ $name }“ ist in Spiel { $number } nur Teil eines Namens, während ein Teilnehmer dieses Namens in Spiel { $elsewhere } spielt: mehr vom Namen eingeben oder die Nummer des anderen Spiels
 error-name-not-in-match = kein offenes Spiel { $number } hat einen Teilnehmer, dessen Name „{ $name }“ enthält
 error-name-in-several-matches = „{ $name }“ passt zu { $matches } offenen Spielen; gib die Nummer von einem dazu, z. B. „{ $name } { $number }“
 error-name-on-both-sides = „{ $name }“ passt zu beiden Seiten von Spiel { $number }; gib mehr vom Namen ein

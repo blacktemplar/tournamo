@@ -40,6 +40,7 @@ pub struct BestOf {
         description = "what the winner of a game usually has, or more, then winning by one or \
                        two; any other score is pointed out, as it may be a typo",
         min = 1,
+        max = 65535,
         default = None
     )]
     winning_score: Option<u16>,

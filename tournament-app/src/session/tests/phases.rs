@@ -403,13 +403,13 @@ fn the_scale_of_a_phase_counts_the_places_its_sources_take() {
 
     // a knockout of two is a final alone
     assert_eq!(
-        session.scale(&form).map(|scale| scale.matches.most),
+        session.scale(&form).and_then(|scale| scale.matches.most),
         Some(1)
     );
     // with its match for third place
     form.enter_place(0, End::To, "");
     assert_eq!(
-        session.scale(&form).map(|scale| scale.matches.most),
+        session.scale(&form).and_then(|scale| scale.matches.most),
         Some(4)
     );
 }

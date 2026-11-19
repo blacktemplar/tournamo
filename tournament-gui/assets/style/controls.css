@@ -143,6 +143,13 @@ select {
   cursor: pointer;
 }
 
+/* unavailable, e.g. in a tab that only shows the competition: looks it, like a button */
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 input::placeholder {
   color: var(--text-muted);
 }

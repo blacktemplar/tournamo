@@ -37,7 +37,7 @@ help-running-start = Starte. Das Format setzt die Spiele an, und die Teilnehmer 
 help-running-results = Melde die Ergebnisse: Wähle bei einem Spiel die Seite, die gewonnen hat, oder Unentschieden, oder trage seinen Spielstand in seiner Zeile ein; oder tippe ein Ergebnis unter „Ergebnisse eintippen“ ein, z. B. „3 1“ für einen Sieg der linken Seite von Spiel 3, „3 x“ für ein Unentschieden oder einen Teil des Namens des Siegers; oder wähle den Sieger im Turnierbaum. Die Tabelle folgt jedem Ergebnis.
 help-running-views = Eine Phase zeigt ihre Spiele, die jetzt spielbaren oder Runde für Runde, und ihre Tabelle, mit einer Linie unter den Plätzen, die in eine spätere Phase weiterkommen. Ein K.-o.-System zeigt auch seinen Turnierbaum; eine Phase, in der die Teilnehmer paarweise aufeinandertreffen, etwa Jeder gegen jeden, eine Kreuztabelle mit jedem Ergebnis jedes Teilnehmers gegen jeden anderen. Die Rangliste reiht alle nach der Phase, die sie erreicht haben.
 help-running-mistakes = Ein irrtümlich gemeldetes Ergebnis wird zurückgenommen, indem sein Spiel wieder geöffnet wird. Rückgängig nimmt zurück, was seit dem Öffnen des Turniers getan wurde, in der Reihenfolge, in der es getan wurde. In beiden Fällen bleiben die eingetragenen Punkte stehen, sodass nur noch zu ändern ist, was falsch war.
-help-running-undo = Rückgängig reicht nur so weit zurück, wie die Seite offen war: Neu laden oder das Turnier verlassen vergisst, was sich rückgängig machen ließe, aber nicht, was getan wurde. Ein Spiel wieder öffnen geht jederzeit. Rückgängig nimmt auch den Start zurück, sobald alles danach rückgängig gemacht ist (es fragt vorher): Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phasen geändert werden können, und ein neuer Start lost wieder gleich.
+help-running-undo = Rückgängig reicht nur so weit zurück, wie die Seite offen war: Neu laden oder das Turnier verlassen vergisst, was sich rückgängig machen ließe, aber nicht, was getan wurde. Ein Spiel wieder öffnen geht jederzeit. Rückgängig nimmt auch den Start zurück, sobald alles danach rückgängig gemacht ist (es fragt vorher): Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phasen geändert werden können. Ein neuer Start lost wieder dieselben Lose, Gruppen, Paare und Turnierbäume: Was gelost wird, steht fest, sobald das Turnier angelegt ist, damit sich eine Auslosung nicht wiederholen lässt, bis sie jemandem passt, und ändert sich nur mit dem, woraus gelost wird, z. B. den Teilnehmern oder der Phase.
 help-running-byes = Bleibt ein Teilnehmer in einer Runde ohne Gegner, hat er ein Freilos: Er kommt ohne Spiel weiter und erhält, was die Phase dafür vorsieht, z. B. die Punkte für ein Freilos.
 help-formats = Formate und Tabelle
 help-presets = Vorlagen
@@ -115,6 +115,10 @@ read-only = Dieses Turnier ist in einem anderen Tab geöffnet und wird hier nur 
 
 ## Before the start
 
+entrants-unnamed = { $count ->
+    [one] Ein Teilnehmer hat
+   *[other] { $count } Teilnehmer haben
+} keinen Namen; Namen lassen sich unter „Teilnehmer“ vergeben.
 entrants-after-start = Das Turnier hat begonnen, die Teilnehmer stehen also fest; ihre Namen lassen sich noch berichtigen.
 entrants = Teilnehmer
 no-entrants = Noch keine Teilnehmer. Jeder wird mit seinem Namen hinzugefügt, mehrere auf einmal durch Einfügen einer Liste mit einem Namen pro Zeile, gefolgt von einer Wertungszahl nach einem Semikolon oder Tabulator, wo es eine gibt.
@@ -129,6 +133,7 @@ remove = Entfernen
 remove-entrant = { $name } entfernen
 rename-entrant = { $name } umbenennen
 ratings = Wertungszahlen
+ratings-locked = An, solange ein Teilnehmer eine Wertungszahl hat.
 rating-of = Wertungszahl von { $name }
 seed = Setzplatz { $seed }
 ratings-note = Die Teilnehmer werden nach Wertungszahl gesetzt, höhere zuerst; die ohne eine folgen nach dem Los.
@@ -171,6 +176,8 @@ scale-matches = { $count ->
        *[other] { $count } Spielen
     }
 scale-matches-range = { $least } bis { $most } Spielen
+scale-rounds-at-least = mindestens { $count } Runden
+scale-matches-at-least = mindestens { $count } Spielen
 start = Starten
 start-new-phase-open = Erst die neue Phase hinzufügen oder verwerfen.
 
@@ -412,3 +419,4 @@ phase-not-started-yet = { $phase } (noch nicht begonnen)
 copy = Kopieren
 copy-table = { $table } als Text kopieren
 announce-copied = Als Text kopiert, zum Einfügen in eine Tabellenkalkulation oder eine Nachricht.
+announce-imported = Als neues Turnier „{ $name }“ importiert.

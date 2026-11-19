@@ -64,11 +64,12 @@ crate::register_criterion!(MorePoints);
     declare_static = Self::declare_static
 )]
 pub struct PointsCalculator {
-    #[plugin(label = "points for a win", min = 0, default = Score::ONE)]
+    #[plugin(label = "points for a win", min = 0, max = 1000, default = Score::ONE)]
     points_for_win: Score,
     #[plugin(
         label = "points for a draw",
         min = 0,
+        max = 1000,
         default = Score::new(0.5),
         irrelevant_with = NoDraws
     )]
@@ -77,6 +78,7 @@ pub struct PointsCalculator {
         label = "points for a bye",
         description = "a round without a match, e.g. with an odd number of entrants",
         min = 0,
+        max = 1000,
         default = Score::ONE
     )]
     points_for_bye: Score,

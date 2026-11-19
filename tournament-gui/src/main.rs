@@ -45,7 +45,7 @@ use tournament_browser::{channel::Events, indexed_db::IndexedDb, persistence};
 use tournament_engine::{MatchResult, uuid::Uuid};
 
 use crate::{
-    competition::{Competition, Place, ShownPhase},
+    competition::{Competition, Place, ShownPhase, View},
     competitions::Competitions,
     help::Help,
     i18n::t,
@@ -100,7 +100,8 @@ enum Screen {
     Unknown,
     Help,
     /// A competition, `#<key>`, and what of it is shown after the start, `#<key>/<place>` (see
-    /// [`Place::in_fragment`]), the matches of the phase shown first without a place.
+    /// [`Place::in_fragment`]), the matches of the phase shown first without a place or with one
+    /// it does not name.
     Competition(CompetitionKey, Place),
 }
 
@@ -119,9 +120,14 @@ impl Screen {
             return Self::Help;
         }
         let (key, place) = fragment.split_once('/').unwrap_or((fragment, ""));
-        match (Uuid::parse_str(key), Place::in_fragment(place)) {
-            (Ok(key), Some(place)) => Self::Competition(CompetitionKey::new(key), place),
-            _ => Self::Unknown,
+        match Uuid::parse_str(key) {
+            // a place it does not have, e.g. phase 0, shows what it shows first, as a phase
+            // beyond its last does
+            Ok(key) => Self::Competition(
+                CompetitionKey::new(key),
+                Place::in_fragment(place).unwrap_or(Place::Phase(None, View::Matches)),
+            ),
+            Err(_) => Self::Unknown,
         }
     }
 }
@@ -149,6 +155,8 @@ struct Page {
     shown: Signal<Option<(String, Option<ShownPhase>)>>,
     /// What the page shows.
     screen: Signal<Screen>,
+    /// Whether the competition opened next was just imported, which its screen says.
+    imported: Signal<bool>,
 }
 
 impl Page {
@@ -197,6 +205,7 @@ fn App() -> Element {
         installable: Signal::new(install::offered()),
         shown: Signal::new(None),
         screen: Signal::new(Screen::in_url()),
+        imported: Signal::new(false),
     });
     toggletip::use_toggletips();
     // a fragment naming nothing shows the list, saying so; on a change of the URL after the error

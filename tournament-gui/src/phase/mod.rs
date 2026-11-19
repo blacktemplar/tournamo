@@ -158,16 +158,17 @@ fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Elemen
         }
     });
     let tr = ctx.translator.read();
-    let count = |count: Count, exact: &'static str, range: &'static str| {
-        let text = if count.least == count.most {
-            Text::new(exact).with("count", count.least)
-        } else {
-            Text::new(range)
+    let count = |count: Count, [exact, range, at_least]: [&'static str; 3]| {
+        let text = match count.most {
+            Some(most) if most == count.least => Text::new(exact).with("count", most),
+            Some(most) => Text::new(range)
                 .with("least", count.least)
-                .with("most", count.most)
+                .with("most", most),
+            None => Text::new(at_least).with("count", count.least),
         };
         tr.text(&text)
     };
+    let warning = scale().and_then(|scale| scale.ok()?.warning());
     let text = scale().map(|scale| match scale {
         Ok(scale) => {
             let key = if scale.teams == scale.entrants {
@@ -181,18 +182,38 @@ fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Elemen
                     .with("teams", scale.teams)
                     .with(
                         "rounds",
-                        count(scale.rounds, "scale-rounds", "scale-rounds-range"),
+                        count(
+                            scale.rounds,
+                            [
+                                "scale-rounds",
+                                "scale-rounds-range",
+                                "scale-rounds-at-least",
+                            ],
+                        ),
                     )
                     .with(
                         "matches",
-                        count(scale.matches, "scale-matches", "scale-matches-range"),
+                        count(
+                            scale.matches,
+                            [
+                                "scale-matches",
+                                "scale-matches-range",
+                                "scale-matches-at-least",
+                            ],
+                        ),
                     ),
             )
         }
         Err(unfit) => tr.sentence(&unfit),
     });
     rsx! {
-        p { class: "hint phase-scale", role: "status", {text} }
+        p { class: "hint phase-scale", role: "status",
+            {text}
+            if let Some(warning) = warning {
+                " "
+                span { class: "warnings", {tr.sentence(&warning)} }
+            }
+        }
     }
 }
 

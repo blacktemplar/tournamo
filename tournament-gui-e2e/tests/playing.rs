@@ -1,5 +1,5 @@
 use tournament_gui_e2e::{
-    Gui, Key, run, run_in_new_competition,
+    COMPETITION, Gui, Key, run, run_in_new_competition,
     thirtyfour::{By, error::WebDriverResult},
 };
 
@@ -690,6 +690,22 @@ async fn a_url_naming_nothing_says_so() {
         gui.page
             .expect_text(By::Id("new-competition"), "New competition")
             .await
+    })
+    .await;
+}
+
+/// A URL naming a competition and a place it does not have shows the competition, as without the
+/// place.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_url_naming_a_place_a_competition_lacks_shows_the_competition() {
+    run_in_new_competition(async |gui| {
+        let key = gui.page.fragment().await?;
+
+        gui.page.open_at(&format!("{key}/0")).await?;
+
+        gui.expect_open(COMPETITION).await?;
+        gui.expect_no_error().await
     })
     .await;
 }

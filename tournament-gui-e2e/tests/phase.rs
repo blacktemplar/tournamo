@@ -205,7 +205,7 @@ async fn a_number_not_taken_keeps_the_phase_from_being_added() {
         gui.expect_issues(&["“x” is no number."]).await?;
         gui.type_into("metrics[1].points_for_win", "-1").await?;
 
-        gui.expect_issues(&["This takes a number of at least 0."])
+        gui.expect_issues(&["This takes a number from 0 to 1000."])
             .await?;
         gui.click("Add phase").await?;
         gui.expect_phase(&[]).await?;

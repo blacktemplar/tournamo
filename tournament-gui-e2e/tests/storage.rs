@@ -192,6 +192,26 @@ async fn a_competition_open_in_another_tab_is_not_deleted() {
     .await;
 }
 
+/// The tab changing a competition shows the name another tab gave it, and keeps it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_competition_renamed_in_another_tab_is_shown_by_its_new_name() {
+    run_in_new_competition(async |gui| {
+        let showing = gui.page.tab().await?;
+        gui.page.open_tab().await?;
+        gui.follow("All competitions").await?;
+
+        gui.rename_competition(COMPETITION, "Final").await?;
+
+        gui.page.switch_to(&showing).await?;
+        gui.expect_open("Final").await?;
+        gui.add_entrant("Alice").await?;
+        gui.follow("All competitions").await?;
+        gui.expect_competitions(&["Final"]).await
+    })
+    .await;
+}
+
 /// Two tabs changing a competition would fork its log, so only one of them does.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

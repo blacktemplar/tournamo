@@ -24,6 +24,15 @@ use crate::{
 };
 
 impl Session {
+    /// The number of entrants without a name, e.g. of a file whose people were cut out by hand.
+    pub fn unnamed(&self) -> usize {
+        self.competition()
+            .entrants()
+            .keys()
+            .filter(|id| self.people.name(id).is_none())
+            .count()
+    }
+
     /// The entrants, in the order they were added.
     pub fn entrants(&self) -> Vec<EntrantRow> {
         self.competition()

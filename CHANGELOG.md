@@ -281,6 +281,27 @@ later one: a file whose `"format"` changes is migrated, not refused.
   scroll sideways. A long text in a table of standings or in the ranking, e.g.
   a round's name in German, wraps rather than pushing the columns after it out
   of sight.
+- Odds and ends: a tab showing a competition takes the name another tab
+  renamed it to; fields that cannot be changed in a tab showing a competition
+  only look so, and the name of a new entrant cannot be typed there; an
+  import says the name it gave the competition (“Cup (2)” where “Cup”
+  exists), and the competition says when entrants have no name, e.g. of a
+  file whose names were cut out; the switch “Ratings” says why it stays on;
+  a URL naming a phase a competition lacks (`#<key>/0`) shows the
+  competition rather than saying there is no such competition. The form of a
+  phase warns of a phase of more than 50 rounds, e.g. a round robin of
+  hundreds of entrants, which is slow to save; beyond what it plays out it
+  says “at least” so many rounds and matches.
+- A name typed with the number of a match, which fits that match only as
+  part of a longer name while an entrant of exactly that name plays in
+  another open match (`max 1` for Maxi of match 1, Max playing in match 2),
+  is refused rather than reported.
+- The form of a phase says when there are more groups than its entrants fill,
+  and how many they make at most, rather than counting the rounds of fewer
+  groups; while a number field holds what it did not take, the form counts no
+  rounds. A winning score is at most 65535, points and weights at most 1000,
+  which the fields say. “Winner only” no longer says that a match may be
+  drawn where the format allows no draws.
 
 ## [0.4.0] - 2026-11-09
 

@@ -69,8 +69,10 @@ impl Session {
     /// The result is an error if the phase has not started, `entry` is empty, it is the
     /// number of a match alone, there is no match of the number entered, it has a result already,
     /// its format has no draws while a draw is entered or scored, the name entered fits no open
-    /// match, both sides of one, or several matches, the match does not take the scores entered,
-    /// they say no result while none is entered, or another than the one entered.
+    /// match, both sides of one, or several matches, or, with a number, only part of a name in
+    /// that match while an entrant of exactly that name plays in another open match, the match
+    /// does not take the scores entered, they say no result while none is entered, or another
+    /// than the one entered.
     ///
     /// [`ResultForm`]: crate::result_form::ResultForm
     /// [`ResultForm::enter_scores`]: crate::result_form::ResultForm::enter_scores
@@ -334,6 +336,8 @@ fn read_named(open: &[MatchRow], entry: &str, draws: bool, language: Language) -
     }
     let says = if reading.draw && !draws {
         Err(ReportError::DrawNotAllowed.into())
+    } else if let Some(error) = named_elsewhere(open, reading, &fitting) {
+        Err(error)
     } else {
         match (fitting.as_slice(), found.as_slice()) {
             ([(row, result, side)], _) => {
@@ -375,6 +379,35 @@ fn read_named(open: &[MatchRow], entry: &str, draws: bool, language: Language) -
         }
     };
     Named { found, says }
+}
+
+/// The refusal of `reading`, a name with the number of a match, whose `fitting` sides of that
+/// match have the name only as part of a longer one, while an entrant of exactly that name plays
+/// in another match of `open`; `None` if that is not so.
+fn named_elsewhere(
+    open: &[MatchRow],
+    reading: &NamedEntry,
+    fitting: &[(&MatchRow, MatchResult, Option<Team>)],
+) -> Option<ReportEnteredError> {
+    let number = reading.number?;
+    let search = NameSearch::new(reading.name);
+    let named = |side: &[EntrantRow]| side.iter().any(|entrant| search.is_name_of(entrant));
+    let named_here = fitting.iter().any(|(row, _, side)| match side {
+        Some(Team::A) => named(&row.a),
+        Some(Team::B) => named(&row.b),
+        None => named(&row.a) || named(&row.b),
+    });
+    if named_here {
+        return None;
+    }
+    let elsewhere = open
+        .iter()
+        .find(|row| row.number != number && (named(&row.a) || named(&row.b)))?;
+    Some(ReportEnteredError::NamedElsewhere {
+        name: reading.name.to_owned(),
+        number,
+        elsewhere: elsewhere.number,
+    })
 }
 
 /// What an entry of the number of a match says, see [`Session::read_entered`].
@@ -766,6 +799,40 @@ mod tests {
             says(read_named(&open, "malcolm 1", true, Language::English)).1,
             Some(MatchResult::AWins)
         );
+    }
+
+    /// `max 1` is not Maxi's win in match 1 while Max plays in match 2; Max's own match, or
+    /// Maxi's without another Max, is.
+    #[test]
+    fn a_part_of_a_name_in_a_match_yields_to_that_name_in_another() {
+        let open = [
+            MatchRow {
+                a: team(&["Tom", "Maxi"]),
+                b: team(&["Jo"]),
+                ..open_match(1)
+            },
+            MatchRow {
+                a: team(&["Ann"]),
+                b: team(&["Max"]),
+                ..open_match(2)
+            },
+        ];
+
+        let named = read_named(&open, "max 1", true, Language::English);
+
+        assert_eq!(found(&named), [1]);
+        assert!(matches!(
+            named.says,
+            Err(ReportEnteredError::NamedElsewhere {
+                number: 1,
+                elsewhere: 2,
+                ..
+            })
+        ));
+        let max = read_named(&open, "max 2", true, Language::English);
+        assert_eq!(says(max).1, Some(MatchResult::BWins));
+        let maxi = read_named(&open[..1], "max 1", true, Language::English);
+        assert_eq!(says(maxi).1, Some(MatchResult::AWins));
     }
 
     #[test]

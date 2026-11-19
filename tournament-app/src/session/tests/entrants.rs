@@ -252,6 +252,21 @@ fn a_name_has_at_most_its_characters() {
     assert_eq!(names(&imported.entrants()), [longest]);
 }
 
+/// A file whose people were cut out by hand imports, its entrants without names, which the
+/// session counts.
+#[test]
+fn entrants_without_names_are_counted() {
+    let session = Given::new().added();
+    let file = session.export();
+    let mut file: serde_json::Value = serde_json::from_str(&file).unwrap();
+    file["people"].as_array_mut().unwrap().remove(0);
+
+    let imported = Session::import(&file.to_string(), "cup", &[]).unwrap();
+
+    assert_eq!(session.unnamed(), 0);
+    assert_eq!(imported.unnamed(), 1);
+}
+
 /// A rating is read as the operator's language writes numbers, and may be negative.
 #[test]
 fn a_rating_is_read_in_the_operators_language() {

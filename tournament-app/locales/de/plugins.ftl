@@ -45,7 +45,7 @@ phase =
 
 plugin-tournament_engine-winner_only =
     .label = nur Sieger
-    .description = wer gewonnen hat oder ob es unentschieden ausging, ohne Spielstand
+    .description = wer gewonnen hat oder, wo das Format Unentschieden zulässt, ob es unentschieden ausging, ohne Spielstand
     .level-match = Spiel
 plugin-tournament_engine-scored =
     .label = Spielstand

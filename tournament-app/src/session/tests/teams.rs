@@ -120,8 +120,20 @@ fn the_scale_of_a_phase_of_pairs_counts_the_pairs() {
     let scale = session.scale(&form).unwrap();
 
     assert_eq!((scale.entrants, scale.teams), (8, 4));
-    assert_eq!(scale.rounds, Count { least: 3, most: 3 });
-    assert_eq!(scale.matches, Count { least: 6, most: 6 });
+    assert_eq!(
+        scale.rounds,
+        Count {
+            least: 3,
+            most: Some(3)
+        }
+    );
+    assert_eq!(
+        scale.matches,
+        Count {
+            least: 6,
+            most: Some(6)
+        }
+    );
     assert_eq!(session.unfit(&form), None);
 }
 

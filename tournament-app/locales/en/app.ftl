@@ -76,6 +76,11 @@ error-too-few-for-format = the format needs at least { $count } entrants
 error-too-few-for-divisions = { $divisions } groups need at least { $count } entrants: lower the number of groups
 error-field-does-not-fit = { $phase } cannot form its teams ({ $teams }) of { $count } entrants, as the number does not come out even
 # of a phase being configured
+warning-many-rounds = { $count } rounds are more than a competition usually plays, and one this big is slow to save: is the phase meant this way?
+warning-too-many-groups = { $divisions } groups need at least { $count } entrants; { $teams } entrants make at most { $most ->
+        [one] one group
+       *[other] { $most } groups
+    }
 warning-teams-unfit = its teams ({ $teams }) cannot be formed of { $count } entrants, as the number does not come out even
 error-not-started = the competition has not started yet
 error-unknown-match = there is no such match
@@ -89,6 +94,7 @@ error-match-numbered-finished-already = match { $number } has a result already
 error-result-missing = enter the result of match { $number } as well: 1, X or 2
 # $entered: part of the winner's name, as entered
 error-no-name-found = no open match has an entrant whose name contains “{ $entered }”
+error-name-elsewhere = “{ $name }” is only part of a name in match { $number }, while an entrant of that name plays in match { $elsewhere }: enter more of the name, or the other match's number
 error-name-not-in-match = no open match { $number } has an entrant whose name contains “{ $name }”
 # $matches: how many open matches have an entrant whose name contains $name; $number: one of them
 error-name-in-several-matches = “{ $name }” fits { $matches } open matches; add the number of one, e.g. “{ $name } { $number }”

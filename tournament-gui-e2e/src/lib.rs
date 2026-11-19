@@ -743,6 +743,35 @@ impl Gui {
             .await
     }
 
+    /// Clicks beside the dialog open, on what dims the page behind it, near the window's top
+    /// left corner.
+    pub async fn click_beside_dialog(&self) -> WebDriverResult<()> {
+        self.driver
+            .query(By::Css("[role=dialog]"))
+            .and_displayed()
+            .first()
+            .await?;
+        self.driver
+            .action_chain()
+            .move_to(4, 4)
+            .click()
+            .perform()
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Clicks the title of the dialog open, inside the dialog but on nothing it lets one do.
+    pub async fn click_dialog_title(&self) -> WebDriverResult<()> {
+        let title = self
+            .driver
+            .query(By::Css("[role=dialog] h2"))
+            .and_displayed()
+            .first()
+            .await?;
+        self.click_in_sight(&title).await
+    }
+
     /// Waits until no dialog is open, nor one asking to confirm (`alertdialog`).
     ///
     /// # Panics

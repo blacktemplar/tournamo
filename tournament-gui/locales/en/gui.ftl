@@ -285,6 +285,12 @@ edit-phase-description = The results reported so far stay. A change that does no
 save-changes = Save changes
 cancel = Cancel
 
+# a dialog with the form of a phase asking, on Escape or a click beside it, before it loses what was changed
+discard-changes-title = Discard the changes?
+discard-changes-description = What was changed in the form is lost.
+discard-changes = Discard changes
+keep-editing = Keep editing
+
 ## After the start
 
 # the state of a phase, next to its link, for screen readers

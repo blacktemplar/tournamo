@@ -12,8 +12,12 @@ struct Styles;
 
 #[component]
 pub fn Dialog(props: DialogRootProps) -> Element {
+    // changed: focusable, so that a press in it on what is not focuses the dialog rather than
+    // an ancestor taking the focus (`main`, a skip link's target), outside its content, where
+    // the primitive closes it
     let base = attributes!(div {
         class: Styles::dx_dialog,
+        tabindex: "-1",
     });
     let merged = merge_attributes(vec![base, props.attributes]);
     // changed: the backdrop has an id of its own, closing on a click rather than on pointerdown
@@ -77,9 +81,12 @@ pub fn DialogDescription(props: DialogDescriptionProps) -> Element {
 // click, which then hits whatever lies below, e.g. a link leaving the page. So a pointerdown on
 // the backdrop is kept from the primitive's listener (on the document, which a listener on the
 // window precedes), and the click on the backdrop closes the dialog instead, if it was pressed
-// there too (not when a selection made in the dialog ends on the backdrop).
+// there too (not when a selection made in the dialog ends on the backdrop). Nor does the press
+// move the focus, to the nearest ancestor taking it (`main`), outside the dialog's content, where
+// the primitive would close the dialog on the focus as well: a dialog asking before it closes
+// would be asked twice.
 /// Closes the dialog whose backdrop has the id `id` by `on_open_change` when the backdrop is
-/// clicked, and keeps a pointerdown on it from closing the dialog before.
+/// clicked, and keeps a press on it from closing the dialog before.
 fn use_backdrop_click(id: String, on_open_change: Callback<bool>) {
     let eval = use_hook(move || {
         let mut eval = document::eval(
@@ -89,11 +96,14 @@ fn use_backdrop_click(id: String, on_open_change: Callback<bool>) {
                 pressed = e.target.id === id;
                 if (pressed) e.stopImmediatePropagation();
             };
+            const mousedown = e => { if (e.target.id === id) e.preventDefault(); };
             const click = e => { if (pressed && e.target.id === id) dioxus.send(true); };
             window.addEventListener('pointerdown', down, true);
+            window.addEventListener('mousedown', mousedown, true);
             window.addEventListener('click', click, true);
             await dioxus.recv();
             window.removeEventListener('pointerdown', down, true);
+            window.removeEventListener('mousedown', mousedown, true);
             window.removeEventListener('click', click, true);",
         );
         let _ = eval.send(id);

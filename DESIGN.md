@@ -1699,7 +1699,10 @@ rather than snapshotting fields before they have been chosen.
   what had it (`focus::focus_later`); buttons that become unavailable while
   focused are `aria-disabled`.
 - **Once added, the phase is a summary** edited in a dialog starting at its
-  config; a refusal shows in the dialog.
+  config; a refusal shows in the dialog. A dialog holding a form of a phase
+  closes as any other (its buttons, Escape, a click beside it), but asks
+  before discarding changes made in it (`PhaseForm::changed_since` the form
+  as it opened), since Escape or a click may well be a slip.
 - **The help explains every plugin** from the catalog (`Session::glossary`), by
   its translated label and description, so it needs no text of its own per
   plugin. The phase and the empty list of entrants link to its sections

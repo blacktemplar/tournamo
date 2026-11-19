@@ -630,6 +630,19 @@ impl PhaseForm {
         &self.draft
     }
 
+    /// Whether the form says anything other than `earlier`, an earlier clone of it, said: other
+    /// answers, name, sources or columns, or text typed that a field did not take. A change
+    /// undone by hand is no change, as far as the answers are the same again.
+    pub fn changed_since(&self, earlier: &Self) -> bool {
+        self.draft.answers() != earlier.draft.answers()
+            || self.columns != earlier.columns
+            || self.entry.name != earlier.entry.name
+            || self.entry.sources != earlier.entry.sources
+            || self.entry.some_places != earlier.entry.some_places
+            || !self.rejected.is_empty()
+            || !self.entry.rejected.is_empty()
+    }
+
     /// What the operator said about the columns of the tables of standings, see
     /// [`Self::set_shown`].
     pub fn columns(&self) -> &Columns {

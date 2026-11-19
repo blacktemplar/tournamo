@@ -1,7 +1,7 @@
 //! Competitions of several phases: adding, starting and following them, and the ranking.
 
 use tournament_gui_e2e::{
-    Gui, run_in_new_competition,
+    Gui, Key, run_in_new_competition,
     thirtyfour::{By, error::WebDriverResult},
 };
 
@@ -207,6 +207,27 @@ async fn a_phase_without_a_tie_at_its_cut_starts_at_once() {
 
         gui.expect_bar_phase(Some("Final")).await?;
         gui.expect_focus("Matches").await
+    })
+    .await;
+}
+
+/// The dialog adding a phase after the start asks before discarding a form with changes made.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_dialog_adding_a_phase_asks_before_discarding_changes() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        gui.open_new_phase("Final").await?;
+
+        gui.press(Key::Escape).await?;
+        gui.expect_alert_dialog("Discard the changes?").await?;
+        gui.click("Discard changes").await?;
+
+        gui.expect_no_dialog().await
     })
     .await;
 }

@@ -1,3 +1,4 @@
+use tournament_engine::{Table, plugins::metrics_calculator::RoundOfEliminationCalculator};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -417,5 +418,47 @@ fn a_phase_whose_results_do_not_fit_the_latest_version_is_not_updated() {
             .map(|chosen| chosen.plugin.id),
         Some(DoubleEliminationV1::ID)
     );
+    assert_eq!(reported(&session), before);
+}
+
+/// The report's case: a new single elimination takes the round of elimination as a column.
+#[test]
+fn a_single_elimination_shows_the_round_of_elimination() {
+    let session = Session::new("cup");
+    let mut form = session
+        .phase_form_with(session.phase_draft(SingleElimination::ID).unwrap(), None)
+        .unwrap();
+
+    form.set_shown(RoundOfEliminationCalculator::ID, Table::Division, true)
+        .unwrap();
+
+    let view = form.view();
+    assert!(view.issues.is_empty(), "{:?}", view.issues);
+    assert!(view.complete);
+}
+
+/// A single elimination played to its end takes the round of elimination by an edit, keeping its
+/// results.
+#[test]
+fn a_played_single_elimination_is_edited_to_show_the_round_of_elimination() {
+    let mut session = Given::new()
+        .entrants(&["A", "B", "C", "D", "E", "F"])
+        .format(SingleElimination::ID)
+        .started();
+    while let Some(open) = matches(&session)
+        .into_iter()
+        .find(|row| row.result.is_none())
+    {
+        session
+            .report(session.first(), open.id, MatchResult::BWins)
+            .unwrap();
+    }
+    let before = reported(&session);
+    let mut form = session.phase_form_to_edit(session.first()).unwrap();
+
+    form.set_shown(RoundOfEliminationCalculator::ID, Table::Division, true)
+        .unwrap();
+
+    assert!(session.edit_phase(session.first(), &form).unwrap());
     assert_eq!(reported(&session), before);
 }

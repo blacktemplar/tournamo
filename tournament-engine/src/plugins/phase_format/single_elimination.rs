@@ -8,6 +8,7 @@ use crate::{
     plugins::{
         facts::{MatchAnnotation, NoDraws},
         metrics_calculator::{
+            round_of_elimination::Eliminates,
             round_of_first_loss::{LaterFirstLoss, RoundOfFirstLossCalculator},
             wins_draws_losses::{FewerLosses, WinsDrawsLossesCalculator},
         },
@@ -31,6 +32,10 @@ use crate::{
 /// whichever way it goes, so [`LaterFirstLoss`] ties them and the ranking needs a further criterion
 /// to tell the two apart, e.g. [`FewerLosses`]. A bracket of three entrants has nobody to play the
 /// match against and so is not given it.
+///
+/// Every match is annotated with its [`KnockoutRound`], and every match but the one for third place
+/// with [`Eliminates`]: whoever loses a semifinal is out in it, the match for third place only
+/// orders the two.
 #[derive(Debug, Clone, Deserialize, Serialize, Plugin)]
 #[cfg_attr(feature = "test-util", derive(Default))]
 #[plugin(
@@ -80,6 +85,7 @@ impl SingleElimination {
         // every match has to produce a winner who moves on to the next round
         declaration
             .provide(MatchAnnotation::<KnockoutRound>::new())
+            .provide(MatchAnnotation::<Eliminates>::new())
             .provide(NoDraws);
     }
 }
@@ -208,7 +214,9 @@ impl PhaseFormat for SingleElimination {
 fn bracket(phase_data: &DivisionData, third_place_match: bool) -> Bracket {
     let mut bracket = BracketBuilder::default();
     let knockout = bracket.add_knockout(phase_data, phase_round, |round, rounds| {
-        TypeMap::new().with(KnockoutRound::RoundOf(1 << (rounds - round + 1)))
+        TypeMap::new()
+            .with(KnockoutRound::RoundOf(1 << (rounds - round + 1)))
+            .with(Eliminates::Loser)
     });
     if third_place_match && let [.., semifinals, _] = &knockout[..] {
         // In a bracket of three, one of the semifinals is a bye, whose loser is nobody, so the

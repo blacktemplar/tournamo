@@ -79,13 +79,22 @@ pub mod __private {
         schema::Configurable,
     };
 
-    /// What is known of one axis: the plugins registered for it by id, and the facts they could
+    /// What is known of one axis: the plugins registered for it, and the facts they could
     /// provide, each built on first access. Held in a static by the code [`axis`](crate::axis)
     /// generates.
     pub struct Index {
         registered: fn() -> Vec<&'static PluginEntry>,
-        entries: OnceLock<BTreeMap<&'static str, &'static PluginEntry>>,
+        entries: OnceLock<Entries>,
         pub(crate) facts: OnceLock<OpenFacts>,
+    }
+
+    /// The plugins registered for an axis.
+    pub(crate) struct Entries {
+        /// Every version of every plugin, by [`PluginType::ID`].
+        pub(crate) all: BTreeMap<&'static str, &'static PluginEntry>,
+        /// The latest version of every plugin, by the id its versions share, see
+        /// [`unversioned`](crate::unversioned).
+        pub(crate) latest: BTreeMap<&'static str, &'static PluginEntry>,
     }
 
     impl Index {
@@ -98,15 +107,32 @@ pub mod __private {
             }
         }
 
-        /// The registered plugins by id.
+        /// The registered plugins.
         ///
         /// # Panics
-        /// Panics if two of them share an id.
-        pub(crate) fn entries(&self) -> &BTreeMap<&'static str, &'static PluginEntry> {
+        /// Panics if two of them share an id, or an id does not say the version it is of, see
+        /// [`PluginType::ID`].
+        pub(crate) fn entries(&self) -> &Entries {
             self.entries.get_or_init(|| {
-                let mut index = BTreeMap::new();
+                let mut all = BTreeMap::new();
+                let mut latest = BTreeMap::<_, &PluginEntry>::new();
                 for entry in (self.registered)() {
-                    if let Some(other) = index.insert(entry.id(), entry) {
+                    let expected = match entry.version() {
+                        1 => entry.unversioned_id().to_owned(),
+                        version => format!(
+                            "{}{}{version}",
+                            entry.unversioned_id(),
+                            crate::VERSION_SEPARATOR
+                        ),
+                    };
+                    assert!(
+                        entry.version() > 0 && entry.id() == expected,
+                        "the plugin {} of version {} has the id {:?} rather than {expected:?}",
+                        entry.type_name(),
+                        entry.version(),
+                        entry.id(),
+                    );
+                    if let Some(other) = all.insert(entry.id(), entry) {
                         panic!(
                             "the plugins {} and {} are both registered with the id {:?}",
                             other.type_name(),
@@ -114,8 +140,16 @@ pub mod __private {
                             entry.id(),
                         );
                     }
+                    latest
+                        .entry(entry.unversioned_id())
+                        .and_modify(|other| {
+                            if entry.version() > other.version() {
+                                *other = entry;
+                            }
+                        })
+                        .or_insert(entry);
                 }
-                index
+                Entries { all, latest }
             })
         }
     }
@@ -205,12 +239,26 @@ pub trait Plugin: Debug + __private::Erased + 'static {
 /// A plugin is configured through its [`Configurable`] impl, which is also where the plugins it
 /// is made of come from.
 pub trait PluginType: Plugin + Configurable {
-    /// What identifies the plugin among the plugins of its axis, in a config as in a saved file,
-    /// e.g. `"my_crate::points"`. Never change it once configurations naming it are saved.
+    /// What identifies this version of the plugin among the plugins of its axis, in a config as
+    /// in a saved file, e.g. `"my_crate::points"`. Never change it once configurations naming it
+    /// are saved.
+    ///
+    /// The first version's id is the plugin's id alone, a later one's the id followed by
+    /// [`VERSION_SEPARATOR`] and its [version](Self::VERSION), e.g. `"my_crate::points@2"`, which
+    /// [`derive@Plugin`] writes; see [`unversioned`]. The catalog panics on any other id.
     ///
     /// A plugin persisted through `typetag` has to be tagged with this id, which [`register`]
     /// does.
     const ID: &'static str;
+
+    /// Which version of the plugin this is, counted from 1.
+    ///
+    /// A version is a type of its own, so that what was saved with one keeps behaving as it did
+    /// once a later one behaves differently. All versions of a plugin share its texts; the catalog
+    /// offers only the latest, and finds the others by their ids, see
+    /// [`AnyAxis::entries`](catalog::AnyAxis::entries) and
+    /// [`AnyAxis::successor`](catalog::AnyAxis::successor).
+    const VERSION: u32 = 1;
 
     /// What an operator picking a plugin reads.
     const LABEL: &'static str;
@@ -223,6 +271,25 @@ pub trait PluginType: Plugin + Configurable {
     ///
     /// A program reads this declaration from the [catalog] before the plugin is configured.
     fn declare_static(_: &mut Declaration) {}
+}
+
+/// What separates a plugin's id from its version in the [`PluginType::ID`] of a later version.
+pub const VERSION_SEPARATOR: char = '@';
+
+/// The id all versions of the plugin `id`, a [`PluginType::ID`], share: `id` without its version.
+///
+/// ```
+/// assert_eq!(
+///     plugin_factory::unversioned("my_crate::points@2"),
+///     "my_crate::points"
+/// );
+/// assert_eq!(
+///     plugin_factory::unversioned("my_crate::points"),
+///     "my_crate::points"
+/// );
+/// ```
+pub fn unversioned(id: &str) -> &str {
+    id.split_once(VERSION_SEPARATOR).map_or(id, |(id, _)| id)
 }
 
 /// The [`PluginType::ID`] of `plugin`, which may be behind a `dyn` of its axis.

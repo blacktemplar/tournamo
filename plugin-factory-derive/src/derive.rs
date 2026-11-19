@@ -1,8 +1,8 @@
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{ToTokens, quote};
 use syn::{
-    Attribute, Data, DeriveInput, Error, Expr, ExprPath, Fields, Ident, LitStr, Result, Token,
-    Type, ext::IdentExt, meta::ParseNestedMeta, token::Paren,
+    Attribute, Data, DeriveInput, Error, Expr, ExprPath, Fields, Ident, LitInt, LitStr, Result,
+    Token, Type, ext::IdentExt, meta::ParseNestedMeta, token::Paren,
 };
 
 /// The `Plugin`, `Configurable` and `PluginType` impls of the struct `input`.
@@ -11,11 +11,22 @@ pub fn expand_plugin(input: &DeriveInput) -> Result<TokenStream> {
     let plugin = &input.ident;
     let Container {
         id,
+        version,
         label,
         description,
         declare_static,
         declare,
     } = Container::parse(input)?;
+    // the id of a later version names it, so that each version is saved under a tag of its own
+    let version_number = version
+        .as_ref()
+        .map_or(Ok(1), LitInt::base10_parse::<u32>)?;
+    let id = if version_number == 1 {
+        id
+    } else {
+        LitStr::new(&format!("{}@{version_number}", id.value()), id.span())
+    };
+    let version = (version_number != 1).then(|| quote!(const VERSION: u32 = #version_number;));
     let declare_static = declare_static.as_ref().map(|declare_static| {
         quote! {
             fn declare_static(declaration: &mut ::plugin_factory::compatibility::Declaration) {
@@ -46,6 +57,7 @@ pub fn expand_plugin(input: &DeriveInput) -> Result<TokenStream> {
 
         impl ::plugin_factory::PluginType for #plugin {
             const ID: &'static str = #id;
+            #version
             const LABEL: &'static str = #label;
             #description
 
@@ -190,6 +202,7 @@ fn container_default(input: &DeriveInput, what: &str) -> Result<bool> {
 /// What the `#[plugin(..)]` attributes of a plugin's struct say.
 struct Container {
     id: LitStr,
+    version: Option<LitInt>,
     label: LitStr,
     description: Option<LitStr>,
     declare_static: Option<Expr>,
@@ -199,6 +212,7 @@ struct Container {
 impl Container {
     fn parse(input: &DeriveInput) -> Result<Self> {
         let mut id = None;
+        let mut version: Option<LitInt> = None;
         let mut label = None;
         let mut description = None;
         let mut declare_static = None;
@@ -207,6 +221,8 @@ impl Container {
             attribute.parse_nested_meta(|meta| {
                 if meta.path.is_ident("id") {
                     set_once(&mut id, &meta, meta.value()?.parse()?)
+                } else if meta.path.is_ident("version") {
+                    set_once(&mut version, &meta, meta.value()?.parse()?)
                 } else if meta.path.is_ident("label") {
                     set_once(&mut label, &meta, meta.value()?.parse()?)
                 } else if meta.path.is_ident("description") {
@@ -217,7 +233,8 @@ impl Container {
                     set_once(&mut declare, &meta, meta.value()?.parse()?)
                 } else {
                     Err(meta.error(
-                        "expected `id`, `label`, `description`, `declare_static` or `declare`",
+                        "expected `id`, `version`, `label`, `description`, `declare_static` or \
+                         `declare`",
                     ))
                 }
             })?;
@@ -231,8 +248,22 @@ impl Container {
                 )
             })
         };
+        let id = required(id, "id")?;
+        if id.value().contains(VERSION_SEPARATOR) {
+            return Err(Error::new_spanned(
+                &id,
+                "an id cannot contain `@`, which separates it from the version; give the version \
+                 as `version = ..`",
+            ));
+        }
+        if let Some(version) = &version
+            && version.base10_parse::<u32>()? == 0
+        {
+            return Err(Error::new_spanned(version, "versions are counted from 1"));
+        }
         Ok(Self {
-            id: required(id, "id")?,
+            id,
+            version,
             label: required(label, "label")?,
             description,
             declare_static,
@@ -550,6 +581,10 @@ fn attributes<'a>(
 }
 
 /// Sets `slot` to `value`, unless it was set before.
+/// What separates the id of a plugin from its version in the id of a later version, as
+/// `plugin_factory::VERSION_SEPARATOR`.
+const VERSION_SEPARATOR: char = '@';
+
 fn set_once<T>(slot: &mut Option<T>, meta: &ParseNestedMeta, value: T) -> Result<()> {
     if slot.is_some() {
         return Err(meta.error("given twice"));
@@ -619,6 +654,54 @@ mod tests {
         .to_string();
 
         assert!(!expanded.contains("DESCRIPTION"));
+    }
+
+    #[test]
+    fn a_later_version_is_named_by_its_id_and_version() {
+        let expanded = expand_plugin(&parse_quote! {
+            #[plugin(id = "points", version = 2, label = "points")]
+            struct Points;
+        })
+        .unwrap()
+        .to_string();
+
+        assert!(expanded.contains("const ID : & 'static str = \"points@2\""));
+        assert!(expanded.contains("const VERSION : u32 = 2u32"));
+    }
+
+    #[test]
+    fn the_first_version_is_named_by_its_id_alone() {
+        let expanded = expand_plugin(&parse_quote! {
+            #[plugin(id = "points", version = 1, label = "points")]
+            struct Points;
+        })
+        .unwrap()
+        .to_string();
+
+        assert!(expanded.contains("const ID : & 'static str = \"points\""));
+        assert!(!expanded.contains("VERSION"));
+    }
+
+    #[test]
+    fn an_id_naming_a_version_is_an_error() {
+        assert!(
+            error_of(parse_quote! {
+                #[plugin(id = "points@2", label = "points")]
+                struct Points;
+            })
+            .starts_with("an id cannot contain `@`")
+        );
+    }
+
+    #[test]
+    fn version_0_is_an_error() {
+        assert_eq!(
+            error_of(parse_quote! {
+                #[plugin(id = "points", version = 0, label = "points")]
+                struct Points;
+            }),
+            "versions are counted from 1"
+        );
     }
 
     #[test]

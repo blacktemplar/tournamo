@@ -154,9 +154,10 @@ pub mod __private {
         }
     }
 
-    /// The entry of the plugin `P`, which [`register`](crate::register) submits.
-    pub const fn entry<P: PluginType>() -> PluginEntry {
-        PluginEntry::new::<P>()
+    /// The entry of the plugin `P` for the axis `A`, which [`register`](crate::register)
+    /// submits.
+    pub const fn entry<P: PluginType, A: Axis + ?Sized>() -> PluginEntry {
+        PluginEntry::new::<P, A>()
     }
 
     /// How the plugin `P` is registered for an axis: the value of the axis's registry that

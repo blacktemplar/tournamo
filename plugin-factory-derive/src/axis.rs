@@ -64,7 +64,7 @@ pub fn expand(arguments: TokenStream, input: ItemTrait) -> Result<TokenStream> {
                 type Registry = Registry;
 
                 const REGISTRY: Registry =
-                    Registry(::plugin_factory::__private::entry::<P>());
+                    Registry(::plugin_factory::__private::entry::<P, dyn #axis>());
             }
         };
     })

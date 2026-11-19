@@ -90,6 +90,7 @@ pub trait Axis: Plugin {
 pub struct PluginEntry {
     id: &'static str,
     version: u32,
+    axis: AnyAxis,
     label: &'static str,
     description: Option<&'static str>,
     declare: fn(&mut Declaration),
@@ -102,11 +103,12 @@ pub struct PluginEntry {
 }
 
 impl PluginEntry {
-    /// The entry of the plugin `P`.
-    pub(crate) const fn new<P: PluginType>() -> Self {
+    /// The entry of the plugin `P` for the axis `A`.
+    pub(crate) const fn new<P: PluginType, A: Axis + ?Sized>() -> Self {
         Self {
             id: P::ID,
             version: P::VERSION,
+            axis: AnyAxis::of::<A>(),
             label: P::LABEL,
             description: P::DESCRIPTION,
             declare: P::declare_static,
@@ -125,6 +127,11 @@ impl PluginEntry {
     /// Which version of the plugin this is, see [`PluginType::VERSION`].
     pub fn version(&self) -> u32 {
         self.version
+    }
+
+    /// The latest version of the plugin if this is an earlier one, see [`AnyAxis::successor`].
+    pub fn successor(&self) -> Option<&'static PluginEntry> {
+        self.axis.successor(self.id)
     }
 
     /// The id all versions of the plugin share, see [`unversioned`](crate::unversioned).
@@ -878,6 +885,10 @@ mod tests {
     #[register]
     impl Evolving for EvolvingSecond {}
 
+    fn entry_of_evolving(id: &str) -> &'static PluginEntry {
+        AnyAxis::of::<dyn Evolving>().entry(id).unwrap()
+    }
+
     #[test]
     fn only_the_latest_version_of_a_plugin_is_offered() {
         let axis = AnyAxis::of::<dyn Evolving>();
@@ -906,6 +917,13 @@ mod tests {
             Some(EvolvingSecond::ID)
         );
         assert!(axis.successor(EvolvingSecond::ID).is_none());
+        assert_eq!(
+            entry_of_evolving(EvolvingFirst::ID)
+                .successor()
+                .map(PluginEntry::id),
+            Some(EvolvingSecond::ID)
+        );
+        assert!(entry_of_evolving(EvolvingSecond::ID).successor().is_none());
         assert!(axis.successor("unregistered").is_none());
         assert!(AnyAxis::of::<dyn Tested>().successor("chained").is_none());
     }

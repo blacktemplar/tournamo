@@ -494,20 +494,15 @@ pub struct Outdated {
 /// Adds the outdated plugins answering `fields` and the fields of their plugins to `outdated`,
 /// depth first.
 fn collect_outdated(fields: Vec<FieldNode<'_>>, outdated: &mut Vec<Outdated>) {
-    for field in fields {
-        let Some(slot) = Slot::of(field.field.kind()) else {
-            continue;
-        };
-        for plugin in field.plugins() {
-            if let Some(latest) = slot.axis().successor(plugin.entry.id()) {
-                outdated.push(Outdated {
-                    path: plugin.path.clone(),
-                    plugin: plugin.entry,
-                    latest,
-                });
-            }
-            collect_outdated(plugin.fields(), outdated);
+    for plugin in fields.iter().flat_map(FieldNode::plugins) {
+        if let Some(latest) = plugin.entry.successor() {
+            outdated.push(Outdated {
+                path: plugin.path.clone(),
+                plugin: plugin.entry,
+                latest,
+            });
         }
+        collect_outdated(plugin.fields(), outdated);
     }
 }
 

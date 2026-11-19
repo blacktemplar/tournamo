@@ -35,8 +35,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   its lot: the best eight of three groups are the firsts and seconds of every
   group and two of the thirds. Entrants of the same place in different groups
   are compared by criteria of their own, by default (for round robin, random
-  rounds and Monster DYP) the new points per match, which compares groups of
-  different sizes, then the points, rather than by lot. A phase with too few entrants for its groups is not started until
+  rounds and Monster DYP) the new points per match (the points scored in
+  matches divided by the matches played, byes left out of both), which
+  compares groups of different sizes, then the points, rather than by lot. A phase with too few entrants for its groups is not started until
   the groups are lowered. The page filters the matches by group, shows the
   standings of each group and, where the cut of the next phase goes through a
   place, how that place compares across the groups, a dashed line below the
@@ -95,6 +96,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- A new round-robin phase scores no point for a bye: with an odd number of
+  entrants everyone has one, so it only added the same to every total and
+  favoured groups of an odd size where groups are compared. Phases added
+  before keep their points; random rounds and Monster DYP, where not everyone
+  gets a bye, still score it as a win.
 - Double elimination: from 17 entrants on, the losers of the winner bracket
   drop into the loser bracket in an order that keeps entrants who met apart
   for as long as possible (as Challonge does): with 24 or 32 entrants until
@@ -200,6 +206,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   (`points_for_win`, `points_for_draw`, `points_for_bye`). In the app,
   `CrossRow::total` is the row's points, `None` without them, next to
   `CrossRow::byes` and `CrossMatch::points`.
+- Library users: the metric `Points` holds its total and the points of the
+  matches apart (`Points::new(of_matches, of_byes)`, `total`, `of_matches`),
+  saved as `{"total", "of_matches"}` where it was a number.
 - Reopening a match that later results depend on, or changing the phase in a
   way that results already reported do not fit, says which matches are in the
   way: all of them at once, rather than one at a time, and of which phase,

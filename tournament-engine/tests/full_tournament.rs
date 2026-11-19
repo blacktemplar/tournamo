@@ -64,7 +64,7 @@ fn assert_metrics(
             byes: 0,
         })
     );
-    assert_eq!(ranking.metric::<Points>(), Some(&Points(points)));
+    assert_eq!(ranking.metric::<Points>().map(Points::total), Some(points));
     assert_eq!(ranking.played_matches(), matches);
     assert_eq!(ranking.metric::<Buchholz>(), Some(&Buchholz(buchholz)));
     assert_eq!(
@@ -349,7 +349,7 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
             .map(|bye| {
                 let ranking = &phase.rankings()[&bye.ranking()];
                 let WinsDrawsLosses { byes, draws, .. } = *ranking.metric().unwrap();
-                let points = ranking.metric::<Points>().unwrap().0;
+                let points = ranking.metric::<Points>().unwrap().total();
                 assert_eq!(points, Score::new(f64::from(3 * byes + draws)));
                 assert_eq!(bye.is_reached(), byes == 1);
                 (bye.round().get(), byes)

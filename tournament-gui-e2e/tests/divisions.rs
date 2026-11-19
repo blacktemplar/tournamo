@@ -60,19 +60,21 @@ async fn groups_then_a_knockout_of_their_best_are_played_through() {
         gui.go_to_phase("1 · Round robin").await?;
         gui.expect_compared(&["Place 3 compared across the groups"], 3)
             .await?;
-        // two of the thirds by the comparison, in the groups and in the comparison
+        // two of the thirds by the comparison, in the groups and in the comparison: all score
+        // half a point per match, a bye of group A none, so the thirds of the larger groups B and
+        // C go on by their points
         let third = "Place 3 goes on to Knockout as things stand, compared across the groups";
         gui.expect_cuts(&[
             "Places 1–2 go on to Knockout",
-            third,
             "Places 1–2 go on to Knockout",
             third,
             "Places 1–2 go on to Knockout",
+            third,
             "Go on to Knockout as things stand",
         ])
         .await?;
         // everyone of a group tied, the lot put the rest of the group below its lines
-        gui.expect_ties_below_cuts(&[1, 0, 2, 1, 2, 0]).await?;
+        gui.expect_ties_below_cuts(&[1, 2, 1, 2, 1, 0]).await?;
         gui.page.check_accessibility().await?;
 
         gui.click("Start Knockout").await?;

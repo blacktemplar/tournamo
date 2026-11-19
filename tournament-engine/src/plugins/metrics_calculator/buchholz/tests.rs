@@ -783,8 +783,8 @@ fn the_neustadtl_scores_of_a_published_cross_table_are_reproduced() {
 
     for (index, (points, neustadtl)) in PUBLISHED_SCORES.into_iter().enumerate() {
         assert_eq!(
-            test_utils::metric_of::<Points>(&phase, index),
-            Points(score(points)),
+            test_utils::metric_of::<Points>(&phase, index).total(),
+            score(points),
             "player {index} ended up with the wrong number of points"
         );
         assert_eq!(

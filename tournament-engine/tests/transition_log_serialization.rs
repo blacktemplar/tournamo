@@ -476,7 +476,9 @@ fn a_round_tripped_log_can_still_be_undone() {
         phase
             .rankings()
             .values()
-            .filter(|ranking| ranking.metric::<Points>() == Some(&Points(Score::new(3.0))))
+            .filter(|ranking| {
+                ranking.metric::<Points>().map(Points::total) == Some(Score::new(3.0))
+            })
             .count(),
         1
     );

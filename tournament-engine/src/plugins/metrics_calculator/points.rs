@@ -13,25 +13,51 @@ use crate::{
     type_map::TypeMapValue,
 };
 
+/// The points of a ranking: those it scored in its matches plus those of its byes.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub struct Points(pub Score);
+pub struct Points {
+    total: Score,
+    of_matches: Score,
+}
+
+impl Points {
+    /// The points `of_matches` scored in matches plus `of_byes` scored for byes.
+    pub fn new(of_matches: Score, of_byes: Score) -> Self {
+        Self {
+            total: of_matches + of_byes,
+            of_matches,
+        }
+    }
+
+    /// All the points, those of the matches and those of the byes.
+    pub const fn total(&self) -> Score {
+        self.total
+    }
+
+    /// The points scored in matches, without those of the byes.
+    pub const fn of_matches(&self) -> Score {
+        self.of_matches
+    }
+}
 
 #[typetag::serde(name = "tournament_engine::points")]
 impl TypeMapValue for Points {}
 
 impl ToCell for Points {
+    /// The total.
     fn to_cell(&self) -> Cell {
-        Cell::Number(self.0)
+        Cell::Number(self.total)
     }
 }
 
 impl AsRef<Score> for Points {
+    /// The total.
     fn as_ref(&self) -> &Score {
-        &self.0
+        &self.total
     }
 }
 
-/// Ranks by the [`Points`], where more points are better.
+/// Ranks by the total of the [`Points`], where more points are better.
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
     id = "tournament_engine::more_points",
@@ -45,7 +71,7 @@ impl RankingCriterion for MorePoints {
     type Metric = Points;
 
     fn compare(&self, first: &Points, second: &Points) -> Comparison {
-        Comparison::greater_is_better(first.0.cmp(&second.0))
+        Comparison::greater_is_better(first.total.cmp(&second.total))
     }
 }
 
@@ -128,10 +154,9 @@ impl PointsCalculator {
         } = *phase_data.rankings()[ranking_id]
             .metric::<WinsDrawsLosses>()
             .unwrap();
-        Points(
-            self.points_for_win * wins.into()
-                + self.points_for_draw * draws.into()
-                + self.points_for_bye * byes.into(),
+        Points::new(
+            self.points_for_win * wins.into() + self.points_for_draw * draws.into(),
+            self.points_for_bye * byes.into(),
         )
     }
 
@@ -178,8 +203,8 @@ impl Calculator for PointsCalculator {
 
 crate::register_calculator!(PointsCalculator);
 
-/// The [`Points`] of a ranking divided by the number of its matches with a result and byes it
-/// reached; 0 before it has any.
+/// The [`Points`] a ranking scored in its matches divided by the number of its matches with a
+/// result, byes left out of both; 0 before it played any.
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct PointsPerMatch(pub Score);
 
@@ -220,7 +245,7 @@ crate::register_criterion!(MorePointsPerMatch);
 #[plugin(
     id = "tournament_engine::points_per_match",
     label = "points per match",
-    description = "the points divided by the matches played and the byes",
+    description = "the points scored in matches divided by the matches played",
     declare_static = Self::declare_static
 )]
 pub struct PointsPerMatchCalculator;
@@ -228,13 +253,15 @@ pub struct PointsPerMatchCalculator;
 impl PointsPerMatchCalculator {
     fn of(ranking_id: RankingId, phase_data: &DivisionData) -> (RankingId, PointsPerMatch) {
         let ranking = &phase_data.rankings()[&ranking_id];
-        let Points(points) = *ranking.metric::<Points>().unwrap();
-        let record = ranking.metric::<WinsDrawsLosses>().unwrap();
-        let counted = record.wins + record.draws + record.losses + record.byes;
-        let per_match = if counted == 0 {
+        let points = ranking.metric::<Points>().unwrap().of_matches;
+        let played = ranking
+            .metric::<WinsDrawsLosses>()
+            .unwrap()
+            .matches_played();
+        let per_match = if played == 0 {
             Score::ZERO
         } else {
-            Score::new(points.get() / f64::from(counted))
+            Score::new(points.get() / f64::from(played))
         };
         (ranking_id, PointsPerMatch(per_match))
     }
@@ -264,13 +291,14 @@ impl Calculator for PointsPerMatchCalculator {
             .collect()
     }
 
+    /// Nothing: a bye counts neither for the points nor for the matches.
     fn after_bye(
         &mut self,
-        phase_data: &DivisionData,
-        bye: &Bye,
+        _: &DivisionData,
+        _: &Bye,
         _: &OldMetrics,
     ) -> Vec<(RankingId, PointsPerMatch)> {
-        vec![Self::of(bye.ranking(), phase_data)]
+        vec![]
     }
 
     fn column(&self) -> Option<MetricColumn> {

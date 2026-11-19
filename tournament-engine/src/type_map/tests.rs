@@ -164,7 +164,7 @@ fn metric_types_of_the_engine_are_serialized_under_their_explicitly_chosen_tags(
 #[test]
 fn metric_types_of_the_engine_survive_a_round_trip() {
     let mut map = TypeMap::new();
-    map.insert(Points(Score::new(2.5)));
+    map.insert(Points::new(Score::new(2.5), Score::ZERO));
     map.insert(WinsDrawsLosses {
         wins: 3,
         draws: 1,
@@ -174,7 +174,10 @@ fn metric_types_of_the_engine_survive_a_round_trip() {
 
     let map = round_trip(&map);
 
-    assert_eq!(map.get::<Points>(), Some(&Points(Score::new(2.5))));
+    assert_eq!(
+        map.get::<Points>(),
+        Some(&Points::new(Score::new(2.5), Score::ZERO))
+    );
     assert_eq!(
         map.get::<WinsDrawsLosses>(),
         Some(&WinsDrawsLosses {

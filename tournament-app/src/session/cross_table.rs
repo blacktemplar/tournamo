@@ -78,7 +78,7 @@ impl Session {
                 total: points.map(|_| {
                     ranking
                         .metric::<Points>()
-                        .map_or(Score::ZERO, |points| points.0)
+                        .map_or(Score::ZERO, Points::total)
                 }),
             })
             .collect();

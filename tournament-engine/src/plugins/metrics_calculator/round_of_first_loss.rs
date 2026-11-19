@@ -7,10 +7,11 @@ use crate::{
     entities::{Bye, DivisionData, Match, RankingId},
     plugins::{
         Phrase,
-        metrics_calculator::{Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric},
+        metrics_calculator::{
+            Calculator, Cell, Metric, MetricColumn, OldMetrics, ToCell, provides_metric,
+        },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
-    type_map::TypeMapValue,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Serialize, Deserialize)]
@@ -26,8 +27,20 @@ impl ToCell for RoundOfFirstLoss {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::round_of_first_loss")]
-impl TypeMapValue for RoundOfFirstLoss {}
+impl Metric for RoundOfFirstLoss {
+    const LABEL: &'static str = "round of the first loss";
+    const DESCRIPTION: Option<&'static str> =
+        Some("the round in which an entrant lost for the first time");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("lost in"))
+    }
+}
+
+crate::metric!(
+    RoundOfFirstLoss,
+    id = "tournament_engine::round_of_first_loss"
+);
 
 /// Ranks by the [`RoundOfFirstLoss`]: the later the better, never having lost is best.
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
@@ -95,10 +108,6 @@ impl Calculator for RoundOfFirstLossCalculator {
         _: &OldMetrics,
     ) -> Vec<(RankingId, RoundOfFirstLoss)> {
         vec![]
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<RoundOfFirstLoss>("lost in"))
     }
 }
 

@@ -262,6 +262,7 @@ fn the_standings_show_the_columns_of_the_metrics() {
         standings.columns,
         [
             Column {
+                metric: "tournament_engine::points",
                 calculator: "tournament_engine::points",
                 header: "points",
                 label: "points",
@@ -269,6 +270,7 @@ fn the_standings_show_the_columns_of_the_metrics() {
                 ranks: true,
             },
             Column {
+                metric: "tournament_engine::sonneborn_berger",
                 calculator: "tournament_engine::sonneborn_berger",
                 header: "Sonneborn-Berger",
                 label: "Sonneborn-Berger",
@@ -278,6 +280,7 @@ fn the_standings_show_the_columns_of_the_metrics() {
                 ranks: true,
             },
             Column {
+                metric: "tournament_engine::wins_draws_losses",
                 calculator: "tournament_engine::wins_draws_losses",
                 header: "W-D-L",
                 label: "win-draw-loss record",

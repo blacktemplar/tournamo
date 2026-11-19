@@ -5,14 +5,13 @@ use std::{
     num::NonZeroU32,
 };
 
-use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use tournament_engine::{
     Annotated as _, Bye, Division, DivisionData, EntrantId, Match, PhaseId, Ranking, RankingId,
     Standing, Table, TypeMap,
     entities::columns::Rule,
     plugins::{
         match_format::Parts,
-        metrics_calculator::{Cell, MetricsCalculator},
+        metrics_calculator::Cell,
         phase_format::{PhaseFormat, Stage},
     },
 };
@@ -453,19 +452,16 @@ impl Session {
         let advancing = self.advancing(phase);
         // a medal is one of the competition, by the place there
         let place_of = self.competition().places(&phase);
-        let calculators = AnyAxis::of::<dyn MetricsCalculator>();
         let ranked_by: Vec<&str> = of
             .rule(table)
             .into_iter()
             .filter(|(_, why)| matches!(why, Rule::RankedBy(_)))
-            .map(|(calculator, _)| calculator)
+            .map(|(metric, _)| metric)
             .collect();
         let columns: Vec<_> = of
             .shown(table)
             .into_iter()
-            .filter_map(|calculator| {
-                Some((plugin_factory::id_of(calculator), calculator.column()?))
-            })
+            .filter_map(|metric| Some((metric, metric.column()?)))
             .collect();
         let finished = of.is_finished();
         let places: Vec<NonZeroU32> = rows
@@ -475,15 +471,20 @@ impl Session {
         let mut standings = Standings {
             columns: columns
                 .iter()
-                .map(|(calculator, column)| {
-                    let entry = calculators.entry(calculator);
-                    Column {
-                        calculator,
-                        header: column.header(),
-                        label: entry.map_or(column.header(), PluginEntry::label),
-                        description: entry.and_then(PluginEntry::description),
-                        ranks: ranked_by.contains(calculator),
-                    }
+                .map(|(metric, column)| Column {
+                    metric: metric.id(),
+                    calculator: of
+                        .plugins()
+                        .metrics()
+                        .iter()
+                        .find(|calculator| calculator.metric() == *metric)
+                        .map_or(metric.id(), |calculator| {
+                            plugin_factory::id_of(&**calculator)
+                        }),
+                    header: column.header(),
+                    label: metric.label(),
+                    description: metric.description(),
+                    ranks: ranked_by.contains(&metric.id()),
                 })
                 .collect(),
             rows: rows

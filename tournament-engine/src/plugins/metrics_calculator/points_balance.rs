@@ -11,13 +11,12 @@ use crate::{
         facts::{CalculatesMetric, MatchTally},
         match_format::PointsScored,
         metrics_calculator::{
-            Calculator, Cell, MetricColumn, OldMetrics, ToCell, derived, provides_metric,
+            Calculator, Cell, Metric, MetricColumn, OldMetrics, ToCell, derived, provides_metric,
             updated_for_each_team,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
-    type_map::TypeMapValue,
 };
 
 /// The points, or goals, a ranking scored and conceded in all its matches.
@@ -51,8 +50,17 @@ impl ToCell for PointsBalance {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::points_balance")]
-impl TypeMapValue for PointsBalance {}
+impl Metric for PointsBalance {
+    const LABEL: &'static str = "points scored and conceded";
+    const DESCRIPTION: Option<&'static str> =
+        Some("the points or goals of all matches, as the results say");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("+:−"))
+    }
+}
+
+crate::metric!(PointsBalance, id = "tournament_engine::points_balance");
 
 /// The points, or goals, a ranking scored minus those it conceded, see
 /// [`PointsBalance::difference`].
@@ -65,8 +73,20 @@ impl ToCell for PointsDifference {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::points_difference")]
-impl TypeMapValue for PointsDifference {}
+impl Metric for PointsDifference {
+    const LABEL: &'static str = "points difference";
+    const DESCRIPTION: Option<&'static str> =
+        Some("the points or goals scored minus those conceded");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("±"))
+    }
+}
+
+crate::metric!(
+    PointsDifference,
+    id = "tournament_engine::points_difference"
+);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
@@ -149,10 +169,6 @@ impl Calculator for PointsBalanceCalculator {
     ) -> Vec<(RankingId, PointsBalance)> {
         Vec::new()
     }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<PointsBalance>("+:−"))
-    }
 }
 
 crate::register_calculator!(PointsBalanceCalculator);
@@ -195,10 +211,6 @@ impl Calculator for PointsDifferenceCalculator {
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, PointsDifference)> {
         derived(phase_data, old_metrics, PointsBalance::difference)
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<PointsDifference>("±"))
     }
 }
 

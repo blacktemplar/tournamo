@@ -494,16 +494,16 @@ pub struct Standings {
 /// A metric column of the standings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Column {
-    /// The id of the calculator whose metric the column shows, which its translated header is
-    /// found by, see [`PluginText::Column`](crate::i18n::PluginText::Column).
+    /// The id of the metric the column shows, which its texts are translated by, see
+    /// [`MetricText`](crate::i18n::MetricText).
+    pub metric: &'static str,
+    /// The id of the phase's calculator of the metric.
     pub calculator: &'static str,
     /// The header in English.
     pub header: &'static str,
-    /// The calculator's label in English, the metric's whole name where the header abbreviates
-    /// it, translated as its [`PluginText::Label`](crate::i18n::PluginText::Label).
+    /// The metric's label in English, its whole name where the header abbreviates it.
     pub label: &'static str,
-    /// What the calculator says about its metric in English, translated as its
-    /// [`PluginText::Description`](crate::i18n::PluginText::Description).
+    /// What the metric counts, in English.
     pub description: Option<&'static str>,
     /// Whether a criterion of the phase ranks by its metric.
     pub ranks: bool,

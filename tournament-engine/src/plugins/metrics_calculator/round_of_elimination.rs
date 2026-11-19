@@ -8,7 +8,9 @@ use crate::{
     plugins::{
         Phrase,
         facts::MatchAnnotation,
-        metrics_calculator::{Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric},
+        metrics_calculator::{
+            Calculator, Cell, Metric, MetricColumn, OldMetrics, ToCell, provides_metric,
+        },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     type_map::TypeMapValue,
@@ -45,8 +47,19 @@ impl ToCell for RoundOfElimination {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::round_of_elimination")]
-impl TypeMapValue for RoundOfElimination {}
+impl Metric for RoundOfElimination {
+    const LABEL: &'static str = "round of elimination";
+    const DESCRIPTION: Option<&'static str> = Some("the round in which an entrant was knocked out");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("out in"))
+    }
+}
+
+crate::metric!(
+    RoundOfElimination,
+    id = "tournament_engine::round_of_elimination"
+);
 
 /// Ranks by [`RoundOfElimination`]: the later a ranking was knocked out the better, still being in
 /// is best.
@@ -129,10 +142,6 @@ impl Calculator for RoundOfEliminationCalculator {
         _: &OldMetrics,
     ) -> Vec<(RankingId, RoundOfElimination)> {
         vec![]
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<RoundOfElimination>("out in"))
     }
 }
 

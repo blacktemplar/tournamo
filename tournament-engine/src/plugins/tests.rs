@@ -20,7 +20,7 @@ use crate::{
         match_format::{BestOf, Scored, WinnerOnly},
         metrics_calculator::{
             Calculator, GamesBalance, GamesBalanceCalculator, GamesDifference,
-            HigherGamesDifference, HigherPointsDifference, OldMetrics, PointsBalance,
+            HigherGamesDifference, HigherPointsDifference, Metric, OldMetrics, PointsBalance,
             PointsBalanceCalculator, PointsDifference,
             buchholz::{
                 Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
@@ -41,7 +41,6 @@ use crate::{
         teams::{BestWithWorst, RandomPairs, Split, Teams},
     },
     score::Score,
-    type_map::TypeMapValue,
 };
 
 /// The scoring system of chess: a win is worth a point, a draw half of one.
@@ -640,15 +639,23 @@ fn entrants_are_paired_up_only_where_they_come_in_on_their_own() {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Circular;
 
-#[typetag::serde(name = "tournament_engine::plugins::tests::circular")]
-impl TypeMapValue for Circular {}
+impl Metric for Circular {
+    const LABEL: &'static str = "circular";
+    const DESCRIPTION: Option<&'static str> = None;
+}
+
+crate::metric!(Circular, id = "tournament_engine::plugins::tests::circular");
 
 /// The metric of [`Cycling`], which is never calculated.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Cycled;
 
-#[typetag::serde(name = "tournament_engine::plugins::tests::cycled")]
-impl TypeMapValue for Cycled {}
+impl Metric for Cycled {
+    const LABEL: &'static str = "cycled";
+    const DESCRIPTION: Option<&'static str> = None;
+}
+
+crate::metric!(Cycled, id = "tournament_engine::plugins::tests::cycled");
 
 /// A calculator requiring the metric of [`Cycling`], which requires its own metric.
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]

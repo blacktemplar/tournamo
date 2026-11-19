@@ -31,8 +31,11 @@ use tournament_engine::{
     Columns, PhasePlugins, Table,
     entities::columns::{self, Rule},
     plugins::{
-        metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
-        seeding::SeededInOrder, teams::Keep,
+        metrics_calculator::{MetricEntry, MetricsCalculator},
+        phase_format::PhaseFormat,
+        ranker::SliceRanker,
+        seeding::SeededInOrder,
+        teams::Keep,
     },
 };
 
@@ -560,7 +563,7 @@ impl Answering for PhaseForm {
             draft.with_defaults()?
         };
         // a metric that leaves the list takes what was said about its columns with it
-        let calculated = answered(&self.completed(), PhasePlugins::METRICS);
+        let calculated = metrics_of(&answered(&self.completed(), PhasePlugins::METRICS));
         self.columns.retain(|id| calculated.contains(&id));
         self.following_suggestions = following;
         if is_suggested(path) || following {
@@ -651,7 +654,7 @@ impl PhaseForm {
 
     /// Shows what `columns` say instead, as far as they are about metrics calculated.
     pub fn set_columns(&mut self, mut columns: Columns) {
-        let calculated = answered(&self.completed(), PhasePlugins::METRICS);
+        let calculated = metrics_of(&answered(&self.completed(), PhasePlugins::METRICS));
         columns.retain(|id| calculated.contains(&id));
         self.columns = columns;
     }
@@ -689,18 +692,19 @@ impl PhaseForm {
         if shown && !answered(&completed, PhasePlugins::METRICS).contains(&calculator) {
             edit::add(self, &metrics, calculator)?;
         }
+        let metric = metric_of(calculator).unwrap_or(calculator);
         let by_rule = self
             .rule(&self.completed(), table)
             .iter()
-            .any(|&(ruled, _)| ruled == calculator);
+            .any(|&(ruled, _)| ruled == metric);
         self.columns
-            .set(calculator, table, (shown != by_rule).then_some(shown));
+            .set(metric, table, (shown != by_rule).then_some(shown));
         let completed = self.completed();
         let anywhere = Table::ALL.into_iter().any(|table| {
-            self.columns.get(calculator).of(table).unwrap_or_else(|| {
+            self.columns.get(metric).of(table).unwrap_or_else(|| {
                 self.rule(&completed, table)
                     .iter()
-                    .any(|&(ruled, _)| ruled == calculator)
+                    .any(|&(ruled, _)| ruled == metric)
             })
         });
         let needed = AnyAxis::of::<dyn MetricsCalculator>()
@@ -882,12 +886,13 @@ impl PhaseForm {
             .map(|entry| {
                 let plugin = *entry.plugin();
                 let is_calculated = calculated.contains(&plugin.id);
-                let said = self.columns.get(plugin.id);
+                let metric = metric_of(plugin.id).unwrap_or(plugin.id);
+                let said = self.columns.get(metric);
                 let tables = Table::ALL.map(|table| {
                     let because = rules[table_index(table)]
                         .iter()
-                        .find(|&&(ruled, _)| ruled == plugin.id)
-                        .and_then(|&(_, why)| because(why));
+                        .find(|&&(ruled, _)| ruled == metric)
+                        .and_then(|&(_, why)| because(why, &calculated));
                     match said.of(table) {
                         Some(on) => ShownIn {
                             on: on && is_calculated,
@@ -915,27 +920,40 @@ impl PhaseForm {
     }
 }
 
-/// What a table showing a metric by rule for `why` says why.
-fn because(why: Rule) -> Option<Because> {
+/// What a table showing a metric by rule for `why` says why, among the calculators `calculated`
+/// by id.
+fn because(why: Rule, calculated: &[&str]) -> Option<Because> {
     let option =
         |axis: AnyAxis, id: &str| axis.entry(id).map(|entry| PluginOption::of(entry, false));
     Some(match why {
         Rule::RankedBy(criterion) => {
             Because::RankedBy(option(AnyAxis::of::<dyn SliceRanker>(), criterion)?)
         }
-        Rule::CalculatedFrom(calculator) => {
+        Rule::CalculatedFrom(metric) => {
+            let calculator = calculated
+                .iter()
+                .find(|calculator| metric_of(calculator) == Some(metric))?;
             Because::CalculatedFrom(option(AnyAxis::of::<dyn MetricsCalculator>(), calculator)?)
         }
     })
 }
 
-/// Whether the calculator `entry` offers a column, as configured by the answers it offers; one
-/// that cannot be built from them is taken to offer one.
+/// Whether the metric of the calculator `entry` offers a column; that of a calculator of no
+/// registered metric is taken to offer one.
 fn offers_column(entry: &PluginEntry) -> bool {
-    entry
-        .default_config()
-        .build::<dyn MetricsCalculator>()
-        .map_or(true, |calculator| calculator.column().is_some())
+    MetricEntry::of_calculator(entry).is_none_or(|metric| metric.column().is_some())
+}
+
+/// The id of the metric the calculator of the id `calculator` calculates, if both are registered.
+fn metric_of(calculator: &str) -> Option<&'static str> {
+    let entry = AnyAxis::of::<dyn MetricsCalculator>().entry(calculator)?;
+    Some(MetricEntry::of_calculator(entry)?.id())
+}
+
+/// The ids of the metrics the calculators of the ids `calculators` calculate, in order, as far as
+/// both are registered.
+fn metrics_of(calculators: &[&str]) -> Vec<&'static str> {
+    calculators.iter().filter_map(|id| metric_of(id)).collect()
 }
 
 /// The ids of the plugins answering the field `field` of the phase in `draft`, in order.

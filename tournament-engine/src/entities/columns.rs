@@ -9,7 +9,10 @@
 use plugin_factory::catalog::{AnyAxis, PluginEntry};
 use serde::{Deserialize, Serialize};
 
-use crate::plugins::{metrics_calculator::MetricsCalculator, ranker::SliceRanker};
+use crate::plugins::{
+    metrics_calculator::{MetricEntry, MetricsCalculator},
+    ranker::SliceRanker,
+};
 
 /// A table of standings of a phase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,9 +59,9 @@ impl Shown {
     }
 }
 
-/// What the operator said about the columns of a phase: at most one [`Shown`] per calculator, by
-/// its plugin id, none following the rule in both tables. Serialized as a sequence of
-/// `(id, Shown)`.
+/// What the operator said about the columns of a phase: at most one [`Shown`] per metric, by its
+/// [id](crate::plugins::metrics_calculator::MetricId::ID), none following the rule in both
+/// tables. Serialized as a sequence of `(id, Shown)`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "Vec<(String, Shown)>")]
 pub struct Columns(Vec<(String, Shown)>);
@@ -69,32 +72,31 @@ impl Columns {
         Self::default()
     }
 
-    /// What the operator said about the calculator `calculator`.
-    pub fn get(&self, calculator: &str) -> Shown {
+    /// What the operator said about the metric `metric`.
+    pub fn get(&self, metric: &str) -> Shown {
         self.0
             .iter()
-            .find(|(id, _)| id == calculator)
+            .find(|(id, _)| id == metric)
             .map_or_else(Shown::default, |&(_, shown)| shown)
     }
 
-    /// The operator says that `table` shows the calculator `calculator` if `shown` is `Some`, or
-    /// that it follows the rule.
-    pub fn set(&mut self, calculator: &str, table: Table, shown: Option<bool>) {
-        let mut entry = self.get(calculator);
+    /// The operator says that `table` shows the metric `metric` if `shown` is `Some`, or that it
+    /// follows the rule.
+    pub fn set(&mut self, metric: &str, table: Table, shown: Option<bool>) {
+        let mut entry = self.get(metric);
         entry.set(table, shown);
-        let at = self.0.iter().position(|(id, _)| id == calculator);
+        let at = self.0.iter().position(|(id, _)| id == metric);
         match (at, entry.is_rule()) {
             (Some(at), true) => {
                 self.0.remove(at);
             }
             (Some(at), false) => self.0[at].1 = entry,
             (None, true) => {}
-            (None, false) => self.0.push((calculator.to_owned(), entry)),
+            (None, false) => self.0.push((metric.to_owned(), entry)),
         }
     }
 
-    /// The calculators the operator said something about, by id, in the order they were first
-    /// named.
+    /// The metrics the operator said something about, by id, in the order they were first named.
     pub fn iter(&self) -> impl Iterator<Item = (&str, Shown)> {
         self.0.iter().map(|(id, shown)| (id.as_str(), *shown))
     }
@@ -104,7 +106,7 @@ impl Columns {
         self.0.is_empty()
     }
 
-    /// These columns without the entries of calculators that `keep` refuses.
+    /// These columns without the entries of metrics that `keep` refuses.
     pub fn retain(&mut self, mut keep: impl FnMut(&str) -> bool) {
         self.0.retain(|(id, _)| keep(id));
     }
@@ -127,35 +129,48 @@ impl From<Vec<(String, Shown)>> for Columns {
 pub enum Rule {
     /// The criterion of this id ranks the table by the metric.
     RankedBy(&'static str),
-    /// The calculator of this id, shown by rule, is calculated from the metric.
+    /// The metric of this id, shown by rule, is calculated from the metric.
     CalculatedFrom(&'static str),
 }
 
-/// The calculators of `metrics` that a table ranked by the slice rankers `criteria` shows by rule,
-/// each by its id with why: those a criterion ranks by, in the order of the criteria, then those
-/// a calculator so shown is calculated from, however far back, in the order of `metrics`. Plugins
-/// are named by id; one that is not registered is left out. Whether a calculator offers a column
-/// is not asked.
+/// The metrics of the calculators `calculators` that a table ranked by the slice rankers
+/// `criteria` shows by rule, each by its id with why: those a criterion ranks by, in the order of
+/// the criteria, then those a metric so shown is calculated from, however far back, in the order
+/// of their calculators in `calculators`. Plugins are named by id; one that is not registered, or
+/// a calculator of no registered metric, is left out. Whether a metric offers a column is not
+/// asked.
 ///
 /// What a plugin ranks by or is calculated from is read from the static declarations, see
 /// [`PluginEntry::providers_in`].
-pub fn by_rule(criteria: &[&str], metrics: &[&str]) -> Vec<(&'static str, Rule)> {
-    let calculators = AnyAxis::of::<dyn MetricsCalculator>();
+pub fn by_rule(criteria: &[&str], calculators: &[&str]) -> Vec<(&'static str, Rule)> {
+    let axis = AnyAxis::of::<dyn MetricsCalculator>();
     let rankers = AnyAxis::of::<dyn SliceRanker>();
-    // the calculators of `metrics` providing what `entry` requires
-    let providers = |entry: &PluginEntry| -> Vec<&'static str> {
-        entry
-            .providers_in(calculators)
-            .into_iter()
-            .map(PluginEntry::id)
-            .filter(|id| metrics.contains(id))
+    // the registered calculators of `calculators`, in order, each with its metric
+    let calculated: Vec<(&'static PluginEntry, MetricEntry)> = calculators
+        .iter()
+        .filter_map(|id| {
+            let calculator = axis.entry(id)?;
+            Some((calculator, MetricEntry::of_calculator(calculator)?))
+        })
+        .collect();
+    // the metrics calculated that `entry` requires
+    let required = |entry: &PluginEntry| -> Vec<&'static str> {
+        let providers = entry.providers_in(axis);
+        calculated
+            .iter()
+            .filter(|(calculator, _)| {
+                providers
+                    .iter()
+                    .any(|provider| provider.id() == calculator.id())
+            })
+            .map(|(_, metric)| metric.id())
             .collect()
     };
     let mut shown: Vec<(&'static str, Rule)> = Vec::new();
     for criterion in criteria.iter().filter_map(|id| rankers.entry(id)) {
-        for calculator in providers(criterion) {
-            if !shown.iter().any(|(id, _)| *id == calculator) {
-                shown.push((calculator, Rule::RankedBy(criterion.id())));
+        for metric in required(criterion) {
+            if !shown.iter().any(|(id, _)| *id == metric) {
+                shown.push((metric, Rule::RankedBy(criterion.id())));
             }
         }
     }
@@ -163,15 +178,16 @@ pub fn by_rule(criteria: &[&str], metrics: &[&str]) -> Vec<(&'static str, Rule)>
     let mut next = 0;
     while let Some(&(id, _)) = shown.get(next) {
         next += 1;
-        let Some(entry) = calculators.entry(id) else {
+        let Some((calculator, _)) = calculated.iter().find(|(_, metric)| metric.id() == id) else {
             continue;
         };
-        for calculator in providers(entry) {
-            if !shown.iter().any(|(id, _)| *id == calculator) {
-                shown.push((calculator, Rule::CalculatedFrom(entry.id())));
+        for metric in required(calculator) {
+            if !shown.iter().any(|(id, _)| *id == metric) {
+                shown.push((metric, Rule::CalculatedFrom(id)));
             }
         }
     }
-    shown[ranked..].sort_by_key(|(id, _)| metrics.iter().position(|metric| metric == id));
+    shown[ranked..]
+        .sort_by_key(|(id, _)| calculated.iter().position(|(_, metric)| metric.id() == *id));
     shown
 }

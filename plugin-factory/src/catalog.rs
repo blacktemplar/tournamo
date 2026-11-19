@@ -187,6 +187,13 @@ impl PluginEntry {
             .collect()
     }
 
+    /// Whether the plugin provides a fact of the type `fact` whatever its configuration, counting
+    /// one it derives from the context. Read from the static declaration, see
+    /// [`PluginType::declare_static`].
+    pub fn provides(&self, fact: TypeId) -> bool {
+        self.declaration().provides_type(fact)
+    }
+
     /// What the plugin as `config` configures it provides and requires, its sub-plugins included:
     /// the [static declaration](Self::declaration), what this configuration adds to it, see
     /// [`Plugin::declare`], and what the plugins in its fields declare.

@@ -6,7 +6,11 @@ use std::{
 };
 
 use dyn_clone::DynClone;
-use plugin_factory::{Plugin, axis, compatibility::Declaration};
+use plugin_factory::{
+    Plugin, axis,
+    catalog::{AnyAxis, PluginEntry},
+    compatibility::Declaration,
+};
 
 use crate::{
     Score,
@@ -51,14 +55,13 @@ pub use wins_draws_losses::{
     WinsDrawsLossesCalculator,
 };
 
-pub type MetricId = TypeId;
-
-pub type Metric = Box<dyn TypeMapValue>;
+/// A metric of a ranking, boxed, of any type.
+pub type BoxedMetric = Box<dyn TypeMapValue>;
 
 /// The values of metrics that the calculators which already ran for an update replaced, keyed by
 /// metric type.
 #[derive(Debug, Default)]
-pub struct OldMetrics(Map<MetricId, Vec<(RankingId, Metric)>>);
+pub struct OldMetrics(Map<TypeId, Vec<(RankingId, BoxedMetric)>>);
 
 impl OldMetrics {
     /// The replaced values of the metric `M`, each with the ranking it belonged to, in the order
@@ -77,7 +80,7 @@ impl OldMetrics {
     }
 
     /// Records `metric` as the value of `ranking_id` that got replaced.
-    pub(crate) fn push(&mut self, ranking_id: RankingId, metric: Metric) {
+    pub(crate) fn push(&mut self, ranking_id: RankingId, metric: BoxedMetric) {
         let metric_id = (&*metric as &dyn Any).type_id();
         self.0
             .entry(metric_id)
@@ -104,7 +107,7 @@ impl OldMetrics {
 pub trait MetricsCalculator: Plugin + DynClone {
     /// The value every ranking of a phase starts out with, whose type is the metric this
     /// calculator calculates.
-    fn default_metric_value(&self) -> Metric;
+    fn default_metric_value(&self) -> BoxedMetric;
 
     /// The new values of all rankings whose metric the result just reported for `match` changed,
     /// see [`Calculator::after_match`].
@@ -113,7 +116,7 @@ pub trait MetricsCalculator: Plugin + DynClone {
         phase_data: &DivisionData,
         r#match: &Match,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)>;
+    ) -> Vec<(RankingId, BoxedMetric)>;
 
     /// The new values of all rankings whose metric the `bye` changed, see
     /// [`Calculator::after_bye`].
@@ -122,19 +125,16 @@ pub trait MetricsCalculator: Plugin + DynClone {
         phase_data: &DivisionData,
         bye: &Bye,
         old_metrics: &OldMetrics,
-    ) -> Vec<(RankingId, Metric)>;
+    ) -> Vec<(RankingId, BoxedMetric)>;
 
-    /// The column showing this calculator's metric in a table of standings, or `None` if the
-    /// metric is not meant to be shown.
-    fn column(&self) -> Option<MetricColumn> {
-        None
-    }
+    /// The metric this calculator calculates, the type of its [`Self::default_metric_value`].
+    fn metric(&self) -> MetricEntry;
 }
 
 dyn_clone::clone_trait_object!(MetricsCalculator);
 
-/// A [`MetricsCalculator`] of the single metric [`Self::Metric`], which every ranking starts out
-/// with as its default value.
+/// A [`MetricsCalculator`] of the single [`Metric`] [`Self::Metric`], which every ranking starts
+/// out with as its default value.
 ///
 /// A calculator declares that it provides its metric with [`provides_metric`], as its static
 /// declaration or as part of it, and registers as a [`MetricsCalculator`] with
@@ -145,8 +145,8 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 /// use plugin_factory::Plugin;
 /// use serde::{Deserialize, Serialize};
 /// use tournament_engine::{
-///     Bye, DivisionData, Match, RankingId, TypeMapValue,
-///     plugins::metrics_calculator::{Calculator, OldMetrics, provides_metric},
+///     Bye, DivisionData, Match, RankingId, metric,
+///     plugins::metrics_calculator::{Calculator, Metric, OldMetrics, provides_metric},
 ///     register_calculator,
 /// };
 ///
@@ -154,8 +154,12 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 /// #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
 /// struct MatchesPlayed(u32);
 ///
-/// #[typetag::serde(name = "my_crate::matches_played")]
-/// impl TypeMapValue for MatchesPlayed {}
+/// impl Metric for MatchesPlayed {
+///     const LABEL: &'static str = "matches played";
+///     const DESCRIPTION: Option<&'static str> = Some("how many matches an entrant played");
+/// }
+///
+/// metric!(MatchesPlayed, id = "my_crate::matches_played");
 ///
 /// #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 /// #[plugin(
@@ -199,7 +203,7 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 /// ```
 pub trait Calculator: Debug + Clone {
     /// The metric this calculator calculates.
-    type Metric: TypeMapValue + Default;
+    type Metric: Metric;
 
     /// The new values of all rankings whose metric the result just reported for `match` changed.
     /// A match is reported once, so `match` was not finished before.
@@ -226,12 +230,6 @@ pub trait Calculator: Debug + Clone {
         bye: &Bye,
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, Self::Metric)>;
-
-    /// The column showing [`Self::Metric`] in a table of standings, or `None` if it is not meant to
-    /// be shown.
-    fn column(&self) -> Option<MetricColumn> {
-        None
-    }
 }
 
 /// Declares that the calculator `C` provides the [`CalculatesMetric`] of its metric. Given to the
@@ -245,16 +243,16 @@ pub fn provides_metric<C: Calculator>(declaration: &mut Declaration) {
 
 /// The default value of the metric of `C`, boxed, for [`register_calculator!`].
 #[doc(hidden)]
-pub fn default_metric<C: Calculator>() -> Metric {
+pub fn default_metric<C: Calculator>() -> BoxedMetric {
     Box::new(C::Metric::default())
 }
 
 /// `metrics`, each boxed, for [`register_calculator!`].
 #[doc(hidden)]
-pub fn boxed<M: TypeMapValue>(metrics: Vec<(RankingId, M)>) -> Vec<(RankingId, Metric)> {
+pub fn boxed<M: TypeMapValue>(metrics: Vec<(RankingId, M)>) -> Vec<(RankingId, BoxedMetric)> {
     metrics
         .into_iter()
-        .map(|(ranking_id, metric)| (ranking_id, Box::new(metric) as Metric))
+        .map(|(ranking_id, metric)| (ranking_id, Box::new(metric) as BoxedMetric))
         .collect()
 }
 
@@ -266,7 +264,7 @@ macro_rules! register_calculator {
     ($calculator:ty) => {
         #[::plugin_factory::register]
         impl $crate::plugins::metrics_calculator::MetricsCalculator for $calculator {
-            fn default_metric_value(&self) -> $crate::plugins::metrics_calculator::Metric {
+            fn default_metric_value(&self) -> $crate::plugins::metrics_calculator::BoxedMetric {
                 $crate::plugins::metrics_calculator::default_metric::<Self>()
             }
 
@@ -277,7 +275,7 @@ macro_rules! register_calculator {
                 old_metrics: &$crate::plugins::metrics_calculator::OldMetrics,
             ) -> ::std::vec::Vec<(
                 $crate::RankingId,
-                $crate::plugins::metrics_calculator::Metric,
+                $crate::plugins::metrics_calculator::BoxedMetric,
             )> {
                 $crate::plugins::metrics_calculator::boxed(
                     $crate::plugins::metrics_calculator::Calculator::after_match(
@@ -296,7 +294,7 @@ macro_rules! register_calculator {
                 old_metrics: &$crate::plugins::metrics_calculator::OldMetrics,
             ) -> ::std::vec::Vec<(
                 $crate::RankingId,
-                $crate::plugins::metrics_calculator::Metric,
+                $crate::plugins::metrics_calculator::BoxedMetric,
             )> {
                 $crate::plugins::metrics_calculator::boxed(
                     $crate::plugins::metrics_calculator::Calculator::after_bye(
@@ -308,10 +306,10 @@ macro_rules! register_calculator {
                 )
             }
 
-            fn column(
-                &self,
-            ) -> ::std::option::Option<$crate::plugins::metrics_calculator::MetricColumn> {
-                $crate::plugins::metrics_calculator::Calculator::column(self)
+            fn metric(&self) -> $crate::plugins::metrics_calculator::MetricEntry {
+                $crate::plugins::metrics_calculator::MetricEntry::of::<
+                    <Self as $crate::plugins::metrics_calculator::Calculator>::Metric,
+                >()
             }
         }
     };
@@ -352,6 +350,186 @@ fn derived<M: TypeMapValue, D>(
         .collect()
 }
 
+/// The id of a metric, see [`Metric`]. Implemented by [`metric!`](crate::metric) alone.
+pub trait MetricId {
+    /// What identifies the metric, also its tag as a [`TypeMapValue`]: a persistence contract,
+    /// never changed. Its texts are translated by it.
+    const ID: &'static str;
+}
+
+/// What a [`Calculator`] calculates of every ranking of a phase, which a table of standings may
+/// show and a criterion may rank by, e.g. the points.
+///
+/// A metric is a type that implements `Metric` and is declared with [`metric!`](crate::metric),
+/// which gives it its [id](MetricId::ID). Its label and description follow "Labelling a plugin"
+/// in the [`plugins`](crate::plugins) docs, as a calculator's do.
+///
+/// # Examples
+/// ```
+/// use serde::{Deserialize, Serialize};
+/// use tournament_engine::{
+///     Score, metric,
+///     plugins::metrics_calculator::{Cell, Metric, MetricColumn, ToCell},
+/// };
+///
+/// /// How many matches a ranking played.
+/// #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
+/// struct MatchesPlayed(u32);
+///
+/// impl Metric for MatchesPlayed {
+///     const LABEL: &'static str = "matches played";
+///     const DESCRIPTION: Option<&'static str> = Some("how many matches an entrant played");
+///
+///     fn column() -> Option<MetricColumn> {
+///         Some(MetricColumn::new::<Self>("played"))
+///     }
+/// }
+///
+/// impl ToCell for MatchesPlayed {
+///     fn to_cell(&self) -> Cell {
+///         Cell::Number(Score::new(self.0.into()))
+///     }
+/// }
+///
+/// metric!(MatchesPlayed, id = "my_crate::matches_played");
+/// ```
+pub trait Metric: MetricId + TypeMapValue + Default {
+    /// What an operator choosing the metric reads, as a column of a ranking would be named.
+    const LABEL: &'static str;
+
+    /// What an operator choosing the metric reads about what it counts, if anything.
+    const DESCRIPTION: Option<&'static str>;
+
+    /// The column showing the metric in a table of standings, or `None` if it is not meant to be
+    /// shown.
+    fn column() -> Option<MetricColumn> {
+        None
+    }
+}
+
+/// Declares the type `$metric`, which implements [`Metric`], a metric of the id `$id`: implements
+/// [`MetricId`] and [`TypeMapValue`] (tagged with the id) for it and registers it, so that
+/// [`MetricEntry::all`] lists it. The crate calling it has to depend on `typetag`.
+#[macro_export]
+macro_rules! metric {
+    ($metric:ty, id = $id:literal) => {
+        impl $crate::plugins::metrics_calculator::MetricId for $metric {
+            const ID: &'static str = $id;
+        }
+
+        #[::typetag::serde(name = $id)]
+        impl $crate::TypeMapValue for $metric {}
+
+        $crate::__private::inventory::submit! {
+            $crate::plugins::metrics_calculator::MetricEntry::of::<$metric>()
+        }
+    };
+}
+
+/// A [`Metric`] as registered by [`metric!`](crate::metric): what is known of it without a value
+/// of it.
+#[derive(Clone, Copy)]
+pub struct MetricEntry {
+    id: &'static str,
+    label: &'static str,
+    description: Option<&'static str>,
+    column: fn() -> Option<MetricColumn>,
+    // `TypeId::of` is not a `const fn` yet (it is unstable)
+    type_id: fn() -> TypeId,
+    fact: fn() -> TypeId,
+}
+
+inventory::collect!(MetricEntry);
+
+impl MetricEntry {
+    /// The entry of the metric `M`.
+    pub const fn of<M: Metric>() -> Self {
+        Self {
+            id: M::ID,
+            label: M::LABEL,
+            description: M::DESCRIPTION,
+            column: M::column,
+            type_id: TypeId::of::<M>,
+            fact: TypeId::of::<CalculatesMetric<M>>,
+        }
+    }
+
+    /// Every metric registered that a registered [`MetricsCalculator`] calculates, in the order
+    /// of their ids.
+    pub fn all() -> Vec<MetricEntry> {
+        let mut all: Vec<_> = inventory::iter::<MetricEntry>
+            .into_iter()
+            .filter(|metric| !metric.calculators().is_empty())
+            .copied()
+            .collect();
+        all.sort_by_key(|metric| metric.id);
+        all
+    }
+
+    /// The metric of the id `id`, if it is registered and calculated, see [`Self::all`].
+    pub fn with_id(id: &str) -> Option<MetricEntry> {
+        Self::all().into_iter().find(|metric| metric.id == id)
+    }
+
+    /// The metric the calculator `calculator` calculates whatever its configuration, if it is
+    /// registered, read from the calculator's static declaration.
+    pub fn of_calculator(calculator: &PluginEntry) -> Option<MetricEntry> {
+        inventory::iter::<MetricEntry>
+            .into_iter()
+            .find(|metric| calculator.provides((metric.fact)()))
+            .copied()
+    }
+
+    /// See [`MetricId::ID`].
+    pub fn id(&self) -> &'static str {
+        self.id
+    }
+
+    /// See [`Metric::LABEL`].
+    pub fn label(&self) -> &'static str {
+        self.label
+    }
+
+    /// See [`Metric::DESCRIPTION`].
+    pub fn description(&self) -> Option<&'static str> {
+        self.description
+    }
+
+    /// See [`Metric::column`].
+    pub fn column(&self) -> Option<MetricColumn> {
+        (self.column)()
+    }
+
+    /// The type of the metric.
+    pub fn type_id(&self) -> TypeId {
+        (self.type_id)()
+    }
+
+    /// The registered calculators that calculate the metric whatever their configuration, in the
+    /// order of their ids, read from their static declarations.
+    pub fn calculators(&self) -> Vec<&'static PluginEntry> {
+        let fact = (self.fact)();
+        AnyAxis::of::<dyn MetricsCalculator>()
+            .entries()
+            .filter(|calculator| calculator.provides(fact))
+            .collect()
+    }
+}
+
+impl PartialEq for MetricEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for MetricEntry {}
+
+impl Debug for MetricEntry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.id)
+    }
+}
+
 /// A column of a table of standings showing one metric: its header and the cell of every
 /// ranking's value.
 #[derive(Debug, Clone, Copy)]
@@ -362,7 +540,7 @@ pub struct MetricColumn {
 
 impl MetricColumn {
     /// The column headed `header` that shows the metric `M` of a ranking as its [`ToCell`].
-    pub fn new<M: TypeMapValue + ToCell>(header: &'static str) -> Self {
+    pub fn new<M: Metric + ToCell>(header: &'static str) -> Self {
         Self {
             header,
             cell: |ranking| ranking.metric::<M>().map(M::to_cell),
@@ -405,7 +583,7 @@ pub enum Cell {
     /// A round of the phase, e.g. the one a ranking was knocked out in. A frontend may name it by
     /// the stage of the ranking's match or bye in that round, where the format names one.
     Round(NonZeroU32),
-    /// A phrase of the calculator's, which a translation finds by the calculator's id.
+    /// A phrase of the metric's, which a translation finds by the metric's id.
     Text(Phrase),
 }
 
@@ -422,10 +600,34 @@ impl Display for Cell {
 
 #[cfg(test)]
 mod tests {
+    use plugin_factory::PluginType;
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
+
+    #[test]
+    fn a_metric_is_found_by_its_id_and_by_its_calculators() {
+        let points = MetricEntry::of::<Points>();
+        let calculator = AnyAxis::of::<dyn MetricsCalculator>()
+            .entry(PointsCalculator::ID)
+            .unwrap();
+
+        assert_eq!(points.id(), "tournament_engine::points");
+        assert_eq!(MetricEntry::with_id(points.id()), Some(points));
+        assert_eq!(MetricEntry::of_calculator(calculator), Some(points));
+        let calculators: Vec<_> = points
+            .calculators()
+            .iter()
+            .map(|entry| entry.id())
+            .collect();
+        assert_eq!(calculators, [PointsCalculator::ID]);
+        assert!(MetricEntry::all().contains(&points));
+        assert_eq!(
+            PointsCalculator::new(Score::ONE, Score::ZERO).metric(),
+            points
+        );
+    }
 
     #[test]
     fn a_signed_cell_shows_the_sign_of_every_number_but_zero() {

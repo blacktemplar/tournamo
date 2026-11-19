@@ -1,4 +1,5 @@
-# The plugins of tournament-engine in German, see `PluginText` in `src/i18n.rs` for the keys.
+# The plugins and metrics of tournament-engine in German, see `PluginText` and `MetricText` in
+# `src/i18n.rs` for the keys.
 
 ## What plugins require of each other, said where they do not fit together
 
@@ -146,12 +147,67 @@ plugin-tournament_engine-split =
     .label = alle allein
     .description = die Teams einer Phase mit Teams werden aufgeteilt, sodass ihre Mitglieder allein spielen; für die Anmeldung dasselbe wie unverändert
 
+## Metrics
+
+metric-tournament_engine-points =
+    .label = Punkte
+    .description = für jeden Sieg, jedes Unentschieden und jedes Freilos
+    .column = Punkte
+metric-tournament_engine-points_per_match =
+    .label = Punkte pro Spiel
+    .description = die in Spielen erzielten Punkte geteilt durch die gespielten Spiele
+    .column = P/S
+metric-tournament_engine-wins_draws_losses =
+    .label = Bilanz aus Siegen, Unentschieden und Niederlagen
+    .description = wie viele Spiele gewonnen, unentschieden gespielt und verloren wurden
+    .column = S-U-N
+    .cell-wins-draws-losses = { $wins }-{ $draws }-{ $losses }
+metric-tournament_engine-points_balance =
+    .label = erzielte und erhaltene Punkte
+    .description = die Punkte oder Tore aller Spiele, wie die Ergebnisse sie angeben
+    .column = +:−
+    .cell-scored-conceded = { $scored }:{ $conceded }
+metric-tournament_engine-points_difference =
+    .label = Punktedifferenz
+    .description = die erzielten Punkte oder Tore abzüglich der erhaltenen
+    .column = ±
+metric-tournament_engine-games_balance =
+    .label = gewonnene und verlorene Sätze
+    .description = die Sätze aller Spiele, wie die Ergebnisse sie angeben
+    .column = Sätze
+    .cell-won-lost = { $won }:{ $lost }
+metric-tournament_engine-games_difference =
+    .label = Satzdifferenz
+    .description = die gewonnenen Sätze abzüglich der verlorenen
+    .column = Sätze ±
+metric-tournament_engine-buchholz =
+    .label = Buchholz
+    .description = die Punkte aller Gegner
+    .column = Bh
+metric-tournament_engine-buchholz_of_buchholz =
+    .label = Fein-Buchholz
+    .description = die Buchholz-Wertung aller Gegner
+    .column = FBh
+metric-tournament_engine-sonneborn_berger =
+    .label = Sonneborn-Berger
+    .description = die Punkte der besiegten Gegner und derer, gegen die unentschieden gespielt wurde
+    .column = SB
+metric-tournament_engine-round_of_first_loss =
+    .label = Runde der ersten Niederlage
+    .description = die Runde, in der ein Teilnehmer zum ersten Mal verloren hat
+    .column = verloren in
+    .cell-unbeaten = -
+metric-tournament_engine-round_of_elimination =
+    .label = Runde des Ausscheidens
+    .description = die Runde, in der ein Teilnehmer ausgeschieden ist
+    .column = raus in
+    .cell-still-in = -
+
 ## Metrics calculators
 
 plugin-tournament_engine-points =
     .label = Punkte
     .description = für jeden Sieg, jedes Unentschieden und jedes Freilos
-    .column = Punkte
     .field-points_for_win = Punkte für einen Sieg
     .field-points_for_draw = Punkte für ein Unentschieden
     .field-points_for_bye = Punkte für ein Freilos
@@ -159,42 +215,30 @@ plugin-tournament_engine-points =
 plugin-tournament_engine-points_per_match =
     .label = Punkte pro Spiel
     .description = die in Spielen erzielten Punkte geteilt durch die gespielten Spiele
-    .column = P/S
 plugin-tournament_engine-wins_draws_losses =
     .label = Bilanz aus Siegen, Unentschieden und Niederlagen
     .description = wie viele Spiele gewonnen, unentschieden gespielt und verloren wurden
-    .column = S-U-N
-    .cell-wins-draws-losses = { $wins }-{ $draws }-{ $losses }
 plugin-tournament_engine-points_balance =
     .label = erzielte und erhaltene Punkte
     .description = die Punkte oder Tore aller Spiele, wie die Ergebnisse sie angeben
-    .column = +:−
-    .cell-scored-conceded = { $scored }:{ $conceded }
 plugin-tournament_engine-points_difference =
     .label = Punktedifferenz
     .description = die erzielten Punkte oder Tore abzüglich der erhaltenen
-    .column = ±
 plugin-tournament_engine-games_balance =
     .label = gewonnene und verlorene Sätze
     .description = die Sätze aller Spiele, wie die Ergebnisse sie angeben
-    .column = Sätze
-    .cell-won-lost = { $won }:{ $lost }
 plugin-tournament_engine-games_difference =
     .label = Satzdifferenz
     .description = die gewonnenen Sätze abzüglich der verlorenen
-    .column = Sätze ±
 plugin-tournament_engine-buchholz =
     .label = Buchholz
     .description = die Punkte aller Gegner
-    .column = Bh
 plugin-tournament_engine-buchholz_of_buchholz =
     .label = Fein-Buchholz
     .description = die Buchholz-Wertung aller Gegner
-    .column = FBh
 plugin-tournament_engine-sonneborn_berger =
     .label = Sonneborn-Berger
     .description = die Punkte der besiegten Gegner und derer, gegen die unentschieden gespielt wurde
-    .column = SB
     .field-weight_for_win = Gewicht eines besiegten Gegners
     .field-weight_for_win-description = die Punkte dieses Gegners werden damit multipliziert
     .field-weight_for_draw = Gewicht eines Gegners, gegen den unentschieden gespielt wurde
@@ -202,13 +246,9 @@ plugin-tournament_engine-sonneborn_berger =
 plugin-tournament_engine-round_of_first_loss =
     .label = Runde der ersten Niederlage
     .description = die Runde, in der ein Teilnehmer zum ersten Mal verloren hat
-    .column = verloren in
-    .cell-unbeaten = -
 plugin-tournament_engine-round_of_elimination =
     .label = Runde des Ausscheidens
     .description = die Runde, in der ein Teilnehmer ausgeschieden ist
-    .column = raus in
-    .cell-still-in = -
 
 ## Ranking criteria
 

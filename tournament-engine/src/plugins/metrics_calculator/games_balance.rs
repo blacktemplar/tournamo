@@ -10,13 +10,12 @@ use crate::{
         facts::{CalculatesMetric, MatchTally},
         match_format::GamesWon,
         metrics_calculator::{
-            Calculator, Cell, MetricColumn, OldMetrics, ToCell, derived, provides_metric,
+            Calculator, Cell, Metric, MetricColumn, OldMetrics, ToCell, derived, provides_metric,
             updated_for_each_team,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
-    type_map::TypeMapValue,
 };
 
 /// The games a ranking won and lost in all its matches.
@@ -50,8 +49,17 @@ impl ToCell for GamesBalance {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::games_balance")]
-impl TypeMapValue for GamesBalance {}
+impl Metric for GamesBalance {
+    const LABEL: &'static str = "games won and lost";
+    const DESCRIPTION: Option<&'static str> =
+        Some("the games, or sets, of all matches, as the results say");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("games"))
+    }
+}
+
+crate::metric!(GamesBalance, id = "tournament_engine::games_balance");
 
 /// The games a ranking won minus those it lost, see [`GamesBalance::difference`].
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -63,8 +71,16 @@ impl ToCell for GamesDifference {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::games_difference")]
-impl TypeMapValue for GamesDifference {}
+impl Metric for GamesDifference {
+    const LABEL: &'static str = "games difference";
+    const DESCRIPTION: Option<&'static str> = Some("the games won minus those lost");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("games ±"))
+    }
+}
+
+crate::metric!(GamesDifference, id = "tournament_engine::games_difference");
 
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(
@@ -146,10 +162,6 @@ impl Calculator for GamesBalanceCalculator {
     ) -> Vec<(RankingId, GamesBalance)> {
         Vec::new()
     }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<GamesBalance>("games"))
-    }
 }
 
 crate::register_calculator!(GamesBalanceCalculator);
@@ -192,10 +204,6 @@ impl Calculator for GamesDifferenceCalculator {
         old_metrics: &OldMetrics,
     ) -> Vec<(RankingId, GamesDifference)> {
         derived(phase_data, old_metrics, GamesBalance::difference)
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<GamesDifference>("games ±"))
     }
 }
 

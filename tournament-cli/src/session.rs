@@ -1103,7 +1103,7 @@ impl Session {
         let columns: Vec<_> = of
             .shown(Table::Division)
             .into_iter()
-            .filter_map(|calculator| calculator.column())
+            .filter_map(|metric| metric.column())
             .collect();
         let overall = of.standings();
         let standings;

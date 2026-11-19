@@ -1,21 +1,22 @@
 //! What the tables of standings of a phase show: by rule what a table is ranked by and what that
 //! is calculated from, otherwise what the operator said.
 
-use plugin_factory::{Phrase, Plugin, PluginType, compatibility::Declaration};
+use plugin_factory::{Phrase, Plugin, PluginType, catalog::AnyAxis, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
     AddEntrant, AddPhase, Bye, Columns, CompetitionStateMachine, CompetitionStateMachineExt,
     DivisionData, Entrant, EntrantId, Match, MatchResult, Phase, PhaseId, PhasePlugins,
     PhasePluginsBuilder, RankingId, ReportMatchResult, Score, Seed, SetCompetitionSeed,
-    StartCompetition, Table, TypeMapValue,
+    StartCompetition, Table,
     entities::columns::{Rule, by_rule},
-    plugin_factory,
+    metric, plugin_factory,
     plugins::{
         facts::CalculatesMetric,
         metrics_calculator::{
-            BuchholzCalculator, BuchholzOfBuchholzCalculator, Calculator, MoreBuchholzOfBuchholz,
-            MorePoints, MorePointsPerMatch, OldMetrics, Points, PointsCalculator,
-            PointsPerMatchCalculator, WinsDrawsLossesCalculator, provides_metric,
+            BuchholzCalculator, BuchholzOfBuchholzCalculator, Calculator, Metric, MetricEntry,
+            MetricsCalculator, MoreBuchholzOfBuchholz, MorePoints, MorePointsPerMatch, OldMetrics,
+            Points, PointsCalculator, PointsPerMatchCalculator, WinsDrawsLossesCalculator,
+            provides_metric,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
@@ -76,12 +77,12 @@ fn phase(machine: &CompetitionStateMachine) -> &Phase {
     &machine.current().phases()[&phase_id()]
 }
 
-/// The ids of the calculators `table` of the phase of `machine` shows, in order.
+/// The ids of the metrics `table` of the phase of `machine` shows, in order.
 fn shown(machine: &CompetitionStateMachine, table: Table) -> Vec<&'static str> {
     phase(machine)
         .shown(table)
         .into_iter()
-        .map(plugin_factory::id_of)
+        .map(|metric| metric.id())
         .collect()
 }
 
@@ -263,12 +264,43 @@ fn columns_round_trip_in_json_and_postcard() {
     );
 }
 
+/// Columns saved before metrics had ids of their own name each metric by the id of its
+/// calculator: the calculators of then calculate a metric of their own id for good.
+#[test]
+fn columns_saved_by_the_ids_of_calculators_name_their_metrics() {
+    let calculators = AnyAxis::of::<dyn MetricsCalculator>();
+    for id in [
+        "tournament_engine::buchholz",
+        "tournament_engine::buchholz_of_buchholz",
+        "tournament_engine::games_balance",
+        "tournament_engine::games_difference",
+        "tournament_engine::points",
+        "tournament_engine::points_balance",
+        "tournament_engine::points_difference",
+        "tournament_engine::points_per_match",
+        "tournament_engine::round_of_elimination",
+        "tournament_engine::round_of_first_loss",
+        "tournament_engine::sonneborn_berger",
+        "tournament_engine::wins_draws_losses",
+    ] {
+        let calculator = calculators.entry(id).unwrap();
+        assert_eq!(
+            MetricEntry::of_calculator(calculator).map(|metric| metric.id()),
+            Some(id)
+        );
+    }
+}
+
 /// A metric of a third party that is not meant to be shown: the points, doubled.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 struct Doubled(Score);
 
-#[typetag::serde(name = "test::doubled")]
-impl TypeMapValue for Doubled {}
+impl Metric for Doubled {
+    const LABEL: &'static str = "doubled points";
+    const DESCRIPTION: Option<&'static str> = None;
+}
+
+metric!(Doubled, id = "test::doubled");
 
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
 #[plugin(

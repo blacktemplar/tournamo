@@ -4335,6 +4335,7 @@ dependencies = [
  "dyn-clone",
  "getrandom 0.4.3",
  "indexmap",
+ "inventory",
  "itertools 0.15.0",
  "plugin-factory",
  "postcard",

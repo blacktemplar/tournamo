@@ -42,8 +42,10 @@ use crate::{
 /// A match is scheduled as soon as both of its entrants are known, without waiting for the rest of
 /// its round. Seeding follows the initial ranks: in the first round the best seed plays the worst,
 /// and the best seeds get the byes of a bracket that is not full, as in a [`SingleElimination`].
-/// Entrants dropping down from the winner bracket enter the loser bracket in reversed and in
-/// original order, alternately, which keeps those apart that met in the winner bracket for longer.
+/// The losers of a round of the winner bracket after the first drop into the loser bracket in an
+/// order that changes from round to round, in a cycle of four: reversed, each half reversed, the
+/// halves swapped, as they come. This keeps entrants apart that met in the winner bracket for as
+/// long as any order does, as Challonge orders them.
 ///
 /// Every match is annotated with its [`DoubleEliminationRound`] and every match that can knock an
 /// entrant out with [`Eliminates`]. Draws are not allowed.
@@ -53,9 +55,10 @@ use crate::{
 #[cfg_attr(feature = "test-util", derive(Default))]
 #[plugin(
     id = "tournament_engine::double_elimination",
+    version = 2,
     label = "double elimination",
     description = "an entrant is out after its second loss, draws are not allowed",
-    declare_static = Self::declare_static
+    declare_static = declare_static
 )]
 pub struct DoubleElimination {
     #[plugin(
@@ -93,14 +96,52 @@ impl DoubleElimination {
         self.grand_final_reset = true;
         self
     }
+}
 
-    fn declare_static(declaration: &mut Declaration) {
-        // every match has to produce a winner who moves on
-        declaration
-            .provide(MatchAnnotation::<DoubleEliminationRound>::new())
-            .provide(MatchAnnotation::<Eliminates>::new())
-            .provide(NoDraws);
+/// The first version of [`DoubleElimination`], which competitions saved with it keep playing: the
+/// losers of the winner bracket drop into the loser bracket reversed and as they come, alternately,
+/// which from 17 entrants on lets entrants meet again sooner than they need to.
+#[derive(Debug, Clone, Deserialize, Serialize, Plugin)]
+#[cfg_attr(feature = "test-util", derive(Default))]
+#[plugin(
+    id = "tournament_engine::double_elimination",
+    label = "double elimination",
+    description = "an entrant is out after its second loss, draws are not allowed",
+    declare_static = declare_static
+)]
+pub struct DoubleEliminationV1 {
+    #[plugin(
+        label = "grand final reset",
+        description = "if the champion of the winner bracket loses the grand final, the two play \
+                       it once more; without it losing the grand final knocks out either side",
+        default = true
+    )]
+    grand_final_reset: bool,
+    /// Built from the seeds on the first call.
+    #[serde(default)]
+    #[plugin(skip)]
+    bracket: Option<Bracket>,
+}
+
+impl DoubleEliminationV1 {
+    /// The first version of [`DoubleElimination::new`].
+    ///
+    /// Requires the `test-util` feature.
+    #[cfg(feature = "test-util")]
+    pub const fn new() -> Self {
+        Self {
+            grand_final_reset: false,
+            bracket: None,
+        }
     }
+}
+
+fn declare_static(declaration: &mut Declaration) {
+    // every match has to produce a winner who moves on
+    declaration
+        .provide(MatchAnnotation::<DoubleEliminationRound>::new())
+        .provide(MatchAnnotation::<Eliminates>::new())
+        .provide(NoDraws);
 }
 
 /// The stage of a [`DoubleElimination`] a match belongs to, attached to every match it schedules as
@@ -171,45 +212,83 @@ impl From<DoubleEliminationRound> for Stage {
     }
 }
 
-#[register]
-impl PhaseFormat for DoubleElimination {
-    fn suggestions(&self) -> PhaseSuggestions {
-        PhaseSuggestions {
-            ranking: vec![
-                PluginConfig::of::<LaterElimination>(),
-                PluginConfig::of::<FewerLosses>(),
-            ],
-            metrics: vec![
-                PluginConfig::of::<RoundOfEliminationCalculator>(),
-                PluginConfig::of::<WinsDrawsLossesCalculator>(),
-            ],
-            across: Vec::new(),
+/// The [`PhaseFormat`] of a version of [`DoubleElimination`] whose losers drop into the loser
+/// bracket in the order `drop_order` gives.
+macro_rules! double_elimination {
+    ($version:ty, $drop_order:expr) => {
+        #[register]
+        impl PhaseFormat for $version {
+            fn suggestions(&self) -> PhaseSuggestions {
+                PhaseSuggestions {
+                    ranking: vec![
+                        PluginConfig::of::<LaterElimination>(),
+                        PluginConfig::of::<FewerLosses>(),
+                    ],
+                    metrics: vec![
+                        PluginConfig::of::<RoundOfEliminationCalculator>(),
+                        PluginConfig::of::<WinsDrawsLossesCalculator>(),
+                    ],
+                    across: Vec::new(),
+                }
+            }
+
+            fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
+                let phase_data = phase.data();
+                let reset = self.grand_final_reset;
+                self.bracket
+                    .get_or_insert_with(|| bracket(phase_data, reset, $drop_order))
+                    .create_new_matches(phase_data)
+            }
+
+            fn stage(&self, annotations: &TypeMap) -> Option<Stage> {
+                annotations
+                    .get::<DoubleEliminationRound>()
+                    .copied()
+                    .map(Stage::from)
+            }
+
+            /// The bracket, with the stage of each pairing as a [`DoubleEliminationRound`]
+            /// annotation.
+            fn bracket(&self) -> Option<&Bracket> {
+                self.bracket.as_ref()
+            }
         }
-    }
+    };
+}
 
-    fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {
-        let phase_data = phase.data();
-        let reset = self.grand_final_reset;
-        self.bracket
-            .get_or_insert_with(|| bracket(phase_data, reset))
-            .create_new_matches(phase_data)
-    }
+double_elimination!(DoubleElimination, cycled);
+double_elimination!(DoubleEliminationV1, alternated);
 
-    fn stage(&self, annotations: &TypeMap) -> Option<Stage> {
-        annotations
-            .get::<DoubleEliminationRound>()
-            .copied()
-            .map(Stage::from)
-    }
-
-    /// The bracket, with the stage of each pairing as a [`DoubleEliminationRound`] annotation.
-    fn bracket(&self) -> Option<&Bracket> {
-        self.bracket.as_ref()
+/// Puts `dropping`, the losers of round `round` of the winner bracket, counted from 2, into the
+/// order they meet the survivors of the loser bracket in, see [`DoubleElimination`]: in a cycle of
+/// reversed, each half reversed, the halves swapped, and as they come.
+fn cycled(round: u32, dropping: &mut [Source]) {
+    let half = dropping.len() / 2;
+    match (round - 2) % 4 {
+        0 => dropping.reverse(),
+        1 => {
+            dropping[..half].reverse();
+            dropping[half..].reverse();
+        }
+        2 => dropping.rotate_left(half),
+        _ => {}
     }
 }
 
-/// The whole double elimination between the rankings of `phase_data`, see [`DoubleElimination`].
-fn bracket(phase_data: &DivisionData, grand_final_reset: bool) -> Bracket {
+/// [`cycled`] for [`DoubleEliminationV1`]: reversed and as they come, alternately.
+fn alternated(round: u32, dropping: &mut [Source]) {
+    if round.is_multiple_of(2) {
+        dropping.reverse();
+    }
+}
+
+/// The whole double elimination between the rankings of `phase_data`, see [`DoubleElimination`],
+/// the losers of each round of the winner bracket after the first ordered by `drop_order`.
+fn bracket(
+    phase_data: &DivisionData,
+    grand_final_reset: bool,
+    drop_order: fn(u32, &mut [Source]),
+) -> Bracket {
     let mut bracket = BracketBuilder::default();
     let winners = bracket.add_knockout(phase_data, winner_bracket_slot, |round, rounds| {
         TypeMap::new().with(DoubleEliminationRound::Winners { round, rounds })
@@ -232,9 +311,7 @@ fn bracket(phase_data: &DivisionData, grand_final_reset: bool) -> Bracket {
                 .copied()
                 .map(Source::LoserOf)
                 .collect();
-            if drop_in % 2 == 1 {
-                dropping.reverse();
-            }
+            drop_order(drop_in + 1, &mut dropping);
             losers
                 .into_iter()
                 .zip(dropping)

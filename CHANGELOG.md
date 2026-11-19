@@ -95,6 +95,12 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- Double elimination: from 17 entrants on, the losers of the winner bracket
+  drop into the loser bracket in an order that keeps entrants who met apart
+  for as long as possible (as Challonge does): with 24 or 32 entrants until
+  round 5 of the loser bracket, with 48 or 64 until round 7, where they could
+  meet again in round 4 before. Up to 16 entrants nothing changes. Phases
+  added before keep the order they were played with.
 - German: the lists of options are in the order of their German labels, the
   recommended first; terms are used alike everywhere (“Reihenfolge der
   Tabelle” and “Kennzahlen” where the form said “Rangfolge und Wertung”,

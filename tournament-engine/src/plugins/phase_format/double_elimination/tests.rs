@@ -99,7 +99,7 @@ fn a_stage_is_keyed_by_its_bracket_and_whether_it_is_the_final() {
 
 /// A double elimination between `num_players` entrants with its first matches scheduled,
 /// ranked by the round of elimination and then by the losses.
-fn bracket(format: DoubleElimination, num_players: u32) -> Division {
+fn bracket(format: impl PhaseFormat, num_players: u32) -> Division {
     let mut phase = DivisionBuilder::new()
         .format(format)
         .add_players(num_players)
@@ -445,6 +445,83 @@ fn every_bracket_size_plays_out_to_one_champion() {
                 "{context}"
             );
         }
+    }
+}
+
+/// The losers round of the first match in which two entrants meet again who met before, if any,
+/// with the results `winner` picks.
+fn first_rematch(mut phase: Division, winner: impl Fn(&Match, u32, u32) -> Team) -> Option<u32> {
+    play_out(&mut phase, winner);
+    let mut met = Vec::new();
+    phase.data().matches().values().find_map(|r#match| {
+        let pair = [r#match.team_a()[0], r#match.team_b()[0]];
+        let again = met.contains(&pair) || met.contains(&[pair[1], pair[0]]);
+        met.push(pair);
+        match r#match.annotation() {
+            Some(&Losers { round, .. }) if again => Some(round),
+            _ => None,
+        }
+    })
+}
+
+/// Results that differ with `variant`: one of the sides wins by a hash of the seeds, the round
+/// and `variant`.
+fn varied(variant: u32) -> impl Fn(&Match, u32, u32) -> Team {
+    move |r#match, seed_a, seed_b| {
+        let hash = (seed_a * 31 + seed_b * 17 + r#match.round().get() * 7 + variant)
+            .wrapping_mul(2_654_435_761);
+        if hash >> 16 & 1 == 0 {
+            Team::A
+        } else {
+            Team::B
+        }
+    }
+}
+
+/// No wiring keeps two entrants apart longer: from 17 to 32 entrants they meet again in round 5 of
+/// the loser bracket at the earliest, from 33 to 64 in round 7. The first version let them meet in
+/// round 4 already.
+#[test]
+fn entrants_who_met_meet_again_as_late_as_possible() {
+    for (num_players, earliest) in [(24, 5), (32, 5), (48, 7), (64, 7)] {
+        let rematches: Vec<_> = (0..12)
+            .filter_map(|variant| {
+                first_rematch(
+                    bracket(DoubleElimination::new(), num_players),
+                    varied(variant),
+                )
+            })
+            .collect();
+        assert!(
+            rematches.iter().all(|round| *round >= earliest),
+            "{num_players} entrants: {rematches:?}"
+        );
+        let first_version = (0..12).filter_map(|variant| {
+            first_rematch(
+                bracket(DoubleEliminationV1::new(), num_players),
+                varied(variant),
+            )
+        });
+        assert!(
+            first_version.min() == Some(4),
+            "{num_players} entrants in the first version"
+        );
+    }
+}
+
+/// Up to 16 entrants, both versions are wired alike.
+#[test]
+fn up_to_16_entrants_the_versions_play_alike() {
+    for num_players in 2..=16 {
+        let schedules = [
+            bracket(DoubleElimination::new(), num_players),
+            bracket(DoubleEliminationV1::new(), num_players),
+        ]
+        .map(|mut phase| {
+            play_out(&mut phase, varied(num_players));
+            schedule(&phase)
+        });
+        assert_eq!(schedules[0], schedules[1], "{num_players} entrants");
     }
 }
 

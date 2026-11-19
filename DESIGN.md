@@ -1238,6 +1238,44 @@ Rejected: `TypeId` (stable only within a build); a hand-rolled binary tag
 registry (reimplements `typetag`); auto-derived tags from the type path
 (silently change on a rename).
 
+### Versions of a plugin
+
+A plugin that is to behave differently than saved competitions were played
+with gets a new version rather than a change: `#[plugin(id = .., version = 2)]`
+is a type of its own, tagged `<id>@2`, while the first keeps the bare id. Each
+version replays what was saved with it exactly, and the versions share their
+code where they agree (the double elimination's two versions differ in a
+function ordering the losers dropping into the loser bracket). They share the
+id their texts, presets and suggestions go by (`plugin_factory::unversioned`).
+The catalog offers the latest version only (`AnyAxis::entries`, which is also
+what is implied and suggested from); any version is found by its id
+(`AnyAxis::entry`), and an earlier one names its successor
+(`PluginEntry::successor`).
+
+A phase keeps the version it was added with. Its form shows an earlier one as
+such (`FormView::outdated`), and `PhaseForm::update_plugins` answers it by the
+latest version, keeping the answers that takes (`Draft::update`). The update is
+an ordinary edit of the phase: a `Replace` of its `AddPhase`, refused, naming
+the matches, where results reported do not fit the new version, which the
+dry run of the edit finds (see
+[Changing a phase after it was added](#changing-a-phase-after-it-was-added)).
+
+Dropping a version once it is old (*planned*): the log keeps the original
+`AddPhase` even after an update, and the competition next to it holds the
+version too, so deleting its type would break every competition that ever used
+it. Dropping it is a converter instead (see [Golden saves](#golden-saves)),
+rewriting its tag to the next version's in log and competition, with whatever
+its configuration and state need; a log that then no longer replays is shown
+read-only from the competition next to it (see
+[The competition next to its log](#the-competition-next-to-its-log)).
+
+Rejected: a new plugin under a new id with the old one marked deprecated
+(duplicates label, translations and presets, and says nothing about which
+replaces which); a hidden revision field in one type (a draft builds a plugin
+by deserializing its answers, so a field left out would be read as the oldest
+revision unless the draft special-cased it, and the old behaviour would live
+on as branches of the current type).
+
 ### Golden saves
 
 Stable tags keep a log loading, not playing the same: a changed format, metric

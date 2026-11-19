@@ -28,7 +28,7 @@ use tournament_engine::{
             Points, PointsCalculator, PointsPerMatchCalculator, RoundOfFirstLossCalculator,
             WinsDrawsLossesCalculator,
         },
-        phase_format::SingleElimination,
+        phase_format::{DoubleElimination, DoubleEliminationV1, PhaseFormat, SingleElimination},
         ranker::SliceRanker,
         seeding::{GroupWinnersApart, SeededAtRandom, SeededInOrder, Seeding},
         teams::{BestWithWorst, Keep, RandomPairs, Split, Teams},
@@ -631,6 +631,26 @@ fn the_plugins_of_divisions_and_teams_are_serialized_under_their_ids() {
     assert_eq!(
         id(serde_json::to_value(criterion).unwrap()),
         "tournament_engine::more_points_per_match"
+    );
+}
+
+/// Each version of a format is saved under its own tag, the first under the plugin's id alone.
+#[test]
+fn each_version_of_the_double_elimination_is_serialized_under_its_own_id() {
+    let id = |plugin: Value| plugin["type"].as_str().unwrap().to_owned();
+    let formats: [Box<dyn PhaseFormat>; 2] = [
+        Box::new(DoubleEliminationV1::new()),
+        Box::new(DoubleElimination::new()),
+    ];
+
+    assert_eq!(
+        formats
+            .map(|format| id(serde_json::to_value(format).unwrap()))
+            .as_slice(),
+        [
+            "tournament_engine::double_elimination",
+            "tournament_engine::double_elimination@2",
+        ]
     );
 }
 

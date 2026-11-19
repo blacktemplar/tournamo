@@ -178,7 +178,7 @@ pub mod single_elimination;
 
 pub(crate) use bracket::seeding_order;
 pub use bracket::{Advance, Bracket, BracketPairing, BracketSide, PairingId, Seat};
-pub use double_elimination::{DoubleElimination, DoubleEliminationRound};
+pub use double_elimination::{DoubleElimination, DoubleEliminationRound, DoubleEliminationV1};
 pub use monster_dyp::MonsterDyp;
 pub use round_robin::{RoundRobin, random_rounds::RandomRounds};
 pub use single_elimination::{KnockoutRound, SingleElimination};

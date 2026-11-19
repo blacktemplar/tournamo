@@ -445,6 +445,65 @@ impl<T: Configurable> Draft<T> {
             .map_err(invalid)?;
         config::deserialize(&config::complete::<T>(walked), &Path::ROOT).map_err(invalid)
     }
+
+    /// The plugins answering a field or a position in a list that are an earlier version of a
+    /// plugin, see [`AnyAxis::successor`], depth first.
+    pub fn outdated(&self) -> Vec<Outdated> {
+        let mut outdated = Vec::new();
+        collect_outdated(self.fields(), &mut outdated);
+        outdated
+    }
+
+    /// Answers every plugin that is an earlier version, see [`Self::outdated`], by its latest
+    /// version instead, keeping the answers to the fields the latest version has, by name, and
+    /// dropping the others; fields it has that the earlier one lacked are left unanswered.
+    ///
+    /// # Errors
+    /// Returns what [`Self::with_answers`] returns, if the latest version does not take an answer
+    /// the earlier one did. Nothing is changed then.
+    pub fn update(&mut self) -> Result<(), ConfigError> {
+        let mut answers = self.answers.clone();
+        for outdated in self.outdated() {
+            // gone with a field the latest version of a plugin around it lacks
+            let Some(mut answer) = answers.get_at(&outdated.path).cloned() else {
+                continue;
+            };
+            answer[PluginAnswer::TAG] = Value::from(outdated.latest.id());
+            if let Some(Value::Object(config)) = PluginAnswer::config_mut(&mut answer) {
+                let schema = outdated.latest.schema();
+                config.retain(|name, _| schema.fields().iter().any(|field| field.name() == name));
+            }
+            edit(&mut answers, &outdated.path, Some(answer));
+        }
+        self.answers = self.schema.walk(&answers, &Path::ROOT, false)?;
+        Ok(())
+    }
+}
+
+/// A plugin of a [`Draft`] that is an earlier version, see [`Draft::outdated`].
+#[derive(Debug, Clone)]
+pub struct Outdated {
+    /// Where it is.
+    pub path: Path,
+    /// The version chosen.
+    pub plugin: &'static PluginEntry,
+    /// The latest version of the plugin.
+    pub latest: &'static PluginEntry,
+}
+
+/// Adds the outdated plugins answering `fields` and the fields of their plugins to `outdated`,
+/// depth first.
+fn collect_outdated(fields: Vec<FieldNode<'_>>, outdated: &mut Vec<Outdated>) {
+    for plugin in fields.iter().flat_map(FieldNode::plugins) {
+        if let Some(latest) = plugin.entry.successor() {
+            outdated.push(Outdated {
+                path: plugin.path.clone(),
+                plugin: plugin.entry,
+                latest,
+            });
+        }
+        collect_outdated(plugin.fields(), outdated);
+    }
 }
 
 // written out rather than derived, which would demand `T: Clone` of the composite

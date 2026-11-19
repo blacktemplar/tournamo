@@ -287,9 +287,12 @@ pub enum PluginText<'a> {
 }
 
 impl PluginText<'_> {
-    /// The key of the message of the plugin `id`.
+    /// The key of the message of the plugin `id`, shared by all its versions.
     fn key(id: &str) -> String {
-        format!("plugin-{}", id.replace("::", "-"))
+        format!(
+            "plugin-{}",
+            plugin_factory::unversioned(id).replace("::", "-")
+        )
     }
 
     /// The name of its attribute.

@@ -1990,3 +1990,156 @@ mod resolution {
         );
     }
 }
+
+/// Drafts of plugins in more than one version.
+mod versions {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    /// How a game is scored, in two versions.
+    #[axis]
+    trait Scoring: Plugin {}
+
+    /// The first version of `scoring`, with a field the second dropped.
+    #[derive(Debug, Serialize, Deserialize, Plugin)]
+    #[plugin(id = "scoring", label = "scoring")]
+    struct ScoringFirst {
+        #[plugin(label = "Points for a win", default = 2)]
+        win: i64,
+        #[plugin(label = "Dropped", default = true)]
+        dropped: bool,
+    }
+
+    #[register]
+    impl Scoring for ScoringFirst {}
+
+    /// The second version of `scoring`, with a field the first lacked.
+    #[derive(Debug, Serialize, Deserialize, Plugin)]
+    #[plugin(id = "scoring", version = 2, label = "scoring")]
+    struct ScoringSecond {
+        #[plugin(label = "Points for a win", default = 2)]
+        win: i64,
+        #[plugin(label = "Points for a draw", default = 1)]
+        draw: i64,
+    }
+
+    #[register]
+    impl Scoring for ScoringSecond {}
+
+    /// A plugin in one version only, holding scorings.
+    #[derive(Debug, Serialize, Deserialize, Plugin)]
+    #[plugin(id = "tiebreak", label = "tiebreak")]
+    struct Tiebreak {
+        #[plugin(label = "Scorings")]
+        scorings: Vec<Box<dyn Scoring>>,
+    }
+
+    #[register]
+    impl Scoring for Tiebreak {}
+
+    #[derive(Debug, Deserialize, Configurable)]
+    struct League {
+        #[plugin(label = "Scoring")]
+        scoring: Box<dyn Scoring>,
+        #[plugin(label = "Tiebreaks")]
+        tiebreaks: Vec<Box<dyn Scoring>>,
+    }
+
+    fn first(win: i64) -> PluginConfig {
+        PluginConfig::of::<ScoringFirst>()
+            .with("win", win)
+            .with("dropped", false)
+    }
+
+    fn league() -> Draft<League> {
+        Draft::<League>::new(|_| {})
+            .with("scoring", first(3))
+            .unwrap()
+            .with(
+                "tiebreaks",
+                json!([PluginConfig::of::<Tiebreak>().with("scorings", json!([first(5)]))]),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn only_the_latest_version_is_a_candidate() {
+        let ids: Vec<_> = league()
+            .candidates(&Path::of("scoring"))
+            .unwrap()
+            .into_iter()
+            .map(PluginEntry::id)
+            .collect();
+
+        assert_eq!(ids, ["scoring@2", "tiebreak"]);
+    }
+
+    #[test]
+    fn the_earlier_versions_chosen_are_outdated_wherever_they_are() {
+        let outdated: Vec<_> = league()
+            .outdated()
+            .into_iter()
+            .map(|outdated| {
+                (
+                    outdated.path.to_string(),
+                    outdated.plugin.id(),
+                    outdated.latest.id(),
+                )
+            })
+            .collect();
+
+        assert_eq!(
+            outdated,
+            [
+                ("scoring".to_owned(), "scoring", "scoring@2"),
+                (
+                    "tiebreaks[0].scorings[0]".to_owned(),
+                    "scoring",
+                    "scoring@2"
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_earlier_version_chosen_still_builds() {
+        let built = league().build().unwrap();
+
+        assert_eq!(
+            format!("{:?}", built.scoring),
+            "ScoringFirst { win: 3, dropped: false }"
+        );
+    }
+
+    #[test]
+    fn an_update_keeps_the_answers_the_latest_version_takes() {
+        let mut draft = league();
+        draft.update().unwrap();
+
+        assert!(draft.outdated().is_empty());
+        let draft = draft.with_defaults().unwrap();
+        let built = draft.build().unwrap();
+        assert_eq!(
+            format!("{built:?}"),
+            "League { scoring: ScoringSecond { win: 3, draw: 1 }, tiebreaks: [Tiebreak { \
+             scorings: [ScoringSecond { win: 5, draw: 1 }] }] }"
+        );
+    }
+
+    #[test]
+    fn an_update_of_a_draft_without_earlier_versions_changes_nothing() {
+        let mut draft = Draft::<League>::new(|_| {})
+            .with(
+                "scoring",
+                PluginConfig::of::<ScoringSecond>().with("win", 4),
+            )
+            .unwrap();
+        let answers = draft.answers().clone();
+
+        draft.update().unwrap();
+
+        assert_eq!(draft.answers(), &answers);
+    }
+}

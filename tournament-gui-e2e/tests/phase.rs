@@ -1,4 +1,6 @@
-use tournament_gui_e2e::{Gui, Key, run_in_new_competition, thirtyfour::error::WebDriverResult};
+use tournament_gui_e2e::{
+    Gui, Key, run, run_in_new_competition, thirtyfour::error::WebDriverResult,
+};
 
 /// Enters Alice and Bob, adds a round robin with what it recommends, and starts.
 async fn start_round_robin(gui: &Gui) -> WebDriverResult<()> {
@@ -798,6 +800,39 @@ async fn the_round_chosen_stays_shown_after_the_phase_is_edited() {
         gui.expect_no_dialog().await?;
         gui.click("Matches & standings").await?;
         gui.expect_matches(&["3", "4"]).await
+    })
+    .await;
+}
+
+/// A phase played with an earlier version of its format, as v0.4.0 saved a double elimination,
+/// says so in its dialog, and is updated to the latest version where its results fit that.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_phase_of_an_earlier_version_is_updated_in_its_dialog() {
+    run(async |gui| {
+        let save = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tournament-app/tests/saves/v0.4.0/double-elimination.json")
+            // Chrome takes only a canonical path
+            .canonicalize()
+            .unwrap();
+        gui.import(&save).await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+
+        gui.expect_outdated(Some(
+            "This phase is played with an earlier version of double elimination. Updated, it is \
+             played with the latest version, if its results fit that.",
+        ))
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.click("Update to the latest version").await?;
+
+        gui.expect_outdated(None).await?;
+        gui.expect_focus_on_choice("format").await?;
+        gui.click("Save changes").await?;
+        gui.expect_no_dialog().await?;
+        gui.click("Edit phase").await?;
+        gui.expect_outdated(None).await
     })
     .await;
 }

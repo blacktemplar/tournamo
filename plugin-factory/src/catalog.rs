@@ -6,6 +6,11 @@
 //! open: a plugin of a third-party crate ends up in the same catalog as the ones of the crate
 //! defining the axis. The plugins of an axis are browsed through its [`AnyAxis`].
 //!
+//! A plugin may come in several versions, see [`PluginType::VERSION`], each registered as a plugin
+//! of its own, so that what was saved with an earlier one still loads and behaves as it did. Only
+//! the latest version is offered, see [`AnyAxis::entries`]; a draft holding an earlier one is
+//! brought up to date with [`Draft::update`](crate::draft::Draft::update).
+//!
 //! A program reads the catalog to offer the plugins of an axis to choose from, and to add the
 //! plugins implied by a fact a composite requires but none of its plugins provides, see
 //! [`Draft::add_implied`](crate::draft::Draft::add_implied).
@@ -84,6 +89,8 @@ pub trait Axis: Plugin {
 /// [`PluginConfig::build`].
 pub struct PluginEntry {
     id: &'static str,
+    version: u32,
+    axis: AnyAxis,
     label: &'static str,
     description: Option<&'static str>,
     declare: fn(&mut Declaration),
@@ -96,10 +103,12 @@ pub struct PluginEntry {
 }
 
 impl PluginEntry {
-    /// The entry of the plugin `P`.
-    pub(crate) const fn new<P: PluginType>() -> Self {
+    /// The entry of the plugin `P` for the axis `A`.
+    pub(crate) const fn new<P: PluginType, A: Axis + ?Sized>() -> Self {
         Self {
             id: P::ID,
+            version: P::VERSION,
+            axis: AnyAxis::of::<A>(),
             label: P::LABEL,
             description: P::DESCRIPTION,
             declare: P::declare_static,
@@ -113,6 +122,21 @@ impl PluginEntry {
     /// What identifies the plugin, see [`PluginType::ID`].
     pub fn id(&self) -> &'static str {
         self.id
+    }
+
+    /// Which version of the plugin this is, see [`PluginType::VERSION`].
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    /// The latest version of the plugin if this is an earlier one, see [`AnyAxis::successor`].
+    pub fn successor(&self) -> Option<&'static PluginEntry> {
+        self.axis.successor(self.id)
+    }
+
+    /// The id all versions of the plugin share, see [`unversioned`](crate::unversioned).
+    pub fn unversioned_id(&self) -> &'static str {
+        crate::unversioned(self.id)
     }
 
     /// What an operator picking a plugin reads.
@@ -293,22 +317,48 @@ impl AnyAxis {
         }
     }
 
-    /// Every plugin registered for this axis, in the order of their ids.
+    /// Every plugin registered for this axis in its latest version, what a program offers to
+    /// choose from, in the order of their ids. An earlier version is found only by its id, see
+    /// [`Self::entry`].
     ///
     /// # Panics
-    /// Panics if two plugins are registered for this axis with the same id, see [`Self::entry`].
+    /// As [`Self::entry`].
     pub fn entries(&self) -> impl Iterator<Item = &'static PluginEntry> {
-        (self.index)().entries().values().copied()
+        (self.index)().entries().latest.values().copied()
     }
 
-    /// The plugin registered for this axis with the id `id`, see [`PluginType::ID`], or [`None`]
-    /// if none is.
+    /// Every version of every plugin registered for this axis, in the order of their ids.
+    ///
+    /// # Panics
+    /// As [`Self::entry`].
+    pub fn all_entries(&self) -> impl Iterator<Item = &'static PluginEntry> {
+        (self.index)().entries().all.values().copied()
+    }
+
+    /// The plugin registered for this axis with the id `id`, of whichever version, see
+    /// [`PluginType::ID`], or [`None`] if none is.
     ///
     /// # Panics
     /// Panics if two plugins are registered for this axis with the same id, naming the id and
-    /// both plugins. Every access to the catalog of the axis checks this.
+    /// both plugins, or with an id that does not say the version it is of. Every access to the
+    /// catalog of the axis checks this.
     pub fn entry(&self, id: &str) -> Option<&'static PluginEntry> {
-        (self.index)().entries().get(id).copied()
+        (self.index)().entries().all.get(id).copied()
+    }
+
+    /// The latest version of the plugin `id`, if `id` is an earlier version of a plugin registered
+    /// for this axis; [`None`] if it is the latest or no plugin of this axis.
+    ///
+    /// # Panics
+    /// As [`Self::entry`].
+    pub fn successor(&self, id: &str) -> Option<&'static PluginEntry> {
+        let entries = (self.index)().entries();
+        entries.all.get(id)?;
+        entries
+            .latest
+            .get(crate::unversioned(id))
+            .copied()
+            .filter(|latest| latest.id() != id)
     }
 
     /// `plugin`, the answer at `at`, as a plugin of this axis with its config walked as
@@ -808,6 +858,116 @@ mod tests {
 
     #[register]
     impl Clashing for Second {}
+
+    /// An axis of a plugin in two versions.
+    #[axis]
+    trait Evolving: Plugin {}
+
+    /// The first version of `evolving`.
+    #[derive(Debug, Serialize, Deserialize, Plugin)]
+    #[plugin(id = "evolving", label = "evolving")]
+    struct EvolvingFirst {
+        #[plugin(label = "Rounds", default = 1)]
+        rounds: i64,
+    }
+
+    #[register]
+    impl Evolving for EvolvingFirst {}
+
+    /// The second version of `evolving`.
+    #[derive(Debug, Serialize, Deserialize, Plugin)]
+    #[plugin(id = "evolving", version = 2, label = "evolving")]
+    struct EvolvingSecond {
+        #[plugin(label = "Rounds", default = 1)]
+        rounds: i64,
+    }
+
+    #[register]
+    impl Evolving for EvolvingSecond {}
+
+    fn entry_of_evolving(id: &str) -> &'static PluginEntry {
+        AnyAxis::of::<dyn Evolving>().entry(id).unwrap()
+    }
+
+    #[test]
+    fn only_the_latest_version_of_a_plugin_is_offered() {
+        let axis = AnyAxis::of::<dyn Evolving>();
+        let ids = |entries: Vec<&PluginEntry>| -> Vec<_> {
+            entries.into_iter().map(PluginEntry::id).collect()
+        };
+
+        assert_eq!(ids(axis.entries().collect()), ["evolving@2"]);
+        assert_eq!(
+            ids(axis.all_entries().collect()),
+            ["evolving", "evolving@2"]
+        );
+        assert_eq!(axis.entry("evolving").map(PluginEntry::version), Some(1));
+        assert_eq!(
+            axis.entry("evolving@2").map(PluginEntry::unversioned_id),
+            Some("evolving")
+        );
+    }
+
+    #[test]
+    fn an_earlier_version_is_succeeded_by_the_latest() {
+        let axis = AnyAxis::of::<dyn Evolving>();
+
+        assert_eq!(
+            axis.successor(EvolvingFirst::ID).map(PluginEntry::id),
+            Some(EvolvingSecond::ID)
+        );
+        assert!(axis.successor(EvolvingSecond::ID).is_none());
+        assert_eq!(
+            entry_of_evolving(EvolvingFirst::ID)
+                .successor()
+                .map(PluginEntry::id),
+            Some(EvolvingSecond::ID)
+        );
+        assert!(entry_of_evolving(EvolvingSecond::ID).successor().is_none());
+        assert!(axis.successor("unregistered").is_none());
+        assert!(AnyAxis::of::<dyn Tested>().successor("chained").is_none());
+    }
+
+    #[test]
+    fn each_version_is_saved_and_loaded_as_itself() {
+        let first: Box<dyn Evolving> = Box::new(EvolvingFirst { rounds: 3 });
+        let second: Box<dyn Evolving> = Box::new(EvolvingSecond { rounds: 3 });
+
+        let saved = serde_json::to_value(&first).unwrap();
+        assert_eq!(saved["type"], "evolving");
+        let loaded: Box<dyn Evolving> = serde_json::from_value(saved).unwrap();
+        assert_eq!(format!("{loaded:?}"), "EvolvingFirst { rounds: 3 }");
+
+        let saved = serde_json::to_value(&second).unwrap();
+        assert_eq!(saved["type"], "evolving@2");
+        let loaded: Box<dyn Evolving> = serde_json::from_value(saved).unwrap();
+        assert_eq!(format!("{loaded:?}"), "EvolvingSecond { rounds: 3 }");
+    }
+
+    /// An axis of a plugin whose id does not say its version.
+    #[axis]
+    trait Misnamed: Plugin {}
+
+    /// A second version written by hand with the id of the first.
+    #[derive(Debug, Serialize, Deserialize, Configurable)]
+    struct Unversioned;
+
+    impl Plugin for Unversioned {}
+
+    impl PluginType for Unversioned {
+        const ID: &'static str = "unversioned";
+        const LABEL: &'static str = "unversioned";
+        const VERSION: u32 = 2;
+    }
+
+    #[register]
+    impl Misnamed for Unversioned {}
+
+    #[test]
+    #[should_panic(expected = "has the id \"unversioned\" rather than \"unversioned@2\"")]
+    fn an_id_not_saying_its_version_panics_on_access() {
+        AnyAxis::of::<dyn Misnamed>().entries().count();
+    }
 
     #[test]
     #[should_panic(expected = "are both registered with the id \"clash\"")]

@@ -541,11 +541,14 @@ mod v5 {
 
 #[cfg(test)]
 mod tests {
-    use plugin_factory::PluginType as _;
+    use plugin_factory::{
+        PluginType as _,
+        config::{Path, PluginConfig},
+    };
     use serde_json::json;
     use tournament_engine::{
-        Competition, CompetitionStateMachine, MatchResult,
-        plugins::phase_format::{DoubleElimination, SingleElimination},
+        Competition, CompetitionStateMachine, MatchResult, PhasePlugins,
+        plugins::phase_format::{DoubleElimination, DoubleEliminationV1, SingleElimination},
     };
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -848,13 +851,23 @@ mod tests {
     }
 
     /// A double elimination of five entrants, so with byes in both brackets, with the first three
-    /// matches reported.
+    /// matches reported: of its first version, the only one older formats knew.
     fn double_elimination_under_way() -> Session {
         let mut session = Session::new("cup");
         for name in ["Alice", "Bob", "Carol", "Dave", "Eve"] {
             session.add_entrant(name).unwrap();
         }
-        let draft = session.phase_draft(DoubleElimination::ID).unwrap();
+        let mut draft = session.phase_draft(DoubleElimination::ID).unwrap();
+        let format = Path::ROOT
+            .field(PhasePlugins::FORMAT)
+            .field("grand_final_reset");
+        let reset = draft.answers().get_at(&format).cloned().unwrap();
+        draft
+            .set(
+                &Path::ROOT.field(PhasePlugins::FORMAT),
+                PluginConfig::of::<DoubleEliminationV1>().with("grand_final_reset", reset),
+            )
+            .unwrap();
         session
             .add_phase(&crate::session::tests::form(draft.clone()))
             .unwrap();

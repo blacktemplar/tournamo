@@ -238,6 +238,11 @@ choose-plugin = Choose…
 no-plugin = (none)
 # next to a plugin the plugins chosen elsewhere recommend
 recommended = (recommended)
+# next to a plugin of which a later version has come out, which a phase added before keeps
+earlier-version = (earlier version)
+# $plugins: the plugins of a phase of which a later version has come out
+outdated-plugins = This phase is played with an earlier version of { $plugins }. Updated, it is played with the latest version, if its results fit that.
+update-plugins = Update to the latest version
 following-suggestions = Ranking and scoring follow suggestions for the format until you edit them.
 customized-settings = Your ranking and scoring settings are kept when the format changes. Applying suggestions replaces them and resumes automatic updates.
 apply-suggested-ranking = Apply suggested ranking

@@ -66,6 +66,8 @@ impl Question {
 pub struct Choice {
     label: &'static str,
     description: Option<&'static str>,
+    /// Whether it is an earlier version of a plugin, which is never offered but kept.
+    outdated: bool,
 }
 
 impl Choice {
@@ -73,6 +75,7 @@ impl Choice {
         Self {
             label: entry.label(),
             description: entry.description(),
+            outdated: entry.successor().is_some(),
         }
     }
 
@@ -81,6 +84,7 @@ impl Choice {
         Self {
             label,
             description: None,
+            outdated: false,
         }
     }
 
@@ -93,12 +97,17 @@ impl Choice {
     }
 }
 
-/// Shows the label, followed by the description if there is one.
+/// Shows the label, marked if it is an earlier version, followed by the description if there is
+/// one.
 impl Display for Choice {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.label)?;
+        if self.outdated {
+            formatter.write_str(" (earlier version)")?;
+        }
         match self.description {
-            Some(description) => write!(formatter, "{} — {description}", self.label),
-            None => formatter.write_str(self.label),
+            Some(description) => write!(formatter, " — {description}"),
+            None => Ok(()),
         }
     }
 }
@@ -809,7 +818,13 @@ impl<T: Configurable, P: AsyncPrompter> Asker<'_, T, P> {
     ) -> Result<(), Error> {
         let default_plugin = default.as_ref().and_then(PluginConfig::from_answer);
         let first: Vec<_> = default_plugin.iter().map(PluginConfig::plugin).collect();
-        let candidates = self.candidates(path, &first)?;
+        let mut candidates = self.candidates(path, &first)?;
+        // an earlier version is never offered, but kept until the operator picks another
+        if let Some(chosen) = self.draft.plugin_at(path)
+            && chosen.entry.successor().is_some()
+        {
+            candidates.insert(0, chosen.entry);
+        }
         let mut options: Vec<_> = candidates.iter().map(|entry| Choice::of(entry)).collect();
         let mut cursor = default_plugin.as_ref().and_then(|default| {
             candidates
@@ -1413,6 +1428,55 @@ mod tests {
         assert!(
             matches!(&result, Err(Error::NoDefault { question }) if question == "Rounds"),
             "{result:?}"
+        );
+    }
+
+    /// A phase added with an earlier version of its format keeps it unless another is picked, and
+    /// the latest version is offered next to it.
+    #[test]
+    fn an_earlier_version_chosen_is_kept_and_the_latest_offered() {
+        use plugin_factory::PluginType as _;
+        use tournament_engine::plugins::phase_format::{
+            DoubleElimination, DoubleEliminationV1, PhaseFormat,
+        };
+
+        let mut draft = phase_draft()
+            .with(
+                PhasePlugins::FORMAT,
+                PluginConfig::of::<DoubleEliminationV1>().with("grand_final_reset", true),
+            )
+            .unwrap();
+        let mut script = Script::default();
+
+        fill(&mut draft, &mut script).unwrap();
+
+        let format = draft.answers().get(PhasePlugins::FORMAT).unwrap();
+        assert_eq!(
+            PluginConfig::from_answer(format).map(|format| format.plugin().to_owned()),
+            Some(DoubleEliminationV1::ID.to_owned())
+        );
+        let formats = &script.options[0];
+        assert_eq!(
+            formats
+                .iter()
+                .filter(|label| **label == "double elimination")
+                .count(),
+            2
+        );
+        assert!(
+            AnyAxis::of::<dyn PhaseFormat>()
+                .entries()
+                .any(|entry| entry.id() == DoubleElimination::ID)
+        );
+        assert_eq!(
+            Choice::of(
+                AnyAxis::of::<dyn PhaseFormat>()
+                    .entry(DoubleEliminationV1::ID)
+                    .unwrap()
+            )
+            .to_string(),
+            "double elimination (earlier version) — an entrant is out after its second loss, \
+             draws are not allowed"
         );
     }
 }

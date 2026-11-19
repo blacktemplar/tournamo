@@ -73,7 +73,13 @@ pub struct Gui {
 impl Gui {
     /// Creates the competition `name` from the list of competitions, and waits until it is open.
     pub async fn new_competition(&self, name: &str) -> WebDriverResult<()> {
-        let input = self.driver.query(By::Css("form input")).first().await?;
+        // by its id: right after leaving a competition, its screen and the inputs of its forms may
+        // still show
+        let input = self
+            .driver
+            .query(By::Id("competition-name"))
+            .first()
+            .await?;
         input.send_keys(name).await?;
         Page::pause().await;
         self.click("Create").await?;

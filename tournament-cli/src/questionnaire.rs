@@ -1009,7 +1009,7 @@ fn plugins(answers: &[Value]) -> Vec<PluginConfig> {
 mod tests {
     use std::{collections::VecDeque, fmt::Debug};
 
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
     use tournament_engine::{
         Competition, PhasePlugins, plugins::metrics_calculator::PointsCalculator,
     };
@@ -1431,52 +1431,68 @@ mod tests {
         );
     }
 
-    /// A phase added with an earlier version of its format keeps it unless another is picked, and
-    /// the latest version is offered next to it.
+    /// A plugin of the tests in two versions.
+    #[plugin_factory::axis]
+    trait Evolving: plugin_factory::Plugin {}
+
+    /// The first version of `evolving`.
+    #[derive(Debug, Serialize, Deserialize, plugin_factory::Plugin)]
+    #[plugin(
+        id = "tournament_cli::evolving",
+        label = "evolving",
+        description = "of the tests"
+    )]
+    struct EvolvingFirst;
+
+    #[plugin_factory::register]
+    impl Evolving for EvolvingFirst {}
+
+    /// The second version of `evolving`.
+    #[derive(Debug, Serialize, Deserialize, plugin_factory::Plugin)]
+    #[plugin(
+        id = "tournament_cli::evolving",
+        version = 2,
+        label = "evolving",
+        description = "of the tests"
+    )]
+    struct EvolvingSecond;
+
+    #[plugin_factory::register]
+    impl Evolving for EvolvingSecond {}
+
+    #[derive(Deserialize, Configurable)]
+    struct Evolved {
+        #[plugin(label = "Evolving")]
+        _evolving: Box<dyn Evolving>,
+    }
+
+    /// A plugin of an earlier version chosen is kept unless another is picked, and the latest
+    /// version is offered next to it.
     #[test]
     fn an_earlier_version_chosen_is_kept_and_the_latest_offered() {
         use plugin_factory::PluginType as _;
-        use tournament_engine::plugins::phase_format::{
-            DoubleElimination, DoubleEliminationV1, PhaseFormat,
-        };
 
-        let mut draft = phase_draft()
-            .with(
-                PhasePlugins::FORMAT,
-                PluginConfig::of::<DoubleEliminationV1>().with("grand_final_reset", true),
-            )
+        let mut draft = Draft::<Evolved>::new(|_| {})
+            .with("_evolving", PluginConfig::of::<EvolvingFirst>())
             .unwrap();
         let mut script = Script::default();
 
-        fill(&mut draft, &mut script).unwrap();
+        super::fill(&mut draft, &mut script).unwrap();
 
-        let format = draft.answers().get(PhasePlugins::FORMAT).unwrap();
+        let chosen = draft.answers().get("_evolving").unwrap();
         assert_eq!(
-            PluginConfig::from_answer(format).map(|format| format.plugin().to_owned()),
-            Some(DoubleEliminationV1::ID.to_owned())
+            PluginConfig::from_answer(chosen).map(|chosen| chosen.plugin().to_owned()),
+            Some(EvolvingFirst::ID.to_owned())
         );
-        let formats = &script.options[0];
+        assert_eq!(script.options, [["evolving", "evolving"]]);
+        let axis = AnyAxis::of::<dyn Evolving>();
         assert_eq!(
-            formats
-                .iter()
-                .filter(|label| **label == "double elimination")
-                .count(),
-            2
-        );
-        assert!(
-            AnyAxis::of::<dyn PhaseFormat>()
-                .entries()
-                .any(|entry| entry.id() == DoubleElimination::ID)
+            Choice::of(axis.entry(EvolvingFirst::ID).unwrap()).to_string(),
+            "evolving (earlier version) — of the tests"
         );
         assert_eq!(
-            Choice::of(
-                AnyAxis::of::<dyn PhaseFormat>()
-                    .entry(DoubleEliminationV1::ID)
-                    .unwrap()
-            )
-            .to_string(),
-            "double elimination (earlier version) — an entrant is out after its second loss, \
-             draws are not allowed"
+            Choice::of(axis.entry(EvolvingSecond::ID).unwrap()).to_string(),
+            "evolving — of the tests"
         );
     }
 }

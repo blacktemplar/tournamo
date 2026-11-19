@@ -21,8 +21,7 @@ use tournament_engine::{
             RoundOfFirstLossCalculator,
         },
         phase_format::{
-            DoubleElimination, DoubleEliminationV1, MonsterDyp, RandomRounds, RoundRobin,
-            SingleElimination,
+            DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
     },
     uuid::Uuid,
@@ -62,6 +61,7 @@ mod scale;
 mod storage;
 mod teams;
 mod undo;
+mod versions;
 mod views;
 
 impl Session {

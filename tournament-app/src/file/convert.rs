@@ -601,16 +601,13 @@ mod v5 {
 
 #[cfg(test)]
 mod tests {
-    use plugin_factory::{
-        PluginType as _,
-        config::{Path, PluginConfig},
-    };
+    use plugin_factory::{PluginType as _, config::PluginConfig};
     use serde_json::json;
     use tournament_engine::{
-        Competition, CompetitionStateMachine, MatchResult, PhasePlugins,
+        Competition, CompetitionStateMachine, MatchResult,
         plugins::{
             metrics_calculator::{MorePoints, PointsCalculator},
-            phase_format::{DoubleElimination, DoubleEliminationV1, SingleElimination},
+            phase_format::{DoubleElimination, SingleElimination},
         },
     };
     #[cfg(target_arch = "wasm32")]
@@ -917,24 +914,14 @@ mod tests {
         session
     }
 
-    /// A double elimination of five entrants, so with byes in both brackets, with the first three
-    /// matches reported: of its first version, the only one older formats knew.
-    fn double_elimination_under_way() -> Session {
+    /// A knockout of the format `format` between five entrants, so with byes, with the first three
+    /// matches reported.
+    fn knockout_under_way(format: &str) -> Session {
         let mut session = Session::new("cup");
         for name in ["Alice", "Bob", "Carol", "Dave", "Eve"] {
             session.add_entrant(name).unwrap();
         }
-        let mut draft = session.phase_draft(DoubleElimination::ID).unwrap();
-        let format = Path::ROOT
-            .field(PhasePlugins::FORMAT)
-            .field("grand_final_reset");
-        let reset = draft.answers().get_at(&format).cloned().unwrap();
-        draft
-            .set(
-                &Path::ROOT.field(PhasePlugins::FORMAT),
-                PluginConfig::of::<DoubleEliminationV1>().with("grand_final_reset", reset),
-            )
-            .unwrap();
+        let draft = session.phase_draft(format).unwrap();
         session
             .add_phase(&crate::session::tests::form(draft.clone()))
             .unwrap();
@@ -1149,7 +1136,7 @@ mod tests {
     /// the competition it was, its pairings numbered as the bracket numbers them.
     #[test]
     fn a_competition_of_format_3_is_read_with_its_plugins_and_its_bracket_numbered() {
-        let session = double_elimination_under_way();
+        let session = knockout_under_way(SingleElimination::ID);
         let competition = serde_json::to_value(session.competition()).unwrap();
         let mut held = competition.clone();
         let numbered = as_of_format_3(&mut held);
@@ -1307,7 +1294,7 @@ mod tests {
     /// registration too, and the highest number of a match or a pairing of a bracket.
     #[test]
     fn a_started_competition_of_format_4_gets_its_lots_and_highest_number() {
-        let session = double_elimination_under_way();
+        let session = knockout_under_way(DoubleElimination::ID);
         let competition = serde_json::to_value(session.competition()).unwrap();
         let mut held = competition.clone();
         as_of_format_4(&mut held);

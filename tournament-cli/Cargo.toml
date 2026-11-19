@@ -26,6 +26,8 @@ tournament-engine.workspace = true
 
 [dev-dependencies]
 serde.workspace = true
+# plugins of the tests are registered as any plugin is
+typetag.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tempfile.workspace = true

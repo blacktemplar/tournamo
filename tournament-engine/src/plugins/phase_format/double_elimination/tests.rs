@@ -99,7 +99,7 @@ fn a_stage_is_keyed_by_its_bracket_and_whether_it_is_the_final() {
 
 /// A double elimination between `num_players` entrants with its first matches scheduled,
 /// ranked by the round of elimination and then by the losses.
-fn bracket(format: impl PhaseFormat, num_players: u32) -> Division {
+pub(crate) fn bracket(format: impl PhaseFormat, num_players: u32) -> Division {
     let mut phase = DivisionBuilder::new()
         .format(format)
         .add_players(num_players)
@@ -120,7 +120,7 @@ fn seed_of(phase: &Division, ranking_id: &RankingId) -> u32 {
 
 /// Every match as its round, its stage and the seeds of its two sides, in the order the
 /// matches were scheduled in.
-fn schedule(phase: &Division) -> Vec<(u32, DoubleEliminationRound, (u32, u32))> {
+pub(crate) fn schedule(phase: &Division) -> Vec<(u32, DoubleEliminationRound, (u32, u32))> {
     phase
         .data()
         .matches()
@@ -140,7 +140,7 @@ fn schedule(phase: &Division) -> Vec<(u32, DoubleEliminationRound, (u32, u32))> 
 
 /// Reports the open matches one at a time, in the order they were scheduled in, as won by the
 /// side `winner` picks given the match and the seeds of its sides, until none is left.
-fn play_out(phase: &mut Division, winner: impl Fn(&Match, u32, u32) -> Team) {
+pub(crate) fn play_out(phase: &mut Division, winner: impl Fn(&Match, u32, u32) -> Team) {
     while let Some(r#match) = phase.data().matches().values().find(|m| !m.is_finished()) {
         let seeds = (
             seed_of(phase, &r#match.team_a()[0]),
@@ -450,7 +450,10 @@ fn every_bracket_size_plays_out_to_one_champion() {
 
 /// The losers round of the first match in which two entrants meet again who met before, if any,
 /// with the results `winner` picks.
-fn first_rematch(mut phase: Division, winner: impl Fn(&Match, u32, u32) -> Team) -> Option<u32> {
+pub(crate) fn first_rematch(
+    mut phase: Division,
+    winner: impl Fn(&Match, u32, u32) -> Team,
+) -> Option<u32> {
     play_out(&mut phase, winner);
     let mut met = Vec::new();
     phase.data().matches().values().find_map(|r#match| {
@@ -466,7 +469,7 @@ fn first_rematch(mut phase: Division, winner: impl Fn(&Match, u32, u32) -> Team)
 
 /// Results that differ with `variant`: one of the sides wins by a hash of the seeds, the round
 /// and `variant`.
-fn varied(variant: u32) -> impl Fn(&Match, u32, u32) -> Team {
+pub(crate) fn varied(variant: u32) -> impl Fn(&Match, u32, u32) -> Team {
     move |r#match, seed_a, seed_b| {
         let hash = (seed_a * 31 + seed_b * 17 + r#match.round().get() * 7 + variant)
             .wrapping_mul(2_654_435_761);
@@ -479,8 +482,7 @@ fn varied(variant: u32) -> impl Fn(&Match, u32, u32) -> Team {
 }
 
 /// No wiring keeps two entrants apart longer: from 17 to 32 entrants they meet again in round 5 of
-/// the loser bracket at the earliest, from 33 to 64 in round 7. The first version let them meet in
-/// round 4 already.
+/// the loser bracket at the earliest, from 33 to 64 in round 7.
 #[test]
 fn entrants_who_met_meet_again_as_late_as_possible() {
     for (num_players, earliest) in [(24, 5), (32, 5), (48, 7), (64, 7)] {
@@ -496,53 +498,21 @@ fn entrants_who_met_meet_again_as_late_as_possible() {
             rematches.iter().all(|round| *round >= earliest),
             "{num_players} entrants: {rematches:?}"
         );
-        let first_version = (0..12).filter_map(|variant| {
-            first_rematch(
-                bracket(DoubleEliminationV1::new(), num_players),
-                varied(variant),
-            )
-        });
-        assert!(
-            first_version.min() == Some(4),
-            "{num_players} entrants in the first version"
-        );
     }
 }
 
 /// The worse seed wins every match.
-fn underdog(_: &Match, seed_a: u32, seed_b: u32) -> Team {
+pub(crate) fn underdog(_: &Match, seed_a: u32, seed_b: u32) -> Team {
     if seed_a > seed_b { Team::A } else { Team::B }
 }
 
-/// As a report found with 24 entrants of whom the worse seed always won: in the first version
-/// seeds 14 and 19, who met in the first round, met again in round 4 of the loser bracket; in the
-/// second nobody meets again before round 5 (here, before the loser bracket's final).
+/// As a report found with 24 entrants of whom the worse seed always won: nobody meets again before
+/// round 5 of the loser bracket (here, before its final).
 #[test]
-fn with_24_entrants_and_underdogs_winning_first_round_pairs_meet_again_only_later() {
-    let first_version = first_rematch(bracket(DoubleEliminationV1::new(), 24), underdog);
-    let second_version = first_rematch(bracket(DoubleElimination::new(), 24), underdog);
+fn with_24_entrants_and_underdogs_winning_nobody_meets_again_early() {
+    let rematch = first_rematch(bracket(DoubleElimination::new(), 24), underdog);
 
-    assert_eq!(first_version, Some(4));
-    assert!(
-        second_version.is_none_or(|round| round >= 5),
-        "{second_version:?}"
-    );
-}
-
-/// Up to 16 entrants, both versions are wired alike.
-#[test]
-fn up_to_16_entrants_the_versions_play_alike() {
-    for num_players in 2..=16 {
-        let schedules = [
-            bracket(DoubleElimination::new(), num_players),
-            bracket(DoubleEliminationV1::new(), num_players),
-        ]
-        .map(|mut phase| {
-            play_out(&mut phase, varied(num_players));
-            schedule(&phase)
-        });
-        assert_eq!(schedules[0], schedules[1], "{num_players} entrants");
-    }
+    assert!(rematch.is_none_or(|round| round >= 5), "{rematch:?}");
 }
 
 /// The loser bracket takes in the losers of the winner bracket, and the reset follows the

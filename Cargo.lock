@@ -4278,6 +4278,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tournament-engine",
+ "typetag",
  "unic-langid",
  "unicode-normalization",
  "uuid",
@@ -4321,6 +4322,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tournament-app",
  "tournament-engine",
+ "typetag",
  "uuid",
  "wasm-bindgen-test",
 ]

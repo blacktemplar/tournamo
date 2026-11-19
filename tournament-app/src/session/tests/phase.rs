@@ -3,7 +3,6 @@ use tournament_engine::{Table, plugins::metrics_calculator::RoundOfEliminationCa
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::form::{Input, PluginInput};
 
 /// What a GUI offers to pick from is every registered format, and each of them is played with
 /// what it offers without anything else answered.
@@ -301,122 +300,6 @@ fn a_finished_knockout_is_not_changed_to_a_round_robin() {
     assert!(
         matches!(result, Err(EditPhaseError::ResultDoesNotFit(_))),
         "{result:?}"
-    );
-    assert_eq!(reported(&session), before);
-}
-
-/// A double elimination of the first `entrants` of 24 entrants in the first version of its format,
-/// played to the end.
-fn first_version_played(entrants: usize) -> Session {
-    const NAMES: [&str; 24] = [
-        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R",
-        "S", "T", "U", "V", "W", "X",
-    ];
-    let mut session = Given::new()
-        .entrants(&NAMES[..entrants])
-        .format(DoubleEliminationV1::ID)
-        .started();
-    while let Some(open) = matches(&session)
-        .into_iter()
-        .find(|row| row.result.is_none())
-    {
-        session
-            .report(session.first(), open.id, MatchResult::AWins)
-            .unwrap();
-    }
-    session
-}
-
-/// The format chosen, as the form of the phase `phase` shows it.
-fn format_of(session: &Session, phase: PhaseId) -> PluginInput {
-    let view = session.phase_form_to_edit(phase).unwrap().view();
-    match &view.fields[0].input {
-        Input::Plugin(format) => format.clone(),
-        input => panic!("the format is chosen from plugins, not {input:?}"),
-    }
-}
-
-/// A phase played with an earlier version of its format keeps it, shown as outdated, though only
-/// the latest version is offered for a new phase.
-#[test]
-fn a_phase_keeps_the_earlier_version_of_its_format_it_was_added_with() {
-    let session = first_version_played(8);
-
-    let format = format_of(&session, session.first());
-
-    assert_eq!(
-        format.chosen.map(|chosen| chosen.plugin.id),
-        Some(DoubleEliminationV1::ID)
-    );
-    assert!(
-        format
-            .options
-            .iter()
-            .any(|option| option.outdated && option.id == DoubleEliminationV1::ID)
-    );
-    assert!(
-        format
-            .options
-            .iter()
-            .any(|option| !option.outdated && option.id == DoubleElimination::ID)
-    );
-    let outdated: Vec<_> = session
-        .phase_form_to_edit(session.first())
-        .unwrap()
-        .view()
-        .outdated
-        .into_iter()
-        .map(|plugin| plugin.id)
-        .collect();
-    assert_eq!(outdated, [DoubleEliminationV1::ID]);
-    assert!(
-        Session::formats()
-            .iter()
-            .all(|format| format.id != DoubleEliminationV1::ID)
-    );
-}
-
-/// Up to 16 entrants both versions of the double elimination pair alike, so a phase played to its
-/// end is updated, keeping its results.
-#[test]
-fn a_phase_is_updated_to_the_latest_version_of_its_plugins_its_results_fit() {
-    let mut session = first_version_played(8);
-    let before = reported(&session);
-    let mut form = session.phase_form_to_edit(session.first()).unwrap();
-
-    form.update_plugins().unwrap();
-
-    assert!(form.view().outdated.is_empty());
-    assert!(session.edit_phase(session.first(), &form).unwrap());
-    assert_eq!(
-        format_of(&session, session.first())
-            .chosen
-            .map(|chosen| chosen.plugin.id),
-        Some(DoubleElimination::ID)
-    );
-    assert_eq!(reported(&session), before);
-}
-
-/// With 24 entrants the versions of the double elimination pair the loser bracket differently, so
-/// a phase played to its end is not updated, and keeps its version and results.
-#[test]
-fn a_phase_whose_results_do_not_fit_the_latest_version_is_not_updated() {
-    let mut session = first_version_played(24);
-    let before = reported(&session);
-    let mut form = session.phase_form_to_edit(session.first()).unwrap();
-    form.update_plugins().unwrap();
-
-    let result = session.edit_phase(session.first(), &form);
-
-    assert!(
-        matches!(&result, Err(EditPhaseError::ResultDoesNotFit(matches)) if !matches.is_empty()),
-        "{result:?}"
-    );
-    assert_eq!(
-        format_of(&session, session.first())
-            .chosen
-            .map(|chosen| chosen.plugin.id),
-        Some(DoubleEliminationV1::ID)
     );
     assert_eq!(reported(&session), before);
 }

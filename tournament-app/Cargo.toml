@@ -27,6 +27,10 @@ unicode-normalization.workspace = true
 # are shown with
 uuid = { workspace = true, features = ["v4"] }
 
+[dev-dependencies]
+# plugins of the tests are registered as any plugin is
+typetag.workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 # seeds and ids are random, and in the browser randomness comes from JavaScript, which the
 # application picks, so the tests do

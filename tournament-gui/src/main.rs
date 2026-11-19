@@ -105,7 +105,23 @@ enum Screen {
     Competition(CompetitionKey, Place),
 }
 
+/// Whether the URL names a section of the help, e.g. `#help-running`.
+fn names_help_section() -> bool {
+    web_sys::window()
+        .and_then(|window| window.location().hash().ok())
+        .is_some_and(|hash| hash.starts_with(&format!("#{HELP}-")))
+}
+
 impl Screen {
+    /// Whether this is what `other` shows, or another place of it, e.g. another phase of the same
+    /// competition.
+    fn is_part_of(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Competition(key, _), Self::Competition(other, _)) => key == other,
+            _ => std::mem::discriminant(&self) == std::mem::discriminant(&other),
+        }
+    }
+
     /// The screen the URL names after its `#`.
     fn in_url() -> Self {
         let Some(hash) = web_sys::window().and_then(|window| window.location().hash().ok()) else {
@@ -233,7 +249,16 @@ fn App() -> Element {
         let mut changes = Events::new(&window, "hashchange");
         while changes.next().await.is_some() {
             page.error.set(None);
-            page.screen.set(Screen::in_url());
+            let screen = Screen::in_url();
+            let other = !screen.is_part_of(*page.screen.peek());
+            page.screen.set(screen);
+            // on the list or the help, the focus starts at its top, rather than on the page's
+            // body, as a page loaded does; not where the URL names a section of the help, which
+            // the browser scrolls to. A competition moves it on itself once loaded, e.g. into
+            // the field of a new entrant.
+            if other && !matches!(screen, Screen::Competition(..)) && !names_help_section() {
+                focus::focus_later(&["main"]);
+            }
         }
     });
     use_future(move || async move {

@@ -489,16 +489,17 @@ async fn the_cross_table_shows_the_results_by_rank() {
         start_round_robin(&gui, &["Alice", "Bob"]).await?;
         gui.click("Cross table").await?;
         gui.expect_view("Cross table").await?;
-        gui.expect_cross_table_row(1, &["", "", "0"]).await?;
+        gui.expect_cross_table_row(1, &["same", "to be played", "0"])
+            .await?;
         gui.page.check_accessibility().await?;
         gui.click("Matches & standings").await?;
 
         gui.click_labelled("Bob wins").await?;
         gui.click("Cross table").await?;
 
-        gui.expect_cross_table_row(1, &["", "1\nwon, 1 point", "1"])
+        gui.expect_cross_table_row(1, &["same", "1\nwon, 1 point", "1"])
             .await?;
-        gui.expect_cross_table_row(2, &["0\nlost, 0 points", "", "0"])
+        gui.expect_cross_table_row(2, &["0\nlost, 0 points", "same", "0"])
             .await?;
         gui.page
             .expect_texts(By::Css("#cross-table-grid tbody th"), &["1 Bob", "2 Alice"])

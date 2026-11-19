@@ -27,9 +27,10 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
         .collect();
     let byes = table.rows.iter().any(|row| row.byes.is_some());
     let totals = table.rows.iter().any(|row| row.total.is_some());
+    let title = heading.clone().unwrap_or_else(|| tr.get("cross-table"));
     rsx! {
         section { class: "card", aria_labelledby: "{id}",
-            h2 { id: "{id}", {heading.clone().unwrap_or_else(|| tr.get("cross-table"))} }
+            h2 { id: "{id}", "{title}" }
             // scrolls sideways if its columns do not fit, the names staying in sight
             div {
                 class: "scroll",
@@ -37,6 +38,8 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
                 tabindex: "0",
                 aria_labelledby: "{id}",
                 table { id: "cross-table-grid{suffix}", class: "cross-table",
+                    // as the tables of standings have, for a screen reader's list of tables
+                    caption { class: "visually-hidden", "{title}" }
                     thead {
                         tr {
                             th { class: "name", scope: "col", {tr.get("name")} }
@@ -65,7 +68,17 @@ pub fn CrossTable(division: DivisionRef, heading: Option<String>) -> Element {
                                 }
                                 for (j , cell) in row.cells.into_iter().enumerate() {
                                     if i == j {
-                                        td { key: "{j}", class: "self" }
+                                        td { key: "{j}", class: "self",
+                                            span { class: "visually-hidden",
+                                                {tr.get("cross-table-self")}
+                                            }
+                                        }
+                                    } else if cell.is_empty() {
+                                        td { key: "{j}",
+                                            span { class: "visually-hidden",
+                                                {tr.get("cross-table-no-match")}
+                                            }
+                                        }
                                     } else {
                                         td { key: "{j}",
                                             for played in cell {
@@ -103,7 +116,12 @@ fn Cell(played: CrossMatch) -> Element {
         Some(Outcome::Win) => ("1", "outcome-win", "win"),
         Some(Outcome::Draw) => ("½", "outcome-draw", "draw"),
         Some(Outcome::Loss) => ("0", "outcome-loss", "loss"),
-        None => return rsx! {},
+        // empty to the eye, which sees that nothing is there yet
+        None => {
+            return rsx! {
+                span { class: "visually-hidden", {tr.get("cross-table-open")} }
+            };
+        }
     };
     let outcome = tr.get(outcome);
     // a score, underlined, shows that the match opens, as in the list of matches

@@ -82,6 +82,8 @@ pub fn Competitions() -> Element {
                         page_error.set(None);
                         if chosen.is_empty() {
                             name_error.set(Some(Text::new("error-empty-competition-name")));
+                            // where the name is missing, rather than on Create
+                            focus_later(&["#competition-name"]);
                         } else {
                             store(page, Session::new(chosen));
                         }
@@ -251,6 +253,7 @@ fn AskDialog(asked: Signal<Option<Ask>>, changed: Signal<u32>, listings: Vec<Lis
                             let chosen = name.peek().trim().to_owned();
                             if chosen.is_empty() {
                                 error.set(Some(Text::new("error-empty-competition-name")));
+                                focus_later(&["#new-name"]);
                                 return;
                             }
                             spawn(rename(page, key, chosen, asked, changed, error));

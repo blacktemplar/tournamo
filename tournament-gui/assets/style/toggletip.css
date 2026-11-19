@@ -55,7 +55,8 @@
   }
 }
 
-/* across the bottom of a narrow screen, where it fits wherever its button is */
+/* across a narrow screen, where it fits wherever its button is, at the height of its button
+ * (toggletip.rs) */
 @media (max-width: 40rem) {
   .toggletip-text {
     position: fixed;
@@ -65,5 +66,12 @@
     left: var(--space-3);
     width: auto;
     max-width: none;
+  }
+}
+
+/* a finger's width as well as height where the pointer is one */
+@media (pointer: coarse) {
+  .toggletip > button.small {
+    min-width: var(--control);
   }
 }

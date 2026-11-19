@@ -310,6 +310,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
   longer tagged as moving on by a bye. A round playing several stages of a
   double elimination is named by each ("Round 2: winners round 2, losers
   round 1").
+- Touch and accessibility: on a screen too low for both (a phone held
+  sideways) only the bar stays on top, the view switch scrolling away; on a
+  touch screen what was just done shows at the top, away from the controls a
+  thumb reaches. The switch “Ratings” looks like a switch. What is said about
+  a field shows at its button on a phone rather than at the bottom, and goes
+  once the focus moves on. A competition without a name moves the focus to
+  its field; the list and the help start the focus at their top. The cross
+  table has a caption, and says to screen readers what its empty cells mean.
 
 ## [0.4.0] - 2026-11-09
 

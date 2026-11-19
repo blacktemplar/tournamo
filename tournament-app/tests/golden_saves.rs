@@ -95,6 +95,7 @@ const SAVES: &[(&str, &str, &str)] = saves![
     "v0.4.0/random-rounds",
     "v0.4.0/single-elimination",
     "v0.4.0/double-elimination",
+    "v0.4.0/double-elimination-24",
     "v0.4.0/monster-dyp",
     "v0.4.0/scored",
     "v0.4.0/best-of",
@@ -281,6 +282,7 @@ const SCRIPTS: &[(&str, Script)] = &[
     ("random-rounds", random_rounds),
     ("single-elimination", single_elimination),
     ("double-elimination", double_elimination),
+    ("double-elimination-24", double_elimination_24),
     ("monster-dyp", monster_dyp),
     ("scored", scored),
     ("best-of", best_of),
@@ -393,6 +395,23 @@ fn double_elimination(session: &mut Session) {
     play(
         session,
         &[MatchResult::BWins, MatchResult::AWins, MatchResult::AWins],
+        usize::MAX,
+    );
+}
+
+/// 24 entrants, so with byes and every round of the loser bracket, played to the end. Written for
+/// v0.4.0 after its release, to keep the loser bracket of its double elimination.
+fn double_elimination_24(session: &mut Session) {
+    let names: Vec<_> = (1..=24).map(|number| format!("P{number:02}")).collect();
+    enter(
+        session,
+        &names.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    add_phase(session, DoubleElimination::ID);
+    session.start().unwrap();
+    play(
+        session,
+        &[MatchResult::AWins, MatchResult::BWins, MatchResult::BWins],
         usize::MAX,
     );
 }

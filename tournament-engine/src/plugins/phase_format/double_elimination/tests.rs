@@ -509,6 +509,26 @@ fn entrants_who_met_meet_again_as_late_as_possible() {
     }
 }
 
+/// The worse seed wins every match.
+fn underdog(_: &Match, seed_a: u32, seed_b: u32) -> Team {
+    if seed_a > seed_b { Team::A } else { Team::B }
+}
+
+/// As a report found with 24 entrants of whom the worse seed always won: in the first version
+/// seeds 14 and 19, who met in the first round, met again in round 4 of the loser bracket; in the
+/// second nobody meets again before round 5 (here, before the loser bracket's final).
+#[test]
+fn with_24_entrants_and_underdogs_winning_first_round_pairs_meet_again_only_later() {
+    let first_version = first_rematch(bracket(DoubleEliminationV1::new(), 24), underdog);
+    let second_version = first_rematch(bracket(DoubleElimination::new(), 24), underdog);
+
+    assert_eq!(first_version, Some(4));
+    assert!(
+        second_version.is_none_or(|round| round >= 5),
+        "{second_version:?}"
+    );
+}
+
 /// Up to 16 entrants, both versions are wired alike.
 #[test]
 fn up_to_16_entrants_the_versions_play_alike() {

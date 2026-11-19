@@ -229,6 +229,11 @@ edit-phase-description = Die bisher gemeldeten Ergebnisse bleiben. Eine Änderun
 save-changes = Änderungen speichern
 cancel = Abbrechen
 
+discard-changes-title = Änderungen verwerfen?
+discard-changes-description = Was im Formular geändert wurde, geht verloren.
+discard-changes = Änderungen verwerfen
+keep-editing = Weiter bearbeiten
+
 ## After the start
 
 phase-not-started = nicht begonnen:

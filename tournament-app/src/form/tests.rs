@@ -384,6 +384,40 @@ fn rejected_scoring_input_customizes_the_section_and_survives_a_format_change() 
 }
 
 #[test]
+fn a_form_is_changed_by_an_answer_until_it_is_answered_back() {
+    let earlier = new_form();
+    let mut form = earlier.clone();
+    assert!(!form.changed_since(&earlier));
+
+    form.choose(&path("format"), Some(RandomRounds::ID))
+        .unwrap();
+    assert!(form.changed_since(&earlier));
+
+    form.choose(&path("format"), Some(RoundRobin::ID)).unwrap();
+    assert!(!form.changed_since(&earlier));
+}
+
+#[test]
+fn a_form_is_changed_by_its_name() {
+    let earlier = new_form();
+    let mut form = earlier.clone();
+
+    form.set_name("Final");
+
+    assert!(form.changed_since(&earlier));
+}
+
+#[test]
+fn a_form_is_changed_by_text_a_field_did_not_take() {
+    let earlier = new_form();
+    let mut form = earlier.clone();
+
+    form.enter(&path("metrics[1].points_for_win"), "x").unwrap();
+
+    assert!(form.changed_since(&earlier));
+}
+
+#[test]
 fn applying_suggestions_keeps_rejected_basic_settings() {
     let mut form = new_form();
     form.choose(&path("format"), Some(RandomRounds::ID))

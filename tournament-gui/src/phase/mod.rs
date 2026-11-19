@@ -32,20 +32,23 @@ use crate::{
     phases::{StartPhaseButton, phase_id_text, sources_text},
 };
 
-/// The form of a new phase, and the button adding it; once added, `on_added` runs. With
-/// `on_discarded`, a button beside it discards the form, which then runs.
+/// The form of a new phase, `form` or else one of its own, and the button adding it; once added,
+/// `on_added` runs. With `on_discarded`, a button beside it discards the form, which then runs.
 #[component]
 pub fn NewPhase(
+    form: Option<Signal<PhaseForm>>,
     on_added: Option<EventHandler<()>>,
     on_discarded: Option<EventHandler<()>>,
 ) -> Element {
     let ctx = use_context::<Ctx>();
-    let created = use_hook(|| {
-        ctx.session
+    let created = use_hook(|| match form {
+        Some(form) => Ok(form),
+        None => ctx
+            .session
             .peek()
             .phase_form()
             .map(Signal::new)
-            .map_err(|error| error.text())
+            .map_err(|error| error.text()),
     });
     let actions = ctx.actions();
     let tr = ctx.translator.read();
@@ -101,34 +104,144 @@ pub fn NewPhase(
 #[component]
 pub fn AddPhaseDialog() -> Element {
     let ctx = use_context::<Ctx>();
-    let mut open = use_signal(|| false);
+    // while the dialog is open: the form and the form as it opened, or why there is none
+    let mut adding = use_signal(|| None::<Result<(Signal<PhaseForm>, PhaseForm), Text>>);
+    let discarding = use_discarding("#field-name");
+    let mut close = move || {
+        adding.set(None);
+        discarding.reset();
+    };
     let tr = ctx.translator.read();
+    let form = adding
+        .read()
+        .as_ref()
+        .map(|adding| adding.as_ref().map(|(form, _)| *form).map_err(Clone::clone));
     rsx! {
         button {
             class: "quiet add-phase",
             onclick: move |_| {
-                open.set(true);
+                let created = ctx.session.peek().phase_form().map_err(|error| error.text());
+                adding.set(Some(created.map(|form| (Signal::new(form.clone()), form))));
                 focus_later(&["#field-name"]);
             },
             icons::Plus {}
             {tr.get("add-phase")}
         }
         Dialog {
-            open: Some(open()),
-            on_open_change: move |is_open: bool| open.set(is_open),
-            DialogTitle { {tr.get("add-phase")} }
-            DialogDescription { {tr.get("add-phase-description")} }
-            if open() {
-                div { class: "dialog-form",
-                    NewPhase { on_added: move |()| open.set(false) }
-                    div { class: "dialog-buttons",
-                        button {
-                            r#type: "button",
-                            onclick: move |_| open.set(false),
-                            {tr.get("cancel")}
+            role: if discarding.asked() { "alertdialog" } else { "dialog" },
+            open: Some(form.is_some()),
+            on_open_change: move |open: bool| {
+                if !open {
+                    let changed = adding.peek().as_ref().is_some_and(|adding| {
+                        adding
+                            .as_ref()
+                            .is_ok_and(|(form, opened)| form.peek().changed_since(opened))
+                    });
+                    discarding.close_asked(changed, close);
+                }
+            },
+            if discarding.asked() {
+                DiscardChanges { discarding, on_discard: move |()| close() }
+            } else {
+                DialogTitle { {tr.get("add-phase")} }
+                DialogDescription { {tr.get("add-phase-description")} }
+            }
+            match form {
+                Some(Ok(form)) => rsx! {
+                    div { class: "dialog-form", hidden: discarding.asked(),
+                        NewPhase { form, on_added: move |()| close() }
+                        div { class: "dialog-buttons",
+                            button {
+                                r#type: "button",
+                                onclick: move |_| close(),
+                                {tr.get("cancel")}
+                            }
                         }
                     }
-                }
+                },
+                Some(Err(error)) => rsx! {
+                    p { class: "error", {tr.sentence(&error)} }
+                },
+                None => rsx! {},
+            }
+        }
+    }
+}
+
+/// Whether a dialog holding the form of a phase asks if the changes made in it are to be
+/// discarded, see [`use_discarding`].
+#[derive(Clone, Copy, PartialEq)]
+struct Discarding {
+    asked: Signal<bool>,
+    /// What gets the focus back when the operator keeps editing.
+    field: &'static str,
+}
+
+/// Whether a dialog holding the form of a phase asks if the changes made in it are to be
+/// discarded: it does when asked to close (Escape, or a click beside it) with changes made; asked
+/// again, the operator keeps editing, at `field`.
+fn use_discarding(field: &'static str) -> Discarding {
+    Discarding {
+        asked: use_signal(|| false),
+        field,
+    }
+}
+
+impl Discarding {
+    fn asked(self) -> bool {
+        (self.asked)()
+    }
+
+    /// What the dialog does when asked to close: closes by `close` if nothing is `changed`, else
+    /// asks whether to discard the changes, and keeps editing if it asked already.
+    fn close_asked(mut self, changed: bool, close: impl FnOnce()) {
+        if *self.asked.peek() {
+            self.keep_editing();
+        } else if changed {
+            self.asked.set(true);
+            // what is safe is what a second Enter does
+            focus_later(&["#keep-editing"]);
+        } else {
+            close();
+        }
+    }
+
+    /// Asks no more, and the form shows again.
+    fn keep_editing(mut self) {
+        self.asked.set(false);
+        focus_later(&[self.field]);
+    }
+
+    /// Asks no more, once the dialog closes.
+    fn reset(mut self) {
+        if *self.asked.peek() {
+            self.asked.set(false);
+        }
+    }
+}
+
+/// What a dialog holding the form of a phase shows while it asks whether to discard the changes
+/// made in it, as `discarding` says: the question, and the buttons answering it, discarding by
+/// `on_discard`, or else keeping on editing.
+#[component]
+fn DiscardChanges(discarding: Discarding, on_discard: EventHandler<()>) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    rsx! {
+        DialogTitle { {tr.get("discard-changes-title")} }
+        DialogDescription { {tr.get("discard-changes-description")} }
+        div { class: "dialog-buttons",
+            button {
+                class: "primary danger",
+                r#type: "button",
+                onclick: move |_| on_discard.call(()),
+                {tr.get("discard-changes")}
+            }
+            button {
+                id: "keep-editing",
+                r#type: "button",
+                onclick: move |_| discarding.keep_editing(),
+                {tr.get("keep-editing")}
             }
         }
     }
@@ -278,11 +391,16 @@ pub fn PendingPhase(phase: PhaseId) -> Element {
 #[component]
 fn EditPhase(phase: PhaseId) -> Element {
     let ctx = use_context::<Ctx>();
-    // the form while the dialog is open
-    let mut editing = use_signal(|| None::<Signal<PhaseForm>>);
+    // the form while the dialog is open, and the form as it opened
+    let mut editing = use_signal(|| None::<(Signal<PhaseForm>, PhaseForm)>);
     let mut error = use_signal(|| None::<Text>);
+    let discarding = use_discarding("#field-format");
+    let mut close = move || {
+        editing.set(None);
+        discarding.reset();
+    };
     let tr = ctx.translator.read();
-    let open = editing.read().is_some();
+    let edited = editing.read().as_ref().map(|(form, _)| *form);
     let name = ctx.session.read().name_of_phase(phase);
     let several = ctx.session.read().phases().len() > 1;
     rsx! {
@@ -296,7 +414,7 @@ fn EditPhase(phase: PhaseId) -> Element {
             onclick: move |_| {
                 if let Ok(form) = ctx.session.peek().phase_form_to_edit(phase) {
                     error.set(None);
-                    editing.set(Some(Signal::new(form)));
+                    editing.set(Some((Signal::new(form.clone()), form)));
                     // the first field, rather than the first button, what is said about it,
                     // whose text would cover the field
                     focus_later(&["#field-format"]);
@@ -306,18 +424,28 @@ fn EditPhase(phase: PhaseId) -> Element {
             {tr.get("edit-phase")}
         }
         Dialog {
-            open: Some(open),
+            role: if discarding.asked() { "alertdialog" } else { "dialog" },
+            open: Some(edited.is_some()),
             on_open_change: move |open: bool| {
                 if !open {
-                    editing.set(None);
+                    let changed = editing
+                        .peek()
+                        .as_ref()
+                        .is_some_and(|(form, opened)| form.peek().changed_since(opened));
+                    discarding.close_asked(changed, close);
                 }
             },
-            DialogTitle { {tr.get("edit-phase-title")} }
-            DialogDescription { {tr.get("edit-phase-description")} }
-            if let Some(form) = editing() {
+            if discarding.asked() {
+                DiscardChanges { discarding, on_discard: move |()| close() }
+            } else {
+                DialogTitle { {tr.get("edit-phase-title")} }
+                DialogDescription { {tr.get("edit-phase-description")} }
+            }
+            if let Some(form) = edited {
                 form {
                     id: "edit-phase",
                     class: "dialog-form",
+                    hidden: discarding.asked(),
                     onsubmit: move |event| {
                         event.prevent_default();
                         if !form.read().view().complete {
@@ -327,7 +455,7 @@ fn EditPhase(phase: PhaseId) -> Element {
                         }
                         match ctx.try_act(|session| session.edit_phase(phase, &form.read())) {
                             Ok(edited) => {
-                                editing.set(None);
+                                close();
                                 if edited {
                                     let results = ctx
                                         .session
@@ -353,7 +481,7 @@ fn EditPhase(phase: PhaseId) -> Element {
                         button { class: "primary", r#type: "submit", {tr.get("save-changes")} }
                         button {
                             r#type: "button",
-                            onclick: move |_| editing.set(None),
+                            onclick: move |_| close(),
                             {tr.get("cancel")}
                         }
                     }

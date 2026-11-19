@@ -413,7 +413,65 @@ async fn escape_in_a_choice_of_the_dialog_leaves_the_dialog_open() {
         gui.expect_list("ranking", &["More Sonneborn-Berger", "More points"])
             .await?;
         gui.press(Key::Escape).await?;
+        gui.expect_alert_dialog("Discard the changes?").await
+    })
+    .await;
+}
+
+/// A click in the dialog editing a phase on what does nothing leaves it open; one beside it, like
+/// Escape, closes it at once while nothing is changed.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_dialog_editing_a_phase_closes_beside_it_not_in_it() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui).await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+
+        gui.click_dialog_title().await?;
+        gui.expect_list("ranking", &["More points", "More Sonneborn-Berger"])
+            .await?;
+        gui.click_beside_dialog().await?;
+        gui.expect_no_dialog().await?;
+
+        gui.click("Edit phase").await?;
+        gui.press(Key::Escape).await?;
         gui.expect_no_dialog().await
+    })
+    .await;
+}
+
+/// Escape or a click beside the dialog editing a phase with changes made asks before discarding
+/// them; asked again, or keeping on editing, the changes stay.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_dialog_editing_a_phase_asks_before_discarding_changes() {
+    run_in_new_competition(async |gui| {
+        start_round_robin(&gui).await?;
+        gui.click("Phase").await?;
+        gui.click("Edit phase").await?;
+        gui.click_labelled("Move more Sonneborn-Berger up").await?;
+
+        gui.press(Key::Escape).await?;
+        gui.expect_alert_dialog("Discard the changes?").await?;
+        gui.expect_focus("Keep editing").await?;
+        gui.page.check_accessibility().await?;
+        gui.press(Key::Enter).await?;
+        gui.expect_list("ranking", &["More Sonneborn-Berger", "More points"])
+            .await?;
+
+        gui.click_beside_dialog().await?;
+        gui.expect_alert_dialog("Discard the changes?").await?;
+        gui.press(Key::Escape).await?;
+        gui.expect_list("ranking", &["More Sonneborn-Berger", "More points"])
+            .await?;
+
+        gui.click_beside_dialog().await?;
+        gui.click("Discard changes").await?;
+        gui.expect_no_dialog().await?;
+        gui.click("Edit phase").await?;
+        gui.expect_list("ranking", &["More points", "More Sonneborn-Berger"])
+            .await
     })
     .await;
 }

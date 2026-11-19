@@ -34,7 +34,9 @@ pub struct RoundRobin;
 
 #[register]
 impl PhaseFormat for RoundRobin {
-    /// Ranked by points, then Sonneborn-Berger, and showing the wins, draws and losses as well.
+    /// Ranked by points, then Sonneborn-Berger, and showing the wins, draws and losses as well. A
+    /// bye scores no point: with an odd number of rankings each has one, which would add the same
+    /// to every total.
     fn suggestions(&self) -> PhaseSuggestions {
         PhaseSuggestions {
             ranking: vec![
@@ -43,7 +45,7 @@ impl PhaseFormat for RoundRobin {
             ],
             metrics: vec![
                 PluginConfig::of::<WinsDrawsLossesCalculator>(),
-                PluginConfig::of::<PointsCalculator>(),
+                PluginConfig::of::<PointsCalculator>().with("points_for_bye", 0.0),
                 PluginConfig::of::<SonnebornBergerCalculator>(),
             ],
             across: PhaseSuggestions::across_by_points(),

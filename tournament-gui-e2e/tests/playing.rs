@@ -330,14 +330,14 @@ async fn a_column_of_the_standings_says_what_it_shows() {
         gui.click_labelled("About Points").await?;
         gui.expect_toggletip(Some(
             "Scored for every win, every draw and every bye (points for a win: 1, points for a \
-             draw: 0.5, points for a bye: 1).",
+             draw: 0.5, points for a bye: 0).",
         ))
         .await?;
         gui.choose_language("Deutsch").await?;
         gui.click_labelled("Über Punkte").await?;
         gui.expect_toggletip(Some(
             "Für jeden Sieg, jedes Unentschieden und jedes Freilos (Punkte für einen Sieg: 1, \
-             Punkte für ein Unentschieden: 0,5, Punkte für ein Freilos: 1).",
+             Punkte für ein Unentschieden: 0,5, Punkte für ein Freilos: 0).",
         ))
         .await
     })

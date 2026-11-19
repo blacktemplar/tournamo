@@ -95,6 +95,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- A new round-robin phase scores no point for a bye: with an odd number of
+  entrants everyone has one, so it only added the same to every total and
+  favoured groups of an odd size where groups are compared. Phases added
+  before keep their points; random rounds and Monster DYP, where not everyone
+  gets a bye, still score it as a win.
 - Double elimination: from 17 entrants on, the losers of the winner bracket
   drop into the loser bracket in an order that keeps entrants who met apart
   for as long as possible (as Challonge does): with 24 or 32 entrants until

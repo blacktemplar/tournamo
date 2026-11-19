@@ -2,18 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    Competition, DivisionView, PhasePlugins, Source,
+    Competition, DivisionView, PhasePlugins, Score, Source,
     plugin_factory::{
         Plugin,
         config::{Path, PluginConfig},
-        register,
+        downcast_ref, register,
     },
     plugins::{
         metrics_calculator::{
             LaterElimination, MorePoints, MorePointsPerMatch, PointsCalculator,
             RoundOfEliminationCalculator,
         },
-        phase_format::{PhaseFormat, PhaseSuggestions, RoundRobin, Schedule},
+        phase_format::{PhaseFormat, PhaseSuggestions, RandomRounds, RoundRobin, Schedule},
     },
 };
 #[cfg(target_arch = "wasm32")]
@@ -169,5 +169,33 @@ fn comparing_across_groups_is_suggested_only_for_several_groups() {
             ]
             .into()
         )
+    );
+}
+
+#[test]
+fn a_bye_scores_no_point_in_a_round_robin_but_a_win_in_random_rounds() {
+    let points_for_bye = |format: PluginConfig| {
+        let draft = Competition::default()
+            .phase_draft(&[Source::registration()])
+            .with("format", format)
+            .unwrap();
+        let mut draft = PhasePlugins::with_suggestions(draft).unwrap();
+        draft.add_implied();
+        let plugins = draft.build().unwrap();
+        plugins
+            .metrics()
+            .iter()
+            .find_map(|calculator| downcast_ref::<PointsCalculator, _>(&**calculator))
+            .unwrap()
+            .points_for_bye()
+    };
+
+    assert_eq!(
+        points_for_bye(PluginConfig::of::<RoundRobin>()),
+        Score::ZERO
+    );
+    assert_eq!(
+        points_for_bye(PluginConfig::of::<RandomRounds>()),
+        Score::ONE
     );
 }

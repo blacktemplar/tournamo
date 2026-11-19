@@ -213,7 +213,9 @@ impl Session {
                     pairing.sides.of(side).from,
                     Some(Advance::WinnerOf(from)) if left_out(&from)
                 );
-                from_left_out && *sides.of(side) != BracketEntry::Bye
+                // not where it is yet to be decided who it is, e.g. the loser of a match not
+                // played yet, where the tag would read as a bye of the side waiting
+                from_left_out && matches!(sides.of(side), BracketEntry::Team(_))
             });
             let line_out = next.get(&pairing.id).map(|to| {
                 // the places of the pairings whose winners meet in `to`, this one's included
@@ -292,7 +294,17 @@ impl Session {
                         .last_mut()
                         .and_then(|section| section.columns.last_mut())
                         .expect("a stage below another follows it");
-                    last.below = columns.next().map(Box::new);
+                    // a match for third place of three entrants is against nobody: the loser of
+                    // the one semifinal is third without it
+                    last.below = columns
+                        .next()
+                        .filter(|column| {
+                            column
+                                .pairings
+                                .iter()
+                                .any(|pairing| !pairing.sides.contains(&BracketEntry::Bye))
+                        })
+                        .map(Box::new);
                 }
             }
         }

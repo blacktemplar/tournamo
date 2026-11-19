@@ -5,6 +5,7 @@
 //! The result of a match is reported by a click on the side that won, whose name is a button
 //! until then; the focus stays on the pairing, which now shows the result, rather than moving to a
 //! side of the next match, which a second Enter would report without the operator having read it.
+//! A finished match is reopened by the button below its number.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -21,6 +22,7 @@ use crate::{
     competition::Ctx,
     focus::{move_focus, use_focus},
     i18n::t,
+    icons,
     play::id_suffix,
     result::ResultDetails,
     result_text, scores_text, team_name,
@@ -69,8 +71,8 @@ pub fn Bracket(division: DivisionRef, heading: Option<String>) -> Element {
             if reports {
                 p { class: "hint", {tr.get("bracket-report-hint")} }
             }
-            // every section in one, scrolling sideways together if its columns do not fit, and
-            // down within the screen if they are higher, their stages staying on top
+            // every section in one, scrolling sideways together if its columns do not fit; the
+            // page scrolls it down
             div {
                 class: "bracket-frame",
                 "data-more-left": more_left.then_some("true"),
@@ -258,8 +260,25 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
         .r#match
         .as_ref()
         .and_then(|row| scores_text(&tr, row));
+    // to be played now, which stands out of those waiting
+    let playable = if to_report.is_some() { "playable" } else { "" };
+    // reopened in its number's place, so that the bracket keeps its size; refused, the page says
+    // which results are in the way
+    let to_reopen = pairing
+        .r#match
+        .as_ref()
+        .filter(|row| row.result.is_some() && ctx.changes())
+        .map(|row| (row.phase, row.id, row.number));
+    let reopen = move |phase, id| {
+        if let Some(reopened) = ctx.act(move |session| session.undo_report(phase, id)) {
+            ctx.announce(Announcement::Reopened(reopened));
+            move_focus(focus, Focus::Pairing(Some(id)));
+        }
+    };
     let side = |side: usize| {
         let entry = &pairing.sides[side];
+        // the line between the sides, which long names would run together without
+        let second = if side == 1 { "side-b" } else { "" };
         let class = if result == Some([MatchResult::AWins, MatchResult::BWins][side]) {
             "winner"
         } else {
@@ -271,7 +290,7 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
             }
         };
         rsx! {
-            span { class: "side {class}",
+            span { class: "side {second} {class}",
                 {entry_text(&tr, entry)}
                 if pairing.after_bye[side] {
                     AfterBye {}
@@ -282,7 +301,7 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
     rsx! {
         li { class: "slot {line_in} {line_out}",
             div {
-                class: "pairing {finished}",
+                class: "pairing {finished} {playable}",
                 tabindex: id.is_some().then_some("-1"),
                 onmounted: on_mounted,
                 // also before it is scheduled, since the sides waiting for it name it by its number
@@ -290,6 +309,16 @@ fn Pairing(pairing: BracketPairing, focus: Signal<Option<Focus>>) -> Element {
                     span { class: "number",
                         span { class: "visually-hidden", {tr.get("match")} }
                         " {number}"
+                        if let Some((phase, id, number)) = to_reopen {
+                            button {
+                                class: "reopen-icon quiet",
+                                r#type: "button",
+                                aria_label: t!(tr, "reopen-match", number = number),
+                                title: t!(tr, "reopen-match", number = number),
+                                onclick: move |_| reopen(phase, id),
+                                icons::Undo {}
+                            }
+                        }
                     }
                 } else {
                     // empty, so that the names line up with those of the numbered pairings
@@ -357,9 +386,14 @@ fn WinButtons(row: MatchRow, after_bye: [bool; 2], focus: Signal<Option<Focus>>)
     };
     // the name alone on the screen; what a click does is said under the pointer
     let button = |name: String, label: String, result, after_bye: bool| {
+        let second = if result == MatchResult::BWins {
+            "side-b"
+        } else {
+            ""
+        };
         let button = rsx! {
             button {
-                class: "side",
+                class: "side {second}",
                 aria_label: "{label}",
                 title: "{label}",
                 onclick: report(result),

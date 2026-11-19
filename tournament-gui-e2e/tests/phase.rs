@@ -509,6 +509,39 @@ async fn a_number_is_shown_with_a_comma_in_german() {
     .await;
 }
 
+/// On a phone, what is said about a plugin shows across the screen right at its button, not at the
+/// bottom far from it; opened by a click, it is gone once the focus moves on.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_is_said_on_a_phone_shows_at_its_button_until_the_focus_moves_on() {
+    const POINTS: &str = "Scored for every win, every draw and every bye.";
+    run_in_new_competition(async |gui| {
+        gui.page.resize(390, 844).await?;
+        gui.click_labelled("About points").await?;
+        gui.expect_toggletip(Some(POINTS)).await?;
+
+        gui.page
+            .expect_script(
+                r#"
+                const button = [...document.querySelectorAll(".toggletip > button")].find(
+                    (button) => button.getAttribute("aria-label").replace(/[\u2068\u2069]/g, "")
+                        === "About points");
+                const text = button.parentElement.querySelector(".toggletip-text");
+                const [at, shown] = [button.getBoundingClientRect(), text.getBoundingClientRect()];
+                const apart =
+                    Math.min(Math.abs(shown.top - at.bottom), Math.abs(at.top - shown.bottom));
+                return apart <= 1 ? null : `it shows ${apart}px from its button`;
+                "#,
+                Vec::new(),
+                "the toggletip must show at its button",
+            )
+            .await?;
+        gui.press(Key::Tab).await?;
+        gui.expect_toggletip(None).await
+    })
+    .await;
+}
+
 /// What is said about a list or a plugin in it shows while the pointer is on its button, and from a
 /// click on it until the next; Escape hides it.
 #[tokio::test]

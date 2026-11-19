@@ -396,6 +396,11 @@ cross-table = Cross table
 cross-table-total = Points
 # the column of the points of the byes of a row, where a bye scored points
 cross-table-byes = Byes
+# said to screen readers for the cells that show nothing: of a team against itself, of two that
+# do not meet, of a match without a result
+cross-table-self = same
+cross-table-no-match = no match
+cross-table-open = to be played
 # how a match ended for the team of the row, said by screen readers for what it shows: 1, ½ and 0,
 # or the points of the result
 outcome-win = won

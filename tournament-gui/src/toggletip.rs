@@ -8,7 +8,7 @@
 //! What shows on hover and focus is the style's (`.toggletip` in `style.css`); the page keeps only
 //! which toggletip a click opened, and whether Escape hid the one shown. Each toggletip places its
 //! text before it shows: below its button unless the room there is short, extending to the right
-//! or to the left, wherever there is more room.
+//! or to the left, wherever there is more room; on a narrow screen across it, at its button.
 
 use dioxus::prelude::*;
 use futures_util::StreamExt as _;
@@ -143,9 +143,12 @@ pub fn Toggletip(id: String, subject: String, text: String) -> Element {
                 },
                 onblur: move |_| {
                     if toggletips.opened.peek().as_deref() == Some(closing.as_str()) {
+                        // hidden as well, since what a tap leaves hovered would keep it shown
                         toggletips.close();
+                        toggletips.hidden.set(true);
+                    } else {
+                        toggletips.unhide();
                     }
-                    toggletips.unhide();
                 },
                 icons::Info {}
             }
@@ -181,8 +184,7 @@ struct Placement {
 /// The room below a button that a text of a toggletip of a few lines takes, in CSS pixels.
 const ROOM_BELOW: f64 = 160.0;
 
-/// The width up to which the style shows every text across the bottom of the screen, `40rem`, in
-/// CSS pixels.
+/// The width up to which the style shows every text across the screen, `40rem`, in CSS pixels.
 const NARROW: f64 = 640.0;
 
 impl Placement {
@@ -197,6 +199,22 @@ impl Placement {
         };
         let (window_width, window_height) =
             (size(window.inner_width()), size(window.inner_height()));
+        // across a narrow screen (the style's), right below or above its button rather than at the
+        // bottom, far from it
+        if window_width <= NARROW {
+            let (above, below) = (rect.top(), window_height - rect.bottom());
+            let above = below < ROOM_BELOW && above > below;
+            let pinned = if above {
+                format!("top: auto; bottom: {}px", window_height - rect.top())
+            } else {
+                format!("top: {}px; bottom: auto", rect.bottom())
+            };
+            return Self {
+                end: false,
+                above,
+                pinned: Some(pinned),
+            };
+        }
         let within = |left: f64, width: f64, top: f64, bottom: f64| {
             let (above, below) = (rect.top() - top, bottom - rect.bottom());
             Self {
@@ -214,12 +232,11 @@ impl Placement {
                 .and_then(|style| style.get_property_value("overflow-x").ok())
                 .is_some_and(|overflow| overflow != "visible");
             if cuts_off {
-                // not on a narrow screen, where the style puts every text across its bottom
                 let scroll = current
                     .class_name()
                     .split_whitespace()
                     .any(|class| class == "scroll");
-                if scroll && window_width > NARROW {
+                if scroll {
                     let mut placement = within(0.0, window_width, 0.0, window_height);
                     let top = if placement.above {
                         format!("bottom: {}px", window_height - rect.top())

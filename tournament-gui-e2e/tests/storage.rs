@@ -166,6 +166,7 @@ async fn a_competition_without_a_name_is_refused_at_its_field() {
 
         gui.expect_field_error("competition-name", "A competition needs a name.")
             .await?;
+        gui.expect_focus_on("#competition-name").await?;
         gui.page.check_accessibility().await
     })
     .await;

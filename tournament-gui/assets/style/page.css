@@ -26,6 +26,13 @@ html:has(.view-switch) {
   scroll-padding-top: calc(var(--bar-height) + var(--control) + 2 * var(--space-2) + var(--space-4));
 }
 
+/* where the switch scrolls away (layout.css), the bar alone stays on top */
+@media (max-height: 30rem) {
+  html:has(.view-switch) {
+    scroll-padding-top: calc(var(--bar-height) + var(--space-4));
+  }
+}
+
 body {
   margin: 0;
   color: var(--text);

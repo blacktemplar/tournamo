@@ -209,3 +209,65 @@ input::placeholder {
 .segmented button:last-child {
   border-radius: 0 var(--radius) var(--radius) 0;
 }
+
+/* a switch (role="switch", e.g. "Ratings"): a track with a knob, on in the accent, rather than a
+ * box that reads as a checkbox; its label a control's height, so that it is easy to hit */
+label:has(> input[role="switch"]) {
+  display: inline-flex;
+  min-height: var(--control);
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+input[type="checkbox"][role="switch"] {
+  position: relative;
+  width: 2.75rem;
+  height: 1.5rem;
+  flex: none;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.75rem;
+  appearance: none;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+input[type="checkbox"][role="switch"]::before {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+  content: "";
+  transition: transform 0.15s;
+}
+
+input[type="checkbox"][role="switch"]:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+input[type="checkbox"][role="switch"]:checked::before {
+  background: var(--on-accent);
+  transform: translateX(1.25rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"][role="switch"]::before {
+    transition: none;
+  }
+}
+
+/* drawn by the system's colours, which ignore backgrounds: the knob outlined, filled when on */
+@media (forced-colors: active) {
+  input[type="checkbox"][role="switch"]::before {
+    border: 1px solid CanvasText;
+  }
+
+  input[type="checkbox"][role="switch"]:checked::before {
+    background: Highlight;
+  }
+}

@@ -32,7 +32,8 @@ async fn a_page_opened_before_opens_offline() {
     .await;
 }
 
-/// The tab names the competition shown, in plain text without the marks isolating it.
+/// The tab names the competition shown, in plain text without the marks isolating it. On the list
+/// and the help, the focus starts at the top of what they show, rather than on the page's body.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_tab_is_titled_by_the_competition() {
@@ -41,7 +42,10 @@ async fn the_tab_is_titled_by_the_competition() {
 
         gui.follow("All competitions").await?;
 
-        gui.page.expect_title("Tournamo").await
+        gui.page.expect_title("Tournamo").await?;
+        gui.expect_focus_on("main").await?;
+        gui.follow("Help").await?;
+        gui.expect_focus_on("main").await
     })
     .await;
 }

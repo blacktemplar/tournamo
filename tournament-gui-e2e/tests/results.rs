@@ -631,15 +631,18 @@ async fn the_cross_table_shows_the_games_won_and_opens_the_details() {
         gui.enter_result("ali 21-17 19-21 21-15").await?;
         gui.click("Cross table").await?;
 
-        gui.expect_cross_table_row(1, &["", "2–1\nwon, 2–1", "1"])
+        gui.expect_cross_table_row(1, &["same", "2–1\nwon, 2–1", "1"])
             .await?;
-        gui.expect_cross_table_row(2, &["1–2\nlost, 1–2", "", "0"])
-            .await?;
-        gui.expect_cross_table_row_said(1, &["", "won, 2–1 Details of the result of match 1", "1"])
+        gui.expect_cross_table_row(2, &["1–2\nlost, 1–2", "same", "0"])
             .await?;
         gui.expect_cross_table_row_said(
+            1,
+            &["same", "won, 2–1 Details of the result of match 1", "1"],
+        )
+        .await?;
+        gui.expect_cross_table_row_said(
             2,
-            &["lost, 1–2 Details of the result of match 1", "", "0"],
+            &["lost, 1–2 Details of the result of match 1", "same", "0"],
         )
         .await?;
         let win = gui.page.style_of(".outcome.win", "font-weight").await?;

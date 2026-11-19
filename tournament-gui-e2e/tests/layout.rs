@@ -818,3 +818,26 @@ async fn the_page_prints_the_competition_without_its_controls() {
     })
     .await;
 }
+
+/// On a phone held sideways, only the bar stays on top, the view switch scrolling away with the
+/// page, so that the page keeps most of the low screen.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn on_a_low_screen_only_the_bar_stays_on_top() {
+    run_in_new_competition(async |gui| {
+        let names: Vec<String> = (1..=8).map(|number| format!("Player {number}")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        gui.page.resize(844, 390).await?;
+        show_bracket(&gui, "Single elimination", &names).await?;
+
+        gui.page.scroll_by(300).await?;
+
+        let switch = gui.page.rects_of(".view-switch").await?[0];
+        assert!(
+            switch.bottom <= 0.0,
+            "the view switch must scroll away, but is at {switch:?}"
+        );
+        Ok(())
+    })
+    .await;
+}

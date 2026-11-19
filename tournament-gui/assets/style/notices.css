@@ -78,7 +78,8 @@
   }
 }
 
-/* What was just done, over the bottom of the page, which it does not move, and gone after a while;
+/* What was just done, over the bottom of the page, which it does not move, and gone after a while
+ * (on a touch screen, at the top below the bar, away from the controls a thumb reaches);
  * in the colours of the page's text and surface, swapped. It takes no tap, so that it never
  * catches one meant for what is below it. */
 .toast {
@@ -96,6 +97,13 @@
   color: var(--surface);
   pointer-events: none;
   transform: translateX(-50%);
+}
+
+@media (pointer: coarse) {
+  .toast {
+    top: calc(var(--bar-height) + var(--space-2));
+    bottom: auto;
+  }
 }
 
 @keyframes toast {

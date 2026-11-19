@@ -59,6 +59,14 @@
   background: var(--background);
 }
 
+/* on a screen too low for both on top, e.g. a phone held sideways, only the bar stays, so that the
+ * page keeps most of the height; the switch scrolls away with the page */
+@media (max-height: 30rem) {
+  .view-switch {
+    position: static;
+  }
+}
+
 /* tabs: on a line, the chosen one underlined in the accent, unlike the joined buttons of a card */
 .view-switch {
   box-shadow: inset 0 -1px var(--border);

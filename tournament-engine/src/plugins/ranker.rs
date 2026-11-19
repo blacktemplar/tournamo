@@ -118,7 +118,7 @@ dyn_clone::clone_trait_object!(SliceRanker);
 ///     type Metric = Points;
 ///
 ///     fn compare(&self, first: &Points, second: &Points) -> Comparison {
-///         Comparison::less_is_better(first.0.cmp(&second.0))
+///         Comparison::less_is_better(first.total().cmp(&second.total()))
 ///     }
 /// }
 ///
@@ -260,7 +260,7 @@ mod tests {
             NonZeroU32::new(index as u32 + 1).unwrap(),
         );
         match points {
-            Some(points) => ranking.with_metric(Points(points.into())),
+            Some(points) => ranking.with_metric(Points::new(points.into(), crate::Score::ZERO)),
             None => ranking,
         }
     }

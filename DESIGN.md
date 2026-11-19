@@ -978,8 +978,10 @@ order of the new list: `PhasePlugins::teams`).
   of groups side by side and the comparison show none; a source taking places
   of them says where its places lie in the groups ("places 1–6 are places 1–2
   of each group").
-- **Points per match** compare groups of different sizes: the points divided
-  by the matches played and the byes reached.
+- **Points per match** compare groups of different sizes: the points scored in
+  matches divided by the matches played, byes left out of both (`Points` holds
+  its total and the points of its matches apart, so that equal records of
+  matches compare equal whatever the byes).
 - **Saved layout.** A phase is saved as `{"id", "name", "sources", "plugins",
   "columns", "seed", "started", "divisions": [{"plugins", "data",
   "number_base"}]}`
@@ -994,7 +996,9 @@ order of the new list: `PhasePlugins::teams`).
   and leaves the phase its plugins whole: knowing no plugin, it cannot tell
   their state from their configuration. It also gives plugins of format 4 their
   `keep` teams and one division dealt in order and compared across
-  divisions by nothing. The typed
+  divisions by nothing, and splits the points of every ranking, a number, into
+  their `total` and the points of its matches (`of_matches`), its wins and
+  draws as the division's points calculator scores them. The typed
   read of a phase drops the
   state (`PhasePlugins::without_state`, each plugin built again from its
   answer in the config), since `#[serde(default)]` fills a state that is

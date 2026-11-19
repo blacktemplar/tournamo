@@ -376,8 +376,9 @@ mod v4 {
 /// `"number_base"` 0. The plugins of a phase, of a division and of an `AddPhase` keep the teams as
 /// they come in (`"teams"`), are played in one division (`"divisions"`), dealt back and forth
 /// (`"draw"`), seeded in order (`"seeding"`) and compared across divisions by nothing
-/// (`"across"`). The start, saved as `null`, gives no
-/// `"order"`. A person has no `"rating"`.
+/// (`"across"`). The points of a ranking, saved as a number, are its `"total"` and the points of
+/// its matches (`"of_matches"`), its wins and draws as its division's points calculator scores
+/// them. The start, saved as `null`, gives no `"order"`. A person has no `"rating"`.
 mod v5 {
     use serde_json::{Map, Value, json};
 
@@ -451,6 +452,9 @@ mod v5 {
             }
             highest_number = highest_number.max(highest_number_of(phase));
             converted |= divisions(phase, started);
+            if let Some(Value::Array(divisions)) = phase.get_mut("divisions") {
+                divisions.iter_mut().for_each(split_points);
+            }
         }
         if converted && let Some(competition) = competition.as_object_mut() {
             let lots = competition
@@ -524,6 +528,62 @@ mod v5 {
         true
     }
 
+    /// The points of every ranking of `division` are held as their total and the points of its
+    /// matches, which the points calculator of the division gives for its wins and draws.
+    fn split_points(division: &mut Value) {
+        const POINTS: &str = "tournament_engine::points";
+        fn of_type<'a>(values: &'a [Value], tag: &str) -> Option<&'a Value> {
+            values
+                .iter()
+                .find(|value| value.get("type").and_then(Value::as_str) == Some(tag))
+        }
+        let Some(calculator) = division
+            .pointer("/plugins/metrics")
+            .and_then(Value::as_array)
+            .and_then(|metrics| of_type(metrics, POINTS))
+        else {
+            return;
+        };
+        let worth = |result: &str| {
+            calculator
+                .pointer(&format!("/value/points_for_{result}"))
+                .and_then(Value::as_f64)
+        };
+        let (Some(win), Some(draw)) = (worth("win"), worth("draw")) else {
+            return;
+        };
+        let Some(Value::Array(rankings)) = division.pointer_mut("/data/rankings") else {
+            return;
+        };
+        for metrics in rankings
+            .iter_mut()
+            .filter_map(|ranking| ranking.get_mut("metrics"))
+            .filter_map(Value::as_array_mut)
+        {
+            let record = of_type(metrics, "tournament_engine::wins_draws_losses");
+            let count = |of: &str| {
+                record
+                    .and_then(|record| record.pointer(&format!("/value/{of}")))
+                    .and_then(Value::as_u64)
+            };
+            let (Some(wins), Some(draws)) = (count("wins"), count("draws")) else {
+                continue;
+            };
+            let Some(points) = metrics
+                .iter_mut()
+                .find(|metric| metric.get("type").and_then(Value::as_str) == Some(POINTS))
+                .and_then(|metric| metric.get_mut("value"))
+            else {
+                continue;
+            };
+            if let Some(total) = points.as_f64() {
+                // as the engine adds them up
+                let of_matches = win * wins as f64 + draw * draws as f64;
+                *points = json!({ "total": total, "of_matches": of_matches });
+            }
+        }
+    }
+
     /// A phase, or an `AddPhase`, without a name, sources and columns gets no name, the whole
     /// registration and no columns.
     fn entry_of_phase(phase: &mut Map<String, Value>) {
@@ -548,13 +608,20 @@ mod tests {
     use serde_json::json;
     use tournament_engine::{
         Competition, CompetitionStateMachine, MatchResult, PhasePlugins,
-        plugins::phase_format::{DoubleElimination, DoubleEliminationV1, SingleElimination},
+        plugins::{
+            metrics_calculator::{MorePoints, PointsCalculator},
+            phase_format::{DoubleElimination, DoubleEliminationV1, SingleElimination},
+        },
     };
     #[cfg(target_arch = "wasm32")]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use crate::{file::File, people::People, session::Session};
+    use crate::{
+        file::File,
+        people::People,
+        session::{Session, tests::Given},
+    };
 
     /// `entry`, an entry of the log, as `log_entry`, the converter of one format, leaves it.
     fn converted_by(log_entry: fn(&mut Value), mut entry: Value) -> Value {
@@ -932,6 +999,11 @@ mod tests {
                             ranking.remove("lot"),
                             ranking.get("initial_unique_rank").cloned()
                         );
+                        for metric in ranking["metrics"].as_array_mut().unwrap() {
+                            if metric["type"] == "tournament_engine::points" {
+                                metric["value"] = metric["value"]["total"].take();
+                            }
+                        }
                     }
                     phase.insert("plugins".to_owned(), division["plugins"].take());
                     division["data"].take()
@@ -1118,6 +1190,52 @@ mod tests {
         assert_eq!(serde_json::to_value(read).unwrap(), competition);
     }
 
+    /// The points of a ranking of format 4, a number, are read as their total and the points of
+    /// its matches.
+    #[test]
+    fn the_points_of_format_4_are_read_with_those_of_the_matches() {
+        let mut session = Given::new()
+            .entrants(&["Alice", "Bob", "Carol"])
+            .ranking(vec![PluginConfig::of::<MorePoints>()])
+            .metrics(vec![
+                PluginConfig::of::<PointsCalculator>()
+                    .with("points_for_win", 3.0)
+                    .with("points_for_draw", 1.0)
+                    .with("points_for_bye", 2.0),
+            ])
+            .started();
+        for result in [MatchResult::AWins, MatchResult::Draw] {
+            let r#match = session.playable(session.all())[0].id;
+            session.report(session.first(), r#match, result).unwrap();
+        }
+        let competition = serde_json::to_value(session.competition()).unwrap();
+        let mut held = competition.clone();
+        as_of_format_4(&mut held);
+        let points = |competition: &Value| {
+            let rankings = competition["phases"][0]["divisions"][0]["data"]["rankings"]
+                .as_array()
+                .unwrap();
+            rankings
+                .iter()
+                .flat_map(|ranking| ranking["metrics"].as_array().unwrap())
+                .filter(|metric| metric["type"] == "tournament_engine::points")
+                .map(|metric| metric["value"].clone())
+                .collect::<Vec<_>>()
+        };
+        // a bye was reached, so the points of some ranking are more than those of its matches
+        assert!(
+            points(&competition)
+                .iter()
+                .any(|points| points["total"] != points["of_matches"])
+        );
+
+        upgrade_competition(&mut held, Format(4));
+
+        assert_eq!(points(&held), points(&competition));
+        let read: Competition = serde_json::from_value(held).unwrap();
+        assert_eq!(serde_json::to_value(read).unwrap(), competition);
+    }
+
     /// A competition of format 4 that has not started is read with its phase holding no division.
     #[test]
     fn a_competition_of_format_4_not_started_is_read_with_its_phase_without_divisions() {
@@ -1261,6 +1379,17 @@ mod tests {
                 "divisions": [],
             }], "started": false }),
             json!({ "phases": [3], "started": true }),
+            // points without the wins, draws and losses they were scored for
+            json!({ "phases": [{ "divisions": [{
+                "plugins": { "metrics": [{
+                    "type": "tournament_engine::points",
+                    "value": { "points_for_win": 1.0, "points_for_draw": 0.5 },
+                }] },
+                "data": { "rankings": [{ "metrics": [{
+                    "type": "tournament_engine::points",
+                    "value": 3.0,
+                }] }] },
+            }] }], "started": true }),
         ];
 
         for shape in shapes {

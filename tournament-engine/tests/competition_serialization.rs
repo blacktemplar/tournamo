@@ -289,7 +289,7 @@ fn a_started_competition_round_trips() {
     // the metrics of a started competition are all at their default value, so this only shows
     // that they exist at all
     for ranking in phase.rankings().values() {
-        assert_eq!(ranking.metric::<Points>(), Some(&Points(Score::ZERO)));
+        assert_eq!(ranking.metric::<Points>(), Some(&Points::default()));
     }
     assert_same_competition(sm.current(), &competition);
 }
@@ -315,7 +315,7 @@ fn a_partially_played_competition_round_trips() {
     let winners = phase
         .rankings()
         .values()
-        .filter(|ranking| ranking.metric::<Points>() == Some(&Points(Score::new(3.0))))
+        .filter(|ranking| ranking.metric::<Points>().map(Points::total) == Some(Score::new(3.0)))
         .count();
     assert_eq!(winners, 2);
     assert_same_competition(sm.current(), &competition);

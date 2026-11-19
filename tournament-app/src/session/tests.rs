@@ -102,7 +102,7 @@ fn now<T>(future: impl Future<Output = T>) -> T {
 
 /// Builds the session a test starts from: Alice, Bob, Carol and Dave entered in a round robin
 /// with the defaults of its format, unless the test says otherwise.
-struct Given {
+pub(crate) struct Given {
     entrants: Vec<&'static str>,
     format: &'static str,
     /// The format's suggestion if `None`.
@@ -119,7 +119,7 @@ struct Given {
 }
 
 impl Given {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             entrants: vec!["Alice", "Bob", "Carol", "Dave"],
             format: RoundRobin::ID,
@@ -133,7 +133,7 @@ impl Given {
     }
 
     /// Ranked by `ranking`.
-    fn ranking(self, ranking: Vec<PluginConfig>) -> Self {
+    pub(crate) fn ranking(self, ranking: Vec<PluginConfig>) -> Self {
         Self {
             ranking: Some(ranking),
             ..self
@@ -141,7 +141,7 @@ impl Given {
     }
 
     /// The metrics `metrics` configured, and those they or the ranking need implied.
-    fn metrics(self, metrics: Vec<PluginConfig>) -> Self {
+    pub(crate) fn metrics(self, metrics: Vec<PluginConfig>) -> Self {
         Self {
             metrics: Some(metrics),
             ..self
@@ -167,7 +167,7 @@ impl Given {
         self
     }
 
-    fn entrants(self, entrants: &[&'static str]) -> Self {
+    pub(crate) fn entrants(self, entrants: &[&'static str]) -> Self {
         Self {
             entrants: entrants.to_vec(),
             ..self
@@ -215,7 +215,7 @@ impl Given {
         session
     }
 
-    fn started(self) -> Session {
+    pub(crate) fn started(self) -> Session {
         let mut session = self.added();
         session.start().unwrap();
         session

@@ -93,10 +93,13 @@ impl TypeMap {
     /// ```
     /// # use tournament_engine::{Score, TypeMap, plugins::metrics_calculator::Points};
     /// let map = TypeMap::new()
-    ///     .with(Points(Score::new(1.0)))
-    ///     .with(Points(Score::new(2.0)));
+    ///     .with(Points::new(Score::new(1.0), Score::ZERO))
+    ///     .with(Points::new(Score::new(2.0), Score::ZERO));
     ///
-    /// assert_eq!(map.get::<Points>(), Some(&Points(Score::new(2.0))));
+    /// assert_eq!(
+    ///     map.get::<Points>(),
+    ///     Some(&Points::new(Score::new(2.0), Score::ZERO))
+    /// );
     /// ```
     pub fn with<T: TypeMapValue>(mut self, value: T) -> Self {
         self.insert(value);

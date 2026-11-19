@@ -18,8 +18,8 @@ const TWO_ONE: PointsCalculator = PointsCalculator::new(Score::new(2.0), Score::
 /// The scoring system of chess and most other games scoring a draw as half a win.
 const ONE_HALF: PointsCalculator = PointsCalculator::new(Score::ONE, Score::new(0.5));
 
-fn points(text: &str) -> Points {
-    Points(text.parse().unwrap())
+fn score(text: &str) -> Score {
+    text.parse().unwrap()
 }
 
 /// Builds a phase with `num_players` rankings and all matches of `matches` already scheduled,
@@ -37,8 +37,9 @@ fn phase_with(num_players: u32, matches: Vec<MatchSpec>, calculator: PointsCalcu
     )
 }
 
-fn metric_of(phase: &Division, ranking_index: usize) -> Points {
-    test_utils::metric_of(phase, ranking_index)
+/// The total of the points of the `ranking_index`th ranking.
+fn points_of(phase: &Division, ranking_index: usize) -> Score {
+    test_utils::metric_of::<Points>(phase, ranking_index).total()
 }
 
 /// Plays all of [`SCENARIO`](test_utils::SCENARIO), scoring with `calculator`.
@@ -54,7 +55,7 @@ fn initialize_metrics_starts_every_ranking_at_zero() {
     let phase = phase_with(4, vec![], THREE_ONE);
 
     for ranking_index in 0..4 {
-        assert_eq!(metric_of(&phase, ranking_index), points("0"));
+        assert_eq!(points_of(&phase, ranking_index), score("0"));
     }
 }
 
@@ -62,30 +63,30 @@ fn initialize_metrics_starts_every_ranking_at_zero() {
 fn three_points_for_a_win_and_one_for_a_draw() {
     let phase = play_scenario(THREE_ONE);
 
-    assert_eq!(metric_of(&phase, 0), points("3"));
-    assert_eq!(metric_of(&phase, 1), points("3"));
-    assert_eq!(metric_of(&phase, 2), points("7"));
-    assert_eq!(metric_of(&phase, 3), points("1"));
+    assert_eq!(points_of(&phase, 0), score("3"));
+    assert_eq!(points_of(&phase, 1), score("3"));
+    assert_eq!(points_of(&phase, 2), score("7"));
+    assert_eq!(points_of(&phase, 3), score("1"));
 }
 
 #[test]
 fn two_points_for_a_win_and_one_for_a_draw() {
     let phase = play_scenario(TWO_ONE);
 
-    assert_eq!(metric_of(&phase, 0), points("2"));
-    assert_eq!(metric_of(&phase, 1), points("2"));
-    assert_eq!(metric_of(&phase, 2), points("5"));
-    assert_eq!(metric_of(&phase, 3), points("1"));
+    assert_eq!(points_of(&phase, 0), score("2"));
+    assert_eq!(points_of(&phase, 1), score("2"));
+    assert_eq!(points_of(&phase, 2), score("5"));
+    assert_eq!(points_of(&phase, 3), score("1"));
 }
 
 #[test]
 fn one_point_for_a_win_and_half_a_point_for_a_draw() {
     let phase = play_scenario(ONE_HALF);
 
-    assert_eq!(metric_of(&phase, 0), points("1"));
-    assert_eq!(metric_of(&phase, 1), points("1"));
-    assert_eq!(metric_of(&phase, 2), points("2.5"));
-    assert_eq!(metric_of(&phase, 3), points("0.5"));
+    assert_eq!(points_of(&phase, 0), score("1"));
+    assert_eq!(points_of(&phase, 1), score("1"));
+    assert_eq!(points_of(&phase, 2), score("2.5"));
+    assert_eq!(points_of(&phase, 3), score("0.5"));
 }
 
 #[test]
@@ -102,8 +103,8 @@ fn half_points_for_draws_add_up_without_rounding() {
         phase.report_match_result(match_id, MatchResult::Draw);
     }
 
-    assert_eq!(metric_of(&phase, 0), points("1.5"));
-    assert_eq!(metric_of(&phase, 1), points("1.5"));
+    assert_eq!(points_of(&phase, 0), score("1.5"));
+    assert_eq!(points_of(&phase, 1), score("1.5"));
 }
 
 #[test]
@@ -124,8 +125,8 @@ fn tenths_of_points_add_up_to_what_they_are_worth() {
         phase.report_match_result(match_id, MatchResult::Draw);
     }
 
-    assert_eq!(metric_of(&phase, 0), points("0.3"));
-    assert_eq!(metric_of(&phase, 0).0.to_string(), "0.3");
+    assert_eq!(points_of(&phase, 0), score("0.3"));
+    assert_eq!(points_of(&phase, 0).to_string(), "0.3");
 }
 
 #[test]
@@ -135,8 +136,8 @@ fn a_loss_is_worth_no_points() {
 
     phase.report_match_result(match_id, MatchResult::BWins);
 
-    assert_eq!(metric_of(&phase, 0), points("0"));
-    assert_eq!(metric_of(&phase, 1), points("3"));
+    assert_eq!(points_of(&phase, 0), score("0"));
+    assert_eq!(points_of(&phase, 1), score("3"));
 }
 
 #[test]
@@ -147,11 +148,11 @@ fn only_the_rankings_of_the_reported_match_get_points() {
 
     phase.report_match_result(match_id, MatchResult::AWins);
 
-    assert_eq!(metric_of(&phase, 0), points("3"));
-    assert_eq!(metric_of(&phase, 1), points("0"));
+    assert_eq!(points_of(&phase, 0), score("3"));
+    assert_eq!(points_of(&phase, 1), score("0"));
     // the rankings of the other match are still at their initial value
-    assert_eq!(metric_of(&phase, 2), points("0"));
-    assert_eq!(metric_of(&phase, 3), points("0"));
+    assert_eq!(points_of(&phase, 2), score("0"));
+    assert_eq!(points_of(&phase, 3), score("0"));
 }
 
 #[test]
@@ -162,7 +163,7 @@ fn every_ranking_of_a_team_gets_the_points_of_the_team() {
     phase.report_match_result(match_id, MatchResult::Draw);
 
     for ranking_index in 0..4 {
-        assert_eq!(metric_of(&phase, ranking_index), points("1"));
+        assert_eq!(points_of(&phase, ranking_index), score("1"));
     }
 }
 
@@ -186,16 +187,16 @@ fn phase_with_a_bye(calculator: PointsCalculator) -> Division {
 fn a_bye_is_worth_no_points_by_default() {
     let phase = phase_with_a_bye(ONE_HALF);
 
-    assert_eq!(metric_of(&phase, 2), points("0"));
+    assert_eq!(points_of(&phase, 2), score("0"));
 }
 
 #[test]
 fn a_bye_is_worth_the_points_for_a_bye() {
     let phase = phase_with_a_bye(ONE_HALF.with_points_for_bye(Score::ONE));
 
-    assert_eq!(metric_of(&phase, 0), points("1"));
-    assert_eq!(metric_of(&phase, 1), points("0"));
-    assert_eq!(metric_of(&phase, 2), points("1"));
+    assert_eq!(points_of(&phase, 0), score("1"));
+    assert_eq!(points_of(&phase, 1), score("0"));
+    assert_eq!(points_of(&phase, 2), score("1"));
 }
 
 #[test]
@@ -212,8 +213,12 @@ fn the_points_of_a_bye_add_to_those_of_matches() {
 
     phase.report_match_result(match_id, MatchResult::Draw);
 
-    assert_eq!(metric_of(&phase, 0), points("3"));
-    assert_eq!(metric_of(&phase, 1), points("1"));
+    assert_eq!(
+        test_utils::metric_of::<Points>(&phase, 0),
+        Points::new(score("1"), score("2"))
+    );
+    assert_eq!(points_of(&phase, 0), score("3"));
+    assert_eq!(points_of(&phase, 1), score("1"));
 }
 
 #[test]
@@ -230,6 +235,7 @@ fn scoring_without_the_wins_draws_losses_metric_panics() {
 
 #[test]
 fn more_points_are_better() {
+    let points = |text| Points::new(score(text), Score::ZERO);
     let compare = |first, second| MorePoints.compare(&points(first), &points(second));
     assert_eq!(compare("3", "1"), Comparison::Better);
     assert_eq!(compare("1", "3"), Comparison::Worse);
@@ -242,30 +248,26 @@ fn per_match(text: &str) -> PointsPerMatch {
 }
 
 #[test]
-fn points_per_match_divide_the_points_by_the_matches_and_byes() {
+fn points_per_match_leave_byes_out_of_the_points_and_the_matches() {
     let mut phase = test_utils::phase_with_byes(
         DivisionBuilder::new()
             .add_players(3)
             .add_metric(WinsDrawsLossesCalculator)
-            .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
+            .add_metric(THREE_ONE.with_points_for_bye(Score::new(2.0)))
             .add_metric(PointsPerMatchCalculator),
         vec![(2, vec![0], vec![1]), (3, vec![0], vec![2])],
         vec![(1, 2)],
     );
     // only the bye of `2` is reached so far
     assert_eq!(
-        test_utils::metric_of::<PointsPerMatch>(&phase, 0),
-        per_match("0")
-    );
-    assert_eq!(
         test_utils::metric_of::<PointsPerMatch>(&phase, 2),
-        per_match("3")
+        per_match("0")
     );
 
     phase.report_match_result(match_id(&phase, 2, &[0], &[1]), MatchResult::Draw);
     phase.report_match_result(match_id(&phase, 3, &[0], &[2]), MatchResult::BWins);
 
-    // 1 point in 2 matches, 1 in 1, 6 in a bye and a match
+    // 1 point in 2 matches, 1 in 1, 3 in 1 match besides the 2 of the bye
     assert_eq!(
         test_utils::metric_of::<PointsPerMatch>(&phase, 0),
         per_match("0.5")

@@ -22,13 +22,14 @@ use tournament_engine::{
     ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
     StartCompetition, StartPhase, TypeMapValue,
     plugins::{
+        deprecated::DoubleEliminationV1,
         draw::{Blocks, Draw, Random, Snake},
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MetricsCalculator, MorePoints, MorePointsPerMatch,
             Points, PointsCalculator, PointsPerMatchCalculator, RoundOfFirstLossCalculator,
             WinsDrawsLossesCalculator,
         },
-        phase_format::{DoubleElimination, DoubleEliminationV1, PhaseFormat, SingleElimination},
+        phase_format::{DoubleElimination, PhaseFormat, SingleElimination},
         ranker::SliceRanker,
         seeding::{GroupWinnersApart, SeededAtRandom, SeededInOrder, Seeding},
         teams::{BestWithWorst, Keep, RandomPairs, Split, Teams},

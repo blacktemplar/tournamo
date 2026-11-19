@@ -10,6 +10,7 @@ use crate::{
         details::Sides,
     },
     plugins::{
+        deprecated::DoubleEliminationV1,
         metrics_calculator::{
             round_of_elimination::{
                 LaterElimination, RoundOfElimination, RoundOfEliminationCalculator,

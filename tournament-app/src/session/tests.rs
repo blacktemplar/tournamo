@@ -15,14 +15,14 @@ use plugin_factory::{
 use tournament_engine::{
     EnteredValue, EntrantId, MatchId, MatchResult, PhasePlugins, Score, Sides,
     plugins::{
+        deprecated::DoubleEliminationV1,
         match_format::{BestOf, Scored},
         metrics_calculator::{
             Cell as MetricCell, MoreBuchholz, MorePointsPerMatch, MoreWins,
             RoundOfFirstLossCalculator,
         },
         phase_format::{
-            DoubleElimination, DoubleEliminationV1, MonsterDyp, RandomRounds, RoundRobin,
-            SingleElimination,
+            DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
     },
     uuid::Uuid,

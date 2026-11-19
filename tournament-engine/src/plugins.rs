@@ -71,6 +71,7 @@ use crate::{
 
 #[cfg(feature = "test-util")]
 mod builder;
+pub mod deprecated;
 pub mod draw;
 pub mod facts;
 pub mod match_format;

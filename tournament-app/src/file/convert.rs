@@ -609,8 +609,9 @@ mod tests {
     use tournament_engine::{
         Competition, CompetitionStateMachine, MatchResult, PhasePlugins,
         plugins::{
+            deprecated::DoubleEliminationV1,
             metrics_calculator::{MorePoints, PointsCalculator},
-            phase_format::{DoubleElimination, DoubleEliminationV1, SingleElimination},
+            phase_format::{DoubleElimination, SingleElimination},
         },
     };
     #[cfg(target_arch = "wasm32")]

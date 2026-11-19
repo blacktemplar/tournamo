@@ -72,7 +72,7 @@ pub enum Advance {
 
 /// Who takes a seat of a pairing.
 #[derive(Debug, Clone, Copy)]
-pub(super) enum Source {
+pub(crate) enum Source {
     Ranking(RankingId),
     /// Nobody, so whoever is paired with it advances without a match.
     Bye,
@@ -113,7 +113,7 @@ struct Pairing {
 
 /// A [`Bracket`] being built: its pairings are added, then [`BracketBuilder::build`] numbers them.
 #[derive(Debug)]
-pub(super) struct BracketBuilder(Bracket);
+pub(crate) struct BracketBuilder(Bracket);
 
 /// A bracket without pairings.
 impl Default for BracketBuilder {
@@ -199,7 +199,7 @@ impl Bracket {
     /// Decides every pairing in play whose match got a result, moves its winner and its loser on,
     /// and returns the matches and the byes of the pairings that got both of their seats taken by
     /// that, each ordered by round and then by the order their pairings were added in.
-    pub(super) fn create_new_matches(&mut self, phase_data: &DivisionData) -> Schedule {
+    pub(crate) fn create_new_matches(&mut self, phase_data: &DivisionData) -> Schedule {
         let mut new_matches = Vec::new();
         let mut new_byes = Vec::new();
         let mut to_check = mem::take(&mut self.in_play);
@@ -297,7 +297,7 @@ impl BracketBuilder {
     ///
     /// A pairing can only take the winner and the loser of a pairing added before it, each at most
     /// once.
-    pub(super) fn add_pairing(
+    pub(crate) fn add_pairing(
         &mut self,
         round: NonZeroU32,
         sources: [Source; 2],
@@ -341,7 +341,7 @@ impl BracketBuilder {
     }
 
     /// Lets the winner and the loser of `pairing` only move on if `side` wins it.
-    pub(super) fn advance_only_if_won_by(&mut self, pairing: PairingId, side: Team) {
+    pub(crate) fn advance_only_if_won_by(&mut self, pairing: PairingId, side: Team) {
         self.0.pairings[pairing.0].advances_only_if_won_by = Some(side);
     }
 
@@ -353,7 +353,7 @@ impl BracketBuilder {
     /// `2i` and `2i + 1` of a round meet in pairing `i` of the next. The first round pairs the best
     /// seed with the worst, the best two seeds can meet in the final at the earliest, and where the
     /// field is not a power of two the best seeds get the byes.
-    pub(super) fn add_knockout(
+    pub(crate) fn add_knockout(
         &mut self,
         phase_data: &DivisionData,
         phase_round: impl Fn(u32) -> NonZeroU32,
@@ -392,7 +392,7 @@ impl BracketBuilder {
     }
 
     /// The bracket of the pairings added, each numbered, see [`BracketPairing::number`].
-    pub(super) fn build(self) -> Bracket {
+    pub(crate) fn build(self) -> Bracket {
         let mut bracket = self.0;
         let byes = bracket.byes(&bracket.sources());
         let mut matches: Vec<usize> = (0..bracket.pairings.len())
@@ -411,7 +411,7 @@ impl BracketBuilder {
 ///
 /// # Panics
 /// If `round` is 0.
-pub(super) fn phase_round(round: u32) -> NonZeroU32 {
+pub(crate) fn phase_round(round: u32) -> NonZeroU32 {
     NonZeroU32::new(round).expect("rounds are counted from 1")
 }
 

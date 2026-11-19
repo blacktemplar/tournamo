@@ -1436,8 +1436,9 @@ mod tests {
     #[test]
     fn an_earlier_version_chosen_is_kept_and_the_latest_offered() {
         use plugin_factory::PluginType as _;
-        use tournament_engine::plugins::phase_format::{
-            DoubleElimination, DoubleEliminationV1, PhaseFormat,
+        use tournament_engine::plugins::{
+            deprecated::DoubleEliminationV1,
+            phase_format::{DoubleElimination, PhaseFormat},
         };
 
         let mut draft = phase_draft()

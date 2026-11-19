@@ -178,7 +178,9 @@ pub mod single_elimination;
 
 pub(crate) use bracket::seeding_order;
 pub use bracket::{Advance, Bracket, BracketPairing, BracketSide, PairingId, Seat};
-pub use double_elimination::{DoubleElimination, DoubleEliminationRound, DoubleEliminationV1};
+// what an earlier version of a format, see `plugins::deprecated`, builds its bracket with
+pub(crate) use bracket::{BracketBuilder, Source, phase_round};
+pub use double_elimination::{DoubleElimination, DoubleEliminationRound};
 pub use monster_dyp::MonsterDyp;
 pub use round_robin::{RoundRobin, random_rounds::RandomRounds};
 pub use single_elimination::{KnockoutRound, SingleElimination};

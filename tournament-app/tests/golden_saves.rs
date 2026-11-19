@@ -1,13 +1,14 @@
-//! Golden saves: competitions as released versions saved them, which every later version has to
-//! load and replay into the very competition they were saved as.
+//! Golden saves: competitions as released versions saved them, whose logs every later version has
+//! to replay as they were played: the same matches with the same results, ranked alike. What else
+//! the competition holds may differ, e.g. an annotation a format has since added to its matches.
 //!
 //! Each release adds a directory `saves/v<version>/`, written by `cargo test -p tournament-app
 //! --test golden_saves -- --ignored write`, and lists its files in [`SAVES`]; a new format or
 //! feature that is saved gets a script first. Each save is the file the version
 //! exports (`<name>.json`) next to the competition it held, serialized (`<name>.competition.json`).
-//! A save is never changed once committed: a test failing on it means that this version would show
-//! users' competitions differently than they were saved. If that is intended, the save goes, noted
-//! in `CHANGELOG.md`.
+//! A save is never changed once committed: a test failing on it means that this version would
+//! replay users' competitions differently than they were played or ranked. If that is intended, the
+//! save goes, noted in `CHANGELOG.md`.
 
 use std::{
     num::NonZeroU32,
@@ -103,15 +104,15 @@ const SAVES: &[(&str, &str, &str)] = saves![
 ];
 
 #[test]
-fn every_golden_save_replays_into_the_competition_it_was_saved_as() {
+fn every_golden_save_replays_as_it_was_played() {
     for (save, file, competition) in SAVES {
         let session = Session::import(file, "", &[])
             .unwrap_or_else(|error| panic!("{save} does not load: {error}"));
 
         let replayed = serde_json::to_value(session.competition()).unwrap();
         assert!(
-            replayed == as_read(file, competition),
-            "{save} replays into another competition than it was saved as"
+            played_in(&replayed) == played_in(&as_read(file, competition)),
+            "{save} replays into other matches or results than it was played with"
         );
         let saved: Value = serde_json::from_str(competition).unwrap();
         assert!(
@@ -144,6 +145,38 @@ fn converted(file: &str, competition: &str) -> Value {
     competition
 }
 
+/// What was played in a serialized competition: per division its matches with their results and
+/// its byes, each without the annotations its format attached.
+fn played_in(competition: &Value) -> Vec<Value> {
+    let without_annotations = |mut entity: Value, annotations: &str| {
+        if let Some(Value::Array(attached)) = entity.pointer_mut(annotations) {
+            attached.clear();
+        }
+        entity
+    };
+    competition["phases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|phase| phase["divisions"].as_array().unwrap())
+        .map(|division| {
+            let data = &division["data"];
+            let entities = |of: &str, annotations: &'static str| -> Vec<Value> {
+                data[of]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|entity| without_annotations(entity.clone(), annotations))
+                    .collect()
+            };
+            serde_json::json!([
+                entities("matches", "/contest/annotations"),
+                entities("byes", "/annotations")
+            ])
+        })
+        .collect()
+}
+
 /// What a serialized competition says of the ranks in the divisions of its phases: per division
 /// the order of the rankings and the ranks of each.
 fn ranks_in(competition: &Value) -> Vec<Value> {
@@ -165,10 +198,11 @@ fn ranks_in(competition: &Value) -> Vec<Value> {
         .collect()
 }
 
-/// Saves of versions that did not store the competition get it when they are stored.
+/// Saves of versions that did not store the competition get the one their log replays into when
+/// they are stored.
 #[test]
-fn every_golden_save_is_stored_with_the_competition_it_was_saved_as() {
-    for (save, file, competition) in SAVES {
+fn every_golden_save_is_stored_with_the_competition_it_replays_into() {
+    for (save, file, _) in SAVES {
         let storage = MemoryStorage::default();
         let mut session = Session::import(file, "", &[]).unwrap();
 
@@ -177,8 +211,8 @@ fn every_golden_save_is_stored_with_the_competition_it_was_saved_as() {
         let stored = now(storage.read(session.key())).unwrap().unwrap();
         let stored: Value = serde_json::from_str(&stored.record).unwrap();
         assert!(
-            stored["competition"] == as_read(file, competition),
-            "{save} is stored with another competition than it was saved as"
+            stored["competition"] == serde_json::to_value(session.competition()).unwrap(),
+            "{save} is stored with another competition than it replays into"
         );
     }
 }

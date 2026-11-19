@@ -753,17 +753,6 @@ impl Gui {
             .await
     }
 
-    /// Waits until the form of a phase says that it is played with an earlier version of a
-    /// plugin, `notice`, or says nothing of it for `None`.
-    ///
-    /// # Panics
-    /// Panics if it does not in time, with what it says instead.
-    pub async fn expect_outdated(&self, notice: Option<&str>) -> WebDriverResult<()> {
-        self.page
-            .expect_texts(By::Id("outdated-plugins"), notice.as_slice())
-            .await
-    }
-
     /// Waits until a dialog asking to confirm what may not be undone (`alertdialog`) is open,
     /// titled `title`.
     ///

@@ -183,9 +183,11 @@ fn a_field_for_draws_is_left_out_without_draws() {
 fn a_field_offers_all_registered_plugins_the_recommended_first() {
     let view = new_form().view();
 
+    // the engine's, without those the tests register
     let formats: Vec<_> = plugin(&view, "format")
         .options
         .iter()
+        .filter(|option| option.id.starts_with("tournament_engine::"))
         .map(|option| option.label)
         .collect();
     assert_eq!(

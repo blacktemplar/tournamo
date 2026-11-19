@@ -304,5 +304,6 @@ fn winner_bracket_slot(round: u32) -> NonZeroU32 {
     phase_round(if round == 1 { 1 } else { 2 * round - 2 })
 }
 
+// its helpers serve the tests of the earlier versions too
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

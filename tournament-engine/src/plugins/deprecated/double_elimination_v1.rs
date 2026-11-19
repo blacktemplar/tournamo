@@ -199,3 +199,68 @@ fn bracket(phase_data: &DivisionData, grand_final_reset: bool) -> Bracket {
 fn winner_bracket_slot(round: u32) -> NonZeroU32 {
     phase_round(if round == 1 { 1 } else { 2 * round - 2 })
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+    use crate::plugins::phase_format::{
+        DoubleElimination,
+        double_elimination::tests::{bracket, first_rematch, play_out, schedule, underdog, varied},
+    };
+
+    /// Its saved tag, the plugin's id alone.
+    #[test]
+    fn it_is_serialized_under_the_plugins_id() {
+        let format: Box<dyn PhaseFormat> = Box::new(DoubleEliminationV1::new());
+
+        assert_eq!(
+            serde_json::to_value(format).unwrap()["type"],
+            "tournament_engine::double_elimination"
+        );
+    }
+
+    /// From 17 entrants on, entrants who met in the winner bracket can meet again in round 4 of
+    /// the loser bracket, which the latest version puts off.
+    #[test]
+    fn entrants_who_met_can_meet_again_in_losers_round_4() {
+        for num_players in [24, 32, 48, 64] {
+            let rematches = (0..12).filter_map(|variant| {
+                first_rematch(
+                    bracket(DoubleEliminationV1::new(), num_players),
+                    varied(variant),
+                )
+            });
+            assert!(rematches.min() == Some(4), "{num_players} entrants");
+        }
+    }
+
+    /// As a report found with 24 entrants of whom the worse seed always won: seeds 14 and 19, who
+    /// met in the first round, meet again in round 4 of the loser bracket.
+    #[test]
+    fn with_24_entrants_and_underdogs_winning_a_first_round_pair_meets_again_in_round_4() {
+        assert_eq!(
+            first_rematch(bracket(DoubleEliminationV1::new(), 24), underdog),
+            Some(4)
+        );
+    }
+
+    /// Up to 16 entrants it is wired as the latest version, so a phase of it updates to that
+    /// whatever its results.
+    #[test]
+    fn up_to_16_entrants_it_plays_as_the_latest_version() {
+        for num_players in 2..=16 {
+            let schedules = [
+                bracket(DoubleElimination::new(), num_players),
+                bracket(DoubleEliminationV1::new(), num_players),
+            ]
+            .map(|mut phase| {
+                play_out(&mut phase, varied(num_players));
+                schedule(&phase)
+            });
+            assert_eq!(schedules[0], schedules[1], "{num_players} entrants");
+        }
+    }
+}

@@ -15,7 +15,6 @@ use plugin_factory::{
 use tournament_engine::{
     EnteredValue, EntrantId, MatchId, MatchResult, PhasePlugins, Score, Sides,
     plugins::{
-        deprecated::DoubleEliminationV1,
         match_format::{BestOf, Scored},
         metrics_calculator::{
             Cell as MetricCell, MoreBuchholz, MorePointsPerMatch, MoreWins,
@@ -62,6 +61,7 @@ mod scale;
 mod storage;
 mod teams;
 mod undo;
+mod versions;
 mod views;
 
 impl Session {

@@ -1265,8 +1265,8 @@ results that no longer fit, other ranks) gets a new version rather than a
 change: `#[plugin(id = .., version = 2)]`
 is a type of its own, tagged `<id>@2`, while the first keeps the bare id. Each
 version replays what was saved with it exactly. An earlier version moves to
-`plugins::deprecated` as a frozen copy of the plugin as it was (e.g.
-`DoubleEliminationV1`), which is never changed: it shares no code with its
+`plugins::deprecated` as a frozen copy of the plugin as it was, which is
+never changed and referenced nowhere outside its file, its tests included: it shares no code with its
 later versions, only what the engine provides every plugin (the bracket of a
 knockout, the traits) and the types a saved competition holds (annotations,
 metrics), whose tags have one type each. So a later change of the plugin cannot

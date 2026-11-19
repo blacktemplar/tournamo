@@ -22,7 +22,6 @@ use tournament_engine::{
     ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
     StartCompetition, StartPhase, TypeMapValue,
     plugins::{
-        deprecated::DoubleEliminationV1,
         draw::{Blocks, Draw, Random, Snake},
         metrics_calculator::{
             BuchholzCalculator, LaterFirstLoss, MetricsCalculator, MorePoints, MorePointsPerMatch,
@@ -637,23 +636,14 @@ fn the_plugins_of_divisions_and_teams_are_serialized_under_their_ids() {
     );
 }
 
-/// Each version of a format is saved under its own tag, the first under the plugin's id alone.
+/// The latest version of a format is saved under its id and version.
 #[test]
-fn each_version_of_the_double_elimination_is_serialized_under_its_own_id() {
-    let id = |plugin: Value| plugin["type"].as_str().unwrap().to_owned();
-    let formats: [Box<dyn PhaseFormat>; 2] = [
-        Box::new(DoubleEliminationV1::new()),
-        Box::new(DoubleElimination::new()),
-    ];
+fn the_double_elimination_is_serialized_under_its_id_and_version() {
+    let format: Box<dyn PhaseFormat> = Box::new(DoubleElimination::new());
 
     assert_eq!(
-        formats
-            .map(|format| id(serde_json::to_value(format).unwrap()))
-            .as_slice(),
-        [
-            "tournament_engine::double_elimination",
-            "tournament_engine::double_elimination@2",
-        ]
+        serde_json::to_value(format).unwrap()["type"],
+        "tournament_engine::double_elimination@2"
     );
 }
 

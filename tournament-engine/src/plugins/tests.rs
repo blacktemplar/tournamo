@@ -514,9 +514,15 @@ fn the_round_of_elimination_needs_a_format_that_knocks_entrants_out() {
         .format(DoubleElimination::new())
         .build()
         .unwrap();
+    let single_elimination = ranked_by_elimination
+        .clone()
+        .format(SingleElimination::new())
+        .build()
+        .unwrap();
     let round_robin = ranked_by_elimination.build().unwrap();
 
     assert_eq!(check(&double_elimination), Ok(()));
+    assert_eq!(check(&single_elimination), Ok(()));
     assert_eq!(
         check(&round_robin),
         Err(Incompatibility::FactNotProvided {
@@ -538,7 +544,7 @@ fn a_bracket_format_provides_the_annotations_it_writes() {
         &double
     ));
     assert!(provides_fact::<MatchAnnotation<Eliminates>>(&double));
-    assert!(!provides_fact::<MatchAnnotation<Eliminates>>(&single));
+    assert!(provides_fact::<MatchAnnotation<Eliminates>>(&single));
 }
 
 #[test]

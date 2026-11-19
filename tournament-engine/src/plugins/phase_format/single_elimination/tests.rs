@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+
 use itertools::Itertools;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -7,7 +9,10 @@ use crate::{
     entities::{
         Annotated, Division, DivisionBuilder, Match, MatchResult, RankingId, details::Sides,
     },
-    plugins::phase_format::{Advance, Seat},
+    plugins::{
+        metrics_calculator::{RoundOfElimination, RoundOfEliminationCalculator},
+        phase_format::{Advance, Seat},
+    },
 };
 
 #[test]
@@ -208,10 +213,16 @@ fn a_stage_is_serialized_under_its_explicitly_chosen_tag() {
 
     assert_eq!(
         value["contest"]["annotations"],
-        serde_json::json!([{
-            "type": "tournament_engine::knockout_round",
-            "value": { "RoundOf": 2 }
-        }])
+        serde_json::json!([
+            {
+                "type": "tournament_engine::knockout_round",
+                "value": { "RoundOf": 2 }
+            },
+            {
+                "type": "tournament_engine::eliminates",
+                "value": "Loser"
+            }
+        ])
     );
 }
 
@@ -401,4 +412,58 @@ fn the_matches_are_numbered_by_the_bracket_whatever_is_played_first() {
         [1, 2, 4],
         "numbered by the bracket, not as scheduled"
     );
+}
+
+/// Every match but the one for third place knocks its loser out.
+#[test]
+fn the_matches_up_to_the_final_eliminate_their_loser() {
+    let mut phase = knockout(SingleElimination::new().with_third_place_match(), 4);
+
+    play_round(&mut phase, 1);
+
+    let eliminates = phase
+        .data()
+        .matches()
+        .values()
+        .map(|r#match| r#match.annotation::<Eliminates>().copied())
+        .collect_vec();
+    assert_eq!(
+        eliminates,
+        [
+            Some(Eliminates::Loser),
+            Some(Eliminates::Loser),
+            Some(Eliminates::Loser),
+            None
+        ],
+        "the semifinals, the final, the match for third place"
+    );
+}
+
+/// Both losers of the semifinals are out in them, whoever wins the match for third place.
+#[test]
+fn the_round_of_elimination_is_that_of_the_first_loss() {
+    let mut phase = DivisionBuilder::new()
+        .format(SingleElimination::new().with_third_place_match())
+        .add_metric(RoundOfEliminationCalculator)
+        .add_players(4)
+        .build();
+    phase.create_new_matches();
+
+    play_round(&mut phase, 1);
+    play_round(&mut phase, 2);
+
+    let out_in = |initial_rank: u32| {
+        let ranking = phase
+            .data()
+            .rankings()
+            .values()
+            .find(|ranking| ranking.initial_unique_rank().get() == initial_rank)
+            .unwrap();
+        ranking
+            .metric::<RoundOfElimination>()
+            .unwrap()
+            .0
+            .map(NonZeroU32::get)
+    };
+    assert_eq!([1, 2, 3, 4].map(out_in), [None, Some(2), Some(1), Some(1)]);
 }

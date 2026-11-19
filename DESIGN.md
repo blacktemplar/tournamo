@@ -1240,8 +1240,25 @@ registry (reimplements `typetag`); auto-derived tags from the type path
 
 ### Versions of a plugin
 
-A plugin that is to behave differently than saved competitions were played
-with gets a new version rather than a change: `#[plugin(id = .., version = 2)]`
+What a change of a plugin must keep is that every saved log replays as it was
+played (see [Golden saves](#golden-saves)), not that it replays into the
+competition saved with it. A new version is the last resort; first, in this
+order:
+
+1. **Nothing**, where saved logs still replay as played and only the
+   competition differs, e.g. a format attaching an annotation to its matches
+   that it did not before.
+2. **A default**: a new field whose `#[serde(default)]` is how saved phases
+   were played, while `#[plugin(default ..)]` offers new phases what they are
+   to get.
+3. **A converter** of the file format (`file/convert.rs`), rewriting what
+   saved files hold so that their logs replay as played, where a default
+   cannot express it (a field renamed or of another type, an old behaviour
+   that is no default of the field's type).
+
+A plugin that would replay saved logs differently even then (other matches,
+results that no longer fit, other ranks) gets a new version rather than a
+change: `#[plugin(id = .., version = 2)]`
 is a type of its own, tagged `<id>@2`, while the first keeps the bare id. Each
 version replays what was saved with it exactly, and the versions share their
 code where they agree (the double elimination's two versions differ in a
@@ -1284,14 +1301,18 @@ round-trip test still passes, since it saves and replays with the same code.
 So each release commits saves of a few scripted competitions (`tournament-app/tests/saves/v<version>/`:
 every format, byes, undo, redo, reopened results, edited phases), each the file
 that version exports next to the competition it held, serialized. Every later
-version must load them, replay each into that very competition and still show
-it. Saves are never rewritten: a failing one is either a bug, or a deliberate
-change of how old competitions are shown, which drops the save and goes into
-`CHANGELOG.md`.
+version must load them, replay each as it was played (the same matches with
+the same results, ranked alike) and still show it. The competition it replays
+into need not be identical to the one saved: it may hold what a later version
+adds, e.g. an annotation a format now attaches to its matches, and is saved
+with the next change. Saves are never rewritten: a failing one is either a
+bug, or a deliberate change of how old competitions are played or ranked,
+which drops the save and goes into `CHANGELOG.md`.
 
-The serialized competition is the expected result, compared as JSON since
-`Competition` has no `PartialEq`, so a test also catches nondeterminism (e.g.
-iterating a `HashMap`) and differences between native and wasm.
+The serialized competition is the expected result: its matches, results and
+ranks, compared as JSON since `Competition` has no `PartialEq`, so a test also
+catches nondeterminism (e.g. iterating a `HashMap`) and differences between
+native and wasm.
 
 **Older layouts are converted, then read by the current types.** A change of
 what is saved raises the file's format (`file::Format`) and adds one converter

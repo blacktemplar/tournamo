@@ -103,6 +103,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   added before keep the order they were played with: editing one says so and
   offers to update it ("Update to the latest version"), which is refused,
   naming the matches, where its results do not fit the new order.
+- Single elimination: the round of elimination can be shown and ranked by, as
+  in a double elimination (the round an entrant lost in; whoever loses a
+  semifinal is out in it, whatever the match for third place says), also in
+  phases added before.
 - German: the lists of options are in the order of their German labels, the
   recommended first; terms are used alike everywhere (“Reihenfolge der
   Tabelle” and “Kennzahlen” where the form said “Rangfolge und Wertung”,

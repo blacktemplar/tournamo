@@ -53,6 +53,7 @@ mod cross_table;
 mod divisions;
 mod entrants;
 mod entry;
+mod match_format;
 mod phase;
 mod phases;
 mod presets;

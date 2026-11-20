@@ -98,6 +98,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- A further phase starts out at the match format of the phase before, with its
+  settings (e.g. a best of five with games to 21), rather than at who won
+  only, where it fits the phase.
 - A new round-robin phase scores no point for a bye: with an odd number of
   entrants everyone has one, so it only added the same to every total and
   favoured groups of an odd size where groups are compared. Phases added

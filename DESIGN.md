@@ -663,8 +663,9 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   the shape of the template, not from a list of match formats or a flag one
   declares: a match with one field and no parts (a score), or with no field of
   its own and parts of one level with one field each (the games of a best of).
-  The GUI enters it below the pairing, its parts side by side and wrapping on a
-  phone rather than dropped there; the dialog is a button away (*Details*,
+  The GUI enters it below the pairing, each side's value below its name as the
+  buttons of a win are, a row per part; on a phone, where the names are stacked,
+  the parts side by side and wrapping rather than dropped there; the dialog is a button away (*Details*,
   starting from what the row holds) for overriding, reasons and what a row
   cannot hold, such as a fixture's rubbers. The row never chooses a result: it
   reports what the values suggest, or says that they decide nothing.

@@ -221,15 +221,52 @@
   justify-self: center;
 }
 
-/* a result entered below the pairing: the values of each part side by side, wrapping where they do
- * not fit, then the buttons, and what they say below them */
-.match .quick-result {
-  display: flex;
-  flex-wrap: wrap;
+/* a result entered below the pairing, in the columns of the card: a row per part, e.g. per game,
+ * each side's value centred below its name, as the buttons of a win are, the number of the part
+ * between them; then the buttons, and what they say below them */
+.match .quick-result,
+.match .quick-values,
+.match .quick-value {
+  display: grid;
   align-items: center;
-  justify-content: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2);
   grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.match .quick-side {
+  display: flex;
+  justify-content: center;
+}
+
+.match .quick-side.a {
+  min-width: min(100%, 12rem);
+  grid-column: 1;
+  justify-self: end;
+}
+
+.match .quick-side.b {
+  min-width: min(100%, 12rem);
+  grid-column: 3;
+  justify-self: start;
+}
+
+/* the number of the part in the middle, in place of the dash */
+.match .quick-part {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.match .quick-value:has(.quick-part) .quick-dash {
+  display: none;
+}
+
+.match .quick-result > * {
+  grid-column: 1 / -1;
+}
+
+.match .quick-buttons {
+  justify-self: center;
 }
 
 /* a match with a result on one line, so that the list of a round is mostly those still to play:
@@ -392,9 +429,38 @@
     grid-row: 2 / span 2;
   }
 
-  /* below the pairing, across the card */
+  /* below the pairing, across the card: the values of each part side by side, wrapping where they
+   * do not fit, the number of the part above them */
   .match .quick-result {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2) var(--space-4);
+  }
+
+  .match .quick-values {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-2) var(--space-4);
+  }
+
+  .match .quick-value {
+    gap: 0 2px;
+    grid-template-columns: auto auto auto;
+  }
+
+  .match .quick-side {
+    display: contents;
+  }
+
+  .match .quick-part {
     grid-column: 1 / -1;
+  }
+
+  .match .quick-value:has(.quick-part) .quick-dash {
+    display: inline;
   }
 
   .match.finished .result {

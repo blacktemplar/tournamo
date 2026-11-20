@@ -188,15 +188,17 @@ fn QuickValues(
             }
         }
     };
+    // each value in a box of its side, which the card places below the side's name where there is
+    // room, as it does the buttons of a win
     rsx! {
         span { class: "quick-value",
             // the inputs say which part, for screen readers
             if let Some((_, number)) = quick.part {
                 span { class: "quick-part", aria_hidden: "true", "{number}" }
             }
-            {input(Team::A, &a)}
-            span { aria_hidden: "true", "–" }
-            {input(Team::B, &b)}
+            span { class: "quick-side a", {input(Team::A, &a)} }
+            span { class: "quick-dash", aria_hidden: "true", "–" }
+            span { class: "quick-side b", {input(Team::B, &b)} }
         }
     }
 }

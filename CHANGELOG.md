@@ -111,6 +111,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
 - A further phase starts out at the match format of the phase before, with its
   settings (e.g. a best of five with games to 21), rather than at who won
   only, where it fits the phase.
+- A score entered in the row of a match shows each side's value below its
+  name, as the buttons of a win are, and the games of a best of a row each,
+  rather than the values side by side between the names; on a phone they
+  stay side by side below the names.
 - A new round-robin phase scores no point for a bye: with an odd number of
   entrants everyone has one, so it only added the same to every total and
   favoured groups of an odd size where groups are compared. Phases added

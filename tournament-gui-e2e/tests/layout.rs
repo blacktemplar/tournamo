@@ -426,6 +426,48 @@ async fn a_match_to_play_shows_each_name_above_its_button() {
     .await;
 }
 
+/// A match whose games are entered in its row shows a row per game needed, each side's value
+/// centred below its name, at every width where the names stand side by side.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_match_to_play_shows_each_value_below_its_name() {
+    run_in_new_competition(async |gui| {
+        for name in ["Eve", "Bob"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Round robin").await?;
+        gui.choose_plugin("match_format", "Best of games").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+
+        for width in [1280, 900, 600] {
+            gui.page.resize(width, 900).await?;
+            let sides = gui.page.rects_of("#match-list .side").await?;
+            let values = gui.page.rects_of("#match-list .quick-value input").await?;
+            assert_eq!(values.len(), 4, "the values of the two games needed");
+            for (index, value) in values.iter().enumerate() {
+                let side = sides[index % 2];
+                let middle = (side.left + side.right - value.left - value.right) / 2.0;
+                assert!(
+                    middle.abs() < 1.0,
+                    "{value:?} centred below {side:?} at {width}px"
+                );
+                assert_eq!(
+                    value.top,
+                    values[index - index % 2].top,
+                    "the values of a game on a row at {width}px"
+                );
+            }
+            assert!(
+                values[0].bottom <= values[2].top,
+                "a game below the one before"
+            );
+        }
+        Ok(())
+    })
+    .await;
+}
+
 /// Enters `names` and starts a round robin of them.
 async fn start_round_robin_of(gui: &Gui, names: &[&str]) -> WebDriverResult<()> {
     for name in names {

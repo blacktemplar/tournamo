@@ -220,8 +220,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 - A click in a dialog on what does nothing there (its title, a text, its
   margin) closed it, and with the dialog editing a phase all changes made.
-  That dialog, and the one adding a phase after the start, now ask before
-  discarding changes made in them on Escape or a click beside them.
+  That dialog, and the one adding a phase after the start, now ask, in a
+  dialog on top of them, before discarding changes made in them on Escape or
+  a click beside them.
 - The keyboard can skip what it would otherwise go through stop by stop: the
   first stop of the page skips the bars to the content, and one before the
   list of entrants skips it to the phases (WCAG 2.4.1). Both show only while

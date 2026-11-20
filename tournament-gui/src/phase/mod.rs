@@ -106,10 +106,10 @@ pub fn AddPhaseDialog() -> Element {
     let ctx = use_context::<Ctx>();
     // while the dialog is open: the form and the form as it opened, or why there is none
     let mut adding = use_signal(|| None::<Result<(Signal<PhaseForm>, PhaseForm), Text>>);
-    let discarding = use_discarding("#field-name");
+    let discarding = use_discarding();
     let mut close = move || {
         adding.set(None);
-        discarding.reset();
+        discarding.keep_editing();
     };
     let tr = ctx.translator.read();
     let form = adding
@@ -128,7 +128,6 @@ pub fn AddPhaseDialog() -> Element {
             {tr.get("add-phase")}
         }
         Dialog {
-            role: if discarding.asked() { "alertdialog" } else { "dialog" },
             open: Some(form.is_some()),
             on_open_change: move |open: bool| {
                 if !open {
@@ -140,15 +139,11 @@ pub fn AddPhaseDialog() -> Element {
                     discarding.close_asked(changed, close);
                 }
             },
-            if discarding.asked() {
-                DiscardChanges { discarding, on_discard: move |()| close() }
-            } else {
-                DialogTitle { {tr.get("add-phase")} }
-                DialogDescription { {tr.get("add-phase-description")} }
-            }
+            DialogTitle { {tr.get("add-phase")} }
+            DialogDescription { {tr.get("add-phase-description")} }
             match form {
                 Some(Ok(form)) => rsx! {
-                    div { class: "dialog-form", hidden: discarding.asked(),
+                    div { class: "dialog-form",
                         NewPhase { form, on_added: move |()| close() }
                         div { class: "dialog-buttons",
                             button {
@@ -165,39 +160,35 @@ pub fn AddPhaseDialog() -> Element {
                 None => rsx! {},
             }
         }
+        DiscardChanges { discarding, on_discard: move |()| close() }
     }
 }
 
 /// Whether a dialog holding the form of a phase asks if the changes made in it are to be
-/// discarded, see [`use_discarding`].
+/// discarded, in a dialog on top of it, see [`DiscardChanges`].
 #[derive(Clone, Copy, PartialEq)]
 struct Discarding {
     asked: Signal<bool>,
-    /// What gets the focus back when the operator keeps editing.
-    field: &'static str,
 }
 
 /// Whether a dialog holding the form of a phase asks if the changes made in it are to be
-/// discarded: it does when asked to close (Escape, or a click beside it) with changes made; asked
-/// again, the operator keeps editing, at `field`.
-fn use_discarding(field: &'static str) -> Discarding {
+/// discarded: it does when asked to close (Escape, or a click beside it) with changes made.
+fn use_discarding() -> Discarding {
     Discarding {
         asked: use_signal(|| false),
-        field,
     }
 }
 
 impl Discarding {
-    fn asked(self) -> bool {
-        (self.asked)()
-    }
-
-    /// What the dialog does when asked to close: closes by `close` if nothing is `changed`, else
-    /// asks whether to discard the changes, and keeps editing if it asked already.
+    /// What the dialog with the form does when asked to close: closes by `close` if nothing is
+    /// `changed`, else asks whether to discard the changes. While it asks, a request comes from
+    /// the question on top (a press or the focus there, outside the form's dialog), which
+    /// answers it itself.
     fn close_asked(mut self, changed: bool, close: impl FnOnce()) {
         if *self.asked.peek() {
-            self.keep_editing();
-        } else if changed {
+            return;
+        }
+        if changed {
             self.asked.set(true);
             // what is safe is what a second Enter does
             focus_later(&["#keep-editing"]);
@@ -206,42 +197,46 @@ impl Discarding {
         }
     }
 
-    /// Asks no more, and the form shows again.
+    /// Asks no more: the question closes, and its dialog hands the focus back to the form.
     fn keep_editing(mut self) {
-        self.asked.set(false);
-        focus_later(&[self.field]);
-    }
-
-    /// Asks no more, once the dialog closes.
-    fn reset(mut self) {
         if *self.asked.peek() {
             self.asked.set(false);
         }
     }
 }
 
-/// What a dialog holding the form of a phase shows while it asks whether to discard the changes
-/// made in it, as `discarding` says: the question, and the buttons answering it, discarding by
-/// `on_discard`, or else keeping on editing.
+/// The dialog asking, on top of the dialog with the form of a phase, whether to discard the
+/// changes made in it, while `discarding` asks: discarding by `on_discard`, else, by its button,
+/// Escape or a click beside it, keeping on editing.
 #[component]
 fn DiscardChanges(discarding: Discarding, on_discard: EventHandler<()>) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     rsx! {
-        DialogTitle { {tr.get("discard-changes-title")} }
-        DialogDescription { {tr.get("discard-changes-description")} }
-        div { class: "dialog-buttons",
-            button {
-                class: "primary danger",
-                r#type: "button",
-                onclick: move |_| on_discard.call(()),
-                {tr.get("discard-changes")}
-            }
-            button {
-                id: "keep-editing",
-                r#type: "button",
-                onclick: move |_| discarding.keep_editing(),
-                {tr.get("keep-editing")}
+        Dialog {
+            role: "alertdialog",
+            class: "discard-changes",
+            open: Some((discarding.asked)()),
+            on_open_change: move |open: bool| {
+                if !open {
+                    discarding.keep_editing();
+                }
+            },
+            DialogTitle { {tr.get("discard-changes-title")} }
+            DialogDescription { {tr.get("discard-changes-description")} }
+            div { class: "dialog-buttons",
+                button {
+                    class: "primary danger",
+                    r#type: "button",
+                    onclick: move |_| on_discard.call(()),
+                    {tr.get("discard-changes")}
+                }
+                button {
+                    id: "keep-editing",
+                    r#type: "button",
+                    onclick: move |_| discarding.keep_editing(),
+                    {tr.get("keep-editing")}
+                }
             }
         }
     }
@@ -394,10 +389,10 @@ fn EditPhase(phase: PhaseId) -> Element {
     // the form while the dialog is open, and the form as it opened
     let mut editing = use_signal(|| None::<(Signal<PhaseForm>, PhaseForm)>);
     let mut error = use_signal(|| None::<Text>);
-    let discarding = use_discarding("#field-format");
+    let discarding = use_discarding();
     let mut close = move || {
         editing.set(None);
-        discarding.reset();
+        discarding.keep_editing();
     };
     let tr = ctx.translator.read();
     let edited = editing.read().as_ref().map(|(form, _)| *form);
@@ -424,7 +419,6 @@ fn EditPhase(phase: PhaseId) -> Element {
             {tr.get("edit-phase")}
         }
         Dialog {
-            role: if discarding.asked() { "alertdialog" } else { "dialog" },
             open: Some(edited.is_some()),
             on_open_change: move |open: bool| {
                 if !open {
@@ -435,17 +429,12 @@ fn EditPhase(phase: PhaseId) -> Element {
                     discarding.close_asked(changed, close);
                 }
             },
-            if discarding.asked() {
-                DiscardChanges { discarding, on_discard: move |()| close() }
-            } else {
-                DialogTitle { {tr.get("edit-phase-title")} }
-                DialogDescription { {tr.get("edit-phase-description")} }
-            }
+            DialogTitle { {tr.get("edit-phase-title")} }
+            DialogDescription { {tr.get("edit-phase-description")} }
             if let Some(form) = edited {
                 form {
                     id: "edit-phase",
                     class: "dialog-form",
-                    hidden: discarding.asked(),
                     onsubmit: move |event| {
                         event.prevent_default();
                         if !form.read().view().complete {
@@ -488,6 +477,7 @@ fn EditPhase(phase: PhaseId) -> Element {
                 }
             }
         }
+        DiscardChanges { discarding, on_discard: move |()| close() }
     }
 }
 

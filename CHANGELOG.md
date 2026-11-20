@@ -47,6 +47,13 @@ later one: a file whose `"format"` changes is migrated, not refused.
   Medals go by the places of the competition, so the group tables show none.
   Who won the competition is shown above the phases, not in the phase
   shown.
+- The start of a phase can be undone (“Undo the start” under Phase) while it
+  has no result and no phase taking its entrants has started, also after a
+  reload, when Undo no longer reaches it: a later phase waits to be started
+  again, freeing the results of the phases before it to be reopened; for a
+  phase that started with the competition, the competition goes back to its
+  setup (asked first), where entrants and phases can be changed. Starting
+  again draws the same lots.
 - What a table of standings shows is chosen per metric: the metrics of a
   phase are a checkbox per table, the group tables and, where groups are
   compared, the comparison. By default a table shows what it is ranked by and

@@ -873,6 +873,22 @@ impl Gui {
         self.click_in_sight(&button).await
     }
 
+    /// Clicks the button saying `text` in the dialog open, once it is enabled, where a button of
+    /// the page behind it says the same, e.g. `"Undo the start"`.
+    pub async fn click_in_dialog(&self, text: &str) -> WebDriverResult<()> {
+        let button = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog' or @role='alertdialog']//button[{}='{text}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .and_displayed()
+            .and_enabled()
+            .first()
+            .await?;
+        self.click_in_sight(&button).await
+    }
+
     /// Clicks the button whose accessible name, its `aria-label`, is `label`, once it is enabled,
     /// e.g. `"Alice wins"`.
     pub async fn click_labelled(&self, label: &str) -> WebDriverResult<()> {

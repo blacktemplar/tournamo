@@ -22,7 +22,7 @@ use tournament_engine::{
     },
     transitions::{
         AddPhaseError, Change, ConflictsError, RemovePhaseError, StartCompetitionError,
-        StartPhaseError, UndoMatchResultError,
+        StartPhaseError, UndoMatchResultError, UnstartPhaseError,
     },
     undoable_state_machine::{SessionHistory, Transition, TransitionId},
     uuid::Uuid,
@@ -1711,4 +1711,87 @@ fn entrants_paired_again_are_placed_as_pairs() {
 
     // the singles left behind come after two pairs, the pair left behind after four rows
     assert_eq!(places_taken(&machine), [(1, 2), (2, 2), (3, 2), (5, 2)]);
+}
+
+#[test]
+fn a_phase_whose_start_is_undone_starts_again_with_the_same_field() {
+    let mut machine = qualification_then_knockouts();
+    play_out(&mut machine, phase(QUALIFICATION));
+    start(&mut machine, phase(UPPER));
+    let field = seeding(&machine, phase(UPPER));
+    let mut history = SessionHistory::new();
+
+    machine.unstart_phase(&mut history, phase(UPPER)).unwrap();
+
+    let upper = &machine.current().phases()[&phase(UPPER)];
+    assert!(!upper.is_started());
+    assert!(upper.divisions().is_empty());
+    history.undo_last(&mut machine).unwrap();
+    assert!(machine.current().phases()[&phase(UPPER)].is_started());
+    machine.unstart_phase(&mut history, phase(UPPER)).unwrap();
+    start(&mut machine, phase(UPPER));
+    assert_eq!(seeding(&machine, phase(UPPER)), field);
+}
+
+#[test]
+fn undoing_the_start_of_a_phase_of_the_registration_unstarts_the_competition() {
+    let mut machine = qualification_then_knockouts();
+    let matches = pairings(&machine, phase(QUALIFICATION));
+
+    machine
+        .unstart_phase(&mut SessionHistory::new(), phase(QUALIFICATION))
+        .unwrap();
+
+    assert!(!machine.current().is_started());
+    assert!(!machine.current().phases()[&phase(QUALIFICATION)].is_started());
+    let late = Entrant::new(EntrantId::new(Uuid::from_u128(99)));
+    machine.apply_new(AddEntrant::new(late).into()).unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    assert_eq!(machine.current().entrants().len(), 17);
+    // without the late entrant, the lots drawn again are the same
+    let mut machine = qualification_then_knockouts();
+    machine
+        .unstart_phase(&mut SessionHistory::new(), phase(QUALIFICATION))
+        .unwrap();
+    machine
+        .apply_new(StartCompetition::default().into())
+        .unwrap();
+    assert_eq!(pairings(&machine, phase(QUALIFICATION)), matches);
+}
+
+#[test]
+fn the_start_of_a_phase_is_undone_only_without_results_and_later_phases_started() {
+    let mut machine = qualification_then_knockouts();
+    let mut history = SessionHistory::new();
+    assert!(matches!(
+        machine.unstart_phase(&mut history, phase(UPPER)),
+        Err(UnstartPhaseError::NotStarted)
+    ));
+    report_one(&mut machine, phase(QUALIFICATION));
+    assert!(matches!(
+        machine.unstart_phase(&mut history, phase(QUALIFICATION)),
+        Err(UnstartPhaseError::Played(played)) if played == [phase(QUALIFICATION)]
+    ));
+    play_out(&mut machine, phase(QUALIFICATION));
+    start(&mut machine, phase(UPPER));
+    start(&mut machine, phase(LOWER));
+    let log_len = machine.log().len();
+
+    assert!(matches!(
+        machine.unstart_phase(&mut history, phase(QUALIFICATION)),
+        Err(UnstartPhaseError::InUse(users)) if users == [phase(UPPER), phase(LOWER)]
+    ));
+    report_one(&mut machine, phase(UPPER));
+    assert!(matches!(
+        machine.unstart_phase(&mut history, phase(UPPER)),
+        Err(UnstartPhaseError::Played(played)) if played == [phase(UPPER)]
+    ));
+    assert_eq!(
+        machine.log().len(),
+        log_len + 1,
+        "only the report is logged"
+    );
+    assert!(history.next_undo(&machine).is_none());
 }

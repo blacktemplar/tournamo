@@ -873,6 +873,12 @@ pub enum Action {
     /// A phase started on its own, see
     /// [`Session::start_phase`](crate::session::Session::start_phase).
     StartPhase(PhaseName),
+    /// The start of the competition undone, see
+    /// [`Session::unstart_phase`](crate::session::Session::unstart_phase).
+    Unstart,
+    /// The start of a phase undone, see
+    /// [`Session::unstart_phase`](crate::session::Session::unstart_phase).
+    UnstartPhase(PhaseName),
     /// A result reported, see [`Reported::row`].
     Report(MatchRow),
     /// A result undone by its match, see [`Reopened::row`].

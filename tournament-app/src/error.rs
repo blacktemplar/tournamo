@@ -271,6 +271,21 @@ pub enum RemovePhaseError {
     Rejected(TransitionError),
 }
 
+/// Why the start of a phase was not undone, see
+/// [`Session::unstart_phase`](crate::session::Session::unstart_phase).
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum UnstartPhaseError {
+    NoSuchPhase,
+    NotStarted,
+    /// These phases, which undoing the start would unstart, have results.
+    Played(Vec<PhaseName>),
+    /// These phases have started, taking entrants from a phase undoing the start would unstart.
+    InUse(Vec<PhaseName>),
+    /// The engine refused the undo for a reason this crate does not know.
+    Rejected(TransitionError),
+}
+
 /// Why the competition did not start.
 #[derive(Debug, Error)]
 #[error("{}", english(self))]
@@ -727,6 +742,22 @@ impl Message for RemovePhaseError {
             Self::NoSuchPhase => Text::new("error-no-such-phase"),
             Self::Started => Text::new("error-phase-removed-after-start"),
             Self::InUse(phases) => Text::new("error-phase-in-use")
+                .with("count", phases.len())
+                .with("phases", Arg::Phases(phases.clone())),
+            Self::Rejected(error) => rejected(error),
+        }
+    }
+}
+
+impl Message for UnstartPhaseError {
+    fn text(&self) -> Text {
+        match self {
+            Self::NoSuchPhase => Text::new("error-no-such-phase"),
+            Self::NotStarted => Text::new("error-phase-not-started"),
+            Self::Played(phases) => Text::new("error-unstart-played")
+                .with("count", phases.len())
+                .with("phases", Arg::Phases(phases.clone())),
+            Self::InUse(phases) => Text::new("error-unstart-in-use")
                 .with("count", phases.len())
                 .with("phases", Arg::Phases(phases.clone())),
             Self::Rejected(error) => rejected(error),

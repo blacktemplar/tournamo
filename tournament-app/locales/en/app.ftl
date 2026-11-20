@@ -41,6 +41,17 @@ error-phase-in-use = { $count ->
     }
 # $phase: a later phase, started, taking entrants from the one changed
 error-later-phase-started = { $phase } has started with the entrants of this phase; undo its start first
+error-phase-not-started = the phase has not started
+# $phases: the phases with results that undoing the start would take back to their setup
+error-unstart-played = { $count ->
+        [one] { $phases } has results; reopen its matches first
+       *[other] { $phases } have results; reopen their matches first
+    }
+# $phases: the later phases, started, taking entrants from a phase whose start is to be undone
+error-unstart-in-use = { $count ->
+        [one] { $phases } has started with entrants of this phase; undo its start first
+       *[other] { $phases } have started with entrants of this phase; undo their starts first
+    }
 # a tie that a cut between places goes through; $favoured and $others: the names of the teams
 # before and after the cut
 warning-cut-through-tie = in { $phase }, more entrants share place { $rank } than go on: the lot takes { $favoured }, not { $others }

@@ -204,8 +204,13 @@ impl Session {
                 Some(CompetitionTransition::AddPhase(added)) => {
                     Action::RemovePhase(self.added_phase_name(*target, added))
                 }
+                Some(CompetitionTransition::StartCompetition(_)) => Action::Unstart,
+                Some(CompetitionTransition::StartPhase(start)) => {
+                    Action::UnstartPhase(started(start.phase_id()))
+                }
                 _ => unreachable!(
-                    "the only undo a session takes as an action reopens a match or removes a phase"
+                    "the only undo a session takes as an action reopens a match, removes a \
+                     phase or undoes a start"
                 ),
             },
         }

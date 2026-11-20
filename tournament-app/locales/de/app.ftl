@@ -34,6 +34,15 @@ error-phase-in-use = { $count ->
        *[other] { $phases } nehmen Teilnehmer aus dieser Phase; entferne zuerst jene Phasen
     }
 error-later-phase-started = { $phase } hat mit den Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
+error-phase-not-started = die Phase hat nicht begonnen
+error-unstart-played = { $count ->
+        [one] { $phases } hat Ergebnisse; öffne zuerst ihre Spiele wieder
+       *[other] { $phases } haben Ergebnisse; öffne zuerst ihre Spiele wieder
+    }
+error-unstart-in-use = { $count ->
+        [one] { $phases } hat mit Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
+       *[other] { $phases } haben mit Teilnehmern dieser Phase begonnen; mache zuerst ihren Beginn rückgängig
+    }
 warning-cut-through-tie = in { $phase } teilen sich mehr Teilnehmer Platz { $rank }, als weiterkommen: das Los nimmt { $favoured }, nicht { $others }
 warning-cut-through-tie-in-group = in Gruppe { $group } von { $phase } teilen sich mehr Teilnehmer Platz { $rank }, als weiterkommen: das Los nimmt { $favoured }, nicht { $others }
 phase-unnamed = { $number } · { $format }

@@ -130,6 +130,67 @@ async fn the_start_waits_for_a_new_phase_to_be_added_or_discarded() {
     .await;
 }
 
+/// Undoing the start of a phase is its own action, there after a reload too, when the session's
+/// undo is gone.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_start_of_a_phase_is_undone_after_a_reload() {
+    run_in_new_competition(async |gui| {
+        round_robin_and_final(&gui).await?;
+        gui.click("Start").await?;
+        draw_round_robin(&gui).await?;
+        gui.click("Start Final").await?;
+        gui.click("Start anyway").await?;
+        gui.page.reload().await?;
+        gui.expect_bar_phase(Some("Final")).await?;
+        gui.go_to_phase("1 · Round robin").await?;
+        gui.expect_bar_phase(Some("1 · Round robin")).await?;
+        gui.click("Phase").await?;
+        // the final took its entrants from the round robin
+        gui.expect_disabled("Undo the start").await?;
+        gui.go_to_phase("Final").await?;
+        gui.expect_bar_phase(Some("Final")).await?;
+        gui.click("Phase").await?;
+        gui.page.check_accessibility().await?;
+
+        gui.click_labelled("Undo the start: Final").await?;
+
+        gui.expect_announcement("The start of Final is undone.")
+            .await?;
+        gui.expect_focus("Final").await?;
+        gui.go_to_phase("1 · Round robin").await?;
+        gui.click_labelled("Reopen match 6").await?;
+        gui.expect_announcement("Match 6 is open again.").await
+    })
+    .await;
+}
+
+/// The first phase started with the competition, so undoing its start goes back to the setup,
+/// which is asked about first.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn undoing_the_start_of_the_first_phase_goes_back_to_the_setup() {
+    run_in_new_competition(async |gui| {
+        round_robin_and_final(&gui).await?;
+        gui.click("Start").await?;
+        gui.expect_bar_phase(Some("1 · Round robin")).await?;
+        gui.click("Phase").await?;
+
+        gui.click_labelled("Undo the start: 1 · Round robin")
+            .await?;
+        gui.page.check_accessibility().await?;
+        gui.click_in_dialog("Undo the start").await?;
+
+        gui.expect_announcement("The start is undone: the competition is back at its setup.")
+            .await?;
+        gui.expect_focus_on_entrant_name().await?;
+        gui.page
+            .expect_texts(By::Css("#phases h3"), &["1 · Round robin", "Final"])
+            .await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_phase_is_removed_and_brought_back_by_undo() {

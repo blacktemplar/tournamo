@@ -19,7 +19,7 @@ use crate::{
     plugins::{
         PhasePlugins,
         draw::{DivisionOrder, DrawView},
-        metrics_calculator::MetricsCalculator,
+        metrics_calculator::MetricEntry,
         ranker::RankingScope,
         seeding::SeedingView,
     },
@@ -119,7 +119,7 @@ impl Phase {
         &self.columns
     }
 
-    /// The calculators of this phase that `table` shows by rule, by id, with why, see
+    /// The metrics of this phase that `table` shows by rule, by id, with why, see
     /// [`columns::by_rule`].
     pub fn rule(&self, table: Table) -> Vec<(&'static str, Rule)> {
         let criteria = match table {
@@ -130,42 +130,40 @@ impl Phase {
             .iter()
             .map(|criterion| plugin_factory::id_of(&**criterion))
             .collect();
-        let metrics: Vec<&str> = self
+        let calculators: Vec<&str> = self
             .plugins
             .metrics()
             .iter()
             .map(|calculator| plugin_factory::id_of(&**calculator))
             .collect();
-        columns::by_rule(&criteria, &metrics)
+        columns::by_rule(&criteria, &calculators)
     }
 
-    /// The calculators whose column `table` shows, in the order of the columns: those the
+    /// The metrics whose column `table` shows, in the order of the columns: those the
     /// [rule](Self::rule) shows and the operator did not hide, and those the operator showed
-    /// ([`Self::columns`]), if they offer a column ([`MetricsCalculator::column`]). Those a
-    /// criterion of the table ranks by come first, in the order of the criteria, then the others
-    /// in running order.
-    pub fn shown(&self, table: Table) -> Vec<&dyn MetricsCalculator> {
+    /// ([`Self::columns`]), if they offer a column ([`MetricEntry::column`]). Those a criterion of
+    /// the table ranks by come first, in the order of the criteria, then the others in the
+    /// running order of their calculators.
+    pub fn shown(&self, table: Table) -> Vec<MetricEntry> {
         let rule = self.rule(table);
-        let mut shown: Vec<&dyn MetricsCalculator> = self
+        let mut shown: Vec<MetricEntry> = self
             .plugins
             .metrics()
             .iter()
-            .map(|calculator| &**calculator)
-            .filter(|calculator| {
-                let id = plugin_factory::id_of(*calculator);
+            .map(|calculator| calculator.metric())
+            .filter(|metric| {
                 self.columns
-                    .get(id)
+                    .get(metric.id())
                     .of(table)
-                    .unwrap_or_else(|| rule.iter().any(|&(ruled, _)| ruled == id))
-                    && calculator.column().is_some()
+                    .unwrap_or_else(|| rule.iter().any(|&(ruled, _)| ruled == metric.id()))
+                    && metric.column().is_some()
             })
             .collect();
         // stable, so that the others stay in running order; the rule lists those ranked by
         // first, in the order of the criteria
-        shown.sort_by_key(|calculator| {
-            let id = plugin_factory::id_of(*calculator);
+        shown.sort_by_key(|metric| {
             rule.iter()
-                .position(|&(ruled, why)| ruled == id && matches!(why, Rule::RankedBy(_)))
+                .position(|&(ruled, why)| ruled == metric.id() && matches!(why, Rule::RankedBy(_)))
                 .unwrap_or(usize::MAX)
         });
         shown

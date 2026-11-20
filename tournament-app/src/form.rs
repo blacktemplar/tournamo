@@ -12,9 +12,9 @@
 //! is edited. Then the whole section stays as chosen, until [`PhaseForm::apply_suggestions`]
 //! replaces it and resumes following. Existing phases start with their settings kept.
 //!
-//! The metrics are not chosen by themselves but by where they are shown
-//! ([`PhaseForm::set_shown`]): a metric is calculated while something needs it or a table of
-//! standings shows it. What the operator says about the columns is kept beside the draft, see
+//! The metrics are a row per metric: those the operator added ([`PhaseForm::add_metric`]) and
+//! those something needs, which come and go with it, see [`metrics`]. Where they are shown is said
+//! apart from that ([`PhaseForm::set_shown`]), and kept beside the draft, see
 //! [`PhaseForm::columns`].
 
 pub(crate) use entry::{Context, Groups};
@@ -31,8 +31,10 @@ use tournament_engine::{
     Columns, PhasePlugins, Table,
     entities::columns::{self, Rule},
     plugins::{
-        metrics_calculator::MetricsCalculator, phase_format::PhaseFormat, ranker::SliceRanker,
-        seeding::SeededInOrder, teams::Keep,
+        metrics_calculator::{MetricEntry, MetricsCalculator},
+        phase_format::PhaseFormat,
+        seeding::SeededInOrder,
+        teams::Keep,
     },
 };
 
@@ -43,9 +45,11 @@ use crate::{
 
 mod edit;
 mod entry;
+pub mod metrics;
 mod preset;
 
 use edit::{Answering, Generator};
+pub use metrics::{MetricOption, MetricRow};
 pub use preset::{PresetForm, PresetView, PreviewPhase};
 
 /// The plugins of a phase being configured, see the [module](self), with its name and where it
@@ -62,6 +66,11 @@ pub struct PhaseForm {
     /// What the operator said about the columns of the tables of standings, only for metrics
     /// calculated.
     columns: Columns,
+    /// The metrics the operator added, by id, see [`Self::add_metric`]; the others are calculated
+    /// since something needs them.
+    added: Vec<&'static str>,
+    /// What the form removed of the metrics, to bring it back as it was.
+    memory: metrics::Memory,
     /// The language numbers are typed in, see [`Self::in_language`].
     language: Language,
 }
@@ -124,32 +133,6 @@ impl FormView {
                 _ => true,
             })
             .cloned()
-            .collect()
-    }
-
-    /// The metrics the operator shows in `table` against the rule if `on`, else those hidden
-    /// there against it, in the order of [`ListInput::set`], see [`PhaseForm::set_shown`].
-    pub fn overridden(&self, table: Table, on: bool) -> Vec<PluginOption> {
-        let metrics = Path::ROOT.field(PhasePlugins::METRICS);
-        let Some(Input::List(list)) = self
-            .fields
-            .iter()
-            .find(|field| field.path == metrics)
-            .map(|field| &field.input)
-        else {
-            return Vec::new();
-        };
-        list.shown
-            .iter()
-            .filter(|metric| {
-                metric.calculated
-                    && *metric.of(table)
-                        == ShownIn {
-                            on,
-                            by: By::Operator,
-                        }
-            })
-            .map(|metric| metric.plugin)
             .collect()
     }
 }
@@ -260,9 +243,12 @@ pub struct ListInput {
     pub implied: Vec<Implied>,
     /// The plugins that can be added, ordered as [`PluginInput::options`].
     pub options: Vec<PluginOption>,
-    /// For the list of metrics of the phase, where each plugin of the list, chosen, implied or
-    /// offered, is shown, in the order of [`Self::set`]; empty for every other list.
-    pub shown: Vec<MetricShown>,
+    /// For the list of metrics of the phase, a row per metric, added or needed, by label; empty
+    /// for every other list. The calculators of [`Self::items`] are found there too.
+    pub metrics: Vec<MetricRow>,
+    /// For the list of metrics of the phase, the metrics that can be added, by label, see
+    /// [`PhaseForm::add_metric`]; empty for every other list.
+    pub addable: Vec<MetricOption>,
 }
 
 impl ListInput {
@@ -282,30 +268,6 @@ impl ListInput {
     }
 }
 
-/// Where a metric is shown, see [`ListInput::shown`].
-#[derive(Debug, Clone, PartialEq)]
-pub struct MetricShown {
-    pub plugin: PluginOption,
-    /// Whether it offers a column at all; one that does not is shown in no table.
-    pub column: bool,
-    /// Whether the standings of a division, then the rows compared across divisions, show it.
-    /// What the rows compared show does not matter while the phase is played in one division and
-    /// compared by nothing, see [`PhasePlugins::ACROSS`].
-    pub tables: [ShownIn; 2],
-    /// Whether it is calculated: chosen or implied.
-    pub calculated: bool,
-    /// The plugins of the phase that need it, in the order of the fields of the phase; empty if
-    /// it is not calculated.
-    pub needed_by: Vec<PluginOption>,
-}
-
-impl MetricShown {
-    /// Whether `table` shows it.
-    pub fn of(&self, table: Table) -> &ShownIn {
-        &self.tables[table_index(table)]
-    }
-}
-
 fn table_index(table: Table) -> usize {
     match table {
         Table::Division => 0,
@@ -313,7 +275,7 @@ fn table_index(table: Table) -> usize {
     }
 }
 
-/// Whether a table shows a metric, see [`MetricShown::tables`].
+/// Whether a table shows a metric, see [`MetricRow::tables`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShownIn {
     pub on: bool,
@@ -335,7 +297,7 @@ pub enum Because {
     /// The table is ranked by it, by this criterion.
     RankedBy(PluginOption),
     /// This metric, shown by rule, is calculated from it.
-    CalculatedFrom(PluginOption),
+    CalculatedFrom(MetricOption),
 }
 
 /// A plugin added to a list since others need it, see [`ListInput::implied`].
@@ -554,13 +516,28 @@ impl Answering for PhaseForm {
         let mut draft = self.draft.clone();
         change(&mut draft)?;
         let following = self.following_suggestions && !is_suggested(path);
-        self.draft = if following {
+        let draft = if following {
             suggested(draft)?
         } else {
             draft.with_defaults()?
         };
+        // following suggestions, the operator has added nothing; else a calculator added or
+        // removed by hand adds or removes its metric
+        let added = if following {
+            metrics::added_in(&draft)
+        } else {
+            metrics::added_by_hand(&self.draft, &draft, &self.added)
+        };
+        let earlier = std::mem::replace(&mut self.added, added);
+        self.draft = match self.settle(draft) {
+            Ok(draft) => draft,
+            Err(error) => {
+                self.added = earlier;
+                return Err(error);
+            }
+        };
         // a metric that leaves the list takes what was said about its columns with it
-        let calculated = answered(&self.completed(), PhasePlugins::METRICS);
+        let calculated = metrics_of(&answered(&self.draft, PhasePlugins::METRICS));
         self.columns.retain(|id| calculated.contains(&id));
         self.following_suggestions = following;
         if is_suggested(path) || following {
@@ -586,6 +563,8 @@ impl PhaseForm {
     /// knows the phases of its competition.
     pub fn new(draft: Draft<PhasePlugins>) -> Self {
         Self {
+            added: metrics::added_in(&draft),
+            memory: metrics::Memory::default(),
             draft,
             following_suggestions: false,
             rejected: Rejections::default(),
@@ -651,7 +630,7 @@ impl PhaseForm {
 
     /// Shows what `columns` say instead, as far as they are about metrics calculated.
     pub fn set_columns(&mut self, mut columns: Columns) {
-        let calculated = answered(&self.completed(), PhasePlugins::METRICS);
+        let calculated = metrics_of(&answered(&self.draft, PhasePlugins::METRICS));
         columns.retain(|id| calculated.contains(&id));
         self.columns = columns;
     }
@@ -663,72 +642,52 @@ impl PhaseForm {
     /// # Errors
     /// Returns an error if a suggested answer does not fit its schema. Nothing changes then.
     pub fn apply_suggestions(&mut self) -> Result<(), ConfigError> {
-        self.draft = suggested(self.draft.clone())?;
+        let draft = suggested(self.draft.clone())?;
+        self.added = metrics::added_in(&draft);
+        self.draft = self.settle(draft)?;
         self.following_suggestions = true;
         self.rejected.retain(|path| !is_suggested(path));
         self.columns = Columns::new();
         Ok(())
     }
 
-    /// Shows the metric `calculator` in `table` if `shown`, else hides it there. A metric not
-    /// calculated is added to the metrics to be shown, configured as it offers. One hidden in the
-    /// last table showing it is removed from the metrics, with what was entered for its fields,
-    /// unless something needs it. The operator's choice is kept only where it differs from the
-    /// rule for the draft as it is, see [`columns::by_rule`].
-    ///
-    /// # Errors
-    /// Returns an error if the phase cannot calculate a metric of this id.
-    pub fn set_shown(
-        &mut self,
-        calculator: &str,
-        table: Table,
-        shown: bool,
-    ) -> Result<(), ConfigError> {
-        let metrics = Path::ROOT.field(PhasePlugins::METRICS);
-        let completed = self.completed();
-        if shown && !answered(&completed, PhasePlugins::METRICS).contains(&calculator) {
-            edit::add(self, &metrics, calculator)?;
-        }
+    /// Shows the metric `metric` in `table` if `shown`, else hides it there. It neither adds nor
+    /// removes the metric, see [`Self::add_metric`]. The operator's choice is kept only where it
+    /// differs from the rule for the draft as it is, see [`columns::by_rule`].
+    pub fn set_shown(&mut self, metric: &str, table: Table, shown: bool) {
         let by_rule = self
-            .rule(&self.completed(), table)
+            .rule(&self.draft, table)
             .iter()
-            .any(|&(ruled, _)| ruled == calculator);
+            .any(|&(ruled, _)| ruled == metric);
         self.columns
-            .set(calculator, table, (shown != by_rule).then_some(shown));
-        let completed = self.completed();
-        let anywhere = Table::ALL.into_iter().any(|table| {
-            self.columns.get(calculator).of(table).unwrap_or_else(|| {
-                self.rule(&completed, table)
-                    .iter()
-                    .any(|&(ruled, _)| ruled == calculator)
-            })
-        });
-        let needed = AnyAxis::of::<dyn MetricsCalculator>()
-            .entry(calculator)
-            .is_some_and(|entry| {
-                !needed_by(
-                    entry,
-                    AnyAxis::of::<dyn MetricsCalculator>(),
-                    &completed.fields(),
-                )
-                .is_empty()
-            });
-        if !anywhere && !needed {
-            let chosen = self.draft.fields().into_iter().find_map(|node| {
-                (node.path == metrics)
-                    .then(|| {
-                        node.plugins()
-                            .into_iter()
-                            .find(|plugin| plugin.entry.id() == calculator)
-                            .map(|plugin| plugin.path)
-                    })
-                    .flatten()
-            });
-            if let Some(chosen) = chosen {
-                edit::remove(self, &chosen)?;
+            .set(metric, table, (shown != by_rule).then_some(shown));
+    }
+
+    /// The plugin a plugin of the issue at `required_by` is there for, if it is the calculator of
+    /// a metric only needed: what needs that metric, however far back, up to a plugin that is no
+    /// such calculator.
+    fn root_needer(&self, required_by: &Path) -> Option<&'static PluginEntry> {
+        let calculator = self.draft.plugin_at(required_by)?.entry;
+        let mut metric = MetricEntry::of_calculator(calculator)?;
+        let mut needer = None;
+        let mut seen = Vec::new();
+        while !self.added.contains(&metric.id()) && !seen.contains(&metric) {
+            seen.push(metric);
+            let plugins = self
+                .draft
+                .fields()
+                .into_iter()
+                .flat_map(|node| node.plugins());
+            let next = plugins
+                .map(|plugin| plugin.entry)
+                .find(|plugin| plugin.id() != calculator.id() && metric.is_required_by(plugin))?;
+            needer = Some(next);
+            match MetricEntry::of_calculator(next) {
+                Some(next) => metric = next,
+                None => break,
             }
         }
-        Ok(())
+        needer
     }
 
     /// What the fields of the draft are shown from.
@@ -797,6 +756,22 @@ impl PhaseForm {
         let mut fields = self
             .generator()
             .fields(&nodes, None, &completed_nodes, &whole);
+        let mut unplaced = Vec::new();
+        for issue in &issues {
+            let needer = match issue.problem() {
+                Problem::Unprovided { required_by, .. } => self.root_needer(required_by),
+                _ => None,
+            };
+            let text = issue_text(issue, &completed, needer);
+            if !place(&mut fields, issue.path(), &text) {
+                unplaced.push(text);
+            }
+        }
+        for (path, rejected) in self.rejected.iter() {
+            place(&mut fields, path, &rejected.problem);
+        }
+        // after the issues, which the rows of the metrics take along with the fields of their
+        // calculators
         if let Some(FormField {
             input: Input::List(metrics),
             ..
@@ -804,17 +779,8 @@ impl PhaseForm {
             .iter_mut()
             .find(|field| field.path == Path::ROOT.field(PhasePlugins::METRICS))
         {
-            metrics.shown = self.shown(metrics, &completed, &completed_nodes);
-        }
-        let mut unplaced = Vec::new();
-        for issue in &issues {
-            let text = issue_text(issue, &completed);
-            if !place(&mut fields, issue.path(), &text) {
-                unplaced.push(text);
-            }
-        }
-        for (path, rejected) in self.rejected.iter() {
-            place(&mut fields, path, &rejected.problem);
+            metrics.metrics = self.metric_rows(metrics);
+            metrics.addable = Self::addable_metrics(&metrics.metrics);
         }
         // a phase ranked by nothing is played all the same, with every entrant tied
         if let Some(ranking) = fields
@@ -864,78 +830,16 @@ impl PhaseForm {
     }
 }
 
-impl PhaseForm {
-    /// Where each plugin of `metrics`, the list of metrics, is shown, see [`ListInput::shown`].
-    /// `completed` is the draft with the plugins it implies, `nodes` its fields.
-    fn shown(
-        &self,
-        metrics: &ListInput,
-        completed: &Draft<PhasePlugins>,
-        nodes: &[FieldNode],
-    ) -> Vec<MetricShown> {
-        let calculators = AnyAxis::of::<dyn MetricsCalculator>();
-        let calculated = answered(completed, PhasePlugins::METRICS);
-        let rules = Table::ALL.map(|table| self.rule(completed, table));
-        metrics
-            .set()
-            .into_iter()
-            .map(|entry| {
-                let plugin = *entry.plugin();
-                let is_calculated = calculated.contains(&plugin.id);
-                let said = self.columns.get(plugin.id);
-                let tables = Table::ALL.map(|table| {
-                    let because = rules[table_index(table)]
-                        .iter()
-                        .find(|&&(ruled, _)| ruled == plugin.id)
-                        .and_then(|&(_, why)| because(why));
-                    match said.of(table) {
-                        Some(on) => ShownIn {
-                            on: on && is_calculated,
-                            by: By::Operator,
-                        },
-                        None => ShownIn {
-                            on: because.is_some(),
-                            by: By::Rule(because),
-                        },
-                    }
-                });
-                let entry = calculators.entry(plugin.id);
-                MetricShown {
-                    plugin,
-                    column: entry.is_none_or(offers_column),
-                    tables,
-                    calculated: is_calculated,
-                    needed_by: match entry {
-                        Some(entry) if is_calculated => needed_by(entry, calculators, nodes),
-                        _ => Vec::new(),
-                    },
-                }
-            })
-            .collect()
-    }
+/// The id of the metric the calculator of the id `calculator` calculates, if both are registered.
+fn metric_of(calculator: &str) -> Option<&'static str> {
+    let entry = AnyAxis::of::<dyn MetricsCalculator>().entry(calculator)?;
+    Some(MetricEntry::of_calculator(entry)?.id())
 }
 
-/// What a table showing a metric by rule for `why` says why.
-fn because(why: Rule) -> Option<Because> {
-    let option =
-        |axis: AnyAxis, id: &str| axis.entry(id).map(|entry| PluginOption::of(entry, false));
-    Some(match why {
-        Rule::RankedBy(criterion) => {
-            Because::RankedBy(option(AnyAxis::of::<dyn SliceRanker>(), criterion)?)
-        }
-        Rule::CalculatedFrom(calculator) => {
-            Because::CalculatedFrom(option(AnyAxis::of::<dyn MetricsCalculator>(), calculator)?)
-        }
-    })
-}
-
-/// Whether the calculator `entry` offers a column, as configured by the answers it offers; one
-/// that cannot be built from them is taken to offer one.
-fn offers_column(entry: &PluginEntry) -> bool {
-    entry
-        .default_config()
-        .build::<dyn MetricsCalculator>()
-        .map_or(true, |calculator| calculator.column().is_some())
+/// The ids of the metrics the calculators of the ids `calculators` calculate, in order, as far as
+/// both are registered.
+fn metrics_of(calculators: &[&str]) -> Vec<&'static str> {
+    calculators.iter().filter_map(|id| metric_of(id)).collect()
 }
 
 /// The ids of the plugins answering the field `field` of the phase in `draft`, in order.
@@ -1081,7 +985,13 @@ fn place(fields: &mut [FormField], path: &Path, text: &Text) -> bool {
 }
 
 /// What `issue` of the enumerated fields says.
-fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
+/// What `issue` of `draft` says; an issue of a plugin's needing what nothing provides names
+/// `needer`, if given, as what needs that plugin, see [`PhaseForm::root_needer`].
+fn issue_text<T: Configurable>(
+    issue: &Issue,
+    draft: &Draft<T>,
+    needer: Option<&'static PluginEntry>,
+) -> Text {
     match issue.problem() {
         Problem::Invalid(ConfigError::Unanswered { .. }) => Text::new("issue-unanswered"),
         Problem::Invalid(ConfigError::OutOfRange { allowed, .. }) => {
@@ -1175,6 +1085,11 @@ fn issue_text<T: Configurable>(issue: &Issue, draft: &Draft<T>) -> Text {
                     .with("count", providers.len())
                     .with("providers", Arg::Plugins(providers))
                     .with("lacking", Arg::Fact(lacking.clone()))
+            } else if let Some(needer) = needer {
+                Text::new("issue-unprovided-for")
+                    .with("needer", plugin_arg(needer))
+                    .with("plugin", plugin)
+                    .with("providers", Arg::Plugins(providers))
             } else {
                 Text::new("issue-unprovided-by")
                     .with("plugin", plugin)

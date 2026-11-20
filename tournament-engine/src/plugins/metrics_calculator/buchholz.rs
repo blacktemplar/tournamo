@@ -1,7 +1,7 @@
 use plugin_factory::{Phrase, Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
-use super::{Cell, MetricColumn, OldMetrics, ToCell};
+use super::{Cell, Metric, MetricColumn, OldMetrics, ToCell};
 use crate::{
     entities::{Bye, DivisionData, Match, MatchResult, RankingId, ResultOfTeam, Team},
     map::Map,
@@ -17,8 +17,16 @@ use crate::{
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct Buchholz(pub Score);
 
-#[typetag::serde(name = "tournament_engine::buchholz")]
-impl TypeMapValue for Buchholz {}
+impl Metric for Buchholz {
+    const LABEL: &'static str = "Buchholz";
+    const DESCRIPTION: Option<&'static str> = Some("the points of all opponents");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("Buchholz"))
+    }
+}
+
+crate::metric!(Buchholz, id = "tournament_engine::buchholz");
 
 impl ToCell for Buchholz {
     fn to_cell(&self) -> Cell {
@@ -103,10 +111,6 @@ impl Calculator for BuchholzCalculator {
             Score::ONE
         })
     }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<Buchholz>("Buchholz"))
-    }
 }
 
 crate::register_calculator!(BuchholzCalculator);
@@ -114,8 +118,19 @@ crate::register_calculator!(BuchholzCalculator);
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct BuchholzOfBuchholz(pub Score);
 
-#[typetag::serde(name = "tournament_engine::buchholz_of_buchholz")]
-impl TypeMapValue for BuchholzOfBuchholz {}
+impl Metric for BuchholzOfBuchholz {
+    const LABEL: &'static str = "Buchholz of Buchholz";
+    const DESCRIPTION: Option<&'static str> = Some("the Buchholz of all opponents");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("Buchholz of Buchholz"))
+    }
+}
+
+crate::metric!(
+    BuchholzOfBuchholz,
+    id = "tournament_engine::buchholz_of_buchholz"
+);
 
 impl ToCell for BuchholzOfBuchholz {
     fn to_cell(&self) -> Cell {
@@ -203,12 +218,6 @@ impl Calculator for BuchholzOfBuchholzCalculator {
             |_| Score::ONE,
         )
     }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<BuchholzOfBuchholz>(
-            "Buchholz of Buchholz",
-        ))
-    }
 }
 
 crate::register_calculator!(BuchholzOfBuchholzCalculator);
@@ -216,8 +225,17 @@ crate::register_calculator!(BuchholzOfBuchholzCalculator);
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct SonnebornBerger(pub Score);
 
-#[typetag::serde(name = "tournament_engine::sonneborn_berger")]
-impl TypeMapValue for SonnebornBerger {}
+impl Metric for SonnebornBerger {
+    const LABEL: &'static str = "Sonneborn-Berger";
+    const DESCRIPTION: Option<&'static str> =
+        Some("the points of the opponents that were beaten or played to a draw");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("Sonneborn-Berger"))
+    }
+}
+
+crate::metric!(SonnebornBerger, id = "tournament_engine::sonneborn_berger");
 
 impl ToCell for SonnebornBerger {
     fn to_cell(&self) -> Cell {
@@ -345,10 +363,6 @@ impl Calculator for SonnebornBergerCalculator {
             old_metrics,
             |result| self.weight(result),
         )
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<SonnebornBerger>("Sonneborn-Berger"))
     }
 }
 

@@ -15,10 +15,8 @@ use tournament_engine::{
         facts::{EntrantsPerQualifier, EntrantsPerRanking},
         match_format::MatchFormat,
         metrics_calculator::{
-            Cell, GamesBalance, GamesBalanceCalculator, MetricsCalculator, PointsBalance,
-            PointsBalanceCalculator, PointsCalculator, RoundOfElimination,
-            RoundOfEliminationCalculator, RoundOfFirstLoss, RoundOfFirstLossCalculator,
-            ToCell as _, WinsDrawsLosses, WinsDrawsLossesCalculator,
+            Cell, GamesBalance, MetricEntry, MetricId as _, MetricsCalculator, Points,
+            PointsBalance, RoundOfElimination, RoundOfFirstLoss, ToCell as _, WinsDrawsLosses,
         },
         phase_format::{
             DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat, RoundRobin,
@@ -278,7 +276,7 @@ fn a_cell_is_said_in_the_language_or_else_as_its_code_says() {
 
     assert_eq!(
         german.cell(
-            RoundOfFirstLossCalculator::ID,
+            RoundOfFirstLoss::ID,
             &RoundOfFirstLoss(NonZeroU32::new(3)).to_cell()
         ),
         "Runde \u{2068}3\u{2069}"
@@ -291,12 +289,11 @@ fn a_cell_is_said_in_the_language_or_else_as_its_code_says() {
         "1500 Elo"
     );
     assert_eq!(
-        german.cell(PointsCalculator::ID, &Cell::Number(Score::new(2.5))),
+        german.cell(Points::ID, &Cell::Number(Score::new(2.5))),
         "2,5"
     );
     assert_eq!(
-        Translator::new(Language::English, &[])
-            .cell(PointsCalculator::ID, &Cell::Number(Score::new(2.5))),
+        Translator::new(Language::English, &[]).cell(Points::ID, &Cell::Number(Score::new(2.5))),
         "2.5"
     );
     let signed = |number| german.cell("my_crate::difference", &Cell::Signed(Score::new(number)));
@@ -336,11 +333,6 @@ fn translatable(entry: &PluginEntry) -> BTreeSet<String> {
         stages(entry.id())
             .iter()
             .map(|stage| PluginText::Stage(stage.key()).attribute()),
-    );
-    attributes.extend(
-        phrases_in_cells(entry.id())
-            .iter()
-            .map(|phrase| PluginText::Cell(phrase.key()).attribute()),
     );
     // the phases of a preset are the same whatever its fields
     if let Ok(preset) = entry.default_config().build::<dyn Preset>() {
@@ -411,25 +403,41 @@ fn phrases_of_rules(id: &str) -> BTreeSet<String> {
     attributes
 }
 
-/// A phrase of every key the column of the calculator `id` shows, none for a plugin that is no
-/// such calculator. They cannot be found from the plugin, so the metrics showing them are listed
-/// here.
+/// What is translated of `metric`, as the attributes of its message.
+fn translatable_metric(metric: MetricEntry) -> BTreeSet<String> {
+    let mut attributes = BTreeSet::from([MetricText::Label.attribute()]);
+    if metric.description().is_some() {
+        attributes.insert(MetricText::Description.attribute());
+    }
+    if metric.column().is_some() {
+        attributes.insert(MetricText::Column.attribute());
+    }
+    attributes.extend(
+        phrases_in_cells(metric.id())
+            .iter()
+            .map(|phrase| MetricText::Cell(phrase.key()).attribute()),
+    );
+    attributes
+}
+
+/// A phrase of every key the column of the metric `id` shows. They cannot be found from the
+/// metric, so the metrics showing them are listed here.
 fn phrases_in_cells(id: &str) -> Vec<Phrase> {
-    let cells = if id == RoundOfFirstLossCalculator::ID {
+    let cells = if id == RoundOfFirstLoss::ID {
         vec![
             RoundOfFirstLoss(NonZeroU32::new(1)).to_cell(),
             RoundOfFirstLoss(None).to_cell(),
         ]
-    } else if id == RoundOfEliminationCalculator::ID {
+    } else if id == RoundOfElimination::ID {
         vec![
             RoundOfElimination(NonZeroU32::new(1)).to_cell(),
             RoundOfElimination(None).to_cell(),
         ]
-    } else if id == WinsDrawsLossesCalculator::ID {
+    } else if id == WinsDrawsLosses::ID {
         vec![WinsDrawsLosses::default().to_cell()]
-    } else if id == PointsBalanceCalculator::ID {
+    } else if id == PointsBalance::ID {
         vec![PointsBalance::default().to_cell()]
-    } else if id == GamesBalanceCalculator::ID {
+    } else if id == GamesBalance::ID {
         vec![GamesBalance::default().to_cell()]
     } else {
         Vec::new()
@@ -521,14 +529,16 @@ fn fact_phrases() -> BTreeSet<String> {
 /// The fields of a phase itself are translated as well, in the message [`PHASE`], and the phrases
 /// about facts in [`FACTS`].
 #[test]
-fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
-    let calculators: Vec<_> = AnyAxis::of::<dyn MetricsCalculator>()
-        .entries()
-        .map(PluginEntry::id)
-        .collect();
+fn every_plugin_and_metric_of_the_engine_is_translated_and_nothing_else() {
     let expected: BTreeMap<String, BTreeSet<String>> = engine_plugins()
         .into_iter()
         .map(|entry| (PluginText::key(entry.id()), translatable(entry)))
+        .chain(
+            MetricEntry::all()
+                .into_iter()
+                .filter(|metric| metric.id().starts_with("tournament_engine::"))
+                .map(|metric| (MetricText::key(metric.id()), translatable_metric(metric))),
+        )
         .chain([
             (
                 PHASE.to_owned(),
@@ -545,17 +555,12 @@ fn every_plugin_of_the_engine_is_translated_and_nothing_else() {
         let mut translated = BTreeMap::new();
         for entry in resource.body {
             if let ast::Entry::Message(message) = entry {
-                let mut attributes: BTreeSet<_> = message
+                let attributes: BTreeSet<_> = message
                     .attributes
                     .iter()
                     .map(|attribute| attribute.id.name.to_owned())
                     .collect();
                 let key = message.id.name.to_owned();
-                // only a calculator has a column, and not every calculator: the column cannot be
-                // checked without the plugin
-                if calculators.iter().any(|id| PluginText::key(id) == key) {
-                    attributes.remove(&PluginText::Column.attribute());
-                }
                 assert!(
                     translated.insert(key.clone(), attributes).is_none(),
                     "{key} is given twice"

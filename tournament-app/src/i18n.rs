@@ -251,7 +251,6 @@ pub trait Message {
 /// plugin-tournament_engine-points =
 ///     .label = Punkte
 ///     .description = für jeden Sieg, jedes Unentschieden und jedes Freilos
-///     .column = Punkte
 ///     .field-points_for_bye = Punkte für ein Freilos
 ///     .field-points_for_bye-description = eine Runde ohne Spiel, …
 /// ```
@@ -261,8 +260,6 @@ pub enum PluginText<'a> {
     Label,
     /// Its description, `.description`.
     Description,
-    /// The header of the column of a calculator's metric, `.column`.
-    Column,
     /// The label of its field of this name, `.field-<name>`.
     Field(&'a str),
     /// The description of its field of this name, `.field-<name>-description`.
@@ -271,9 +268,6 @@ pub enum PluginText<'a> {
     /// variables, see [`Translator::stage`] and
     /// [`Stage::key`](tournament_engine::plugins::phase_format::Stage::key).
     Stage(&'a str),
-    /// The phrase of this key in a cell of a calculator's column, `.cell-<key>`, with the phrase's
-    /// numbers as its variables, see [`Translator::cell`].
-    Cell(&'a str),
     /// What a match format calls a part of a match at the level of this key, e.g. a game,
     /// `.level-<key>`.
     Level(&'a str),
@@ -300,17 +294,64 @@ impl PluginText<'_> {
         match self {
             Self::Label => "label".to_owned(),
             Self::Description => "description".to_owned(),
-            Self::Column => "column".to_owned(),
             Self::Field(name) => format!("field-{name}"),
             Self::FieldDescription(name) => format!("field-{name}-description"),
             Self::Stage(key) => format!("stage-{key}"),
-            Self::Cell(key) => format!("cell-{key}"),
             Self::Level(key) => format!("level-{key}"),
             Self::EnteredValue(key) => format!("value-{key}"),
             Self::Reason(key) => format!("reason-{key}"),
             Self::Phase(key) => format!("phase-{key}"),
         }
     }
+}
+
+/// What is translated of a metric, in a language that has it. Each is an attribute of the Fluent
+/// message `metric-<id>`, with each `::` of the id replaced by `-`:
+///
+/// ```text
+/// metric-tournament_engine-wins_draws_losses =
+///     .label = Bilanz aus Siegen, Unentschieden und Niederlagen
+///     .description = wie viele Spiele gewonnen, unentschieden gespielt und verloren wurden
+///     .column = S-U-N
+///     .cell-wins-draws-losses = { $wins }-{ $draws }-{ $losses }
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MetricText<'a> {
+    /// Its label, `.label`.
+    Label,
+    /// Its description, `.description`.
+    Description,
+    /// The header of its column, `.column`.
+    Column,
+    /// The phrase of this key in a cell of its column, `.cell-<key>`, with the phrase's numbers as
+    /// its variables, see [`Translator::cell`].
+    Cell(&'a str),
+}
+
+impl MetricText<'_> {
+    /// The key of the message of the metric `id`.
+    fn key(id: &str) -> String {
+        format!("metric-{}", id.replace("::", "-"))
+    }
+
+    /// The name of its attribute.
+    fn attribute(self) -> String {
+        match self {
+            Self::Label => "label".to_owned(),
+            Self::Description => "description".to_owned(),
+            Self::Column => "column".to_owned(),
+            Self::Cell(key) => format!("cell-{key}"),
+        }
+    }
+}
+
+/// The numbers of `phrase` as the variables of its message.
+fn phrase_args(phrase: &Phrase) -> FluentArgs<'static> {
+    let mut args = FluentArgs::new();
+    for (name, value) in phrase.numbers() {
+        args.set(*name, *value);
+    }
+    args
 }
 
 /// The message whose attributes translate the fields of a phase itself, as those of a plugin's
@@ -500,18 +541,28 @@ impl Translator {
         )
     }
 
-    /// What `cell` of the column of the calculator `calculator` shows in the language: a number as
-    /// the language writes it, see [`Self::number`], a signed one after its sign, a round as the
-    /// message `cell-round`, and a phrase as the [`PluginText::Cell`] of the calculator with its
-    /// numbers set, or else in English, as the calculator's code says it.
-    pub fn cell(&self, calculator: &str, cell: &Cell) -> String {
+    /// `text` of the metric `id` in the language, or else `english`, what the metric's code says.
+    pub fn metric(&self, id: &str, text: MetricText<'_>, english: &str) -> String {
+        self.format(&MetricText::key(id), Some(&text.attribute()), None)
+            .unwrap_or_else(|| english.to_owned())
+    }
+
+    /// What `cell` of the column of the metric `metric` shows in the language: a number as the
+    /// language writes it, see [`Self::number`], a signed one after its sign, a round as the
+    /// message `cell-round`, and a phrase as the [`MetricText::Cell`] of the metric with its
+    /// numbers set, or else in English, as the metric's code says it.
+    pub fn cell(&self, metric: &str, cell: &Cell) -> String {
         match cell {
             Cell::Number(number) => self.number(number.get()),
             Cell::Signed(number) => format!("{}{}", sign(*number), self.number(number.get().abs())),
             Cell::Round(round) => self.text(&Text::new("cell-round").with("round", round.get())),
-            Cell::Text(phrase) => {
-                self.plugin_phrase(calculator, PluginText::Cell(phrase.key()), phrase)
-            }
+            Cell::Text(phrase) => self
+                .format(
+                    &MetricText::key(metric),
+                    Some(&MetricText::Cell(phrase.key()).attribute()),
+                    Some(&phrase_args(phrase)),
+                )
+                .unwrap_or_else(|| phrase.to_string()),
         }
     }
 
@@ -565,23 +616,19 @@ impl Translator {
     /// `phrase` of the plugin `id` as its `text` with the phrase's numbers set, or else in English,
     /// e.g. a level of the match format `id` as [`PluginText::Level`] of the phrase's key.
     pub fn plugin_phrase(&self, id: &str, text: PluginText<'_>, phrase: &Phrase) -> String {
-        let mut args = FluentArgs::new();
-        for (name, value) in phrase.numbers() {
-            args.set(*name, *value);
-        }
-        self.format(&PluginText::key(id), Some(&text.attribute()), Some(&args))
-            .unwrap_or_else(|| phrase.to_string())
+        self.format(
+            &PluginText::key(id),
+            Some(&text.attribute()),
+            Some(&phrase_args(phrase)),
+        )
+        .unwrap_or_else(|| phrase.to_string())
     }
 
     /// `phrase`, about a fact of compatibility (what a plugin requires, or what a fact is), in the
     /// language as the attribute of its key of the message `facts`, with the phrase's numbers
     /// set, or else in English.
     pub fn fact(&self, phrase: &Phrase) -> String {
-        let mut args = FluentArgs::new();
-        for (name, value) in phrase.numbers() {
-            args.set(*name, *value);
-        }
-        self.format(FACTS, Some(phrase.key()), Some(&args))
+        self.format(FACTS, Some(phrase.key()), Some(&phrase_args(phrase)))
             .unwrap_or_else(|| phrase.to_string())
     }
 

@@ -366,7 +366,8 @@ impl<T: Configurable> Generator<'_, T> {
                     }
                 })
                 .collect(),
-            shown: Vec::new(),
+            metrics: Vec::new(),
+            addable: Vec::new(),
             implied: implied
                 .iter()
                 .map(|plugin| Implied {

@@ -27,3 +27,10 @@ pub use transitions::{
 pub use type_map::{TypeMap, TypeMapValue};
 // the crates the API of this one is written in, so that a user does not have to depend on them
 pub use {plugin_factory, undoable_state_machine, uuid, vec1};
+
+/// What the macros of this crate generate refers to. Not part of the API.
+#[doc(hidden)]
+pub mod __private {
+    // so that a crate declaring a metric does not have to depend on it
+    pub use inventory;
+}

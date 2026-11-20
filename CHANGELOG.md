@@ -52,8 +52,10 @@ later one: a file whose `"format"` changes is migrated, not refused.
   compared, the comparison. By default a table shows what it is ranked by and
   what that is calculated from (ranked by points also the wins, draws and
   losses), marked by an outlined tick; ticking or unticking shows or hides a
-  metric anyway, also while the phase is played, and a metric ticked is
-  calculated. The summary of a phase names what is shown or hidden so.
+  metric anyway, also while the phase is played. The metrics of a phase are
+  those its criteria need, which come and go with them, and those added with
+  “Add metric”, which stay until removed; a metric needing another brings it
+  along. The summary of a phase names what is shown or hidden so.
 - Entrants can be rated (e.g. by Elo), higher is better: a switch “Ratings”
   above the entrants shows a field per entrant and their seed, and a list
   pasted gives a rating after a `;` or a tab. The start orders the
@@ -240,10 +242,12 @@ later one: a file whose `"format"` changes is migrated, not refused.
   who the lot put below it (“Eve: tied, below the line by lot”), so that a
   rank 1 below the line no longer reads as a mistake; the question before
   starting the next phase says who of the tie the lot takes and who not.
-- A metric needing what the match format does not keep, e.g. the points
-  difference in a phase of “winner only”, says what it needs in turn (“needs
-  points scored and conceded, which needs the points scored”), where it named
-  only another metric to tick, which would not have done on its own.
+- A metric needing what the match format does not keep, e.g. the games
+  difference in a phase of “score”, says so at the match format, naming what
+  needs it (“games difference needs games won and lost, which needs one of
+  these: best of games”), where it named only another metric to tick, which
+  would not have done on its own; unticking both left the other metric and its
+  issue behind.
 - In the browser, undoing or redoing what another tab has undone, redone or
   built on since no longer breaks the page: it says that a change made
   elsewhere keeps it from being undone (or redone), and nothing more can be

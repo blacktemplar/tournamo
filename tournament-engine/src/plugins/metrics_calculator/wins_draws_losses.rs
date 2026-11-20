@@ -6,12 +6,11 @@ use crate::{
     plugins::{
         Phrase,
         metrics_calculator::{
-            Calculator, Cell, MetricColumn, OldMetrics, ToCell, provides_metric,
+            Calculator, Cell, Metric, MetricColumn, OldMetrics, ToCell, provides_metric,
             updated_for_each_team,
         },
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
-    type_map::TypeMapValue,
 };
 
 /// How many of its matches a ranking won, drew and lost, and how many byes it had.
@@ -51,8 +50,16 @@ impl ToCell for WinsDrawsLosses {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::wins_draws_losses")]
-impl TypeMapValue for WinsDrawsLosses {}
+impl Metric for WinsDrawsLosses {
+    const LABEL: &'static str = "win-draw-loss record";
+    const DESCRIPTION: Option<&'static str> = Some("how many matches were won, drawn and lost");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("W-D-L"))
+    }
+}
+
+crate::metric!(WinsDrawsLosses, id = "tournament_engine::wins_draws_losses");
 
 /// Ranks by the wins of [`WinsDrawsLosses`], where more wins are better.
 #[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
@@ -182,10 +189,6 @@ impl Calculator for WinsDrawsLossesCalculator {
             .unwrap();
         metric.byes += 1;
         vec![(bye.ranking(), metric)]
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<WinsDrawsLosses>("W-D-L"))
     }
 }
 

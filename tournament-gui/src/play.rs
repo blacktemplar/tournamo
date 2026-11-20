@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    i18n::{Message as _, PluginText, Text, Translator},
+    i18n::{Message as _, MetricText, PluginText, Text, Translator},
     session::Session,
     view::{
         Advancing, Compared, Cut, DivisionRef, ListedMatch, MatchRow, MatchesOf, Medal,
@@ -822,12 +822,11 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
         .columns
         .iter()
         .map(|column| {
-            let header =
-                capitalized(&tr.plugin(column.calculator, PluginText::Column, column.header));
-            let label = capitalized(&tr.plugin(column.calculator, PluginText::Label, column.label));
+            let header = capitalized(&tr.metric(column.metric, MetricText::Column, column.header));
+            let label = capitalized(&tr.metric(column.metric, MetricText::Label, column.label));
             let description = column
                 .description
-                .map(|english| tr.plugin(column.calculator, PluginText::Description, english));
+                .map(|english| tr.metric(column.metric, MetricText::Description, english));
             // the metric's whole name where the header abbreviates it, e.g. "SB"
             let about = match description {
                 Some(description) if label != header => Some(format!("{label}: {description}")),
@@ -846,10 +845,10 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
                 Some(about) => Some(format!("{about} ({})", settings.join(", "))),
                 None => Some(settings.join(", ")),
             };
-            // ids of plugins are namespaced by `::`
+            // ids of metrics are namespaced by `::`
             let id = format!(
                 "standings-about-{}{suffix}",
-                column.calculator.replace("::", "-")
+                column.metric.replace("::", "-")
             );
             (header, about, id)
         })
@@ -881,7 +880,7 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
                         .iter()
                         .zip(&row.cells)
                         .map(|(column, cell)| {
-                            cell_text(&tr, column.calculator, cell.as_ref()).unwrap_or_default()
+                            cell_text(&tr, column.metric, cell.as_ref()).unwrap_or_default()
                         }),
                 )
                 .chain([row.played.to_string()])
@@ -938,7 +937,7 @@ fn DivisionStandings(division: DivisionRef, heading: Option<String>) -> Element 
                                 th { class: "name", scope: "row", {team_name(&tr, &row.entrants)} }
                                 for (column, cell) in standings.columns.iter().zip(row.cells) {
                                     td { class: metric_class(&cell),
-                                        {cell_text(&tr, column.calculator, cell.as_ref())}
+                                        {cell_text(&tr, column.metric, cell.as_ref())}
                                     }
                                 }
                                 td { class: "played", "{row.played}" }
@@ -980,7 +979,7 @@ fn ComparedStandings(compared: Compared) -> Element {
     let headers: Vec<_> = compared
         .columns
         .iter()
-        .map(|column| capitalized(&tr.plugin(column.calculator, PluginText::Column, column.header)))
+        .map(|column| capitalized(&tr.metric(column.metric, MetricText::Column, column.header)))
         .collect();
     rsx! {
         section { class: "card compared", aria_labelledby: "{id}",
@@ -1009,7 +1008,7 @@ fn ComparedStandings(compared: Compared) -> Element {
                                 td { class: "division", {division_letter(row.division)} }
                                 for (column , cell) in compared.columns.iter().zip(row.cells) {
                                     td { class: metric_class(&cell),
-                                        {cell_text(&tr, column.calculator, cell.as_ref())}
+                                        {cell_text(&tr, column.metric, cell.as_ref())}
                                     }
                                 }
                                 td { class: "played", "{row.played}" }
@@ -1091,10 +1090,10 @@ fn metric_class(cell: &Option<StandingCell>) -> &'static str {
     }
 }
 
-/// What `cell` of a column of the calculator `calculator` shows, nothing if it is empty.
-fn cell_text(tr: &Translator, calculator: &str, cell: Option<&StandingCell>) -> Option<String> {
+/// What `cell` of a column of the metric `metric` shows, nothing if it is empty.
+fn cell_text(tr: &Translator, metric: &str, cell: Option<&StandingCell>) -> Option<String> {
     cell.map(|cell| match cell {
-        StandingCell::Metric(cell) => capitalized(&tr.cell(calculator, cell)),
+        StandingCell::Metric(cell) => capitalized(&tr.cell(metric, cell)),
         StandingCell::Stage(stage) => capitalized(&tr.stage(stage)),
     })
 }

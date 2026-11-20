@@ -18,7 +18,7 @@ use crate::{
     plugins::{
         PhasePlugins,
         match_format::MatchFormat,
-        metrics_calculator::{Metric, MetricsCalculator, OldMetrics},
+        metrics_calculator::{BoxedMetric, MetricsCalculator, OldMetrics},
         phase_format::{PhaseFormat, Schedule},
         ranker::HierarchicalRanker,
     },
@@ -400,7 +400,7 @@ impl Division {
             &mut dyn MetricsCalculator,
             &DivisionData,
             &OldMetrics,
-        ) -> Vec<(RankingId, Metric)>,
+        ) -> Vec<(RankingId, BoxedMetric)>,
     ) {
         let mut old_metrics = OldMetrics::default();
         for metrics_calculator in self.plugins.metrics_mut() {

@@ -1040,6 +1040,40 @@ Rejected:
 - Hiding `across` by a fact: facts come from plugins, not from a number
   answered; the form hides it while there is one division and it is empty.
 
+### Metrics and their calculators
+
+A metric (`Points`) and its calculator (`PointsCalculator`) are two things: the
+metric is what a table shows and a criterion ranks by, the calculator how it is
+calculated. Several calculators may calculate one metric (a phase has at most
+one of them, `Incompatibility::FactProvidedTwice`).
+
+- **A metric is a type implementing `Metric`** (label, description, column)
+  declared with `metric!(Points, id = "..")`. The macro writes the id both as
+  `MetricId::ID` and as the `typetag` tag, so the two cannot differ, and
+  `Metric` requires `MetricId`, so a metric without the macro does not
+  compile. The id is a persistence contract (the tag of saved metrics, the key
+  of `Columns`) and keys its translations (`metric-<id>`).
+- **The column belongs to the metric**, so two calculators of one metric cannot
+  disagree about it; `Columns` name metrics.
+- **No axis of metrics.** A metric is never chosen or configured itself; what
+  is known of it (`MetricEntry`) is registered by the macro, and which
+  calculators calculate it is read from their static declarations
+  (`CalculatesMetric<M>`), so a calculator declares nothing new. At runtime a
+  metric is its `TypeId`.
+- Saves made while `Columns` named calculators read the same: every
+  calculator of then has the id of its metric (pinned by a test).
+
+Rejected:
+- Identifying a metric by `TypeId` alone: not stable across builds, so it can
+  neither be saved nor key a translation.
+- Taking the id from `typetag` (`typetag_name` of a default value): hidden API
+  of `typetag`, and the id a translation needs would not be visible in the
+  code.
+- A derive (`#[derive(Metric)]`): needs a proc-macro crate of the engine
+  (`plugin-factory-derive` must not know engine concepts) for what one
+  `macro_rules!` does; a macro wrapping the type's definition hides it from
+  rustfmt and rust-analyzer.
+
 ### What the standings show
 
 A phase has two tables of standings (`Table`): those of a division, ranked by
@@ -1057,28 +1091,39 @@ metric (`Phase::shown`, the one rule for every consumer):
   saved before too, and a phase nobody touched follows it when its criteria
   change.
 - **The operator decides otherwise per metric and table**, and only where it
-  differs from the rule (`Columns`, by calculator id, a `Shown` of two
-  `Option<bool>`). Only calculators offering a column are shown; those a
+  differs from the rule (`Columns`, by metric id, a `Shown` of two
+  `Option<bool>`). Only metrics offering a column are shown; those a
   criterion ranks by come first, in the order of the criteria, then the
-  others in running order.
+  others in the running order of their calculators.
 - **The choice is data of `AddPhase`**, like the name and the sources, so a
   change is logged, undoable and edits a running phase without touching a
   result (`reconfigure_phase` counts a change of the columns alone).
-  `AddPhase::with_columns` drops what is said about a calculator the phase
-  does not have, so a column never names a metric that is not calculated.
-- **The operator chooses where a metric is shown, not whether it is
-  calculated.** A metric neither needed nor shown has no effect, so the form's
-  list of metrics is a table of checkboxes, a column per table of standings
-  (one with one division compared by nothing): ticking a metric not
-  calculated adds it, hiding one in the last table showing it removes it with
-  its fields unless something needs it (`PhaseForm::set_shown`). A box on by
-  rule is told from one the operator ticked by its look, an outlined tick, and
-  says why as its accessible description. A phase that calculates a metric
-  nothing needs and nothing shows (saved before, or by the CLI) keeps it until
-  the operator touches its row.
+  `AddPhase::with_columns` drops what is said about a metric no calculator of
+  the phase calculates, so a column never names a metric that is not
+  calculated.
+- **The metrics of a phase are those added and those needed**, a row each
+  (`PhaseForm`, `form/metrics.rs`): the operator adds a metric ("Add metric")
+  and removes it again, unless something needs it; a metric a criterion or
+  another metric needs is there while that is, and goes with it, also what it
+  needed in turn. The checkboxes only say where a metric is shown. After every
+  change the form settles the metrics: removes those neither added nor needed,
+  and adds a calculator for each that has none, the one chosen before, else
+  the only one, else the format's suggestion, else the only one without fields
+  (as `Draft::add_implied` would); otherwise the row asks which calculator.
+  What it removes (a calculator's settings, the calculator chosen for a
+  metric) it remembers while it is open, so taking a criterion out and back in
+  costs nothing. A metric only needed that cannot be calculated names, at the
+  field that fixes it, what needs it ("games difference needs games won and
+  lost, which needs one of these: best of games"). A phase opened again counts
+  every metric nothing needs as added, so opening a form changes nothing.
 - Nothing of this runs when a result is reported.
 
 Rejected:
+- Every metric registered as a row of checkboxes, a metric calculated once a
+  box is ticked and no longer once none is and nothing needs it: ticking a
+  metric only to have it calculated mixed showing with calculating, the list
+  grows with every metric registered, and unticking checked only the metric
+  unticked, leaving what it needed behind with its issue.
 - An ordered list of columns per table: it can name a metric nobody
   configured, and is a second place to keep in step with the metrics. A free
   order of the columns: the order of the criteria is what an operator
@@ -1975,9 +2020,11 @@ is in `tournament-app` (`i18n`), tested natively and in wasm.
   English message (`i18n::english`, without the marks isolating variables), so
   the English is written once, in `app.ftl`.
 - **One message per plugin** (`plugin-<id>`, `::` as `-`), its texts as
-  attributes (`.label`, `.description`, `.column`, `.field-<name>`,
-  `.field-<name>-description`): kept together, no collisions. English is the
-  code; a test checks German translates every engine plugin and nothing else.
+  attributes (`.label`, `.description`, `.field-<name>`,
+  `.field-<name>-description`): kept together, no collisions; likewise one per
+  metric (`metric-<id>`: `.label`, `.description`, `.column`, `.cell-<key>`).
+  English is the code; a test checks German translates every engine plugin and
+  metric and nothing else.
   Third-party plugins show in English until translated. The phase's own fields
   are attributes of `phase`.
 - **A missing message falls back to English**, then to its key, rather than

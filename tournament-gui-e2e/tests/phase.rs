@@ -40,7 +40,7 @@ async fn a_field_for_draws_is_left_out_without_draws() {
         gui.expect_field_shown("Points for a draw", true).await?;
 
         gui.choose_format("Single elimination").await?;
-        gui.toggle("Points").await?;
+        gui.choose_plugin("metrics", "Points").await?;
 
         gui.expect_field_shown("Points for a win", true).await?;
         gui.expect_field_shown("Points for a draw", false).await?;
@@ -165,13 +165,17 @@ async fn enter_in_a_number_takes_it_without_adding_the_phase() {
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn adding_a_phase_with_issues_moves_the_focus_to_them() {
     run_in_new_competition(async |gui| {
-        gui.choose_format("Single elimination").await?;
-        gui.choose_plugin("ranking", "More points").await?;
+        gui.choose_plugin("match_format", "Score").await?;
+        gui.choose_plugin("ranking", "Higher games difference")
+            .await?;
 
         gui.click("Add phase").await?;
 
-        gui.expect_focus("More points needs one of these: points.")
-            .await?;
+        gui.expect_focus(
+            "Higher games difference needs games won and lost, which needs one of these: best of \
+             games.",
+        )
+        .await?;
         gui.expect_no_error().await?;
         gui.expect_phase(&[]).await
     })
@@ -247,24 +251,51 @@ async fn what_is_said_about_the_next_field_leaves_the_issue_in_sight() {
     .await;
 }
 
-/// The points can be scored in many ways, so they are not added without being chosen, and the
-/// ranking by them stays rather than being dropped unnoticed; ticking them calculates them.
+/// The metrics of a new phase, all shown.
+const ALL_METRICS: [&str; 3] = ["Points", "Sonneborn-Berger", "Win-draw-loss record"];
+
+/// A criterion takes the metric it ranks by along, with its settings to answer, and what that
+/// needs in turn; removing the criterion takes them away again.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_metric_needed_and_not_calculated_is_an_issue_at_the_metrics() {
+async fn a_metric_needed_comes_and_goes_with_what_needs_it() {
     run_in_new_competition(async |gui| {
         gui.choose_format("Single elimination").await?;
         gui.choose_plugin("ranking", "More points").await?;
 
-        gui.expect_issues(&["More points needs one of these: points."])
+        gui.expect_issues(&[]).await?;
+        gui.expect_metric_needed("Points", "needed by more points")
             .await?;
-        gui.expect_list(
-            "ranking",
-            &["Later first loss", "Fewer losses", "More points"],
+        gui.click_labelled("Remove more points").await?;
+        gui.expect_checked(
+            "metrics",
+            &["Round of the first loss", "Win-draw-loss record"],
         )
+        .await
+    })
+    .await;
+}
+
+/// The report this list was reworked for: games difference under a match format of scores needs
+/// games won and lost, which need games; the issue says so at the match format, and removing the
+/// metric takes both away, issue and all.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_metric_added_says_what_it_needs_in_turn_and_goes_without_a_trace() {
+    run_in_new_competition(async |gui| {
+        gui.choose_plugin("match_format", "Score").await?;
+
+        gui.choose_plugin("metrics", "Games difference").await?;
+
+        gui.expect_issues(&[
+            "Games difference needs games won and lost, which needs one of these: best of games.",
+        ])
         .await?;
-        gui.toggle("Points").await?;
-        gui.expect_issues(&[]).await
+        gui.expect_metric_needed("Games won and lost", "needed by games difference")
+            .await?;
+        gui.click_labelled("Remove games difference").await?;
+        gui.expect_issues(&[]).await?;
+        gui.expect_checked("metrics", &ALL_METRICS).await
     })
     .await;
 }
@@ -275,7 +306,7 @@ async fn a_metric_needed_and_not_calculated_is_an_issue_at_the_metrics() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_metrics_stay_in_place_when_toggled() {
-    const ALL: [&str; 3] = ["Points", "Sonneborn-Berger", "Win-draw-loss record"];
+    const ALL: [&str; 3] = ALL_METRICS;
     run_in_new_competition(async |gui| {
         gui.expect_checked("metrics", &ALL).await?;
 
@@ -510,15 +541,9 @@ async fn a_ranking_of_nothing_is_warned_about() {
             .await?;
         gui.page.check_accessibility().await?;
         gui.click("Add phase").await?;
-        gui.expect_phase(&[
-            "Round robin",
-            "Winner only",
-            "(none)",
-            "Win-draw-loss record",
-            "Points",
-            "Sonneborn-Berger",
-        ])
-        .await
+        // the metrics went with the criteria needing them
+        gui.expect_phase(&["Round robin", "Winner only", "(none)", "(none)"])
+            .await
     })
     .await;
 }

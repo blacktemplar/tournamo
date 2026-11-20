@@ -1,4 +1,4 @@
-use tournament_engine::{Table, plugins::metrics_calculator::RoundOfEliminationCalculator};
+use tournament_engine::plugins::metrics_calculator::RoundOfEliminationCalculator;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -312,8 +312,7 @@ fn a_single_elimination_shows_the_round_of_elimination() {
         .phase_form_with(session.phase_draft(SingleElimination::ID).unwrap(), None)
         .unwrap();
 
-    form.set_shown(RoundOfEliminationCalculator::ID, Table::Division, true)
-        .unwrap();
+    form.add_metric(RoundOfEliminationCalculator::ID).unwrap();
 
     let view = form.view();
     assert!(view.issues.is_empty(), "{:?}", view.issues);
@@ -339,8 +338,7 @@ fn a_played_single_elimination_is_edited_to_show_the_round_of_elimination() {
     let before = reported(&session);
     let mut form = session.phase_form_to_edit(session.first()).unwrap();
 
-    form.set_shown(RoundOfEliminationCalculator::ID, Table::Division, true)
-        .unwrap();
+    form.add_metric(RoundOfEliminationCalculator::ID).unwrap();
 
     assert!(session.edit_phase(session.first(), &form).unwrap());
     assert_eq!(reported(&session), before);

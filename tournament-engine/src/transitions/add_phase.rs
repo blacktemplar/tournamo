@@ -60,14 +60,14 @@ impl AddPhase {
     }
 
     /// This phase showing in its tables of standings what `columns` say, without what they say
-    /// about a calculator that is not among the plugins of the phase.
+    /// about a metric that no calculator of the phase calculates.
     #[must_use]
     pub fn with_columns(mut self, mut columns: Columns) -> Self {
         let metrics: Vec<&str> = self
             .plugins
             .metrics()
             .iter()
-            .map(|calculator| plugin_factory::id_of(&**calculator))
+            .map(|calculator| calculator.metric().id())
             .collect();
         columns.retain(|id| metrics.contains(&id));
         self.columns = columns;

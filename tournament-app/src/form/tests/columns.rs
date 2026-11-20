@@ -1,22 +1,25 @@
 //! Where the metrics are shown: the list of metrics as a table of the tables of standings.
 
+use tournament_engine::plugins::metrics_calculator::{
+    Buchholz, MetricId, Points, SonnebornBerger, WinsDrawsLosses,
+};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 
-const WDL: &str = WinsDrawsLossesCalculator::ID;
-const POINTS: &str = PointsCalculator::ID;
-const SB: &str = SonnebornBergerCalculator::ID;
-const BUCHHOLZ: &str = BuchholzCalculator::ID;
+const WDL: &str = WinsDrawsLosses::ID;
+const POINTS: &str = Points::ID;
+const SB: &str = SonnebornBerger::ID;
+const BUCHHOLZ: &str = Buchholz::ID;
 
-/// Where the metric `id` of the list of metrics of `view` is shown.
+/// The row of the metric `id` of the list of metrics of `view`.
 #[track_caller]
-fn shown<'a>(view: &'a FormView, id: &str) -> &'a MetricShown {
+fn shown<'a>(view: &'a FormView, id: &str) -> &'a MetricRow {
     list(view, "metrics")
-        .shown
+        .metrics
         .iter()
-        .find(|metric| metric.plugin.id == id)
+        .find(|row| row.metric.id == id)
         .unwrap_or_else(|| panic!("{id} is not in the list of metrics"))
 }
 
@@ -26,23 +29,32 @@ fn shown_in(form: &PhaseForm, id: &str, table: Table) -> ShownIn {
     *shown(&form.view(), id).of(table)
 }
 
-/// The id of the plugin `because` names.
+/// The id of what `because` names.
 fn why(because: Because) -> (&'static str, &'static str) {
     match because {
         Because::RankedBy(criterion) => ("ranked by", criterion.id),
-        Because::CalculatedFrom(calculator) => ("calculated from", calculator.id),
+        Because::CalculatedFrom(metric) => ("calculated from", metric.id),
     }
 }
 
 /// What the tables of standings of `form` show by rule, with why, as [`why`] puts it.
 fn by_rule(form: &PhaseForm, table: Table) -> Vec<(&'static str, (&'static str, &'static str))> {
     list(&form.view(), "metrics")
-        .shown
+        .metrics
         .iter()
-        .filter_map(|metric| match metric.of(table).by {
-            By::Rule(Some(because)) => Some((metric.plugin.id, why(because))),
+        .filter_map(|row| match row.of(table).by {
+            By::Rule(Some(because)) => Some((row.metric.id, why(because))),
             _ => None,
         })
+        .collect()
+}
+
+/// The ids of the metrics of the form, in the order of its rows.
+fn metrics(form: &PhaseForm) -> Vec<&'static str> {
+    list(&form.view(), "metrics")
+        .metrics
+        .iter()
+        .map(|row| row.metric.id)
         .collect()
 }
 
@@ -63,35 +75,23 @@ fn every_metric_is_shown_by_rule_where_the_table_is_ranked_by_it_or_what_that_is
     // compared by nothing, the rows compared show nothing
     assert_eq!(by_rule(&form, Table::Across), []);
     let view = form.view();
-    let buchholz = shown(&view, BUCHHOLZ);
-    assert!(!buchholz.calculated && buchholz.column);
-    assert_eq!(
-        buchholz.tables,
-        [ShownIn {
-            on: false,
-            by: By::Rule(None)
-        }; 2]
-    );
     let names: Vec<_> = shown(&view, WDL)
         .needed_by
         .iter()
         .map(|plugin| plugin.id)
         .collect();
-    assert_eq!(names, [POINTS]);
-    // the list shows an entry for every plugin of the list
-    assert_eq!(
-        list(&view, "metrics").shown.len(),
-        list(&view, "metrics").set().len()
-    );
+    assert_eq!(names, [PointsCalculator::ID]);
+    // a row for every metric added or needed, and none for the others
+    assert_eq!(metrics(&form).len(), 3);
 }
 
 #[test]
-fn a_metric_ticked_is_calculated_and_unticked_is_no_longer() {
+fn a_metric_added_is_shown_and_removed_is_no_longer_calculated() {
     let mut form = new_form();
 
-    form.set_shown(BUCHHOLZ, Table::Division, true).unwrap();
+    form.add_metric(BUCHHOLZ).unwrap();
 
-    assert!(items(&form.view(), "metrics").contains(&BUCHHOLZ));
+    assert!(items(&form.view(), "metrics").contains(&BuchholzCalculator::ID));
     assert_eq!(
         shown_in(&form, BUCHHOLZ, Table::Division),
         ShownIn {
@@ -105,19 +105,19 @@ fn a_metric_ticked_is_calculated_and_unticked_is_no_longer() {
         BUCHHOLZ
     );
 
-    form.set_shown(BUCHHOLZ, Table::Division, false).unwrap();
+    form.remove_metric(BUCHHOLZ).unwrap();
 
-    assert!(!items(&form.view(), "metrics").contains(&BUCHHOLZ));
+    assert!(!items(&form.view(), "metrics").contains(&BuchholzCalculator::ID));
     assert!(form.columns().is_empty());
 }
 
 #[test]
-fn a_metric_needed_and_hidden_is_still_calculated_and_ticked_back_follows_the_rule() {
+fn a_metric_hidden_is_still_calculated_and_shown_again_follows_the_rule() {
     let mut form = new_form();
 
-    form.set_shown(WDL, Table::Division, false).unwrap();
+    form.set_shown(WDL, Table::Division, false);
 
-    assert!(items(&form.view(), "metrics").contains(&WDL));
+    assert!(items(&form.view(), "metrics").contains(&WinsDrawsLossesCalculator::ID));
     assert_eq!(
         shown_in(&form, WDL, Table::Division),
         ShownIn {
@@ -127,7 +127,7 @@ fn a_metric_needed_and_hidden_is_still_calculated_and_ticked_back_follows_the_ru
     );
     assert_eq!(form.view().overridden(Table::Division, false)[0].id, WDL);
 
-    form.set_shown(WDL, Table::Division, true).unwrap();
+    form.set_shown(WDL, Table::Division, true);
 
     assert!(form.columns().is_empty());
     assert!(matches!(
@@ -137,14 +137,14 @@ fn a_metric_needed_and_hidden_is_still_calculated_and_ticked_back_follows_the_ru
 }
 
 #[test]
-fn a_metric_shown_in_one_table_stays_while_hidden_in_the_other() {
+fn a_metric_hidden_in_one_table_keeps_what_was_said_about_the_other() {
     let mut form = new_form();
-    form.set_shown(BUCHHOLZ, Table::Division, true).unwrap();
-    form.set_shown(BUCHHOLZ, Table::Across, true).unwrap();
+    form.add_metric(BUCHHOLZ).unwrap();
+    form.set_shown(BUCHHOLZ, Table::Across, true);
 
-    form.set_shown(BUCHHOLZ, Table::Division, false).unwrap();
+    form.set_shown(BUCHHOLZ, Table::Division, false);
 
-    assert!(items(&form.view(), "metrics").contains(&BUCHHOLZ));
+    assert!(items(&form.view(), "metrics").contains(&BuchholzCalculator::ID));
     assert_eq!(form.columns().get(BUCHHOLZ).across, Some(true));
     assert_eq!(form.columns().get(BUCHHOLZ).division, None);
 }
@@ -152,24 +152,19 @@ fn a_metric_shown_in_one_table_stays_while_hidden_in_the_other() {
 #[test]
 fn a_metric_leaving_the_list_takes_what_was_said_about_it_along() {
     let mut form = new_form();
-    form.set_shown(BUCHHOLZ, Table::Division, true).unwrap();
-    let item = list(&form.view(), "metrics")
-        .items
-        .iter()
-        .find(|item| item.plugin.id == BUCHHOLZ)
-        .unwrap()
-        .path
-        .clone();
+    form.set_shown(SB, Table::Division, false);
 
-    form.remove(&item).unwrap();
+    // ranked by points alone, the Sonneborn-Berger score is needed no more
+    form.remove(&path("ranking[1]")).unwrap();
 
+    assert!(!metrics(&form).contains(&SB));
     assert!(form.columns().is_empty());
 }
 
 #[test]
 fn applying_suggestions_follows_the_rule_again() {
     let mut form = new_form();
-    form.set_shown(WDL, Table::Division, false).unwrap();
+    form.set_shown(WDL, Table::Division, false);
 
     form.apply_suggestions().unwrap();
 
@@ -177,39 +172,16 @@ fn applying_suggestions_follows_the_rule_again() {
 }
 
 #[test]
-fn a_metric_nothing_needs_and_nothing_shows_stays_until_its_row_is_touched() {
-    let mut session = Session::new("cup");
-    let mut form = session.phase_form().unwrap();
-    // ranked by points alone, the Sonneborn-Berger score is neither needed nor shown
-    form.remove(&path("ranking[1]")).unwrap();
-    session.add_phase(&form).unwrap();
-
-    let mut form = session.phase_form_to_edit(session.first()).unwrap();
-    assert!(items(&form.view(), "metrics").contains(&SB));
-    assert!(
-        Table::ALL
-            .iter()
-            .all(|&table| !shown_in(&form, SB, table).on)
-    );
-    form.set_shown(WDL, Table::Division, false).unwrap();
-    assert!(items(&form.view(), "metrics").contains(&SB));
-
-    form.set_shown(SB, Table::Division, false).unwrap();
-
-    assert!(!items(&form.view(), "metrics").contains(&SB));
-}
-
-#[test]
 fn the_columns_of_a_phase_are_added_edited_and_brought_back_with_it() {
     let mut session = Session::new("cup");
     let mut form = session.phase_form().unwrap();
-    form.set_shown(BUCHHOLZ, Table::Division, true).unwrap();
+    form.add_metric(BUCHHOLZ).unwrap();
 
     session.add_phase(&form).unwrap();
 
     let mut edited = session.phase_form_to_edit(session.first()).unwrap();
     assert_eq!(edited.columns(), form.columns());
-    edited.set_shown(WDL, Table::Division, false).unwrap();
+    edited.set_shown(WDL, Table::Division, false);
     assert!(session.edit_phase(session.first(), &edited).unwrap());
     assert_eq!(
         session

@@ -1,7 +1,7 @@
 use plugin_factory::{Phrase, Plugin, compatibility::Declaration};
 use serde::{Deserialize, Serialize};
 
-use super::{Cell, MetricColumn, OldMetrics, ToCell};
+use super::{Cell, Metric, MetricColumn, OldMetrics, ToCell};
 use crate::{
     entities::{Bye, DivisionData, Match, RankingId},
     plugins::{
@@ -10,7 +10,6 @@ use crate::{
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     score::Score,
-    type_map::TypeMapValue,
 };
 
 /// The points of a ranking: those it scored in its matches plus those of its byes.
@@ -40,8 +39,17 @@ impl Points {
     }
 }
 
-#[typetag::serde(name = "tournament_engine::points")]
-impl TypeMapValue for Points {}
+impl Metric for Points {
+    const LABEL: &'static str = "points";
+    const DESCRIPTION: Option<&'static str> =
+        Some("scored for every win, every draw and every bye");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("points"))
+    }
+}
+
+crate::metric!(Points, id = "tournament_engine::points");
 
 impl ToCell for Points {
     /// The total.
@@ -195,10 +203,6 @@ impl Calculator for PointsCalculator {
         }
         vec![(bye.ranking(), self.points_of(&bye.ranking(), phase_data))]
     }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<Points>("points"))
-    }
 }
 
 crate::register_calculator!(PointsCalculator);
@@ -208,8 +212,17 @@ crate::register_calculator!(PointsCalculator);
 #[derive(Default, Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct PointsPerMatch(pub Score);
 
-#[typetag::serde(name = "tournament_engine::points_per_match")]
-impl TypeMapValue for PointsPerMatch {}
+impl Metric for PointsPerMatch {
+    const LABEL: &'static str = "points per match";
+    const DESCRIPTION: Option<&'static str> =
+        Some("the points scored in matches divided by the matches played");
+
+    fn column() -> Option<MetricColumn> {
+        Some(MetricColumn::new::<Self>("P/M"))
+    }
+}
+
+crate::metric!(PointsPerMatch, id = "tournament_engine::points_per_match");
 
 impl ToCell for PointsPerMatch {
     /// The average rounded to two decimals, as a third does not fit a table.
@@ -299,10 +312,6 @@ impl Calculator for PointsPerMatchCalculator {
         _: &OldMetrics,
     ) -> Vec<(RankingId, PointsPerMatch)> {
         vec![]
-    }
-
-    fn column(&self) -> Option<MetricColumn> {
-        Some(MetricColumn::new::<PointsPerMatch>("P/M"))
     }
 }
 

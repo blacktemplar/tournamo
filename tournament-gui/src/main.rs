@@ -255,9 +255,10 @@ fn App() -> Element {
             // on the list or the help, the focus starts at its top, rather than on the page's
             // body, as a page loaded does; not where the URL names a section of the help, which
             // the browser scrolls to. A competition moves it on itself once loaded, e.g. into
-            // the field of a new entrant.
+            // the field of a new entrant. Not where it was moved meanwhile, e.g. into the field
+            // naming a new competition.
             if other && !matches!(screen, Screen::Competition(..)) && !names_help_section() {
-                focus::focus_later(&["main"]);
+                focus::focus_later_unless_moved(&["main"]);
             }
         }
     });

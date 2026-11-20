@@ -242,6 +242,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   the row of values the other matches show. It started out at the winner
   reported before, as if chosen against the score, and showed only "Enter a
   result".
+- Clicking into the field naming a new competition right after going back to
+  the list of competitions no longer loses what is typed: the list moved the
+  focus to its top a moment later, taking it from the field.
 - A click in a dialog on what does nothing there (its title, a text, its
   margin) closed it, and with the dialog editing a phase all changes made.
   That dialog, and the one adding a phase after the start, now ask, in a

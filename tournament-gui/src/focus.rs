@@ -8,20 +8,38 @@ use wasm_bindgen::JsCast as _;
 /// Moves the focus, once the page shows what was just changed, to the first element that
 /// `selectors` find, if any, e.g. to the button of the next item after one removed.
 pub fn focus_later(selectors: &[&str]) {
+    move_focus_later(selectors, false);
+}
+
+/// Moves the focus like [`focus_later`], unless it moved meanwhile from where it is now (other
+/// than to the page's body, where it falls when what had it is removed), e.g. into a field of the
+/// screen just shown, where the operator started typing.
+pub fn focus_later_unless_moved(selectors: &[&str]) {
+    move_focus_later(selectors, true);
+}
+
+fn move_focus_later(selectors: &[&str], unless_moved: bool) {
     // ids and classes of the page, with nothing a JavaScript string would read otherwise than Rust
     let selectors = format!("{selectors:?}");
     // the second frame is after the page rendered the change, which it does in the first
     _ = document::eval(&format!(
         r#"
-        requestAnimationFrame(() => requestAnimationFrame(() => {{
-            for (const selector of {selectors}) {{
-                const element = document.querySelector(selector);
-                if (element) {{
-                    element.focus();
-                    break;
+        {{
+            const before = document.activeElement;
+            requestAnimationFrame(() => requestAnimationFrame(() => {{
+                const now = document.activeElement;
+                if ({unless_moved} && now !== before && now !== null && now !== document.body) {{
+                    return;
                 }}
-            }}
-        }}));
+                for (const selector of {selectors}) {{
+                    const element = document.querySelector(selector);
+                    if (element) {{
+                        element.focus();
+                        break;
+                    }}
+                }}
+            }}));
+        }}
         "#
     ));
 }

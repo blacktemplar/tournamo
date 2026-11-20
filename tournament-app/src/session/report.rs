@@ -7,7 +7,7 @@ use tournament_engine::{
     transitions::{Change, ConflictsError, UndoMatchResultError},
 };
 
-use super::{Session, refused};
+use super::{Session, TakenBack, refused};
 use crate::{
     error::{Refusal, ReportError, UndoReportError},
     result_form::{ResultForm, ResultView},
@@ -33,8 +33,8 @@ impl Session {
     /// If this session took
     /// back the result of the match, by reopening it ([`Self::undo_report`]), undoing its report
     /// or redoing a reopening, the form starts out at that result, the one taken back last, so
-    /// that correcting a value takes changing only that one, as long as the match format still
-    /// takes it; else nothing is entered.
+    /// that correcting a value takes changing only that one, as long as the match has the template
+    /// it was reported with; else, e.g. with the match format changed since, nothing is entered.
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, or the match has a
@@ -43,14 +43,17 @@ impl Session {
         let (division, r#match) = self.open_match(phase, id)?;
         let format = division.match_format();
         let template = format.template(division.data(), r#match);
-        // the match format may have changed since, e.g. with the phase edited
+        // the match format may have changed since, e.g. with the phase edited; one that takes the
+        // result may still read it otherwise, e.g. a winner alone as chosen against the score
         let reopened = self
             .reopened
             .get(&(phase, id))
-            .filter(|contest| template.root.check(contest).is_ok());
+            .filter(|taken_back| taken_back.template == template);
         let format = dyn_clone::clone_box(format);
         let form = match reopened {
-            Some(contest) => ResultForm::reported(phase, id, format, template, contest),
+            Some(taken_back) => {
+                ResultForm::reported(phase, id, format, template, &taken_back.contest)
+            }
             None => ResultForm::new(phase, id, format, template),
         };
         Ok(form.in_language(self.language))
@@ -155,7 +158,7 @@ impl Session {
             return Err(UndoReportError::UnknownMatch);
         };
         let row = self.match_row(phase, index, division, r#match);
-        let contest = r#match.contest().clone();
+        let taken_back = TakenBack::of(division, r#match);
         let matches_before = division.data().matches().len();
         self.machine
             .undo_match_result(&mut self.history, phase, id)
@@ -163,7 +166,7 @@ impl Session {
                 UndoMatchResultError::NotReported => UndoReportError::NotReported,
                 UndoMatchResultError::Rejected(_) => self.undo_refusal(phase, id),
             })?;
-        self.reopened.insert((phase, id), contest);
+        self.reopened.insert((phase, id), taken_back);
         let matches = self.phase(phase).expect("still added").divisions()[index]
             .data()
             .matches();
@@ -195,11 +198,11 @@ impl Session {
         &self,
         phase: PhaseId,
         id: MatchId,
-    ) -> Option<((PhaseId, MatchId), Part)> {
-        let (_, _, r#match) = self.match_of(phase, id)?;
+    ) -> Option<((PhaseId, MatchId), TakenBack)> {
+        let (_, division, r#match) = self.match_of(phase, id)?;
         r#match
             .is_finished()
-            .then(|| ((phase, id), r#match.contest().clone()))
+            .then(|| ((phase, id), TakenBack::of(division, r#match)))
     }
 
     /// The division of the match `id` of the started phase `phase`, and the match, which has no

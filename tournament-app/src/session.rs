@@ -15,7 +15,7 @@ use plugin_factory::{catalog::AnyAxis, config::Config};
 use tournament_engine::{
     Columns, Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division,
     Match, MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source, StartCompetition,
-    plugins::teams::Teams,
+    plugins::{match_format::Template, teams::Teams},
     transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
     uuid::Uuid,
@@ -53,6 +53,23 @@ pub(crate) fn cut(name: &str) -> String {
 /// The most matches [`Session::scale`] plays out, far more than a day's play.
 pub const MOST_MATCHES: usize = 10_000;
 
+/// The result of a match taken back, and the template of the match it was reported with.
+#[derive(Debug, Clone)]
+struct TakenBack {
+    template: Template,
+    contest: Part,
+}
+
+impl TakenBack {
+    /// What `r#match` of `division` had reported for it.
+    fn of(division: &Division, r#match: &Match) -> Self {
+        Self {
+            template: division.match_format().template(division.data(), r#match),
+            contest: r#match.contest().clone(),
+        }
+    }
+}
+
 /// A phase whose adding was undone: its name, sources and configuration.
 #[derive(Debug, Clone)]
 struct UndonePhase {
@@ -80,7 +97,7 @@ pub struct Session {
     undone_phase: Option<UndonePhase>,
     /// What was reported for each match whose result this session took back, as it was then, the
     /// latest of each, which the form of the match starts out at, see [`Self::result_form`].
-    reopened: HashMap<(PhaseId, MatchId), Part>,
+    reopened: HashMap<(PhaseId, MatchId), TakenBack>,
     /// How often the session changed the people: with the length of the log, which every other
     /// change makes longer, undo and redo included, it counts the changes, see [`Self::changes`].
     people_changes: usize,

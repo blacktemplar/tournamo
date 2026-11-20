@@ -30,7 +30,7 @@ pub struct PresetForm {
 /// What a [`PresetForm`] shows: plain data for a screen to lay out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PresetView {
-    /// The fields of the preset, in schema order.
+    /// The fields of the preset, then the match format of its phases, in schema order.
     pub fields: Vec<FormField>,
     /// What is wrong with the answers that no field in particular fixes.
     pub issues: Vec<Text>,
@@ -101,22 +101,34 @@ impl PresetForm {
         for (path, rejected) in self.rejected.iter() {
             place(&mut fields, path, &rejected.problem);
         }
-        // the composite has the preset as its only field, which the form shows the fields of
-        let (fields, mut issues_of_preset) = match fields.pop() {
-            Some(FormField {
-                input:
-                    Input::Plugin(PluginInput {
-                        chosen: Some(chosen),
-                        ..
-                    }),
-                issues,
-                ..
-            }) => (chosen.fields, issues),
-            _ => (Vec::new(), Vec::new()),
-        };
+        // the form shows the fields of the preset in place of the field choosing it
+        let mut shown = Vec::new();
+        let mut issues_of_preset = Vec::new();
+        for field in fields {
+            match field {
+                FormField {
+                    name: PresetChoice::PRESET,
+                    input:
+                        Input::Plugin(PluginInput {
+                            chosen: Some(chosen),
+                            ..
+                        }),
+                    issues,
+                    ..
+                } => {
+                    shown.extend(chosen.fields);
+                    issues_of_preset = issues;
+                }
+                FormField {
+                    name: PresetChoice::PRESET,
+                    ..
+                } => {}
+                field => shown.push(field),
+            }
+        }
         issues_of_preset.append(&mut unplaced);
         PresetView {
-            fields,
+            fields: shown,
             complete: issues.is_empty() && self.rejected.is_empty(),
             issues: issues_of_preset,
         }
@@ -144,7 +156,7 @@ impl PresetForm {
         let competition = Competition::default();
         let phases = competition
             .expand(
-                preset.preset(),
+                &preset,
                 || {
                     next += 1;
                     PhaseId::new(Uuid::from_u128(next))

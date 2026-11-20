@@ -98,6 +98,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- A preset asks for the match format of its phases (e.g. a score, or a best of
+  five), rather than adding every phase with who won only; a phase it does
+  not fit keeps who won only.
 - A further phase starts out at the match format of the phase before, with its
   settings (e.g. a best of five with games to 21), rather than at who won
   only, where it fits the phase.

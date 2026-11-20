@@ -10,16 +10,16 @@ use crate::CompetitionStateMachine;
 #[test]
 fn every_preset_expands_with_its_defaults_into_phases_added_one_after_the_other() {
     for entry in AnyAxis::of::<dyn Preset>().entries() {
-        let preset = entry
-            .default_config()
-            .build::<dyn Preset>()
-            .unwrap_or_else(|error| panic!("{} builds with its defaults: {error}", entry.id()));
+        let choice = PresetChoice::draft_of(entry.id())
+            .unwrap_or_else(|error| panic!("{} offers what it takes: {error}", entry.id()))
+            .build()
+            .unwrap_or_else(|issues| panic!("{} builds with its defaults: {issues:?}", entry.id()));
         let mut machine = CompetitionStateMachine::default();
         let mut next = 0;
         let phases = machine
             .current()
             .expand(
-                &*preset,
+                &choice,
                 || {
                     next += 1;
                     PhaseId::new(Uuid::from_u128(next))
@@ -27,7 +27,12 @@ fn every_preset_expands_with_its_defaults_into_phases_added_one_after_the_other(
                 ToString::to_string,
             )
             .unwrap_or_else(|error| panic!("{} expands: {error}", entry.id()));
-        assert_eq!(phases.len(), preset.phases().len(), "{}", entry.id());
+        assert_eq!(
+            phases.len(),
+            choice.preset().phases().len(),
+            "{}",
+            entry.id()
+        );
         for phase in phases {
             machine
                 .apply_new(phase.into())

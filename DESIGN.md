@@ -1175,10 +1175,20 @@ catalog expands every preset registered with its defaults and adds its phases.
   `Translator` gives the preset's phrases (`.phase-<key>`), as the operator
   would have typed them; they are names like any other afterwards.
 - **The form of a preset shares the machinery of the form of a phase**: its
-  draft is of the composite `PresetChoice` (the preset as its only field), its
-  fields generated and edited by the same code (`form/edit.rs`, the trait
-  `Editable`), without name, sources and suggestions; its preview expands it
-  into an empty competition, which is the only one it applies to.
+  draft is of the composite `PresetChoice` (the preset and the match format
+  of its phases), its fields generated and edited by the same code
+  (`form/edit.rs`, the trait `Editable`), without name, sources and
+  suggestions; its preview expands it into an empty competition, which is the
+  only one it applies to.
+- **The match format is asked once for all phases** (#82): every preset is
+  played in some match format, so `PresetChoice` asks for it rather than each
+  preset declaring a field of its own, labelled as the field of a phase so that
+  it is translated once. Expanding answers it on each phase whose answers leave
+  the match format open, where the phase then builds; a phase it does not fit
+  (a match format needing a winner of every match, for groups) gets the
+  default, as a further phase does (*A new phase takes over the match format
+  of the phase before*), and a phase answering its own (a final played as a
+  best of five) keeps it.
 
 Rejected: a transition adding a preset's phases (editing or removing one of
 them would need entries of its own, and the log would hold a template, not

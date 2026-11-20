@@ -23,6 +23,7 @@ use crate::{
     plugins::{
         PhasePlugins, Phrase,
         draw::Blocks,
+        match_format::{self, MatchFormat},
         phase_format::{
             DoubleElimination, PhaseSuggestions, RandomRounds, RoundRobin, SingleElimination,
         },
@@ -49,8 +50,8 @@ pub struct PresetPhase {
     /// Where it takes its entrants from, in this order.
     pub sources: Vec1<PresetSource>,
     /// Answers to the draft of the phase, see [`Competition::phase_draft`]; what they leave open
-    /// follows the suggestions of the format and the defaults, see
-    /// [`PhasePlugins::with_suggestions`].
+    /// follows the match format chosen with the preset (see [`PresetChoice::match_format`]), the
+    /// suggestions of the format and the defaults, see [`PhasePlugins::with_suggestions`].
     pub answers: Config,
 }
 
@@ -84,7 +85,7 @@ pub enum PresetSourceOf {
 }
 
 /// A preset as a composite to configure: a [`Draft`] of it answers which preset and its fields,
-/// as a [`PhasePlugins`] draft answers the plugins of a phase.
+/// and the match format of its phases, as a [`PhasePlugins`] draft answers the plugins of a phase.
 #[derive(Debug, Clone, Serialize, Deserialize, Configurable)]
 pub struct PresetChoice {
     #[plugin(
@@ -92,6 +93,13 @@ pub struct PresetChoice {
         description = "the phases the competition is played in"
     )]
     preset: Box<dyn Preset>,
+    // the label and description of the field of a phase, which a consumer translates once
+    #[plugin(
+        label = "match format",
+        description = "what is entered for a match",
+        default = match_format::default()
+    )]
+    match_format: Box<dyn MatchFormat>,
 }
 
 impl PresetChoice {
@@ -110,8 +118,31 @@ impl PresetChoice {
             .with_defaults()
     }
 
+    /// The preset `preset`, its phases played in the default match format where they leave it
+    /// open, see [`Competition::expand`].
+    pub fn new(preset: Box<dyn Preset>) -> Self {
+        Self {
+            preset,
+            match_format: match_format::default(),
+        }
+    }
+
+    /// This choice with its phases played in `match_format` where they leave it open and fit it.
+    #[must_use]
+    pub fn with_match_format(self, match_format: Box<dyn MatchFormat>) -> Self {
+        Self {
+            match_format,
+            ..self
+        }
+    }
+
     pub fn preset(&self) -> &dyn Preset {
         &*self.preset
+    }
+
+    /// The match format of the phases that leave it open, see [`Competition::expand`].
+    pub fn match_format(&self) -> &dyn MatchFormat {
+        &*self.match_format
     }
 }
 
@@ -139,11 +170,12 @@ pub enum PresetProblem {
 }
 
 impl Competition {
-    /// The phases `preset` stands for, to be added to this competition in this order: each with
-    /// the id `ids` gives it next, named `name` of its name, built from its answers to the draft of
-    /// its sources (see [`Self::phase_draft`]), what they leave open answered as the format
-    /// suggests (see [`PhasePlugins::with_suggestions`]), with the plugins they imply (see
-    /// [`Draft::add_implied`]).
+    /// The phases the preset of `choice` stands for, to be added to this competition in this
+    /// order: each with the id `ids` gives it next, named `name` of its name, built from its
+    /// answers to the draft of its sources (see [`Self::phase_draft`]), the match format of
+    /// `choice` where they leave it open and the phase fits it, what they leave open besides
+    /// answered as the format suggests (see [`PhasePlugins::with_suggestions`]), with the plugins
+    /// they imply (see [`Draft::add_implied`]).
     ///
     /// Adding the phases is up to the caller, and may still be refused, e.g. if this competition
     /// has a phase taking places of the registration that one of them takes too.
@@ -152,12 +184,17 @@ impl Competition {
     /// Returns a [`PresetError`] if a phase does not expand: a bug of the preset.
     pub fn expand(
         &self,
-        preset: &dyn Preset,
+        choice: &PresetChoice,
         mut ids: impl FnMut() -> PhaseId,
         name: impl Fn(&Phrase) -> String,
     ) -> Result<Vec<AddPhase>, PresetError> {
+        let match_format = Config::of(choice)
+            .expect("every plugin serializes as it is configured")
+            .get(PresetChoice::MATCH_FORMAT)
+            .cloned()
+            .expect("a preset choice has a match format");
         let mut expanded: Vec<(AddPhase, Option<NonZeroU32>)> = Vec::new();
-        for (index, phase) in preset.phases().into_iter().enumerate() {
+        for (index, phase) in choice.preset().phases().into_iter().enumerate() {
             let error = |problem| PresetError {
                 phase: index,
                 problem,
@@ -184,14 +221,34 @@ impl Competition {
                         |&(_, per_ranking)| per_ranking,
                     )
             });
-            let mut draft = PhasePlugins::draft(per_qualifier)
-                .with_answers(&phase.answers)
-                .and_then(PhasePlugins::with_suggestions)
-                .map_err(|config| error(PresetProblem::Answers(config)))?;
-            draft.add_implied();
-            let plugins = draft
-                .build()
-                .map_err(|issues| error(PresetProblem::Plugins(issues)))?;
+            let built = |answers: &Config| {
+                let mut draft = PhasePlugins::draft(per_qualifier)
+                    .with_answers(answers)
+                    .and_then(PhasePlugins::with_suggestions)
+                    .map_err(|config| error(PresetProblem::Answers(config)))?;
+                draft.add_implied();
+                draft
+                    .build()
+                    .map_err(|issues| error(PresetProblem::Plugins(issues)))
+            };
+            let chosen = phase
+                .answers
+                .get(PhasePlugins::MATCH_FORMAT)
+                .is_none()
+                .then(|| {
+                    built(
+                        &phase
+                            .answers
+                            .clone()
+                            .with(PhasePlugins::MATCH_FORMAT, match_format.clone()),
+                    )
+                    .ok()
+                })
+                .flatten();
+            let plugins = match chosen {
+                Some(plugins) => plugins,
+                None => built(&phase.answers)?,
+            };
             let per_ranking = plugins.teams().entrants_per_team(per_qualifier);
             let added = AddPhase::new(ids(), plugins)
                 .with_name(Some(name(&phase.name)))

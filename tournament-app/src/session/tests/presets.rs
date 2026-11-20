@@ -45,7 +45,7 @@ fn the_presets_of_the_engine_are_offered() {
 fn a_preset_form_shows_the_fields_of_the_preset() {
     let view = groups(3).view();
     let names: Vec<_> = view.fields.iter().map(|field| field.name).collect();
-    assert_eq!(names, ["groups", "advancing"]);
+    assert_eq!(names, ["groups", "advancing", PresetChoice::MATCH_FORMAT]);
     assert!(matches!(
         view.fields[0].input,
         Input::Integer { value: Some(3), .. }
@@ -117,6 +117,29 @@ fn a_preset_adds_ordinary_phases_undone_and_redone_as_one_action() {
     // each is a phase of its own: the knockout is removed alone
     session.remove_phase(ids[1]).unwrap();
     assert_eq!(session.phases().len(), 1);
+}
+
+#[test]
+fn the_phases_of_a_preset_are_played_in_the_match_format_chosen_in_its_form() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let mut form = groups(2);
+    let match_format = ConfigPath::ROOT.field(PresetChoice::MATCH_FORMAT);
+
+    form.choose(&match_format, Some(BestOf::ID)).unwrap();
+    form.enter(&match_format.field("games"), "5").unwrap();
+
+    assert!(form.view().complete);
+    for id in session.add_preset(&form, &english()).unwrap() {
+        let phase = session.phase_form_to_edit(id).unwrap();
+        let answer = phase
+            .draft()
+            .answers()
+            .get(PhasePlugins::MATCH_FORMAT)
+            .and_then(PluginConfig::from_answer)
+            .unwrap();
+        assert_eq!(answer.plugin(), BestOf::ID);
+        assert_eq!(answer.config().get("games"), Some(&5.into()));
+    }
 }
 
 #[test]

@@ -54,7 +54,7 @@ impl Session {
         let phases = self
             .competition()
             .expand(
-                choice.preset(),
+                &choice,
                 || PhaseId::new(Uuid::new_v4()),
                 |phrase| tr.preset_phase(form.id(), phrase),
             )

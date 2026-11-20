@@ -258,6 +258,17 @@ fn a_stage_is_said_in_the_language_with_its_numbers_or_else_as_its_code_says() {
         "Verliererrunde \u{2068}3\u{2069}"
     );
     assert_eq!(
+        german.stage(&stage(
+            DoubleElimination::ID,
+            DoubleEliminationRound::Winners {
+                round: 1,
+                rounds: 4
+            }
+            .into()
+        )),
+        "Achtelfinale der Gewinnerrunde"
+    );
+    assert_eq!(
         german.stage(&stage("my_crate::swiss", Stage::new("playoff", "Playoff"))),
         "Playoff"
     );
@@ -468,11 +479,19 @@ fn stages(id: &str) -> Vec<Stage> {
         [
             DoubleEliminationRound::Winners {
                 round: 1,
-                rounds: 2,
+                rounds: 4,
             },
             DoubleEliminationRound::Winners {
                 round: 2,
-                rounds: 2,
+                rounds: 4,
+            },
+            DoubleEliminationRound::Winners {
+                round: 3,
+                rounds: 4,
+            },
+            DoubleEliminationRound::Winners {
+                round: 4,
+                rounds: 4,
             },
             DoubleEliminationRound::Losers {
                 round: 1,

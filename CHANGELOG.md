@@ -363,8 +363,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   the page rather than in a box of its own. A match for third place of three
   entrants, against nobody, is left out, and a side yet to be decided is no
   longer tagged as moving on by a bye. A round playing several stages of a
-  double elimination is named by each ("Round 2: winners round 2, losers
-  round 1").
+  double elimination is named by each ("Winners semifinals, Losers round 3"),
+  and the rounds of its winner bracket as those of a single elimination
+  ("Winners quarterfinals", "Winners round of 16").
 - Touch and accessibility: on a screen too low for both (a phone held
   sideways) only the bar stays on top, the view switch scrolling away; on a
   touch screen what was just done shows at the top, away from the controls a

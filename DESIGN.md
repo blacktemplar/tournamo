@@ -1903,7 +1903,9 @@ winners (old listings would not read).
   the loser of the one semifinal is third without it. A side is tagged as
   moving on by a bye only once it is known who it is.
 - **A round playing several stages is named by each** in the list of rounds
-  ("Round 2: winners round 2, losers round 1"), as the bracket names them.
+  ("Winners semifinals, Losers round 1"), as the bracket names them, without
+  its number: the round of the phase matches neither bracket's own count. The
+  winner bracket names its rounds as a single elimination does.
 
 Rejected: a trait method for views (moves the table of kinds, self-reported);
 the format drawing itself (the engine knows no display); rebuilding the tree

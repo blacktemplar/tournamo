@@ -266,7 +266,6 @@ view = Ansicht
 matches-and-standings = Spiele & Tabelle
 rounds = Runden
 round = Runde { $round }
-round-of-stages = Runde { $round }: { $stages }
 round-with-open = { $round } ({ $open } offen)
 playable-now = Jetzt spielbar
 playable-now-count = Jetzt spielbar ({ $count })

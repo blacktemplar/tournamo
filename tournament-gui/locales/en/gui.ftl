@@ -337,8 +337,6 @@ matches-and-standings = Matches & standings
 # the lists of matches to choose from: those playable now, and each round
 rounds = Rounds
 round = Round { $round }
-# a round playing several stages side by side, e.g. "Round 2: winners round 2, losers round 1"
-round-of-stages = Round { $round }: { $stages }
 # $round: the name of the round, as `round` says it or the stage it is of
 round-with-open = { $round } ({ $open } open)
 # the matches whose entrants have played every round before

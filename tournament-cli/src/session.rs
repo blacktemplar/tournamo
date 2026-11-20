@@ -2332,8 +2332,8 @@ mod tests {
         assert_eq!(
             stages,
             [
-                "Winners round 1",
-                "Winners round 1",
+                "Winners semifinals",
+                "Winners semifinals",
                 "Winners final",
                 "Losers round 1",
                 "Losers final",

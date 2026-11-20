@@ -441,8 +441,9 @@ async fn the_dialog_editing_a_phase_closes_beside_it_not_in_it() {
     .await;
 }
 
-/// Escape or a click beside the dialog editing a phase with changes made asks before discarding
-/// them; asked again, or keeping on editing, the changes stay.
+/// Escape or a click beside the dialog editing a phase with changes made asks, in a dialog on top
+/// of it, before discarding them; keeping on editing, by the button, Escape or a click beside the
+/// question, the changes stay, and the focus is back where it was.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_dialog_editing_a_phase_asks_before_discarding_changes() {
@@ -451,12 +452,18 @@ async fn the_dialog_editing_a_phase_asks_before_discarding_changes() {
         gui.click("Phase").await?;
         gui.click("Edit phase").await?;
         gui.click_labelled("Move more Sonneborn-Berger up").await?;
+        gui.expect_focus_labelled("Move more Sonneborn-Berger up")
+            .await?;
 
         gui.press(Key::Escape).await?;
         gui.expect_alert_dialog("Discard the changes?").await?;
         gui.expect_focus("Keep editing").await?;
+        gui.expect_dialog("Edit the phase").await?;
         gui.page.check_accessibility().await?;
         gui.press(Key::Enter).await?;
+        gui.expect_no_alert_dialog().await?;
+        gui.expect_focus_labelled("Move more Sonneborn-Berger up")
+            .await?;
         gui.expect_list("ranking", &["More Sonneborn-Berger", "More points"])
             .await?;
 

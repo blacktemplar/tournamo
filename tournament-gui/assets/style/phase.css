@@ -391,3 +391,9 @@ input[type="checkbox"].by-rule:checked::before {
 .metrics-table .metric-fields > td {
   padding-top: 0;
 }
+
+/* the question whether to discard the changes made in the form of a phase, on top of its dialog,
+ * narrower, so that the form shows around it */
+[role="alertdialog"].discard-changes {
+  max-width: min(28rem, calc(100% - 2rem));
+}

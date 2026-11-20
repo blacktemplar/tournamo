@@ -788,6 +788,28 @@ impl Gui {
             .await
     }
 
+    /// Waits until a dialog (not one asking to confirm) is open, titled `title`, also beneath one
+    /// asking to confirm.
+    ///
+    /// # Panics
+    /// Panics if none is in time, with the titles of those open instead.
+    pub async fn expect_dialog(&self, title: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=dialog] h2"), &[title])
+            .await
+    }
+
+    /// Waits until no dialog asking to confirm (`alertdialog`) is open, whether or not another
+    /// dialog is.
+    ///
+    /// # Panics
+    /// Panics if one still is in time.
+    pub async fn expect_no_alert_dialog(&self) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("[role=alertdialog]"), &[])
+            .await
+    }
+
     /// Waits until a dialog asking to confirm what may not be undone (`alertdialog`) is open,
     /// titled `title`.
     ///

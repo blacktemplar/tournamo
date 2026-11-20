@@ -1,12 +1,16 @@
 //! Configuring, adding and editing a phase.
 
-use plugin_factory::{catalog::AnyAxis, config::PluginConfig, draft::Draft};
+use plugin_factory::{
+    catalog::AnyAxis,
+    config::{PluginConfig, Value},
+    draft::Draft,
+};
 use tournament_engine::{
     AddPhase, Columns, CompetitionStateMachineExt as _, CompetitionTransition, PhaseId,
     PhasePlugins, Source, SourceOf,
     plugins::{
-        draw::DivisionOrder, metrics_calculator::MetricsCalculator, phase_format::PhaseFormat,
-        ranker::SliceRanker,
+        draw::DivisionOrder, match_format::MatchFormat, metrics_calculator::MetricsCalculator,
+        phase_format::PhaseFormat, ranker::SliceRanker,
     },
     transitions::{Change, ConflictsError, ReconfigurePhaseError},
     undoable_state_machine::{StateMachineError, TransitionId},
@@ -62,8 +66,9 @@ impl Session {
     /// this session undid last, so that adding it again adds the same phase; if it undid none,
     /// with every field answered as offered: in the format a phase offers, with what that
     /// recommends, following suggestions until customized, taking every entrant registered if it
-    /// is the first phase, else every place of the phase before. An undone phase's settings are
-    /// kept. Once filled, it is handed to [`Self::add_phase`].
+    /// is the first phase, else every place of the phase before, whose match format it takes over
+    /// with its settings where that leaves the form without an issue. An undone phase's settings
+    /// are kept. Once filled, it is handed to [`Self::add_phase`].
     ///
     /// # Errors
     /// Returns an error if a plugin offers an answer it does not take.
@@ -83,13 +88,38 @@ impl Session {
             }
             None => {
                 let draft = self.competition().phase_draft(&self.sources_of_new_phase());
-                let mut form = self
-                    .phase_form_with(draft, None)
-                    .expect("no phase is named");
-                form.apply_suggestions()?;
-                form
+                let carried = self
+                    .carried_match_format()
+                    .and_then(|answer| draft.clone().with(PhasePlugins::MATCH_FORMAT, answer).ok())
+                    .and_then(|draft| self.new_phase_form(draft).ok())
+                    .filter(|form| form.draft().issues().is_empty());
+                match carried {
+                    Some(form) => form,
+                    None => self.new_phase_form(draft)?,
+                }
             }
         })
+    }
+
+    /// A form of a new phase answered by `draft`, following suggestions.
+    fn new_phase_form(&self, draft: Draft<PhasePlugins>) -> Result<PhaseForm, PhaseDraftError> {
+        let mut form = self
+            .phase_form_with(draft, None)
+            .expect("no phase is named");
+        form.apply_suggestions()?;
+        Ok(form)
+    }
+
+    /// The match format, with its settings, of the phase a new phase takes its places from at
+    /// first, the last one, unless it is an earlier version of a match format.
+    fn carried_match_format(&self) -> Option<Value> {
+        let before = self.competition().phases().values().last()?;
+        let answer = before.config().get(PhasePlugins::MATCH_FORMAT)?.clone();
+        let id = PluginConfig::from_answer(&answer)?;
+        AnyAxis::of::<dyn MatchFormat>()
+            .successor(id.plugin())
+            .is_none()
+            .then_some(answer)
     }
 
     /// The sources a new phase starts out at: every entrant registered for the first phase, else

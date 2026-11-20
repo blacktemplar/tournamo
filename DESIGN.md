@@ -1736,6 +1736,17 @@ rather than snapshotting fields before they have been chosen.
   behind a visibility switch; future preset/advanced/expert visibility is separate.
 - **The form of a new phase starts at the phase undone last**, so adding it again
   adds the same phase.
+- **A new phase takes over the match format of the phase before**, with its
+  settings (a best of five, games to 21), from the phase its sources start out
+  at, where the form then has no issue and it is the latest version of its
+  plugin; else it starts at the default. Changing the sources later does not
+  carry it over again. Rejected: a match format of the competition that phases
+  inherit or override. Inherited live, changing it would change phases already
+  played, whose plugins never change; copied when a phase is added, it is this
+  default with a setting more. A match format that fits only some formats (a
+  best of five in the winners' bracket, a best of three in the losers') would
+  make the inherited one silently differ from phase to phase; such a format
+  reads the stage of the match within one phase's match format instead.
 - **Numbers are typed as text** (`type=text` with `inputmode`), taken on change
   or Enter, comma or point; what is not a number of the range stays shown with
   why, the answer unchanged. A `type=number` hands over nothing for what the

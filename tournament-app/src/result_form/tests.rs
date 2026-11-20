@@ -832,19 +832,42 @@ fn a_result_the_match_format_no_longer_takes_is_not_where_the_form_starts_out() 
         .unwrap();
     session.undo_report(session.first(), id).unwrap();
 
-    let draft = session
-        .phase_draft_to_edit(session.first())
-        .unwrap()
-        .with("match_format", PluginConfig::of::<Scored>())
-        .and_then(|draft| draft.with_defaults())
-        .unwrap();
-    session
-        .edit_phase(session.first(), &crate::session::tests::form(draft.clone()))
-        .unwrap();
+    edit_match_format(&mut session, PluginConfig::of::<Scored>());
 
     let form = session.result_form(session.first(), id).unwrap();
     assert_eq!(score_shown(&form), Sides::new(None, None));
     assert_eq!(form.result(), None);
+}
+
+/// A result the match format still takes may mean something else under it: a winner reported
+/// alone would be chosen by hand against the score, which takes the match its row.
+#[test]
+fn a_result_reported_under_another_match_format_is_not_where_the_form_starts_out() {
+    let (mut session, id) = started(PluginConfig::of::<WinnerOnly>());
+    session
+        .report(session.first(), id, MatchResult::AWins)
+        .unwrap();
+    session.undo_report(session.first(), id).unwrap();
+
+    edit_match_format(&mut session, PluginConfig::of::<Scored>());
+
+    let form = session.result_form(session.first(), id).unwrap();
+    assert!(!form.is_chosen());
+    assert_eq!(form.result(), None);
+    assert!(form.quick_entry().is_some());
+}
+
+/// Edits the only phase of `session` to play its matches by `match_format`.
+fn edit_match_format(session: &mut Session, match_format: PluginConfig) {
+    let draft = session
+        .phase_draft_to_edit(session.first())
+        .unwrap()
+        .with("match_format", match_format)
+        .and_then(|draft| draft.with_defaults())
+        .unwrap();
+    session
+        .edit_phase(session.first(), &crate::session::tests::form(draft))
+        .unwrap();
 }
 
 #[test]
@@ -856,15 +879,7 @@ fn the_template_of_a_match_is_that_of_its_form() {
         session.result_form(session.first(), id).unwrap().template()
     );
 
-    let draft = session
-        .phase_draft_to_edit(session.first())
-        .unwrap()
-        .with("match_format", PluginConfig::of::<Scored>())
-        .and_then(|draft| draft.with_defaults())
-        .unwrap();
-    session
-        .edit_phase(session.first(), &crate::session::tests::form(draft.clone()))
-        .unwrap();
+    edit_match_format(&mut session, PluginConfig::of::<Scored>());
 
     let scored = session.result_template(session.first(), id).unwrap();
     assert_ne!(scored, best_of);

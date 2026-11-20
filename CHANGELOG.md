@@ -233,6 +233,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
+- A match reopened and then played by another match format, e.g. a phase
+  changed from the winner alone to a score, starts out empty under it, with
+  the row of values the other matches show. It started out at the winner
+  reported before, as if chosen against the score, and showed only "Enter a
+  result".
 - A click in a dialog on what does nothing there (its title, a text, its
   margin) closed it, and with the dialog editing a phase all changes made.
   That dialog, and the one adding a phase after the start, now ask, in a

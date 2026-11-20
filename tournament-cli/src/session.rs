@@ -1810,8 +1810,7 @@ mod tests {
         let mut session = started("round-robin");
         let id = session.competition().phases()[0].id();
         let mut form = session.session.phase_form_to_edit(id).unwrap();
-        form.set_shown(WinsDrawsLossesCalculator::ID, Table::Division, false)
-            .unwrap();
+        form.set_shown(WinsDrawsLossesCalculator::ID, Table::Division, false);
         session.session.edit_phase(id, &form).unwrap();
         let mut draft = session.phase_draft_to_edit(None).unwrap();
         draft

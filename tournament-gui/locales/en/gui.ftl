@@ -57,7 +57,7 @@ help-presets = Presets
 help-presets-text = A preset sets up a whole competition at once, while it has no phase: choose it under “How is it played?”, answer its few questions, and add the phases it shows. They are ordinary phases, each changed or removed as any phase; one undo takes all of them back.
 help-standings = The order of the standings
 help-standings-text = The standings compare the entrants by the criteria of their order in turn: the first decides, the second only between entrants the first leaves tied, and so on, e.g. more points, then more Sonneborn-Berger, a tie break favouring those who scored against strong opponents. A criterion compares a metric, a number calculated for each entrant from the results, such as the points; the metrics a criterion needs are calculated with it. Further metrics can be calculated and shown without ranking by them. The “i” next to a short column header, such as SB, says what the column counts; every criterion and metric is explained below.
-help-columns-text = A table of standings shows the metrics it is ranked by and those they are calculated from, e.g. ranked by points also the wins, draws and losses the points are scored for. Where a phase compares several groups, the rows compared show what they are compared by. In the metrics of a phase, a box with an outlined tick is shown by this rule; tick or untick it to show or hide the metric anyway, in the group tables or in the comparison. A metric ticked is calculated, one shown nowhere and needed by nothing is not. This can be changed at any time, also while the phase is played.
+help-columns-text = A table of standings shows the metrics it is ranked by and those they are calculated from, e.g. ranked by points also the wins, draws and losses the points are scored for. Where a phase compares several groups, the rows compared show what they are compared by. The metrics of a phase are those it is ranked by, those these need, and those added under “Add metric”; a metric needed comes and goes with what needs it, one added stays until it is removed. A box with an outlined tick is shown by this rule; tick or untick it to show or hide the metric anyway, in the group tables or in the comparison. This can be changed at any time, also while the phase is played.
 help-groups = Groups
 help-groups-text = A phase can be played in several groups, each on its own in the same format; the draw deals the entrants to them, and the seeding orders those of each, which a knockout seeds its bracket by: “groups kept apart” lets entrants of one group meet as late as possible. Groups dealt in blocks play for places of their own, e.g. knockouts A and B for places 1–4 and 5–8. Otherwise the groups stand side by side: the firsts of all groups come first, then the seconds, and so on (who is tied in their group placed by lot), and where a next phase takes only some of one place, e.g. the best two of three thirds, they are compared by the criteria across the groups, suggested for formats ranking by points: the points per match, which suit groups of different sizes, then the points.
 help-seeding = Seeding
@@ -267,6 +267,12 @@ show-in-divisions = Show { $metric } in the group tables
 show-in-comparison = Show { $metric } in the comparison
 # $needed_by: the plugins needing a metric, as a list
 metric-needed-by = needed by { $needed_by }
+# the choice of a metric to add to a phase
+add-metric = Add metric
+# the choice of the calculator of a metric several can calculate
+metric-provided-by = Calculated by
+# a metric added that is shown nowhere and needed by nothing
+metric-unused = not shown and not used
 # why a metric is shown by rule, said of its checkbox
 shown-ranked-in-divisions = shown since the standings are ranked by it
 shown-ranked-in-comparison = shown since the rows compared are ranked by it

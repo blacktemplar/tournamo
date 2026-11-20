@@ -2,8 +2,11 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{Editable, FormField, Input, Path, PhaseForm, PluginInput, PluginOption, PresetForm},
-    i18n::{PluginText, Text, Translator},
+    form::{
+        Editable, FormField, Input, MetricOption, Path, PhaseForm, PluginInput, PluginOption,
+        PresetForm,
+    },
+    i18n::{MetricText, PluginText, Text, Translator},
 };
 use tournament_engine::{PhasePlugins, plugin_factory::config::ConfigError};
 
@@ -76,6 +79,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
     let label = capitalized(&tr.field_label(&field));
     let description = tr.field_description(&field);
     let path = field.path.clone();
+    let is_metrics = field.plugin.is_none() && field.name == PhasePlugins::METRICS;
     let described_by = format!("{id}-description {id}-issues {id}-warnings");
     let issues = rsx! {
         Issues { id: "{id}-issues", issues: field.issues.clone() }
@@ -227,7 +231,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                         list,
                         disabled,
                     }
-                } else if let (false, EditedForm::Phase(form)) = (list.shown.is_empty(), form) {
+                } else if let (true, EditedForm::Phase(form)) = (is_metrics, form) {
                     MetricsList {
                         form,
                         list_id: id.clone(),
@@ -404,24 +408,68 @@ fn PluginField(
 pub(super) fn PluginChoice(select: String, index: usize, option: PluginOption) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    let label = capitalized(&plugin_label(&tr, &option));
-    let description = plugin_description(&tr, &option);
+    rsx! {
+        Choice {
+            select,
+            index,
+            value: option.id.to_owned(),
+            label: capitalized(&plugin_label(&tr, &option)),
+            description: plugin_description(&tr, &option),
+            recommended: option.recommended,
+            outdated: option.outdated,
+        }
+    }
+}
+
+/// The metric `option` as an option of the [`Select`] whose id is `select`, at `index`, as
+/// [`PluginChoice`] shows a plugin.
+#[component]
+pub(super) fn MetricChoice(select: String, index: usize, option: MetricOption) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    rsx! {
+        Choice {
+            select,
+            index,
+            value: option.id.to_owned(),
+            label: capitalized(&metric_label(&tr, &option)),
+            description: metric_description(&tr, &option),
+            recommended: false,
+            outdated: false,
+        }
+    }
+}
+
+/// An option of the [`Select`] whose id is `select`, at `index`, for `value`, as
+/// [`PluginChoice`] describes it.
+#[component]
+fn Choice(
+    select: String,
+    index: usize,
+    value: String,
+    label: String,
+    description: Option<String>,
+    recommended: bool,
+    outdated: bool,
+) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
     let mut tapped = use_signal(|| false);
-    // ids of plugins are namespaced by `::`
-    let described_by = format!("{select}-option-{}", option.id.replace("::", "-"));
+    // ids of plugins and metrics are namespaced by `::`
+    let described_by = format!("{select}-option-{}", value.replace("::", "-"));
     rsx! {
         SelectOption {
             index,
-            value: option.id.to_owned(),
+            value: value.clone(),
             text_value: label.clone(),
             aria_describedby: description.is_some().then(|| described_by.clone()),
             span { class: "option",
                 span { class: "option-label", "{label}" }
-                if option.recommended {
+                if recommended {
                     " "
                     span { class: "recommended", {tr.get("recommended")} }
                 }
-                if option.outdated {
+                if outdated {
                     " "
                     span { class: "recommended", {tr.get("earlier-version")} }
                 }
@@ -496,6 +544,16 @@ pub(super) fn plugin_description(tr: &Translator, option: &PluginOption) -> Opti
     option
         .description
         .map(|english| tr.plugin(option.id, PluginText::Description, english))
+}
+
+pub(super) fn metric_label(tr: &Translator, option: &MetricOption) -> String {
+    tr.metric(option.id, MetricText::Label, option.label)
+}
+
+pub(super) fn metric_description(tr: &Translator, option: &MetricOption) -> Option<String> {
+    option
+        .description
+        .map(|english| tr.metric(option.id, MetricText::Description, english))
 }
 
 /// The id of the element of the field at `path`, e.g. `field-metrics-1-points_for_win`.

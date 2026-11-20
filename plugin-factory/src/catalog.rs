@@ -194,6 +194,15 @@ impl PluginEntry {
         self.declaration().provides_type(fact)
     }
 
+    /// Whether the plugin requires a fact of the type `fact` whatever its configuration. Read
+    /// from the static declaration, see [`PluginType::declare_static`].
+    pub fn requires(&self, fact: TypeId) -> bool {
+        self.declaration()
+            .required()
+            .iter()
+            .any(|required| required.type_id() == fact)
+    }
+
     /// What the plugin as `config` configures it provides and requires, its sub-plugins included:
     /// the [static declaration](Self::declaration), what this configuration adds to it, see
     /// [`Plugin::declare`], and what the plugins in its fields declare.

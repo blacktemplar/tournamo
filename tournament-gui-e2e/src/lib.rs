@@ -297,7 +297,7 @@ impl Gui {
 
     /// Chooses the plugin labelled `label` for the field at `path` of the form of the phase, e.g.
     /// `"format"`, or adds it to the list at `path` if it is one whose order matters, e.g.
-    /// `"ranking"`.
+    /// `"ranking"`, or adds the metric labelled `label` to the metrics (`"metrics"`).
     pub async fn choose_plugin(&self, path: &str, label: &str) -> WebDriverResult<()> {
         self.open_choice(path).await?;
         self.choose_option(label).await
@@ -330,7 +330,10 @@ impl Gui {
         let id = field_id(path);
         let trigger = match self.driver.find(By::Id(format!("{id}-add"))).await {
             Ok(add) => add,
-            Err(_) => self.driver.query(By::Id(id)).first().await?,
+            Err(_) => match self.driver.find(By::Id(format!("{id}-add-metric"))).await {
+                Ok(add) => add,
+                Err(_) => self.driver.query(By::Id(id)).first().await?,
+            },
         };
         // in sight, as below a long list of entrants it may be under the bar
         self.click_in_sight(&trigger).await?;

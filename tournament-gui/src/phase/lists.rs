@@ -3,17 +3,23 @@
 use dioxus::prelude::*;
 use tournament_app::{
     form::{
-        self, Because, By, Item, ListInput, MetricShown, Path, PhaseForm, PluginOption, SetEntry,
+        self, Because, By, Item, ListInput, MetricOption, Path, PhaseForm, PluginOption, SetEntry,
     },
     i18n::Translator,
 };
 use tournament_engine::Table;
 
 use super::fields::{
-    EditedForm, Fields, Issues, PluginChoice, id, in_label_order, plugin_description, plugin_label,
+    EditedForm, Fields, Issues, MetricChoice, PluginChoice, id, in_label_order, metric_description,
+    metric_label, plugin_description, plugin_label,
 };
 use crate::{
-    capitalized, competition::Ctx, components::select::Select, focus::focus_later, i18n::t, icons,
+    capitalized,
+    competition::Ctx,
+    components::select::Select,
+    focus::focus_later,
+    i18n::{collation_key, t},
+    icons,
     toggletip::Toggletip,
 };
 
@@ -338,11 +344,13 @@ enum SetState {
     Offered,
 }
 
-/// The metrics of the phase, chosen, implied or offered, each with where it is shown: a checkbox
-/// for the standings of the divisions and, where the phase compares its divisions (`compared`),
-/// one for the rows compared, as a table with a column per table of standings; otherwise a
-/// list of metrics, each with its checkbox. A metric checked is calculated, with its fields
-/// below it. A box checked by rule shows an outlined tick, and says why as its description.
+/// The metrics of the phase, those added and those needed, each with where it is shown: a
+/// checkbox for the standings of the divisions and, where the phase compares its divisions
+/// (`compared`), one for the rows compared, as a table with a column per table of standings;
+/// otherwise a list of metrics, each with its checkbox. Below each metric, who calculates it where
+/// several can, and its fields; one added and needed by nothing can be removed. A box checked by
+/// rule shows an outlined tick, and says why as its description. Below the metrics, the metrics
+/// that can be added.
 #[component]
 pub(super) fn MetricsList(
     form: Signal<PhaseForm>,
@@ -353,25 +361,25 @@ pub(super) fn MetricsList(
 ) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    // in one order, whether calculated or not, so that a metric stays where it is when it is
-    // clicked; one without a column is listed only while it is calculated, without a box
     let rows: Vec<MetricRow> = list
-        .shown
+        .metrics
         .iter()
-        .filter(|metric| metric.column || metric.calculated)
-        .map(|metric| MetricRow::new(&tr, &list, metric))
+        .map(|metric| MetricRow::new(&tr, metric))
         .collect();
     let tables: &[Table] = if compared {
         &[Table::Division, Table::Across]
     } else {
         &[Table::Division]
     };
+    let add = rsx! {
+        AddMetric { form, list: list_id.clone(), addable: list.addable.clone(), disabled }
+    };
     if !compared {
         return rsx! {
             ul { class: "plugin-set metrics", id: "{list_id}",
                 // keyed by the metric, so that its checkbox keeps the focus when it is clicked
                 for row in rows {
-                    li { key: "{row.metric.plugin.id}",
+                    li { key: "{row.metric.metric.id}",
                         if row.metric.column {
                             label {
                                 MetricBox {
@@ -392,16 +400,13 @@ pub(super) fn MetricsList(
                         } else {
                             span { "{row.name}" }
                         }
-                        if let Some(needed) = &row.needed {
-                            " "
-                            span { class: "needed", "{needed}" }
-                        }
-                        " "
-                        About { list: list_id.clone(), option: row.metric.plugin }
-                        MetricFields { form, row, disabled }
+                        MetricNotes { list: list_id.clone(), row: row.clone() }
+                        RemoveMetric { form, list: list_id.clone(), row: row.clone(), disabled }
+                        MetricDetails { form, list: list_id.clone(), row, disabled }
                     }
                 }
             }
+            {add}
         };
     }
     rsx! {
@@ -413,18 +418,14 @@ pub(super) fn MetricsList(
                     th { scope: "col", {tr.get("shown-in-comparison")} }
                 }
             }
-            // a body per metric, its fields in a row below its own
+            // a body per metric, its details in a row below its own
             for row in rows {
-                tbody { key: "{row.metric.plugin.id}",
+                tbody { key: "{row.metric.metric.id}",
                     tr {
                         th { scope: "row",
                             span { class: "name", "{row.name}" }
-                            if let Some(needed) = &row.needed {
-                                " "
-                                span { class: "needed", "{needed}" }
-                            }
-                            " "
-                            About { list: list_id.clone(), option: row.metric.plugin }
+                            MetricNotes { list: list_id.clone(), row: row.clone() }
+                            RemoveMetric { form, list: list_id.clone(), row: row.clone(), disabled }
                         }
                         for &table in tables {
                             td {
@@ -446,34 +447,35 @@ pub(super) fn MetricsList(
                             }
                         }
                     }
-                    if row.item.is_some() {
+                    if row.has_details() {
                         tr { class: "metric-fields",
-                            td { colspan: "3", MetricFields { form, row, disabled } }
+                            td { colspan: "3",
+                                MetricDetails { form, list: list_id.clone(), row, disabled }
+                            }
                         }
                     }
                 }
             }
         }
+        {add}
     }
 }
 
 /// A metric of [`MetricsList`].
 #[derive(Clone, PartialEq)]
 struct MetricRow {
-    metric: MetricShown,
+    metric: form::MetricRow,
     /// Its label, as a text goes on.
     label: String,
     /// Its label, standing alone.
     name: String,
     /// What needs it, if anything does.
     needed: Option<String>,
-    /// The metric as chosen, with its fields; `None` if it is implied or offered.
-    item: Option<Item>,
 }
 
 impl MetricRow {
-    fn new(tr: &Translator, list: &ListInput, metric: &MetricShown) -> Self {
-        let label = plugin_label(tr, &metric.plugin);
+    fn new(tr: &Translator, metric: &form::MetricRow) -> Self {
+        let label = metric_label(tr, &metric.metric);
         let needed = (!metric.needed_by.is_empty()).then(|| {
             let needed_by: Vec<_> = metric
                 .needed_by
@@ -491,24 +493,164 @@ impl MetricRow {
             name: capitalized(&label),
             label,
             needed,
-            item: list
-                .items
-                .iter()
-                .find(|item| item.plugin.id == metric.plugin.id)
-                .cloned(),
+        }
+    }
+
+    /// Whether it shows more than its row: who calculates it, or fields.
+    fn has_details(&self) -> bool {
+        !self.metric.providers.is_empty()
+            || self
+                .metric
+                .item
+                .as_ref()
+                .is_some_and(|item| !item.fields.is_empty() || !item.issues.is_empty())
+    }
+
+    /// The id of an element of it, e.g. `remove`, in the list of metrics whose id is `list`.
+    fn element(&self, list: &str, element: &str) -> String {
+        // ids of metrics are namespaced by `::`
+        format!(
+            "{list}-{element}-{}",
+            self.metric.metric.id.replace("::", "-")
+        )
+    }
+}
+
+/// What is said next to the name of the metric of `row`: what it counts, what needs it, and
+/// that it does nothing where it is unused.
+#[component]
+fn MetricNotes(list: String, row: MetricRow) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let about = metric_description(&tr, &row.metric.metric);
+    rsx! {
+        if let Some(needed) = &row.needed {
+            " "
+            span { class: "needed", "{needed}" }
+        }
+        if let Some(text) = about {
+            " "
+            Toggletip { id: row.element(&list, "about"), subject: row.label.clone(), text }
+        }
+        if row.metric.unused {
+            " "
+            span { class: "warning", {tr.get("metric-unused")} }
         }
     }
 }
 
-/// The fields of the metric of `row` and their issues, if it is chosen.
+/// The button removing the metric of `row`, if the operator added it and nothing needs it.
 #[component]
-fn MetricFields(form: Signal<PhaseForm>, row: MetricRow, disabled: bool) -> Element {
-    let Some(item) = row.item else {
+fn RemoveMetric(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled: bool) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    if !row.metric.added || !row.metric.needed_by.is_empty() {
         return rsx! {};
-    };
+    }
+    let metric = row.metric.metric.id;
+    let name = t!(tr, "remove-plugin", plugin = row.label.as_str());
+    // the metric is gone, and the list adding one is where the operator goes on
+    let after = format!("#{list}-add-metric");
     rsx! {
-        Fields { form: EditedForm::Phase(form), fields: item.fields, disabled }
-        Issues { id: "{id(&item.path)}-issues", issues: item.issues }
+        " "
+        button {
+            class: "small icon-only",
+            r#type: "button",
+            id: row.element(&list, "remove"),
+            aria_label: "{name}",
+            title: "{name}",
+            disabled,
+            onclick: move |_| {
+                _ = form.write().remove_metric(metric);
+                focus_later(&[&after]);
+            },
+            icons::Trash {}
+        }
+    }
+}
+
+/// Who calculates the metric of `row` where several can, and the fields and issues of its
+/// calculator.
+#[component]
+fn MetricDetails(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled: bool) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let metric = row.metric.metric.id;
+    let select = row.element(&list, "provider");
+    let trigger = format!("#{select}");
+    let providers = in_label_order(&tr, &row.metric.providers);
+    let chosen = row
+        .metric
+        .item
+        .as_ref()
+        .map(|item| item.plugin.id.to_owned());
+    rsx! {
+        if !providers.is_empty() {
+            div { class: "field",
+                span { class: "label", id: "{select}-label", {tr.get("metric-provided-by")} }
+                " "
+                Select {
+                    id: "{select}",
+                    labelled_by: "{select}-label",
+                    value: chosen,
+                    placeholder: tr.get("choose-plugin"),
+                    disabled,
+                    on_change: move |chosen: String| {
+                        _ = form.write().choose_provider(metric, &chosen);
+                        focus_later(&[&trigger]);
+                    },
+                    for (index, option) in providers.into_iter().enumerate() {
+                        PluginChoice { key: "{option.id}", select: select.clone(), index, option }
+                    }
+                }
+            }
+        }
+        if let Some(item) = row.metric.item {
+            Fields { form: EditedForm::Phase(form), fields: item.fields, disabled }
+            Issues { id: "{id(&item.path)}-issues", issues: item.issues }
+        }
+    }
+}
+
+/// The choice of a metric to add among `addable`, to the list of metrics whose id is `list`;
+/// nothing if there is none.
+#[component]
+fn AddMetric(
+    form: Signal<PhaseForm>,
+    list: String,
+    addable: Vec<MetricOption>,
+    disabled: bool,
+) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    if addable.is_empty() {
+        return rsx! {};
+    }
+    let select = format!("{list}-add-metric");
+    let trigger = format!("#{select}");
+    let mut addable = addable;
+    addable.sort_by_cached_key(|option| collation_key(&metric_label(&tr, option)));
+    rsx! {
+        div { class: "add",
+            span { class: "label", id: "{select}-label", {tr.get("add-metric")} }
+            " "
+            Select {
+                id: "{select}",
+                labelled_by: "{select}-label",
+                value: None,
+                placeholder: tr.get("choose-plugin"),
+                disabled,
+                on_change: move |chosen: String| {
+                    _ = form.write().add_metric(&chosen);
+                    // the metric added has its checkbox, the list adding one stays otherwise
+                    let added = format!("#{list}-divisions-{}", chosen.replace("::", "-"));
+                    focus_later(&[&added, &trigger]);
+                },
+                for (index, option) in addable.into_iter().enumerate() {
+                    MetricChoice { key: "{option.id}", select: select.clone(), index, option }
+                }
+            }
+        }
     }
 }
 
@@ -519,7 +661,7 @@ fn MetricFields(form: Signal<PhaseForm>, row: MetricRow, disabled: bool) -> Elem
 fn MetricBox(
     form: Signal<PhaseForm>,
     list: String,
-    metric: MetricShown,
+    metric: form::MetricRow,
     table: Table,
     name: Option<String>,
     disabled: bool,
@@ -533,7 +675,7 @@ fn MetricBox(
         Table::Across => t!(tr, "show-in-comparison", metric = metric.as_str()),
     });
     let described_by = why_shown(&tr, &metric, table).map(|_| format!("{own}-why"));
-    let plugin = metric.plugin.id;
+    let id = metric.metric.id;
     rsx! {
         input {
             r#type: "checkbox",
@@ -544,7 +686,7 @@ fn MetricBox(
             aria_label: name,
             aria_describedby: described_by,
             onchange: move |event| {
-                _ = form.write().set_shown(plugin, table, event.checked());
+                form.write().set_shown(id, table, event.checked());
             },
         }
     }
@@ -553,7 +695,7 @@ fn MetricBox(
 /// Why the checkbox of [`MetricBox`] is checked by rule, hidden, as its description; nothing if
 /// it is not.
 #[component]
-fn WhyShown(list: String, metric: MetricShown, table: Table) -> Element {
+fn WhyShown(list: String, metric: form::MetricRow, table: Table) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let Some(why) = why_shown(&tr, &metric, table) else {
@@ -565,17 +707,17 @@ fn WhyShown(list: String, metric: MetricShown, table: Table) -> Element {
 }
 
 /// The id of the checkbox showing `metric` in `table`, of the list of metrics whose id is `list`.
-fn box_id(list: &str, metric: &MetricShown, table: Table) -> String {
+fn box_id(list: &str, metric: &form::MetricRow, table: Table) -> String {
     let table = match table {
         Table::Division => "divisions",
         Table::Across => "comparison",
     };
-    // ids of plugins are namespaced by `::`
-    format!("{list}-{table}-{}", metric.plugin.id.replace("::", "-"))
+    // ids of metrics are namespaced by `::`
+    format!("{list}-{table}-{}", metric.metric.id.replace("::", "-"))
 }
 
 /// Why `table` shows `metric` by rule, if it does.
-fn why_shown(tr: &Translator, metric: &MetricShown, table: Table) -> Option<String> {
+fn why_shown(tr: &Translator, metric: &form::MetricRow, table: Table) -> Option<String> {
     match metric.of(table).by {
         By::Rule(Some(Because::RankedBy(_))) => Some(tr.get(match table {
             Table::Division => "shown-ranked-in-divisions",
@@ -584,7 +726,7 @@ fn why_shown(tr: &Translator, metric: &MetricShown, table: Table) -> Option<Stri
         By::Rule(Some(Because::CalculatedFrom(from))) => Some(t!(
             tr,
             "shown-calculated-from",
-            metric = plugin_label(tr, &from).as_str()
+            metric = metric_label(tr, &from).as_str()
         )),
         _ => None,
     }

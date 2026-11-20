@@ -505,6 +505,12 @@ impl MetricEntry {
         (self.type_id)()
     }
 
+    /// Whether the plugin `plugin` requires the metric whatever its configuration, read from its
+    /// static declaration, e.g. a criterion ranking by it.
+    pub fn is_required_by(&self, plugin: &PluginEntry) -> bool {
+        plugin.requires((self.fact)())
+    }
+
     /// The registered calculators that calculate the metric whatever their configuration, in the
     /// order of their ids, read from their static declarations.
     pub fn calculators(&self) -> Vec<&'static PluginEntry> {

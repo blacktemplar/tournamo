@@ -7,7 +7,7 @@ use tournament_app::{
 };
 use tournament_engine::{PhasePlugins, Table};
 
-use super::fields::plugin_label;
+use super::fields::{metric_label, plugin_label};
 use crate::{capitalized, competition::Ctx};
 
 /// How the phase is played, read from the fields of its form, then what its tables of standings
@@ -88,7 +88,7 @@ pub(super) fn columns(tr: &Translator, view: &FormView) -> Vec<(String, String)>
         let metrics: Vec<_> = view
             .overridden(table, on)
             .iter()
-            .map(|metric| plugin_label(tr, metric))
+            .map(|metric| metric_label(tr, metric))
             .collect();
         (!metrics.is_empty()).then(|| (tr.get(term), metrics.join(&tr.get("list-separator"))))
     })

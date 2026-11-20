@@ -220,8 +220,7 @@ fn a_field_offers_all_registered_plugins_the_recommended_first() {
 fn an_incompatible_choice_stays_selected_until_the_operator_resolves_it() {
     let mut form = new_form();
     form.add(&path("ranking"), LaterElimination::ID).unwrap();
-    form.add(&path("metrics"), RoundOfEliminationCalculator::ID)
-        .unwrap();
+    assert!(items(&form.view(), "metrics").contains(&RoundOfEliminationCalculator::ID));
     let view = form.view();
     assert!(!view.complete);
     assert!(!field(&view, "format").issues.is_empty());
@@ -291,13 +290,10 @@ fn a_customized_section_is_kept_as_a_whole() {
 
     let view = form.view();
     assert_eq!(items(&view, "ranking"), [MorePoints::ID]);
+    // the Sonneborn-Berger score went with the criterion needing it
     assert_eq!(
         items(&view, "metrics"),
-        [
-            WinsDrawsLossesCalculator::ID,
-            PointsCalculator::ID,
-            SonnebornBergerCalculator::ID
-        ]
+        [WinsDrawsLossesCalculator::ID, PointsCalculator::ID]
     );
 
     form.choose(&path("format"), Some(SingleElimination::ID))
@@ -305,11 +301,7 @@ fn a_customized_section_is_kept_as_a_whole() {
     let view = form.view();
     assert_eq!(
         items(&view, "metrics"),
-        [
-            WinsDrawsLossesCalculator::ID,
-            PointsCalculator::ID,
-            SonnebornBergerCalculator::ID
-        ]
+        [WinsDrawsLossesCalculator::ID, PointsCalculator::ID]
     );
     assert!(view.complete);
 }
@@ -628,36 +620,35 @@ fn a_whole_number_is_taken_however_it_is_written() {
 /// A metric a criterion needs is calculated without being chosen, if there is nothing to choose:
 /// a single calculator without fields calculates it.
 #[test]
-fn a_calculator_needed_and_without_fields_is_implied() {
+fn a_metric_needed_is_listed_with_what_needs_it() {
     let mut form = new_form();
 
     form.add(&path("ranking"), MoreBuchholz::ID).unwrap();
 
     let view = form.view();
     let metrics = list(&view, "metrics");
-    let implied: Vec<_> = metrics
-        .implied
+    let buchholz = metrics
+        .metrics
         .iter()
-        .map(|implied| {
-            let needed_by: Vec<_> = implied.needed_by.iter().map(|option| option.id).collect();
-            (implied.plugin.id, needed_by)
-        })
-        .collect();
-    assert_eq!(implied, [(BuchholzCalculator::ID, vec![MoreBuchholz::ID])]);
+        .find(|row| row.metric.id == BuchholzCalculator::ID)
+        .unwrap();
+    assert!(!buchholz.added);
+    let needed_by: Vec<_> = buchholz.needed_by.iter().map(|option| option.id).collect();
+    assert_eq!(needed_by, [MoreBuchholz::ID]);
     assert!(
         metrics
-            .options
+            .addable
             .iter()
             .all(|option| option.id != BuchholzCalculator::ID),
-        "an implied plugin is not offered as well"
+        "a metric listed is not offered to add as well"
     );
     assert!(view.complete);
 }
 
-/// The ranking comes before the metrics, so removing the metric a criterion needs leaves the
-/// criterion where it is, with an issue, rather than dropping it unnoticed.
+/// The calculator of a metric something needs comes back when removed by hand, and the
+/// criterion needing it stays where it is.
 #[test]
-fn a_field_does_not_follow_a_change_of_a_field_after_it() {
+fn a_calculator_needed_comes_back_when_removed() {
     let mut form = new_form();
 
     form.remove(&path("metrics[2]")).unwrap();
@@ -667,14 +658,12 @@ fn a_field_does_not_follow_a_change_of_a_field_after_it() {
         items(&view, "ranking"),
         [MorePoints::ID, MoreSonnebornBerger::ID]
     );
-    assert_eq!(
-        english_all(&field(&view, "metrics").issues),
-        ["more Sonneborn-Berger needs one of these: Sonneborn-Berger"]
-    );
+    assert!(items(&view, "metrics").contains(&SonnebornBergerCalculator::ID));
+    assert!(view.complete);
 }
 
 /// The points difference needs the points scored and conceded, which need a match format keeping
-/// scores: the issue says so rather than only naming the metric, which would not do on its own.
+/// scores: the issue is where that is chosen, and says what needs them.
 #[test]
 fn an_issue_names_what_the_metric_it_names_needs_in_turn() {
     let mut form = new_form();
@@ -684,16 +673,20 @@ fn an_issue_names_what_the_metric_it_names_needs_in_turn() {
 
     let view = form.view();
     assert!(!view.complete);
+    assert!(items(&view, "metrics").contains(&PointsBalanceCalculator::ID));
     assert_eq!(
-        english_all(&field(&view, "metrics").issues),
+        english_all(&field(&view, "match_format").issues),
         [
-            "points difference needs points scored and conceded, which needs the points scored, \
-          and nothing chosen provides that"
+            "points difference needs points scored and conceded, which needs one of these: best \
+             of games, score"
         ]
     );
-    assert!(
-        !items(&view, "metrics").contains(&PointsBalanceCalculator::ID),
-        "not added, since it would not do on its own"
+    assert_eq!(
+        Translator::new(Language::German, &[])
+            .text(&field(&view, "match_format").issues[0])
+            .replace(['\u{2068}', '\u{2069}'], ""),
+        "Punktedifferenz braucht erzielte und erhaltene Punkte, wofür eines davon nötig ist: \
+         nach Sätzen, Spielstand"
     );
 
     form.choose(&path("match_format"), Some(Scored::ID))
@@ -702,57 +695,31 @@ fn an_issue_names_what_the_metric_it_names_needs_in_turn() {
     assert!(view.complete, "{:?}", view.issues);
 }
 
-/// The points can be scored in many ways, so the operator has to choose them, and the issue is
-/// at the metrics, where it is fixed, naming what fixes it.
+/// The metrics are listed by label, so that a metric stays where it is whatever is added,
+/// removed or chosen.
 #[test]
-fn an_issue_is_shown_at_the_field_that_fixes_it() {
+fn the_metrics_are_listed_by_label_whatever_is_chosen() {
     let mut form = new_form();
-
-    form.remove(&path("metrics[1]")).unwrap();
-
-    let view = form.view();
-    assert!(!view.complete);
-    assert_eq!(
-        english_all(&field(&view, "metrics").issues),
-        [
-            "more points needs one of these: points",
-            "Sonneborn-Berger needs one of these: points"
-        ]
-    );
-    assert_eq!(
-        Translator::new(Language::German, &[])
-            .text(&field(&view, "metrics").issues[0])
-            .replace(['\u{2068}', '\u{2069}'], ""),
-        "mehr Punkte braucht eines davon: Punkte"
-    );
-    assert!(view.issues.is_empty());
-}
-
-/// A metric stays where it is when it is chosen or left out, so that a second click at the same
-/// place is at the same metric.
-#[test]
-fn a_set_of_plugins_keeps_its_order_whatever_is_chosen() {
-    let mut form = new_form();
-    let set = |form: &PhaseForm| -> Vec<&'static str> {
+    let rows = |form: &PhaseForm| -> Vec<&'static str> {
         list(&form.view(), "metrics")
-            .set()
+            .metrics
             .iter()
-            .map(|entry| entry.plugin().id)
+            .map(|row| row.metric.label)
             .collect()
     };
-    let before = set(&form);
+    let in_order = |labels: Vec<&'static str>| {
+        let mut sorted = labels.clone();
+        sorted.sort_by_key(|label| label.to_lowercase());
+        assert_eq!(labels, sorted);
+    };
 
+    form.add_metric(BuchholzCalculator::ID).unwrap();
+    in_order(rows(&form));
     form.remove(&path("metrics[0]")).unwrap();
-    assert_eq!(set(&form), before);
-    form.add(&path("metrics"), BuchholzCalculator::ID).unwrap();
-    assert_eq!(set(&form), before);
-    form.add(&path("metrics"), WinsDrawsLossesCalculator::ID)
-        .unwrap();
-    assert_eq!(set(&form), before);
-    // another format recommends other metrics
+    in_order(rows(&form));
     form.choose(&path("format"), Some(SingleElimination::ID))
         .unwrap();
-    assert_eq!(set(&form), before);
+    in_order(rows(&form));
 }
 
 /// A phase ranked by nothing can be played, but the form says what that leads to.
@@ -1047,3 +1014,4 @@ fn a_summary_leaves_out_one_division_seeding_in_order_and_teams_as_they_come() {
 }
 
 mod columns;
+mod metrics;

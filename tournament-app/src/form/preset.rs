@@ -93,7 +93,7 @@ impl PresetForm {
         let mut fields = self.generator().fields(&nodes, None, &nodes, &whole);
         let mut unplaced = Vec::new();
         for issue in &issues {
-            let text = issue_text(issue, &self.draft);
+            let text = issue_text(issue, &self.draft, None);
             if !place(&mut fields, issue.path(), &text) {
                 unplaced.push(text);
             }

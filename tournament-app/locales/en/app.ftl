@@ -224,6 +224,8 @@ issue-incompatible = this does not fit next to the others: { $reason }
 issue-unprovided = { $plugin } needs { $fact }, which nothing provides
 # $plugin: a plugin, $providers: the plugins of which it needs one
 issue-unprovided-by = { $plugin } needs one of these: { $providers }
+# as issue-unprovided-by, where $plugin is there since $needer needs it
+issue-unprovided-for = { $needer } needs { $plugin }, which needs one of these: { $providers }
 # $lacking: what each of the providers needs in turn, e.g. what a match format keeps
 issue-unprovided-lacking = { $plugin } needs { $count ->
         [one] { $providers }, which needs

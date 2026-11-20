@@ -1101,19 +1101,29 @@ metric (`Phase::shown`, the one rule for every consumer):
   `AddPhase::with_columns` drops what is said about a metric no calculator of
   the phase calculates, so a column never names a metric that is not
   calculated.
-- **The operator chooses where a metric is shown, not whether it is
-  calculated.** A metric neither needed nor shown has no effect, so the form's
-  list of metrics is a table of checkboxes, a column per table of standings
-  (one with one division compared by nothing): ticking a metric not
-  calculated adds it, hiding one in the last table showing it removes it with
-  its fields unless something needs it (`PhaseForm::set_shown`). A box on by
-  rule is told from one the operator ticked by its look, an outlined tick, and
-  says why as its accessible description. A phase that calculates a metric
-  nothing needs and nothing shows (saved before, or by the CLI) keeps it until
-  the operator touches its row.
+- **The metrics of a phase are those added and those needed**, a row each
+  (`PhaseForm`, `form/metrics.rs`): the operator adds a metric ("Add metric")
+  and removes it again, unless something needs it; a metric a criterion or
+  another metric needs is there while that is, and goes with it, also what it
+  needed in turn. The checkboxes only say where a metric is shown. After every
+  change the form settles the metrics: removes those neither added nor needed,
+  and adds a calculator for each that has none, the one chosen before, else
+  the only one, else the format's suggestion, else the only one without fields
+  (as `Draft::add_implied` would); otherwise the row asks which calculator.
+  What it removes (a calculator's settings, the calculator chosen for a
+  metric) it remembers while it is open, so taking a criterion out and back in
+  costs nothing. A metric only needed that cannot be calculated names, at the
+  field that fixes it, what needs it ("games difference needs games won and
+  lost, which needs one of these: best of games"). A phase opened again counts
+  every metric nothing needs as added, so opening a form changes nothing.
 - Nothing of this runs when a result is reported.
 
 Rejected:
+- Every metric registered as a row of checkboxes, a metric calculated once a
+  box is ticked and no longer once none is and nothing needs it: ticking a
+  metric only to have it calculated mixed showing with calculating, the list
+  grows with every metric registered, and unticking checked only the metric
+  unticked, leaving what it needed behind with its issue.
 - An ordered list of columns per table: it can name a metric nobody
   configured, and is a second place to keep in step with the metrics. A free
   order of the columns: the order of the criteria is what an operator

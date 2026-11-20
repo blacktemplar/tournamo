@@ -196,7 +196,7 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
 
         gui.click("Phase").await?;
         gui.click("Edit phase").await?;
-        gui.toggle_named(BUCHHOLZ_IN_GROUPS).await?;
+        gui.choose_plugin("metrics", "Buchholz").await?;
         gui.expect_named_checkbox(BUCHHOLZ_IN_GROUPS, true, false)
             .await?;
         gui.click("Save changes").await?;
@@ -208,7 +208,7 @@ async fn each_table_shows_what_it_is_ranked_by_and_what_the_operator_ticks() {
         .await?;
         gui.click("Phase").await?;
         gui.click("Edit phase").await?;
-        gui.toggle_named(BUCHHOLZ_IN_GROUPS).await?;
+        gui.click_labelled("Remove Buchholz").await?;
         gui.click("Save changes").await?;
         // no longer calculated
         gui.expect_phase(&[

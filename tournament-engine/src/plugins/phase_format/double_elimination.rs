@@ -141,25 +141,35 @@ pub enum DoubleEliminationRound {
 #[typetag::serde(name = "tournament_engine::double_elimination_round")]
 impl TypeMapValue for DoubleEliminationRound {}
 
-/// Shows the round by its bracket, e.g. `Winners round 2`, `Losers final` or `Grand final`.
+/// Shows the round by its bracket, the rounds of the winner bracket by their fraction of its final
+/// as a [`KnockoutRound`] shows them, e.g. `Winners semifinals`, `Winners round of 16`, `Losers
+/// round 2`, `Losers final` or `Grand final`.
+///
+/// [`KnockoutRound`]: super::KnockoutRound
 impl Display for DoubleEliminationRound {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&Stage::from(*self), f)
     }
 }
 
-/// The stage named as [`Display`] shows it, with the keys `winners-round` and `losers-round`, each
-/// with the number `round`, `winners-final`, `losers-final`, `grand-final` and
-/// `grand-final-reset`.
+/// The stage named as [`Display`] shows it, with the keys `winners-final`, `winners-semifinals`,
+/// `winners-quarterfinals`, `winners-fraction-finals` with the number `fraction` for the other
+/// rounds of the winner bracket, e.g. 8 for its eighth-finals, `losers-round` with the number
+/// `round`, `losers-final`, `grand-final` and `grand-final-reset`.
 impl From<DoubleEliminationRound> for Stage {
     fn from(round: DoubleEliminationRound) -> Self {
         match round {
-            DoubleEliminationRound::Winners { round, rounds } if round == rounds => {
-                Self::new("winners-final", "Winners final")
-            }
-            DoubleEliminationRound::Winners { round, .. } => {
-                Self::new("winners-round", format!("Winners round {round}")).with("round", round)
-            }
+            // named as a single elimination names its rounds
+            DoubleEliminationRound::Winners { round, rounds } => match 1 << (rounds - round) {
+                1 => Self::new("winners-final", "Winners final"),
+                2 => Self::new("winners-semifinals", "Winners semifinals"),
+                4 => Self::new("winners-quarterfinals", "Winners quarterfinals"),
+                fraction => Self::new(
+                    "winners-fraction-finals",
+                    format!("Winners round of {}", 2 * fraction),
+                )
+                .with("fraction", fraction),
+            },
             DoubleEliminationRound::Losers { round, rounds } if round == rounds => {
                 Self::new("losers-final", "Losers final")
             }

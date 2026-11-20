@@ -271,19 +271,14 @@ pub fn Rounds() -> Element {
     }
 }
 
-/// The name of the round of `summary`: the stage it is of, if one, else its number, followed by
-/// the stages it plays where it plays several, e.g. "Round 2: Winners round 2, Losers round 1".
+/// The name of the round of `summary`: the stage it is of, if one, else the stages it plays where
+/// it plays several, e.g. "Winners semifinals, Losers round 1", else its number.
 fn round_name(tr: &Translator, summary: &RoundSummary) -> String {
     match &summary.stage {
         Some(stage) => capitalized(&tr.stage(stage)),
         None if !summary.stages.is_empty() => {
             let stages: Vec<_> = summary.stages.iter().map(|stage| tr.stage(stage)).collect();
-            t!(
-                tr,
-                "round-of-stages",
-                round = summary.round,
-                stages = stages.join(", "),
-            )
+            capitalized(&stages.join(", "))
         }
         None => t!(tr, "round", round = summary.round),
     }

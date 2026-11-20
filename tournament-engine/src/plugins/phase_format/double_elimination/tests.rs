@@ -21,15 +21,23 @@ use crate::{
 };
 
 #[test]
-fn double_elimination_rounds_are_named_by_their_bracket() {
+fn double_elimination_rounds_are_named_by_their_bracket_the_winners_as_a_knockout() {
     let names = [
         Winners {
             round: 1,
-            rounds: 3,
+            rounds: 5,
         },
         Winners {
             round: 3,
-            rounds: 3,
+            rounds: 5,
+        },
+        Winners {
+            round: 4,
+            rounds: 5,
+        },
+        Winners {
+            round: 5,
+            rounds: 5,
         },
         Losers {
             round: 2,
@@ -47,7 +55,9 @@ fn double_elimination_rounds_are_named_by_their_bracket() {
     assert_eq!(
         names,
         [
-            "Winners round 1",
+            "Winners round of 32",
+            "Winners quarterfinals",
+            "Winners semifinals",
             "Winners final",
             "Losers round 2",
             "Losers final",
@@ -86,7 +96,7 @@ fn a_stage_is_keyed_by_its_bracket_and_whether_it_is_the_final() {
             .each_ref()
             .map(|stage| (stage.key(), stage.numbers())),
         [
-            ("winners-round", &[("round", 1)][..]),
+            ("winners-quarterfinals", &[][..]),
             ("winners-final", &[]),
             ("losers-round", &[("round", 2)]),
             ("losers-final", &[]),
@@ -94,7 +104,7 @@ fn a_stage_is_keyed_by_its_bracket_and_whether_it_is_the_final() {
             ("grand-final-reset", &[]),
         ]
     );
-    assert_eq!(stages[0].to_string(), "Winners round 1");
+    assert_eq!(stages[0].to_string(), "Winners quarterfinals");
 }
 
 /// A double elimination between `num_players` entrants with its first matches scheduled,

@@ -96,8 +96,16 @@ plugin-tournament_engine-double_elimination =
     .description = wer zum zweiten Mal verliert, scheidet aus; Unentschieden sind nicht erlaubt
     .field-grand_final_reset = Wiederholung des großen Finales
     .field-grand_final_reset-description = verliert der Sieger der Gewinnerrunde das große Finale, spielen die beiden es noch einmal; ohne Wiederholung scheidet aus, wer das große Finale verliert
-    .stage-winners-round = Gewinnerrunde { $round }
     .stage-winners-final = Finale der Gewinnerrunde
+    .stage-winners-semifinals = Halbfinale der Gewinnerrunde
+    .stage-winners-quarterfinals = Viertelfinale der Gewinnerrunde
+    .stage-winners-fraction-finals = { $fraction ->
+        [8] Achtelfinale der Gewinnerrunde
+        [16] Sechzehntelfinale der Gewinnerrunde
+        [32] Zweiunddreißigstelfinale der Gewinnerrunde
+        [64] Vierundsechzigstelfinale der Gewinnerrunde
+       *[other] { $fraction }tel-Finale der Gewinnerrunde
+    }
     .stage-losers-round = Verliererrunde { $round }
     .stage-losers-final = Finale der Verliererrunde
     .stage-grand-final = Großes Finale

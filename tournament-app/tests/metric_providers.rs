@@ -1,17 +1,18 @@
 //! A metric several calculators provide: the form of a phase asks which one, keeps the choice and
 //! what was entered for each. No metric of the engine has several, so the plugins are this test's
-//! own, registered in its own catalog.
+//! own, registered in its own catalog, with a format of its own suggesting one of them.
 
-use plugin_factory::{Plugin, PluginType as _};
+use plugin_factory::{Plugin, PluginType as _, config::PluginConfig, register};
 use serde::{Deserialize, Serialize};
 use tournament_app::{
     form::{Editable as _, FormView, Input, MetricRow, PhaseForm},
     session::Session,
 };
 use tournament_engine::{
-    Bye, DivisionData, Match, RankingId, Score, metric,
+    Bye, DivisionData, DivisionView, Match, RankingId, Score, metric,
     plugins::{
         metrics_calculator::{Calculator, Metric, MetricId as _, OldMetrics, provides_metric},
+        phase_format::{PhaseFormat, PhaseSuggestions, Schedule},
         ranker::{Comparison, RankingCriterion, requires_metric},
     },
     register_calculator, register_criterion,
@@ -105,6 +106,26 @@ impl RankingCriterion for HigherRating {
 
 register_criterion!(HigherRating);
 
+/// Schedules nothing, ranked by the [`Rating`] as [`Glicko`] calculates it.
+#[derive(Debug, Clone, Serialize, Deserialize, Plugin)]
+#[plugin(id = "test::rated_rounds", label = "rated rounds")]
+struct RatedRounds;
+
+#[register]
+impl PhaseFormat for RatedRounds {
+    fn suggestions(&self) -> PhaseSuggestions {
+        PhaseSuggestions {
+            ranking: vec![PluginConfig::of::<HigherRating>()],
+            metrics: vec![PluginConfig::of::<Glicko>()],
+            across: Vec::new(),
+        }
+    }
+
+    fn create_new_matches(&mut self, _: &DivisionView<'_>) -> Schedule {
+        Schedule::default()
+    }
+}
+
 fn new_form() -> PhaseForm {
     Session::new("cup").phase_form().unwrap()
 }
@@ -160,6 +181,39 @@ fn a_metric_of_several_calculators_waits_for_the_choice_of_one() {
 
     assert_eq!(provider(&form), Some(Glicko::ID));
     assert!(form.view().complete, "{:?}", form.view().issues);
+}
+
+/// A form no longer following the suggestions still takes the calculator the format suggests for
+/// a metric something needs, and lets the operator choose another.
+#[test]
+fn a_metric_needed_is_calculated_as_the_format_suggests() {
+    let mut form = new_form();
+    let ranking = "ranking".parse().unwrap();
+    // edited, so choosing the format keeps the ranking and the metrics
+    while !form.view().fields.iter().any(|field| {
+        field.path == ranking && matches!(&field.input, Input::List(list) if list.items.is_empty())
+    }) {
+        form.remove(&"ranking[0]".parse().unwrap()).unwrap();
+    }
+    form.choose(&"format".parse().unwrap(), Some(RatedRounds::ID))
+        .unwrap();
+
+    form.add(&ranking, HigherRating::ID).unwrap();
+
+    assert_eq!(provider(&form), Some(Glicko::ID));
+    let recommended: Vec<_> = rating(&form.view())
+        .providers
+        .iter()
+        .filter(|option| option.recommended)
+        .map(|option| option.id)
+        .collect();
+    assert_eq!(recommended, [Glicko::ID]);
+
+    form.choose_provider(Rating::ID, Elo::ID).unwrap();
+    form.remove(&"ranking[0]".parse().unwrap()).unwrap();
+    form.add(&ranking, HigherRating::ID).unwrap();
+
+    assert_eq!(provider(&form), Some(Elo::ID));
 }
 
 /// Switching to another calculator and back brings back what was entered for the first.

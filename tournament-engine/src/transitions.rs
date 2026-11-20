@@ -169,6 +169,24 @@ pub enum RemovePhaseError {
     Rejected(#[from] StateMachineError),
 }
 
+/// Why the start of a phase could not be undone.
+#[derive(Debug, Error)]
+pub enum UnstartPhaseError {
+    /// No phase with this id has started.
+    #[error("the phase has not started")]
+    NotStarted,
+    /// Results are reported in these phases, which undoing the start would unstart.
+    #[error("results are reported in the phase")]
+    Played(Vec<PhaseId>),
+    /// These phases have started, taking entrants from a phase undoing the start would unstart.
+    #[error("phases taking entrants from the phase have started")]
+    InUse(Vec<PhaseId>),
+    /// The undo was rejected by the state machine, because a later change in the log depends on
+    /// the start otherwise.
+    #[error(transparent)]
+    Rejected(#[from] StateMachineError),
+}
+
 /// A change to the log that is not made, for [`CompetitionStateMachineExt::conflicts_of`].
 #[derive(Debug, Clone, Copy)]
 pub enum Change<'a> {
@@ -359,6 +377,36 @@ pub trait CompetitionStateMachineExt {
         phase_id: PhaseId,
     ) -> Result<TransitionId, RemovePhaseError>;
 
+    /// Undoes the start of the phase `phase_id` by undoing the transition in effect that started
+    /// it, as an action of the session of `history`, and returns the id of the undo entry appended
+    /// for that. Undoing that action, see [`SessionHistory::undo_last`], starts the phase again.
+    ///
+    /// A phase that takes entrants from phases was started by a [`StartPhase`]; one fed by the
+    /// registration alone started with the competition, by the [`StartCompetition`], so undoing
+    /// its start unstarts the competition and every phase that started with it. Starting it again
+    /// draws the same lots, which come from the competition's seed.
+    ///
+    /// # Errors
+    /// Returns [`UnstartPhaseError::NotStarted`] if no phase with this id has started,
+    /// [`UnstartPhaseError::InUse`] if a phase taking entrants from a phase it would unstart has
+    /// started, [`UnstartPhaseError::Played`] if a result is reported in one of those, and
+    /// [`UnstartPhaseError::Rejected`] if a later change in the log depends on the start
+    /// otherwise. In either case neither the log nor `history` changes.
+    fn unstart_phase(
+        &mut self,
+        history: &mut SessionHistory,
+        phase_id: PhaseId,
+    ) -> Result<TransitionId, UnstartPhaseError>;
+
+    /// The id of the log entry in effect that started the phase `phase_id`, which
+    /// [`Self::unstart_phase`] undoes: its [`StartPhase`], or the [`StartCompetition`] for a phase
+    /// fed by the registration alone.
+    ///
+    /// # Errors
+    /// Returns why [`Self::unstart_phase`] would refuse to undo it, except for
+    /// [`UnstartPhaseError::Rejected`], which only undoing it finds out.
+    fn started_by(&self, phase_id: PhaseId) -> Result<TransitionId, UnstartPhaseError>;
+
     /// The id of the log entry in effect that reported the result of the match `match_id` of the
     /// phase `phase_id`: the latest [`ReportMatchResult`] in effect for it, which
     /// [`Self::undo_match_result`] undoes. `None` if there is none.
@@ -499,6 +547,79 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         let id = TransitionId::new();
         history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
         Ok(id)
+    }
+
+    fn unstart_phase(
+        &mut self,
+        history: &mut SessionHistory,
+        phase_id: PhaseId,
+    ) -> Result<TransitionId, UnstartPhaseError> {
+        let target = self.started_by(phase_id)?;
+        let id = TransitionId::new();
+        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
+        Ok(id)
+    }
+
+    fn started_by(&self, phase_id: PhaseId) -> Result<TransitionId, UnstartPhaseError> {
+        let competition = self.current();
+        let with_competition = competition
+            .phase(&phase_id)
+            .filter(|phase| phase.is_started())
+            .ok_or(UnstartPhaseError::NotStarted)?
+            .is_fed_by_registration_alone();
+        let unstarted: Vec<_> = competition
+            .phases()
+            .values()
+            .filter(|phase| {
+                phase.is_started()
+                    && if with_competition {
+                        phase.is_fed_by_registration_alone()
+                    } else {
+                        phase.id() == phase_id
+                    }
+            })
+            .collect();
+        let users: Vec<_> = competition
+            .phases()
+            .values()
+            .filter(|phase| {
+                phase.is_started()
+                    && phase.sources().iter().any(|source| {
+                        unstarted
+                            .iter()
+                            .any(|from| source.of() == SourceOf::Phase(from.id()))
+                    })
+            })
+            .map(|phase| phase.id())
+            .collect();
+        if !users.is_empty() {
+            return Err(UnstartPhaseError::InUse(users));
+        }
+        let played: Vec<_> = unstarted
+            .iter()
+            .filter(|phase| {
+                phase.divisions().iter().any(|division| {
+                    division
+                        .data()
+                        .matches()
+                        .values()
+                        .any(|r#match| r#match.is_finished())
+                })
+            })
+            .map(|phase| phase.id())
+            .collect();
+        if !played.is_empty() {
+            return Err(UnstartPhaseError::Played(played));
+        }
+        self.rev_in_effect_applied()
+            .find_map(|(id, transition)| match transition {
+                CompetitionTransition::StartPhase(start) if start.phase_id() == phase_id => {
+                    Some(id)
+                }
+                CompetitionTransition::StartCompetition(_) if with_competition => Some(id),
+                _ => None,
+            })
+            .ok_or(UnstartPhaseError::NotStarted)
     }
 
     fn reported_by(&self, phase_id: PhaseId, match_id: MatchId) -> Option<TransitionId> {

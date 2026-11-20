@@ -13,6 +13,8 @@ undo-since-opened = Rückgängig umfasst, was hier seit dem Öffnen dieses Turni
 undo-start-title = Start rückgängig machen?
 undo-start-description = Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phase geändert werden können. Wiederherstellen startet es wieder.
 undo-start = Start rückgängig machen
+undo-start-named = Start rückgängig machen: { $phase }
+unstart-description = Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phasen geändert werden können. Ein neuer Start lost dieselben Lose.
 not-persisted-summary = Dieser Browser behält die hier gespeicherten Turniere womöglich nicht.
 not-persisted = Zum Beispiel in einem privaten Fenster, oder wenn ihm der Platz ausgeht. Exportiere sie, um eine Kopie zu behalten.
 not-persisted-install = Als App installiert, darf die Seite sie meist behalten.
@@ -37,7 +39,7 @@ help-running-start = Starte. Das Format setzt die Spiele an, und die Teilnehmer 
 help-running-results = Melde die Ergebnisse: Wähle bei einem Spiel die Seite, die gewonnen hat, oder Unentschieden, oder trage seinen Spielstand in seiner Zeile ein; oder tippe ein Ergebnis unter „Ergebnisse eintippen“ ein, z. B. „3 1“ für einen Sieg der linken Seite von Spiel 3, „3 x“ für ein Unentschieden oder einen Teil des Namens des Siegers; oder wähle den Sieger im Turnierbaum. Die Tabelle folgt jedem Ergebnis.
 help-running-views = Eine Phase zeigt ihre Spiele, die jetzt spielbaren oder Runde für Runde, und ihre Tabelle, mit einer Linie unter den Plätzen, die in eine spätere Phase weiterkommen. Ein K.-o.-System zeigt auch seinen Turnierbaum; eine Phase, in der die Teilnehmer paarweise aufeinandertreffen, etwa Jeder gegen jeden, eine Kreuztabelle mit jedem Ergebnis jedes Teilnehmers gegen jeden anderen. Die Rangliste reiht alle nach der Phase, die sie erreicht haben.
 help-running-mistakes = Ein irrtümlich gemeldetes Ergebnis wird zurückgenommen, indem sein Spiel wieder geöffnet wird. Rückgängig nimmt zurück, was seit dem Öffnen des Turniers getan wurde, in der Reihenfolge, in der es getan wurde. In beiden Fällen bleiben die eingetragenen Punkte stehen, sodass nur noch zu ändern ist, was falsch war.
-help-running-undo = Rückgängig reicht nur so weit zurück, wie die Seite offen war: Neu laden oder das Turnier verlassen vergisst, was sich rückgängig machen ließe, aber nicht, was getan wurde. Ein Spiel wieder öffnen geht jederzeit. Rückgängig nimmt auch den Start zurück, sobald alles danach rückgängig gemacht ist (es fragt vorher): Das Turnier kehrt zur Vorbereitung zurück, wo Teilnehmer und Phasen geändert werden können. Ein neuer Start lost wieder dieselben Lose, Gruppen, Paare und Turnierbäume: Was gelost wird, steht fest, sobald das Turnier angelegt ist, damit sich eine Auslosung nicht wiederholen lässt, bis sie jemandem passt, und ändert sich nur mit dem, woraus gelost wird, z. B. den Teilnehmern oder der Phase.
+help-running-undo = Rückgängig reicht nur so weit zurück, wie die Seite offen war: Neu laden oder das Turnier verlassen vergisst, was sich rückgängig machen ließe, aber nicht, was getan wurde. Ein Spiel wieder öffnen geht jederzeit, ebenso den Start einer Phase rückgängig machen, sobald ihre Spiele wieder geöffnet sind (unter Phase). Den Start einer Phase, die mit dem Turnier begonnen hat, rückgängig zu machen, oder den Start selbst mit Rückgängig, bringt das Turnier zurück in die Vorbereitung (es fragt vorher), wo Teilnehmer und Phasen geändert werden können. Ein neuer Start lost wieder dieselben Lose, Gruppen, Paare und Turnierbäume: Was gelost wird, steht fest, sobald das Turnier angelegt ist, damit sich eine Auslosung nicht wiederholen lässt, bis sie jemandem passt, und ändert sich nur mit dem, woraus gelost wird, z. B. den Teilnehmern oder der Phase.
 help-running-byes = Bleibt ein Teilnehmer in einer Runde ohne Gegner, hat er ein Freilos: Er kommt ohne Spiel weiter und erhält, was die Phase dafür vorsieht, z. B. die Punkte für ein Freilos.
 help-formats = Formate und Tabelle
 help-presets = Vorlagen
@@ -384,6 +386,8 @@ announce-added-phases = { $count ->
     }
 announce-edited-phase = Die Phase ist geändert.
 announce-removed-phase = Die Phase ist entfernt.
+announce-unstarted = Der Start ist rückgängig gemacht: Das Turnier ist wieder in der Vorbereitung.
+announce-unstarted-phase = Der Start von { $phase } ist rückgängig gemacht.
 announce-phase-finished = Jedes Spiel der Phase hat ein Ergebnis.
 announce-started-phase = { $phase } gestartet: { $count ->
         [one] ein Spiel
@@ -406,6 +410,8 @@ action-edit-phase = Bearbeiten von { $phase }
 action-remove-phase = Entfernen von { $phase }
 action-start-phase = Start von { $phase }
 action-start = Start
+action-unstart = Rückgängigmachen des Starts
+action-unstart-phase = Rückgängigmachen des Starts von { $phase }
 action-report = Ergebnis von Spiel { $number } ({ $result })
 action-reopen = Wiederöffnen von Spiel { $number }
 

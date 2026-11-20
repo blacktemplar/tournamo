@@ -30,6 +30,11 @@ pub enum Announcement {
     RemovedPhase,
     /// A phase started on its own, as it is called, with the number of matches it scheduled.
     StartedPhase(Option<PhaseName>, usize),
+    /// The start of the competition undone, see
+    /// [`Session::unstart_phase`](tournament_app::session::Session::unstart_phase).
+    Unstarted,
+    /// The start of a later phase undone, as it is called.
+    UnstartedPhase(PhaseName),
     Reported(Reported),
     Reopened(Reopened),
     Undone(Action),
@@ -78,6 +83,10 @@ impl Announcement {
                     .unwrap_or_default(),
                 count = *matches,
             ),
+            Self::Unstarted => tr.get("announce-unstarted"),
+            Self::UnstartedPhase(phase) => {
+                t!(tr, "announce-unstarted-phase", phase = tr.phase_name(phase))
+            }
             Self::Reported(reported) => {
                 let row = &reported.row;
                 let mut sentences = vec![t!(
@@ -143,6 +152,10 @@ fn action_text(tr: &Translator, action: &Action) -> String {
         }
         Action::Start => tr.get("action-start"),
         Action::StartPhase(phase) => t!(tr, "action-start-phase", phase = tr.phase_name(phase)),
+        Action::Unstart => tr.get("action-unstart"),
+        Action::UnstartPhase(phase) => {
+            t!(tr, "action-unstart-phase", phase = tr.phase_name(phase))
+        }
         Action::Report(row) => t!(
             tr,
             "action-report",

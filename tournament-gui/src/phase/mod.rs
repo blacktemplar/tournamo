@@ -332,7 +332,7 @@ fn PhaseScale(form: Option<Signal<PhaseForm>>, phase: Option<PhaseId>) -> Elemen
 }
 
 /// How the phase `phase` is played, where it takes its entrants from where the competition has
-/// several phases, and the buttons changing and removing it.
+/// several phases, and the buttons changing it and removing it, or undoing its start once started.
 #[component]
 pub fn PhaseSummary(phase: PhaseId) -> Element {
     let ctx = use_context::<Ctx>();
@@ -342,13 +342,24 @@ pub fn PhaseSummary(phase: PhaseId) -> Element {
     let actions = ctx.actions();
     let view = form.view();
     let columns = summary::columns(&ctx.translator.read(), &view);
+    let started = ctx
+        .session
+        .read()
+        .competition()
+        .phase(&phase)
+        .is_some_and(|phase| phase.is_started());
     rsx! {
         Summary { fields: view.summary(), columns }
         PhaseScale { phase }
         if actions.edit_phase {
             div { class: "phase-actions",
                 EditPhase { phase }
-                RemovePhase { phase }
+                // a started phase is never removed
+                if started {
+                    UnstartPhase { phase }
+                } else {
+                    RemovePhase { phase }
+                }
             }
         }
     }
@@ -521,6 +532,86 @@ fn RemovePhase(phase: PhaseId) -> Element {
         if let Some(refusal) = &refusal {
             " "
             span { id: "{described}", class: "hint", {tr.sentence(refusal)} }
+        }
+    }
+}
+
+/// The button undoing the start of the phase `phase`: `aria-disabled` with the reason while it
+/// cannot be undone. A phase taking its entrants from the registration started with the
+/// competition, so undoing its start takes the competition back to its setup, which is asked
+/// about first; the start of a later phase is undone without a question, since starting it again
+/// brings it back.
+#[component]
+fn UnstartPhase(phase: PhaseId) -> Element {
+    let ctx = use_context::<Ctx>();
+    let mut asking = use_signal(|| false);
+    let session = ctx.session.read();
+    let refusal = session
+        .unstart_phase_refusal(phase)
+        .map(|refusal| refusal.text());
+    let phases = session.phases();
+    let Some(overview) = phases.iter().find(|overview| overview.id == phase) else {
+        return rsx! {};
+    };
+    let name = overview.name.clone();
+    let with_competition = overview.sources.iter().all(|source| source.phase.is_none());
+    let several = phases.len() > 1;
+    drop(session);
+    let tr = ctx.translator.read();
+    let label = several.then(|| t!(tr, "undo-start-named", phase = tr.phase_name(&name)));
+    let described = format!("unstart-refusal-{}", phase_id_text(phase));
+    let disabled = refusal.is_some();
+    let unstart = move || {
+        if ctx.act(|session| session.unstart_phase(phase)).is_some() {
+            if with_competition {
+                ctx.announce(Announcement::Unstarted);
+                // back in the setup, where an entrant is added
+                focus_later(&["#entrant-name"]);
+            } else {
+                ctx.announce(Announcement::UnstartedPhase(name.clone()));
+                focus_later(&["#phase"]);
+            }
+        }
+    };
+    let unstart_asked = unstart.clone();
+    rsx! {
+        button {
+            aria_disabled: disabled.then_some("true"),
+            aria_describedby: disabled.then(|| described.clone()),
+            aria_label: label,
+            onclick: move |_| {
+                if disabled {
+                    return;
+                }
+                if with_competition {
+                    asking.set(true);
+                } else {
+                    unstart();
+                }
+            },
+            icons::Undo {}
+            {tr.get("undo-start")}
+        }
+        if let Some(refusal) = &refusal {
+            " "
+            span { id: "{described}", class: "hint", {tr.sentence(refusal)} }
+        }
+        Dialog {
+            open: Some(asking()),
+            on_open_change: move |open: bool| asking.set(open),
+            DialogTitle { {tr.get("undo-start-title")} }
+            DialogDescription { {tr.get("unstart-description")} }
+            div { class: "dialog-buttons",
+                button {
+                    class: "primary",
+                    onclick: move |_| {
+                        asking.set(false);
+                        unstart_asked();
+                    },
+                    {tr.get("undo-start")}
+                }
+                button { onclick: move |_| asking.set(false), {tr.get("cancel")} }
+            }
         }
     }
 }

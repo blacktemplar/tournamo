@@ -8,13 +8,16 @@ use tournament_engine::{
     AddPhase, CompetitionStateMachineExt as _, CompetitionTransition, Phase, PhaseId,
     PhaseStanding, RankingId, SourceOf, StartPhase,
     plugins::{draw::DivisionOrder, phase_format::PhaseFormat},
-    transitions::{RemovePhaseError as EngineRemovePhaseError, StartPhaseError as Engine},
+    transitions::{
+        RemovePhaseError as EngineRemovePhaseError, StartPhaseError as Engine,
+        UnstartPhaseError as EngineUnstartPhaseError,
+    },
     undoable_state_machine::TransitionId,
 };
 
 use super::{CannotStart, Session, Taken, rejection};
 use crate::{
-    error::{RemovePhaseError, StartPhaseError, Tie},
+    error::{RemovePhaseError, StartPhaseError, Tie, UnstartPhaseError},
     view::{
         Advance, Advancing, CompetitionRanking, DivisionOverview, DivisionRef, Medal, PhaseName,
         PhaseOverview, PhaseState, PlacedRow, Plugin, SourceProgress, SourceRow,
@@ -371,6 +374,52 @@ impl Session {
                 }
             })?;
         Ok(())
+    }
+
+    /// Why [`Self::unstart_phase`] would refuse to undo the start of the phase `id`, or `None` if
+    /// it would undo it.
+    pub fn unstart_phase_refusal(&self, id: PhaseId) -> Option<UnstartPhaseError> {
+        self.phase(id)?;
+        self.machine
+            .started_by(id)
+            .err()
+            .map(|error| self.unstart_phase_error(error))
+    }
+
+    /// Undoes the start of the phase `id`, so that it can be changed, removed or started again; a
+    /// phase taking entrants from the registration alone started with the competition, so this
+    /// unstarts the competition, which goes back to its setup. Starting again draws the same lots.
+    /// Undo starts it again.
+    ///
+    /// # Errors
+    /// Returns an error if there is no such phase, it has not started, a phase it would unstart
+    /// has results, or a phase taking entrants from one of those has started.
+    pub fn unstart_phase(&mut self, id: PhaseId) -> Result<(), UnstartPhaseError> {
+        if self.phase(id).is_none() {
+            return Err(UnstartPhaseError::NoSuchPhase);
+        }
+        self.machine
+            .unstart_phase(&mut self.history, id)
+            .map_err(|error| self.unstart_phase_error(error))?;
+        Ok(())
+    }
+
+    /// The error of the app for `error`, its phases named.
+    fn unstart_phase_error(&self, error: EngineUnstartPhaseError) -> UnstartPhaseError {
+        let names = |phases: Vec<PhaseId>| {
+            phases
+                .into_iter()
+                .filter_map(|phase| self.name_of_phase(phase))
+                .collect()
+        };
+        match error {
+            EngineUnstartPhaseError::NotStarted => UnstartPhaseError::NotStarted,
+            EngineUnstartPhaseError::Played(phases) => UnstartPhaseError::Played(names(phases)),
+            EngineUnstartPhaseError::InUse(phases) => UnstartPhaseError::InUse(names(phases)),
+            EngineUnstartPhaseError::Rejected(error) => {
+                UnstartPhaseError::Rejected(rejection(error))
+            }
+        }
     }
 
     /// Every entrant's place in the competition, as things stand: by the latest started phase

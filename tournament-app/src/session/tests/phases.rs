@@ -4,7 +4,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    error::{RemovePhaseError, StartPhaseError},
+    error::{RemovePhaseError, StartPhaseError, UnstartPhaseError},
     form::{Editable as _, End},
     i18n::Text,
     people::Rating,
@@ -333,6 +333,63 @@ fn a_result_of_a_phase_is_not_undone_once_a_phase_taking_its_entrants_started() 
         matches!(edited, Ok(_) | Err(EditPhaseError::PhaseStarted(_))),
         "{edited:?}"
     );
+}
+
+/// Undoing the start of the final makes the results of the phase before it reopenable, without
+/// the session's undo, which is gone after a reload.
+#[test]
+fn a_phase_whose_start_is_undone_frees_the_results_it_took_its_entrants_by() {
+    let mut session = qualification_and_final();
+    session.start().unwrap();
+    let (first, last) = (phase(&session, 1), phase(&session, 2));
+    play_out(&mut session, first);
+    let reported = matches(&session)[0].id;
+    session.start_phase(last).unwrap();
+
+    assert!(matches!(
+        session.unstart_phase_refusal(first),
+        Some(UnstartPhaseError::InUse(phases)) if phases[0].name.as_deref() == Some("Final")
+    ));
+    assert!(session.unstart_phase_refusal(last).is_none());
+    session.unstart_phase(last).unwrap();
+
+    assert!(matches!(
+        session.phases()[1].state,
+        PhaseState::NotStarted { .. }
+    ));
+    assert!(matches!(
+        session.unstart_phase_refusal(last),
+        Some(UnstartPhaseError::NotStarted)
+    ));
+    session.undo_report(first, reported).unwrap();
+    session.undo().unwrap();
+    let undone = session.undo().unwrap();
+    assert!(matches!(undone, Action::UnstartPhase(phase) if phase.number == 2));
+    assert!(matches!(session.phases()[1].state, PhaseState::Running));
+}
+
+/// The first phase started with the competition, so undoing its start goes back to the setup.
+#[test]
+fn undoing_the_start_of_the_first_phase_goes_back_to_the_setup() {
+    let mut session = qualification_and_final();
+    session.start().unwrap();
+    let first = phase(&session, 1);
+    let reported = session.playable(MatchesOf::phase(first))[0].id;
+    session.report(first, reported, MatchResult::AWins).unwrap();
+    assert!(matches!(
+        session.unstart_phase_refusal(first),
+        Some(UnstartPhaseError::Played(phases)) if phases[0].number == 1
+    ));
+    session.undo_report(first, reported).unwrap();
+
+    session.unstart_phase(first).unwrap();
+
+    assert!(!session.competition().is_started());
+    session.add_entrant("Erin").unwrap();
+    let erin = session.entrants()[4].clone();
+    assert_eq!(session.undo().unwrap(), Action::AddEntrant(erin));
+    assert_eq!(session.undo().unwrap(), Action::Unstart);
+    assert!(session.competition().is_started());
 }
 
 #[test]

@@ -1423,6 +1423,15 @@ in the engine because it knows the shape of the log.
   stays unchanged.
 - **No new transition**: an undo entry, itself undoable.
 
+The same holds for removing a phase (`remove_phase`, the undo of its
+`AddPhase`) and undoing the start of a phase (`unstart_phase`, the undo of its
+`StartPhase`, or of the `StartCompetition` for a phase fed by the registration
+alone, which unstarts the competition with every phase started with it). Every
+action has a way back of its own, since the session's undo is gone after a
+reload: undoing a start is refused while a phase it would unstart has a result
+or a phase taking entrants from it has started, which the operator takes back
+first. Starting again draws the same lots, from the competition's seed.
+
 ### Changing a phase after it was added
 
 A consumer reads `Phase::config`, puts it into a draft (`Draft::with_answers`),

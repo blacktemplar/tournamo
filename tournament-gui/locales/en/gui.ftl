@@ -18,6 +18,10 @@ undo-since-opened = Undo covers what was done here since this competition was op
 undo-start-title = Undo the start?
 undo-start-description = The competition goes back to its setup, where the entrants and the phase can be changed. Redo starts it again.
 undo-start = Undo the start
+# $phase: what a phase is called, its name or else its number and format
+undo-start-named = Undo the start: { $phase }
+# undoing the start of a phase that started with the competition, asked about first
+unstart-description = The competition goes back to its setup, where the entrants and the phases can be changed. Starting it again draws the same lots.
 # the browser refused to keep what is stored, which a private window does as well; the first line,
 # which stays shown when the warning is folded, then what it unfolds to
 not-persisted-summary = This browser may not keep the competitions stored here.
@@ -50,7 +54,7 @@ help-running-start = Start. The format schedules the matches, and the entrants a
 help-running-results = Report the results: at a match, choose the side that won, or Draw, or enter its score in its row; or type a result in under “Type in results”, e.g. “3 1” for a win of the left side of match 3, “3 x” for a draw, or part of the winner's name; or choose the winner in the bracket. The standings follow every result.
 help-running-views = A phase shows its matches, those playable now or round by round, and its standings, with a line below the places going on to a later phase. A knockout also shows its bracket; a phase whose entrants meet in pairs, such as a round robin, a cross table of every result of each entrant against each other. The ranking places everyone by the phase they reached.
 help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done. Either way, the score entered stays, so that only what was wrong needs changing.
-help-running-undo = Undo goes back only as far as the page was open: reloading the page or leaving the competition forgets what could be undone, though not what was done. Reopening a match works at any time. Undo takes back the start too, once everything after it is undone (it asks first): the competition goes back to its setup, where the entrants and phases can be changed. Starting again draws the same lots, groups, pairs and brackets: what is drawn is fixed when the competition is created, so that a draw cannot be repeated until it suits someone, and changes only with what it is drawn of, e.g. the entrants or the phase.
+help-running-undo = Undo goes back only as far as the page was open: reloading the page or leaving the competition forgets what could be undone, though not what was done. Reopening a match works at any time, and so does undoing the start of a phase once its matches are reopened (under Phase). Undoing the start of a phase that started with the competition, or the start itself with Undo, takes the competition back to its setup (it asks first), where the entrants and phases can be changed. Starting again draws the same lots, groups, pairs and brackets: what is drawn is fixed when the competition is created, so that a draw cannot be repeated until it suits someone, and changes only with what it is drawn of, e.g. the entrants or the phase.
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
 help-formats = Formats and standings
 help-presets = Presets
@@ -507,6 +511,8 @@ announce-added-phases = { $count ->
     }
 announce-edited-phase = The phase is changed.
 announce-removed-phase = The phase is removed.
+announce-unstarted = The start is undone: the competition is back at its setup.
+announce-unstarted-phase = The start of { $phase } is undone.
 announce-phase-finished = Every match of the phase has a result.
 # $count: the matches without a result
 announce-started-phase = Started { $phase }: { $count ->
@@ -534,6 +540,8 @@ action-edit-phase = editing { $phase }
 action-remove-phase = removing { $phase }
 action-start-phase = the start of { $phase }
 action-start = the start
+action-unstart = undoing the start
+action-unstart-phase = undoing the start of { $phase }
 # $result: as `won` or `draw` say it
 action-report = the result of match { $number } ({ $result })
 action-reopen = reopening match { $number }

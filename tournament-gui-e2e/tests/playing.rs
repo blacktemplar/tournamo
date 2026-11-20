@@ -779,7 +779,7 @@ async fn undoing_the_start_is_asked_about_first() {
         gui.expect_no_dialog().await?;
         gui.expect_matches(&["1"]).await?;
         gui.click("Undo").await?;
-        gui.click("Undo the start").await?;
+        gui.click_in_dialog("Undo the start").await?;
         gui.expect_no_dialog().await?;
         gui.expect_entrants(&["Alice", "Bob"]).await?;
         gui.expect_announcement("Undone: the start.").await

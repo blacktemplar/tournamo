@@ -56,18 +56,27 @@ pub fn Select(
                     const list = select.querySelector("[role='listbox']");
                     if (!list) return;
                     list.style.left = "";
-                    // its width without the scale it opens with; a margin as the page's
+                    // where the select starts, as the list does unmoved, and the list's width,
+                    // both without the scale it opens with; a margin as the page's
                     const margin = 16;
-                    const left = list.getBoundingClientRect().left;
+                    const left = select.getBoundingClientRect().left;
                     const over = left + list.offsetWidth
                         - (document.documentElement.clientWidth - margin);
                     if (over > 0) {{
                         list.style.left = `${{-Math.min(over, left - margin)}}px`;
                     }}
                 }};
+                // the list and its options are inserted a render after the select opens: fitted
+                // whenever they change, in the microtask right after, before a frame shows them
                 new MutationObserver(() => {{
-                    if (select.dataset.state === "open") requestAnimationFrame(fit);
-                }}).observe(select, {{ attributes: true, attributeFilter: ["data-state"] }});
+                    if (select.dataset.state === "open") fit();
+                }}).observe(select, {{
+                    attributes: true,
+                    attributeFilter: ["data-state"],
+                    childList: true,
+                    subtree: true,
+                    characterData: true,
+                }});
             }}
             "#
         ));

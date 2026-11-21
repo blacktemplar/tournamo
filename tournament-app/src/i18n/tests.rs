@@ -33,7 +33,9 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
-    error::{AddEntrantError, EditPhaseError, NoPhase, ReportError, UndoReportError},
+    error::{
+        AddEntrantError, EditPhaseError, EditReportError, NoPhase, ReportError, UndoReportError,
+    },
     result_form::PartView,
     session::Session,
 };
@@ -156,6 +158,10 @@ fn an_error_displays_its_english_message() {
     assert_eq!(
         UndoReportError::DependedOnBy(vec![3, 4, 10]).to_string(),
         "the results of matches 3, 4, 10 depend on this one; reopen those matches first"
+    );
+    assert_eq!(
+        EditReportError::DoesNotFit(vec![3]).to_string(),
+        "changed this way, the result of match 3 no longer fits; reopen that match first"
     );
     assert_eq!(
         EditPhaseError::NoPhase(NoPhase).to_string(),

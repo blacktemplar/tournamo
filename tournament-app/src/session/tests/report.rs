@@ -142,3 +142,179 @@ fn every_result_depending_on_an_undone_one_is_named() {
         result.err()
     );
 }
+
+/// A knockout of four entrants decided by a score, every match won 3–1 by side A.
+fn knockout_played() -> Session {
+    let mut session = Given::new()
+        .format(SingleElimination::ID)
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    for number in 1..=4 {
+        session
+            .report_entered(session.all(), &format!("{number} 3-1"))
+            .unwrap();
+    }
+    session
+}
+
+/// Enters `a`–`b` as the score of the match numbered `number` of `session` in the form editing its
+/// result, and hands it to the session.
+fn edit_score(
+    session: &mut Session,
+    number: usize,
+    a: u16,
+    b: u16,
+) -> Result<Edited, EditReportError> {
+    let id = numbered(session, number);
+    let mut form = session.edit_form(session.first(), id).unwrap();
+    let count = |count| Some(EnteredValue::Count(count));
+    form.enter_scores(&[Sides::new(count(a), count(b))])
+        .unwrap();
+    session.edit_report(&form)
+}
+
+/// The score shown for the match numbered `number`.
+fn scores_of(session: &Session, number: usize) -> Vec<Sides<Option<EnteredValue>>> {
+    let id = numbered(session, number);
+    let (index, division, r#match) = session.match_of(session.first(), id).unwrap();
+    session
+        .match_row(session.first(), index, division, r#match)
+        .scores
+}
+
+/// The form editing a result starts out at it, so that only what was wrong needs changing.
+#[test]
+fn the_form_editing_a_result_starts_out_at_it() {
+    let session = knockout_played();
+    let id = numbered(&session, 1);
+
+    let form = session.edit_form(session.first(), id).unwrap();
+
+    assert_eq!(
+        form.view(),
+        session.reported_result(session.first(), id).unwrap()
+    );
+}
+
+/// A semifinal corrected to another score of the same winner keeps the final as it was played,
+/// where reopening the semifinal is refused.
+#[test]
+fn a_result_a_later_one_depends_on_is_edited_keeping_its_winner() {
+    let mut session = knockout_played();
+    let count = |count| Some(EnteredValue::Count(count));
+
+    let edited = edit_score(&mut session, 1, 3, 2).unwrap();
+
+    assert_eq!(edited.row.result, Some(MatchResult::AWins));
+    assert_eq!(edited.row.scores, [Sides::new(count(3), count(2))]);
+    assert_eq!(scores_of(&session, 3), [Sides::new(count(3), count(1))]);
+    assert_eq!(
+        session.undo().unwrap(),
+        Action::EditResult(edited.row.clone())
+    );
+    assert_eq!(scores_of(&session, 1), [Sides::new(count(3), count(1))]);
+    session.redo().unwrap();
+    assert_eq!(scores_of(&session, 1), [Sides::new(count(3), count(2))]);
+}
+
+/// Another winner of a semifinal leaves the final and the match for third place played by others,
+/// so the edit names both.
+#[test]
+fn an_edit_later_results_no_longer_fit_names_them() {
+    let mut session = knockout_played();
+    let changes = session.changes();
+
+    let result = edit_score(&mut session, 1, 1, 3);
+
+    assert!(
+        matches!(&result, Err(EditReportError::DoesNotFit(numbers)) if *numbers == [3, 4]),
+        "{:?}",
+        result.err()
+    );
+    assert_eq!(session.changes(), changes, "nothing changed");
+}
+
+/// Without later results in the way, an edit changes who won, and who plays on.
+#[test]
+fn an_edit_changes_who_won() {
+    let mut session = Given::new()
+        .format(SingleElimination::ID)
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    for number in 1..=2 {
+        session
+            .report_entered(session.all(), &format!("{number} 3-1"))
+            .unwrap();
+    }
+    let final_before = matches(&session)[2].clone();
+
+    let edited = edit_score(&mut session, 1, 1, 3).unwrap();
+
+    assert_eq!(edited.row.result, Some(MatchResult::BWins));
+    assert_ne!(
+        matches(&session)[2].a,
+        final_before.a,
+        "the other side of the semifinal plays the final"
+    );
+}
+
+#[test]
+fn a_result_entered_as_it_was_is_no_action() {
+    let mut session = knockout_played();
+    let changes = session.changes();
+
+    edit_score(&mut session, 1, 3, 1).unwrap();
+
+    assert_eq!(session.changes(), changes);
+    assert!(matches!(session.next_undo(), Some(Action::Report(_))));
+}
+
+#[test]
+fn only_a_finished_match_is_edited() {
+    let session = Given::new().started();
+
+    assert!(matches!(
+        session.edit_form(session.first(), numbered(&session, 1)),
+        Err(EditReportError::NotReported)
+    ));
+}
+
+#[test]
+fn an_edit_the_match_does_not_take_is_refused() {
+    let mut session = Given::new().format(SingleElimination::ID).started();
+    let first = numbered(&session, 1);
+    session
+        .report(session.first(), first, MatchResult::AWins)
+        .unwrap();
+    let mut form = session.edit_form(session.first(), first).unwrap();
+
+    form.choose(&[], Some(MatchResult::Draw));
+
+    assert!(matches!(
+        session.edit_report(&form),
+        Err(EditReportError::DrawNotAllowed)
+    ));
+}
+
+/// Reopening a match leaves it to be entered anew: its form starts out empty, and so after undoing
+/// its report.
+#[test]
+fn a_reopened_match_starts_out_empty() {
+    let mut session = knockout_played();
+    let final_match = numbered(&session, 3);
+    session.undo_report(session.first(), final_match).unwrap();
+    let empty = |session: &Session| {
+        session
+            .result_form(session.first(), final_match)
+            .unwrap()
+            .report()
+            .values()
+            .is_empty()
+    };
+    assert!(empty(&session));
+
+    session.report_entered(session.all(), "3 3-2").unwrap();
+    session.undo().unwrap();
+
+    assert!(empty(&session));
+}

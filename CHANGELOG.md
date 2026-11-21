@@ -103,8 +103,16 @@ later one: a file whose `"format"` changes is migrated, not refused.
   `ranking`; `add-phase` answers the phase's own fields too, e.g.
   `divisions=3 draw=in-blocks`.
 
+- A finished match is corrected with "Edit" beside "Reopen": its dialog opens
+  at the result reported and saves the corrected one in its place, as one
+  step that undo takes back. Results reported after it stay as long as they
+  still fit, e.g. a semifinal's score corrected with the same winner, its
+  final played; otherwise the dialog names the matches in the way.
+
 ### Changed
 
+- A match reopened, or whose report is undone, starts out empty, to be entered
+  anew; a result is corrected by editing it instead.
 - A preset asks for the match format of its phases (e.g. a score, or a best of
   five), rather than adding every phase with who won only; a phase it does
   not fit keeps who won only.
@@ -237,11 +245,6 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
-- A match reopened and then played by another match format, e.g. a phase
-  changed from the winner alone to a score, starts out empty under it, with
-  the row of values the other matches show. It started out at the winner
-  reported before, as if chosen against the score, and showed only "Enter a
-  result".
 - Clicking into the field naming a new competition right after going back to
   the list of competitions no longer loses what is typed: the list moved the
   focus to its top a moment later, taking it from the field.

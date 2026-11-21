@@ -2,13 +2,13 @@
 
 use tournament_engine::{
     CompetitionTransition, ReportMatchResult,
-    undoable_state_machine::{LogEntry, LogEntryKind, RedoLastError, TransitionId, UndoLastError},
+    undoable_state_machine::{LogEntryKind, RedoLastError, TransitionId, UndoLastError},
 };
 
 use super::{Session, UndonePhase};
 use crate::{
     error::{RedoError, UndoError},
-    view::{Action, MatchRow},
+    view::{self, Action, MatchRow},
 };
 
 impl Session {
@@ -22,8 +22,7 @@ impl Session {
 
     /// Undoes the latest action of this session that is still in effect, which may be an
     /// [`Self::undo_report`], bringing the result back, or every entrant of a list added at once.
-    /// Returns the action undone. The form of a match whose report it undoes starts out at the
-    /// result, see [`Self::result_form`].
+    /// Returns the action undone.
     ///
     /// The changes of other sessions, caught up with, are not undone, and stay in effect.
     ///
@@ -54,28 +53,17 @@ impl Session {
             },
             _ => None,
         };
-        let reported: Vec<_> = ids
-            .iter()
-            .filter_map(|id| match self.applied(*id) {
-                Some(CompetitionTransition::ReportMatchResult(report)) => {
-                    self.reported_contest(report.phase_id(), report.match_id())
-                }
-                _ => None,
-            })
-            .collect();
         self.history
             .undo_last(&mut self.machine)
             .map_err(|_| UndoError::ChangedElsewhere)?;
         if phase.is_some() {
             self.undone_phase = phase;
         }
-        self.reopened.extend(reported);
         Ok(self.action_of(&ids))
     }
 
     /// Redoes the action this session undid last, as long as it took no other action since.
-    /// Returns the action redone. The form of a match it reopens again starts out at the result,
-    /// see [`Self::result_form`].
+    /// Returns the action redone.
     ///
     /// # Errors
     /// Returns [`RedoError::NothingToRedo`] if there is no such action, and
@@ -89,23 +77,9 @@ impl Session {
                 _ => RedoError::ChangedElsewhere,
             });
         };
-        // read before the redo, which takes the result back
-        let reported: Vec<_> = ids
-            .iter()
-            .filter_map(|id| match self.machine.entry(*id).map(LogEntry::kind) {
-                Some(LogEntryKind::Undo(target)) => match self.applied(*target) {
-                    Some(CompetitionTransition::ReportMatchResult(report)) => {
-                        self.reported_contest(report.phase_id(), report.match_id())
-                    }
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect();
         self.history
             .redo_last(&mut self.machine)
             .map_err(|_| RedoError::ChangedElsewhere)?;
-        self.reopened.extend(reported);
         Ok(self.action_of(&ids))
     }
 
@@ -163,8 +137,15 @@ impl Session {
             let (index, division, r#match) = self
                 .match_of(report.phase_id(), report.match_id())
                 .expect("the match of a report is scheduled");
+            // as reported, whatever the match has now
+            let root = division
+                .match_format()
+                .template(division.data(), r#match)
+                .root;
             MatchRow {
                 result: Some(report.match_result()),
+                scores: view::scores_of(&root, report.contest()),
+                parts_won: view::parts_won_of(&root, report.contest()),
                 ..self.match_row(report.phase_id(), index, division, r#match)
             }
         };
@@ -195,7 +176,10 @@ impl Session {
                 CompetitionTransition::AddPhase(added) => {
                     Action::EditPhase(self.added_phase_name(*target, added))
                 }
-                _ => unreachable!("the only replacement a session makes edits a phase"),
+                CompetitionTransition::ReportMatchResult(report) => {
+                    Action::EditResult(reported(report))
+                }
+                _ => unreachable!("the only replacements a session makes edit a phase or a result"),
             },
             LogEntryKind::Undo(target) => match self.applied(*target) {
                 Some(CompetitionTransition::ReportMatchResult(report)) => {

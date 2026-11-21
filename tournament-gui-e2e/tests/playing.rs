@@ -118,7 +118,7 @@ async fn undo_says_what_it_covers() {
 
         gui.expect_titled(
             "Undo covers what was done here since this competition was opened. To change a \
-             result reported before, reopen its match.",
+             result reported before, edit it by its match.",
         )
         .await?;
         gui.page.check_accessibility().await
@@ -616,6 +616,36 @@ async fn reopening_a_result_a_later_one_depends_on_names_that_one() {
 
         gui.expect_error("The result of match 3 depends on this one; reopen that match first.")
             .await
+    })
+    .await;
+}
+
+/// A semifinal whose winner played the final cannot be edited to another winner, which the
+/// refusal says in the dialog, naming the final.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn editing_a_result_later_ones_no_longer_fit_names_them() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol", "Dave"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Single elimination").await?;
+        gui.toggle("Match for third place").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        for entry in ["1 1", "2 1", "3 1"] {
+            gui.enter_result(entry).await?;
+        }
+        gui.choose_round("Semifinals").await?;
+
+        gui.click_labelled("Edit result of match 1").await?;
+        gui.choose_result_of_side("Result: Match", "b").await?;
+        gui.save_in_dialog().await?;
+
+        gui.expect_dialog_error(
+            "Changed this way, the result of match 3 no longer fits; reopen that match first.",
+        )
+        .await
     })
     .await;
 }

@@ -25,7 +25,7 @@ use crate::{
     i18n::t,
     icons,
     phase::answer,
-    result::{ResultDetails, ResultOf},
+    result::{EnterResult, ResultDetails, ResultOf},
     result_text, result_with_scores, team_name,
     toggletip::Toggletip,
 };
@@ -36,6 +36,8 @@ pub enum Focus {
     /// The first button reporting a result of the match, or the first value of its result entered
     /// in its row.
     Report(MatchId),
+    /// The button editing the result of the match.
+    Edit(MatchId),
     /// The heading of the matches shown, once none of them is left without a result.
     Heading,
 }
@@ -610,9 +612,9 @@ fn ReportButtons(
 /// than the taps of a double tap are apart.
 const REOPEN_DELAY_MS: f64 = 600.0;
 
-/// The result of the match `row`, of a round where a match may end in a draw if `draws`, and the
-/// button reopening it, which takes no click until [`REOPEN_DELAY_MS`] after this tab last reported
-/// a result.
+/// The result of the match `row`, of a round where a match may end in a draw if `draws`, the button
+/// editing it in a dialog, and the button reopening it, which takes no click until
+/// [`REOPEN_DELAY_MS`] after this tab last reported a result.
 #[component]
 fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> Element {
     let ctx = use_context::<Ctx>();
@@ -682,6 +684,12 @@ fn ReportedResult(row: MatchRow, draws: bool, focus: Signal<Option<Focus>>) -> E
             ResultDetails { row: row.clone() }
         }
         div { class: "finished-actions",
+            EnterResult {
+                row: row.clone(),
+                focus,
+                after_report: Focus::Edit(id),
+                edit: true,
+            }
             button {
                 class: "small",
                 disabled,

@@ -582,8 +582,8 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   A match is finished if and only if its decision is `Some`; finished and open
   matches have one type. `ReportMatchResult` carries a `Decision` (not an
   `Option`), so reporting always decides; the decision is set once, and
-  formats and rankers never see a result change (a correction undoes the
-  report, as before).
+  formats and rankers never see a result change (a correction undoes or
+  replaces the report, and the log replays).
 - **The decision is stored, not derived.** The log says who won, so replay does
   not depend on a plugin's reading of the values, and changing a plugin cannot
   change a saved winner. A part without a winner of its own (a relay leg, an
@@ -711,20 +711,17 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   it opens to no more than who won. Rejected: a *Details* label or an icon by every
   finished match (room in a row kept to one line), a chevron (the card steps
   through rounds by chevrons).
-- **A reopened match starts out at its result** (`Session::result_form`), so
-  that a typo in one game of a best of five is corrected in that game, still
-  by an undo and a report. The session keeps what was reported for each match
-  whose result it took back (reopening, undoing the report, redoing a
-  reopening), the latest of each, as it keeps the configuration of a phase
-  whose adding it undid; the form starts out at it while the match format
-  takes it (`Level::check`). A result chosen against the values stays chosen:
-  the match takes no row, which holds values only (`ResultForm::quick_entry`),
-  and the dialog opens overriding. Scores typed in are the whole result and
-  replace it (`ResultForm::enter_scores`). Catching up drops what the session
-  kept, as another session may have reported and reopened the match since.
-  Rejected: reading the result from the undone report in the log (it would
-  come back after a reload or in another tab, in a form nobody reopened, and
-  every form would search the log).
+- **A result is corrected by editing it** (`Session::edit_form`,
+  `Session::edit_report`; issue 62): the form of a finished match starts out
+  at its result and, once saved, replaces the report (see *Correcting a
+  result*), one action, without the match being open in between. So a typo in
+  one game of a best of five is corrected in that game, also where reopening is
+  refused since a later result depends on the match, as long as that result
+  still applies (the same winner). Reopening, and undoing a report, leave the
+  match open with an empty form: the match is to be entered anew, e.g. played
+  again. Rejected: a reopened match starting out at its result (the session
+  kept what it took back; editing does that job without a transition in
+  between, and an empty form says that the result is gone).
 
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the match formats of their rubbers, live reporting (an `UpdatePlay` on open
@@ -1432,6 +1429,23 @@ action has a way back of its own, since the session's undo is gone after a
 reload: undoing a start is refused while a phase it would unstart has a result
 or a phase taking entrants from it has started, which the operator takes back
 first. Starting again draws the same lots, from the competition's seed.
+
+### Correcting a result
+
+`CompetitionStateMachineExt::replace_match_result` appends a
+`LogEntryKind::Replace` of the `ReportMatchResult` in effect for the match
+(`reported_by`), unless the new report enters the match as it was
+(`Part::is_entered_as`). Everything after it replays: a later result stays as
+long as it applies, which a knockout's next match does while the winner stays,
+since `MatchId`s come from content. No new transition and nothing new saved.
+
+- **Refused, not cascaded,** like an undo: a replacement that does not apply
+  itself (a draw where the format allows none) or that a later entry does not
+  apply after (another winner of a semifinal whose final is played);
+  `conflicts_of(Change::Replace { .. })` names the results in the way.
+- *Planned* (issue 16): correcting a result in place, keeping the later
+  results as played even where they no longer follow from it, offered once a
+  replacement was refused.
 
 ### Changing a phase after it was added
 

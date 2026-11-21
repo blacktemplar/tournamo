@@ -13,7 +13,7 @@ theme-dark = Dark
 undo = Undo
 redo = Redo
 # under the pointer on Undo while there is nothing to undo, e.g. after a reload
-undo-since-opened = Undo covers what was done here since this competition was opened. To change a result reported before, reopen its match.
+undo-since-opened = Undo covers what was done here since this competition was opened. To change a result reported before, edit it by its match.
 # undoing the start leaves play, so it is asked about first
 undo-start-title = Undo the start?
 undo-start-description = The competition goes back to its setup, where the entrants and the phase can be changed. Redo starts it again.
@@ -53,7 +53,7 @@ help-running-phase = Choose how they play: a preset, which sets up all phases at
 help-running-start = Start. The format schedules the matches, and the entrants are fixed from then on, though their names can still be corrected under “Entrants”. The phase can still be changed, as long as the change fits the results reported.
 help-running-results = Report the results: at a match, choose the side that won, or Draw, or enter its score in its row; or type a result in under “Type in results”, e.g. “3 1” for a win of the left side of match 3, “3 x” for a draw, or part of the winner's name; or choose the winner in the bracket. The standings follow every result.
 help-running-views = A phase shows its matches, those playable now or round by round, and its standings, with a line below the places going on to a later phase. A knockout also shows its bracket; a phase whose entrants meet in pairs, such as a round robin, a cross table of every result of each entrant against each other. The ranking places everyone by the phase they reached.
-help-running-mistakes = A result reported by mistake is taken back by reopening its match. Undo takes back what was done since the competition was opened, in the order it was done. Either way, the score entered stays, so that only what was wrong needs changing.
+help-running-mistakes = A result reported wrongly is corrected with Edit by its match: the dialog opens at the result, so that only what was wrong needs changing. Results reported after it stay as long as they still fit, e.g. with the same winner. Reopening the match takes the result back, to be entered anew. Undo takes back what was done since the competition was opened, in the order it was done.
 help-running-undo = Undo goes back only as far as the page was open: reloading the page or leaving the competition forgets what could be undone, though not what was done. Reopening a match works at any time, and so does undoing the start of a phase once its matches are reopened (under Phase). Undoing the start of a phase that started with the competition, or the start itself with Undo, takes the competition back to its setup (it asks first), where the entrants and phases can be changed. Starting again draws the same lots, groups, pairs and brackets: what is drawn is fixed when the competition is created, so that a draw cannot be repeated until it suits someone, and changes only with what it is drawn of, e.g. the entrants or the phase.
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
 help-formats = Formats and standings
@@ -367,6 +367,11 @@ reopen-match = Reopen match { $number }
 # the result of a match whose match format enters more than who won, e.g. a score, in a dialog
 open-result = Enter result
 open-result-of = Enter result of match { $number }
+# the button opening the dialog to correct the result of a finished match
+edit-result = Edit
+edit-result-of = Edit result of match { $number }
+# the button of that dialog replacing the result
+save-result = Save
 # the button opening the dialog of a result entered in the row of its match, for more than the row enters
 result-details = Details
 # what screen readers say of it
@@ -490,6 +495,8 @@ announce-all-finished = Every match has a result.
 # $winners: as `winners` says it, capitalized
 announce-winners = { $winners }.
 announce-reopened = Match { $number } is open again.
+# $result: as `won` or `draw` say it, with the scores
+announce-edited = Match { $number } corrected: { $result }.
 announce-unscheduled = { $count ->
         [one] The match scheduled because of its result is gone.
        *[other] The { $count } matches scheduled because of its result are gone.
@@ -543,6 +550,8 @@ action-unstart-phase = undoing the start of { $phase }
 # $result: as `won` or `draw` say it
 action-report = the result of match { $number } ({ $result })
 action-reopen = reopening match { $number }
+# $result: as `won` or `draw` say it, with the scores
+action-edit-result = correcting match { $number } ({ $result })
 
 ## Names
 

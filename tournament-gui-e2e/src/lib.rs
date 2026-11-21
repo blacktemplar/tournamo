@@ -2808,13 +2808,41 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the value of a result labelled `label` in the dialog open, e.g.
+    /// `"Score of Bob in Game 3"`, shows `text`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_value(&self, label: &str, text: &str) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::XPath(format!(
+                    "//*[@role='dialog']//input[{}='{label}']",
+                    without_isolation_marks("@aria-label")
+                )),
+                |query| query.with_value(text.to_owned()),
+                &format!("the value {text:?}"),
+            )
+            .await
+    }
+
     /// Reports the result entered in the dialog open, by its button, rather than by that of the
     /// row of the match below it.
     pub async fn report_in_dialog(&self) -> WebDriverResult<()> {
+        self.click_in_dialog_button("Report").await
+    }
+
+    /// Saves the result edited in the dialog open, in place of the one reported.
+    pub async fn save_in_dialog(&self) -> WebDriverResult<()> {
+        self.click_in_dialog_button("Save").await
+    }
+
+    /// Clicks the enabled button of the dialog open whose text is `text`.
+    async fn click_in_dialog_button(&self, text: &str) -> WebDriverResult<()> {
         let button = self
             .driver
             .query(By::XPath(format!(
-                "//*[@role='dialog']//button[{}='Report']",
+                "//*[@role='dialog']//button[{}='{text}']",
                 without_isolation_marks("normalize-space()")
             )))
             .and_enabled()
@@ -3096,6 +3124,24 @@ impl Gui {
                 "option[{}='{option}']",
                 without_isolation_marks("normalize-space()")
             )))
+            .await?;
+        option.click().await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Chooses the result `value` in the choice labelled `label` of the result in the dialog open:
+    /// `"a"` for a win of the side shown first, `"b"` for one of the other, or `"draw"`, so that a
+    /// test need not know which side an entrant was drawn on.
+    pub async fn choose_result_of_side(&self, label: &str, value: &str) -> WebDriverResult<()> {
+        let option = self
+            .driver
+            .query(By::XPath(format!(
+                "//*[@role='dialog']//div[@class='result-choice'][label[{}='{label}']]/select/\
+                 option[@value='{value}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
             .await?;
         option.click().await?;
         Page::pause().await;

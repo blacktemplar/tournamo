@@ -1,7 +1,7 @@
-//! The dialog entering a result: every part with the values of each side and its result, the one
-//! the values suggest. Overriding it is rare, so a result is chosen only after asking to override,
-//! except for a part that only a choice decides, and the dialog opens overriding where a result is
-//! chosen already, e.g. that of a match reopened.
+//! The dialog entering a result, or editing one reported: every part with the values of each side
+//! and its result, the one the values suggest. Overriding it is rare, so a result is chosen only
+//! after asking to override, except for a part that only a choice decides, and the dialog opens
+//! overriding where a result is chosen already, e.g. that of a result edited.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -25,13 +25,15 @@ use crate::{
 
 /// The button entering the result of the match `row` in a dialog, and the dialog; once reported,
 /// the focus moves to `after_report`. Beside the values of a [`QuickResult`], it opens with them,
-/// `from`, and only offers more, not taking the focus once a result is reported.
+/// `from`, and only offers more, not taking the focus once a result is reported. If `edit`, the
+/// match is finished, and the dialog opens at its result and replaces it.
 #[component]
 pub fn EnterResult(
     row: MatchRow,
     focus: Signal<Option<Focus>>,
     after_report: Focus,
     from: Option<Signal<Option<ResultForm>>>,
+    #[props(default)] edit: bool,
 ) -> Element {
     let ctx = use_context::<Ctx>();
     // the form while the dialog is open
@@ -44,21 +46,37 @@ pub fn EnterResult(
     let (a, b) = (team_name(&tr, &row.a), team_name(&tr, &row.b));
     // only reported by the tab that changes the competition
     let disabled = !ctx.changes();
-    let mut on_mounted = use_focus(focus, Focus::Report(id));
+    let mut on_mounted = use_focus(
+        focus,
+        if edit {
+            Focus::Edit(id)
+        } else {
+            Focus::Report(id)
+        },
+    );
     let more = from.is_some();
     let (label, aria_label) = if more {
         (
             "result-details",
             t!(tr, "result-details-of", number = row.number),
         )
+    } else if edit {
+        ("edit-result", t!(tr, "edit-result-of", number = row.number))
     } else {
         ("open-result", t!(tr, "open-result-of", number = row.number))
+    };
+    let class = if more {
+        "details quiet small"
+    } else if edit {
+        "small"
+    } else {
+        "enter-result"
     };
     let view = entering.read().as_ref().map(ResultForm::view);
     let needs_choice = view.as_ref().is_some_and(|view| view.root.needs_choice);
     rsx! {
         button {
-            class: if more { "details quiet small" } else { "enter-result" },
+            class,
             r#type: "button",
             disabled,
             aria_label,
@@ -68,13 +86,15 @@ pub fn EnterResult(
                 }
             },
             onclick: move |_| {
+                let session = ctx.session.peek();
                 let form = match from {
                     Some(from) => from.peek().clone().ok_or(()),
-                    None => ctx.session.peek().result_form(row.phase, id).map_err(drop),
+                    None if edit => session.edit_form(row.phase, id).map_err(drop),
+                    None => session.result_form(row.phase, id).map_err(drop),
                 };
                 if let Ok(form) = form {
                     error.set(None);
-                    // a result chosen already, e.g. that of a match reopened, shows as chosen
+                    // a result chosen already, e.g. that of a result edited, shows as chosen
                     overriding.set(form.is_chosen());
                     entering.set(Some(form));
                     focus_later(&["#result-form input", "#result-form select"]);
@@ -100,10 +120,17 @@ pub fn EnterResult(
                         let Some(form) = entering.read().clone() else {
                             return;
                         };
-                        match ctx.try_act(|session| session.report_form(&form)) {
-                            Ok(reported) => {
+                        let done = if edit {
+                            ctx.try_act(|session| session.edit_report(&form))
+                                .map(Announcement::Edited)
+                        } else {
+                            ctx.try_act(|session| session.report_form(&form))
+                                .map(Announcement::Reported)
+                        };
+                        match done {
+                            Ok(announcement) => {
                                 entering.set(None);
-                                ctx.announce(Announcement::Reported(reported));
+                                ctx.announce(announcement);
                                 move_focus(focus, after_report);
                             }
                             Err(refused) => error.set(Some(refused)),
@@ -145,7 +172,13 @@ pub fn EnterResult(
                                 }
                             }
                         }
-                        button { class: "primary", r#type: "submit", {tr.get("report")} }
+                        button { class: "primary", r#type: "submit",
+                            if edit {
+                                {tr.get("save-result")}
+                            } else {
+                                {tr.get("report")}
+                            }
+                        }
                         button {
                             r#type: "button",
                             onclick: move |_| entering.set(None),

@@ -112,6 +112,12 @@ error-result-depended-on-by = { $count ->
         [one] das Ergebnis von Spiel { $numbers } hängt von diesem ab; zuerst muss Spiel { $numbers } wieder geöffnet werden
        *[other] die Ergebnisse der Spiele { $numbers } hängen von diesem ab; zuerst müssen die Spiele { $numbers } wieder geöffnet werden
     }
+error-match-not-reported-to-edit = das Spiel hat kein Ergebnis, das geändert werden könnte
+error-edit-depended-on = so geändert passt ein späteres Ergebnis nicht mehr; zuerst muss jenes Spiel wieder geöffnet werden
+error-edit-does-not-fit = { $count ->
+        [one] so geändert passt das Ergebnis von Spiel { $numbers } nicht mehr; zuerst muss Spiel { $numbers } wieder geöffnet werden
+       *[other] so geändert passen die Ergebnisse der Spiele { $numbers } nicht mehr; zuerst müssen die Spiele { $numbers } wieder geöffnet werden
+    }
 error-nothing-to-undo = es gibt nichts rückgängig zu machen
 error-nothing-to-redo = es gibt nichts wiederherzustellen
 error-undo-changed-elsewhere = eine inzwischen anderswo gemachte Änderung verhindert, dass dies rückgängig gemacht wird, daher kann nichts mehr rückgängig gemacht werden

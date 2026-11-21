@@ -852,6 +852,14 @@ pub struct Reopened {
     pub unscheduled: usize,
 }
 
+/// What editing a result led to, see
+/// [`Session::edit_report`](crate::session::Session::edit_report).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Edited {
+    /// The match, with the result it was given.
+    pub row: MatchRow,
+}
+
 /// An action of the operator that undo and redo walk through, as it was when it was done, e.g. so
 /// that a GUI can tell what an undo undid.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -883,6 +891,8 @@ pub enum Action {
     Report(MatchRow),
     /// A result undone by its match, see [`Reopened::row`].
     Reopen(MatchRow),
+    /// A result replaced, see [`Edited::row`]: the match with the result it was given.
+    EditResult(MatchRow),
 }
 
 /// The parts of `r#match`, of the template `root`, each side won, as [`MatchRow::parts_won`]
@@ -922,7 +932,12 @@ pub fn scores(root: &Level, r#match: &Match) -> Vec<Sides<Option<EnteredValue>>>
     if !r#match.is_finished() {
         return Vec::new();
     }
-    let contest = r#match.contest();
+    scores_of(root, r#match.contest())
+}
+
+/// The scores entered as `contest` for a match of the template `root`, as [`MatchRow::scores`]
+/// shows them.
+pub(crate) fn scores_of(root: &Level, contest: &Part) -> Vec<Sides<Option<EnteredValue>>> {
     match score(root, contest) {
         Some(score) => vec![score],
         None => contest

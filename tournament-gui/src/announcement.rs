@@ -4,7 +4,7 @@
 
 use tournament_app::{
     i18n::Translator,
-    view::{Action, EntrantRow, PhaseName, Reopened, Reported},
+    view::{Action, Edited, EntrantRow, PhaseName, Reopened, Reported},
 };
 
 use crate::{capitalized, i18n::t, result_text, result_with_scores, team_name, winners_text};
@@ -37,6 +37,8 @@ pub enum Announcement {
     UnstartedPhase(PhaseName),
     Reported(Reported),
     Reopened(Reopened),
+    /// A result edited.
+    Edited(Edited),
     Undone(Action),
     Redone(Action),
     /// A table copied as text.
@@ -122,6 +124,12 @@ impl Announcement {
                 }
                 sentences.join(" ")
             }
+            Self::Edited(edited) => t!(
+                tr,
+                "announce-edited",
+                number = edited.row.number,
+                result = result_with_scores(tr, &edited.row).unwrap_or_default(),
+            ),
             Self::Undone(action) => t!(tr, "announce-undone", action = action_text(tr, action)),
             Self::Redone(action) => t!(tr, "announce-redone", action = action_text(tr, action)),
             Self::Copied => tr.get("announce-copied"),
@@ -163,5 +171,11 @@ fn action_text(tr: &Translator, action: &Action) -> String {
             result = result_text(tr, row).unwrap_or_default(),
         ),
         Action::Reopen(row) => t!(tr, "action-reopen", number = row.number),
+        Action::EditResult(row) => t!(
+            tr,
+            "action-edit-result",
+            number = row.number,
+            result = result_with_scores(tr, row).unwrap_or_default(),
+        ),
     }
 }

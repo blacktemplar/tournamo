@@ -439,6 +439,34 @@ pub enum UndoReportError {
     PhaseStarted(PhaseName),
 }
 
+/// Why a result was not edited, see
+/// [`Session::edit_report`](crate::session::Session::edit_report).
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum EditReportError {
+    NotStarted,
+    UnknownMatch,
+    NotReported,
+    DrawNotAllowed,
+    /// A result entered that neither says nor suggests who won.
+    Undecided,
+    /// Something typed into the [`ResultForm`](crate::result_form::ResultForm) was not taken.
+    NotTaken,
+    /// A later result no longer applies with the result entered, e.g. that of the final the
+    /// winner of the edited semifinal played; it has to be undone first.
+    DependedOn,
+    /// The results of the matches of these numbers (see
+    /// [`MatchRow::number`](crate::view::MatchRow::number)), ascending and at least one, no longer
+    /// apply with the result entered, e.g. that of the final the winner of the edited semifinal
+    /// played; they have to be undone first.
+    DoesNotFit(Vec<usize>),
+    /// A phase taking entrants from the phase of the match has started, and would take others
+    /// with the result entered; undoing its start allows the edit.
+    PhaseStarted(PhaseName),
+    /// The engine refused the result for a reason this crate does not know.
+    Rejected(TransitionError),
+}
+
 /// The numbers of matches as a message lists them: `5, 7, 9`.
 fn listed(numbers: &[usize]) -> String {
     numbers
@@ -926,6 +954,27 @@ impl Message for UndoReportError {
             Self::PhaseStarted(phase) => {
                 Text::new("error-later-phase-started").with("phase", phase.clone())
             }
+        }
+    }
+}
+
+impl Message for EditReportError {
+    fn text(&self) -> Text {
+        match self {
+            Self::NotStarted => Text::new("error-not-started"),
+            Self::UnknownMatch => Text::new("error-unknown-match"),
+            Self::NotReported => Text::new("error-match-not-reported-to-edit"),
+            Self::DrawNotAllowed => Text::new("error-draw-not-allowed"),
+            Self::Undecided => Text::new("error-undecided"),
+            Self::NotTaken => Text::new("error-value-not-taken"),
+            Self::DependedOn => Text::new("error-edit-depended-on"),
+            Self::DoesNotFit(numbers) => Text::new("error-edit-does-not-fit")
+                .with("count", numbers.len())
+                .with("numbers", listed(numbers)),
+            Self::PhaseStarted(phase) => {
+                Text::new("error-later-phase-started").with("phase", phase.clone())
+            }
+            Self::Rejected(error) => rejected(error),
         }
     }
 }

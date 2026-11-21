@@ -122,6 +122,19 @@ impl Part {
         &self.parts
     }
 
+    /// Whether `other` has the decision, values and parts of this part, as deep as they go,
+    /// whatever their annotations.
+    pub fn is_entered_as(&self, other: &Part) -> bool {
+        self.decision == other.decision
+            && self.values == other.values
+            && self.parts.len() == other.parts.len()
+            && self
+                .parts
+                .iter()
+                .zip(&other.parts)
+                .all(|(part, other)| part.is_entered_as(other))
+    }
+
     /// Takes the decision, values and parts of `entered`, keeping the annotations of this part.
     pub(crate) fn enter(&mut self, entered: Part) {
         let annotations = std::mem::take(&mut self.annotations);

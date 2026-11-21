@@ -758,22 +758,21 @@ fn a_result_reported_against_the_score_shows_as_chosen() {
     assert_eq!(root.warnings, [Text::new("warning-result-disagrees")]);
 }
 
-/// Correcting a result takes changing only what was wrong: the form of a match reopened starts out
-/// at the result it had.
+/// Correcting a result takes changing only what was wrong: the form editing it starts out at the
+/// result it had.
 #[test]
-fn a_reopened_match_starts_out_at_its_result() {
+fn the_form_editing_a_result_starts_out_at_it() {
     let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
     session
         .report_entered(session.all(), "1 21-17 19-21 21-15")
         .unwrap();
     let reported = session.reported_result(session.first(), id).unwrap();
 
-    session.undo_report(session.first(), id).unwrap();
+    let mut form = session.edit_form(session.first(), id).unwrap();
 
-    let mut form = session.result_form(session.first(), id).unwrap();
     assert_eq!(form.view(), reported);
     score(&mut form, &[2], 21, 19);
-    session.report_form(&form).unwrap();
+    session.edit_report(&form).unwrap();
     assert_eq!(
         session
             .reported_result(session.first(), id)
@@ -791,36 +790,21 @@ fn score_shown(form: &ResultForm) -> Sides<Option<EnteredValue>> {
     form.view().root.fields[0].values
 }
 
-/// Reports `a` to `b` for the match `id` of `session` from the form of the match, whatever it
-/// starts out at.
-fn report_score(session: &mut Session, id: MatchId, a: u16, b: u16) {
-    let mut form = session.result_form(session.first(), id).unwrap();
-    score(&mut form, &[], a, b);
-    session.report_form(&form).unwrap();
-}
-
-/// Undoing a report takes its result back as reopening the match does, and so does redoing a
-/// reopening undone: the form starts out at the result taken back last.
+/// A report undone is reported again with what was wrong changed: the form starts out at the
+/// result undone.
 #[test]
-fn undo_and_redo_take_a_result_back_as_reopening_does() {
-    let (mut session, id) = started(PluginConfig::of::<Scored>());
-    report_score(&mut session, id, 21, 17);
-    session.undo_report(session.first(), id).unwrap();
-    report_score(&mut session, id, 21, 19);
+fn the_form_of_a_match_whose_report_is_undone_starts_out_at_its_result() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    let reported = session.reported_result(session.first(), id).unwrap();
 
     session.undo().unwrap();
-    assert_eq!(
-        score_shown(&session.result_form(session.first(), id).unwrap()),
-        Sides::new(count(21), count(19)),
-        "the result of the report undone"
-    );
 
-    session.undo().unwrap();
-    session.redo().unwrap();
     assert_eq!(
-        score_shown(&session.result_form(session.first(), id).unwrap()),
-        Sides::new(count(21), count(17)),
-        "the result reopened again"
+        session.result_form(session.first(), id).unwrap().view(),
+        reported
     );
 }
 
@@ -830,7 +814,7 @@ fn a_result_the_match_format_no_longer_takes_is_not_where_the_form_starts_out() 
     session
         .report_entered(session.all(), "1 21-17 21-15")
         .unwrap();
-    session.undo_report(session.first(), id).unwrap();
+    session.undo().unwrap();
 
     edit_match_format(&mut session, PluginConfig::of::<Scored>());
 
@@ -847,7 +831,7 @@ fn a_result_reported_under_another_match_format_is_not_where_the_form_starts_out
     session
         .report(session.first(), id, MatchResult::AWins)
         .unwrap();
-    session.undo_report(session.first(), id).unwrap();
+    session.undo().unwrap();
 
     edit_match_format(&mut session, PluginConfig::of::<Scored>());
 
@@ -855,6 +839,34 @@ fn a_result_reported_under_another_match_format_is_not_where_the_form_starts_out
     assert!(!form.is_chosen());
     assert_eq!(form.result(), None);
     assert!(form.quick_entry().is_some());
+}
+
+/// Scores typed in are the whole result, also of a match whose form starts out at the result
+/// whose report was undone.
+#[test]
+fn scores_typed_in_replace_the_result_a_form_starts_out_at() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    session.undo().unwrap();
+
+    let row = session
+        .report_entered(session.all(), "1 21-17 21-19")
+        .unwrap()
+        .row;
+
+    assert_eq!(
+        row.scores,
+        [
+            Sides::new(count(21), count(17)),
+            Sides::new(count(21), count(19))
+        ]
+    );
+    assert!(
+        session.result_form(session.first(), id).is_err(),
+        "reported"
+    );
 }
 
 /// Edits the only phase of `session` to play its matches by `match_format`.
@@ -894,19 +906,18 @@ fn the_template_of_a_match_is_that_of_its_form() {
     ));
 }
 
-/// A result chosen by hand shows only where results are chosen, so a match reopened with one takes
-/// no row.
+/// A result chosen by hand shows only where results are chosen, so a result edited that has one
+/// takes no row.
 #[test]
-fn a_result_chosen_by_hand_stays_chosen_once_reopened_and_takes_no_row() {
+fn a_result_chosen_by_hand_stays_chosen_in_the_form_editing_it_and_takes_no_row() {
     let (mut session, id) = started(PluginConfig::of::<Scored>());
     let mut form = session.result_form(session.first(), id).unwrap();
     score(&mut form, &[], 3, 1);
     form.choose(&[], Some(MatchResult::BWins));
     session.report_form(&form).unwrap();
 
-    session.undo_report(session.first(), id).unwrap();
+    let form = session.edit_form(session.first(), id).unwrap();
 
-    let form = session.result_form(session.first(), id).unwrap();
     assert!(form.is_chosen());
     assert_eq!(form.result(), Some(MatchResult::BWins));
     assert_eq!(form.quick_entry(), None);
@@ -930,30 +941,6 @@ fn scores_entered_replace_everything_entered() {
         form.report().parts().len(),
         2,
         "the games of the scores alone"
-    );
-}
-
-/// Scores typed in are the whole result, also of a match whose form starts out at the result it
-/// had before it was reopened.
-#[test]
-fn scores_typed_in_replace_the_result_a_reopened_match_starts_out_at() {
-    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
-    session
-        .report_entered(session.all(), "1 21-17 19-21 21-15")
-        .unwrap();
-    session.undo_report(session.first(), id).unwrap();
-
-    let row = session
-        .report_entered(session.all(), "1 21-17 21-19")
-        .unwrap()
-        .row;
-
-    assert_eq!(
-        row.scores,
-        [
-            Sides::new(count(21), count(17)),
-            Sides::new(count(21), count(19))
-        ]
     );
 }
 

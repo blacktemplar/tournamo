@@ -269,19 +269,17 @@ fn catching_up_takes_the_people_as_stored() {
     assert_eq!(names(&following.entrants()), ["Alice", "Bob"]);
 }
 
-/// What another session saved may have reported a match this one reopened, and reopened it again,
-/// so after catching up, the form of the match no longer starts out at the result this one took
-/// back.
+/// What another session saved may have reported a match whose report this one undid, and reopened
+/// it again, so after catching up, the form of the match no longer starts out at the result this
+/// one undid.
 #[test]
-fn catching_up_drops_the_results_taken_back() {
+fn catching_up_drops_the_results_undone() {
     let storage = MemoryStorage::default();
     let mut session = Given::new()
         .match_format(PluginConfig::of::<Scored>())
         .started();
     session.report_entered(session.all(), "1 21-17").unwrap();
-    session
-        .undo_report(session.first(), numbered(&session, 1))
-        .unwrap();
+    session.undo().unwrap();
     now(session.save(&storage)).unwrap();
     let mut other = now(Session::load(&storage, session.key())).unwrap();
     other.report_entered(other.all(), "1 21-19").unwrap();

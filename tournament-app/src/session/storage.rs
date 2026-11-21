@@ -60,9 +60,10 @@ impl Session {
     /// Catches up with `stored`, what a storage holds of this session's competition: appends the
     /// entries of its log after those of the session's, each as [`Self::load`] would have
     /// replayed it, and takes the people as stored. Returns how many entries it appended. They are
-    /// no actions of this session, which undoes and redoes its own as before, see [`Self::undo`].
-    /// [`Self::catch_up`] reads and catches up in one;
-    /// reading apart lets a GUI hold no borrow of the session while it reads.
+    /// no actions of this session, which undoes and redoes its own as before, see [`Self::undo`];
+    /// the forms of the matches whose report it undid start out empty again. [`Self::catch_up`]
+    /// reads and catches up in one; reading apart lets a GUI hold no borrow of the session while
+    /// it reads.
     ///
     /// An entry that undoes or replaces an earlier one replays the log after that one, as it did
     /// when it was appended; any other entry only applies to the current state.
@@ -87,6 +88,11 @@ impl Session {
         self.competition_saved = file.competition.is_some();
         let entries = file.log.into_iter().skip(self.machine.log().len());
         let appended = entries.len();
+        // another session may have reported and reopened again the matches whose report this
+        // session undid
+        if appended > 0 {
+            self.undone_reports.clear();
+        }
         for entry in entries {
             self.machine.apply(entry).map_err(LoadError::Replay)?;
             self.saved_changes = self.changes();

@@ -1,6 +1,6 @@
 [package]
 name = "plugin-factory-derive"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "The derive macro of plugin-factory"
@@ -14,4 +14,4 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
-syn = { version = "3.0.9", features = ["full"] }
+syn = { version = "3.0.10", features = ["full"] }

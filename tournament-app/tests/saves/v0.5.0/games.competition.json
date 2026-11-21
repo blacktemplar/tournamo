@@ -1,0 +1,1135 @@
+{
+  "entrants": [
+    {
+      "id": "2bb12667-3c68-4d89-b5db-5e7604be8776",
+      "annotations": []
+    },
+    {
+      "id": "881d902c-86d3-49b9-8c0b-e1eee3519b75",
+      "annotations": []
+    },
+    {
+      "id": "d7794298-7ac4-45df-986c-4c96a168488e",
+      "annotations": []
+    },
+    {
+      "id": "3da1b261-9aad-4b8c-a8ed-684c517549c8",
+      "annotations": []
+    }
+  ],
+  "phases": [
+    {
+      "id": "a248a2d3-e6b1-4772-968f-d09bd8560aec",
+      "name": null,
+      "sources": [
+        {
+          "of": "Registration",
+          "from": 1,
+          "to": null
+        }
+      ],
+      "plugins": {
+        "format": {
+          "type": "tournament_engine::round_robin",
+          "value": null
+        },
+        "teams": {
+          "type": "tournament_engine::keep",
+          "value": null
+        },
+        "divisions": 1,
+        "draw": {
+          "type": "tournament_engine::snake",
+          "value": null
+        },
+        "seeding": {
+          "type": "tournament_engine::seeded_in_order",
+          "value": null
+        },
+        "match_format": {
+          "type": "tournament_engine::best_of",
+          "value": {
+            "games": 5,
+            "winning_score": 11
+          }
+        },
+        "ranking": [
+          {
+            "type": "tournament_engine::more_wins",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::higher_games_difference",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::more_games_won",
+            "value": null
+          }
+        ],
+        "metrics": [
+          {
+            "type": "tournament_engine::wins_draws_losses",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::games_balance",
+            "value": null
+          },
+          {
+            "type": "tournament_engine::games_difference",
+            "value": null
+          }
+        ],
+        "across": []
+      },
+      "columns": [],
+      "seed": [
+        110,
+        187,
+        12,
+        96,
+        32,
+        151,
+        141,
+        16,
+        245,
+        66,
+        96,
+        253
+      ],
+      "started": true,
+      "divisions": [
+        {
+          "plugins": {
+            "format": {
+              "type": "tournament_engine::round_robin",
+              "value": null
+            },
+            "teams": {
+              "type": "tournament_engine::keep",
+              "value": null
+            },
+            "divisions": 1,
+            "draw": {
+              "type": "tournament_engine::snake",
+              "value": null
+            },
+            "seeding": {
+              "type": "tournament_engine::seeded_in_order",
+              "value": null
+            },
+            "match_format": {
+              "type": "tournament_engine::best_of",
+              "value": {
+                "games": 5,
+                "winning_score": 11
+              }
+            },
+            "ranking": [
+              {
+                "type": "tournament_engine::more_wins",
+                "value": null
+              },
+              {
+                "type": "tournament_engine::higher_games_difference",
+                "value": null
+              },
+              {
+                "type": "tournament_engine::more_games_won",
+                "value": null
+              }
+            ],
+            "metrics": [
+              {
+                "type": "tournament_engine::wins_draws_losses",
+                "value": null
+              },
+              {
+                "type": "tournament_engine::games_balance",
+                "value": null
+              },
+              {
+                "type": "tournament_engine::games_difference",
+                "value": null
+              }
+            ],
+            "across": []
+          },
+          "data": {
+            "rankings": [
+              {
+                "id": "7a71a001-0dab-5cad-815a-010f4ed44d03",
+                "entrants": [
+                  "3da1b261-9aad-4b8c-a8ed-684c517549c8"
+                ],
+                "initial_unique_rank": 1,
+                "lot": 1,
+                "unique_rank": 2,
+                "rank": 2,
+                "played_matches": [
+                  "cdf98bf8-6bef-5b92-831a-35ced477e896",
+                  "286721f8-44bf-51df-a308-dcde85ad85a6",
+                  "a117ef6d-75fc-5964-ad83-fde4281c3164"
+                ],
+                "metrics": [
+                  {
+                    "type": "tournament_engine::wins_draws_losses",
+                    "value": {
+                      "wins": 2,
+                      "draws": 0,
+                      "losses": 1,
+                      "byes": 0
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_balance",
+                    "value": {
+                      "won": 8,
+                      "lost": 3
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_difference",
+                    "value": 5
+                  }
+                ]
+              },
+              {
+                "id": "a44ec3a0-a3f0-5707-8a86-5c07a48e4302",
+                "entrants": [
+                  "d7794298-7ac4-45df-986c-4c96a168488e"
+                ],
+                "initial_unique_rank": 2,
+                "lot": 2,
+                "unique_rank": 4,
+                "rank": 4,
+                "played_matches": [
+                  "c183351c-e878-5155-8425-cfb3bc761866",
+                  "286721f8-44bf-51df-a308-dcde85ad85a6",
+                  "22946eaa-fbea-5bb1-93b3-9daf918f329b"
+                ],
+                "metrics": [
+                  {
+                    "type": "tournament_engine::wins_draws_losses",
+                    "value": {
+                      "wins": 0,
+                      "draws": 0,
+                      "losses": 3,
+                      "byes": 0
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_balance",
+                    "value": {
+                      "won": 4,
+                      "lost": 9
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_difference",
+                    "value": -5
+                  }
+                ]
+              },
+              {
+                "id": "e681838c-238c-5806-b6fb-17125efdb14f",
+                "entrants": [
+                  "2bb12667-3c68-4d89-b5db-5e7604be8776"
+                ],
+                "initial_unique_rank": 3,
+                "lot": 3,
+                "unique_rank": 1,
+                "rank": 1,
+                "played_matches": [
+                  "c183351c-e878-5155-8425-cfb3bc761866",
+                  "842bf417-6c72-54e8-b43a-e91ee561af27",
+                  "a117ef6d-75fc-5964-ad83-fde4281c3164"
+                ],
+                "metrics": [
+                  {
+                    "type": "tournament_engine::wins_draws_losses",
+                    "value": {
+                      "wins": 3,
+                      "draws": 0,
+                      "losses": 0,
+                      "byes": 0
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_balance",
+                    "value": {
+                      "won": 9,
+                      "lost": 6
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_difference",
+                    "value": 3
+                  }
+                ]
+              },
+              {
+                "id": "8a717afc-6e0d-58ce-a50b-9c270e57e871",
+                "entrants": [
+                  "881d902c-86d3-49b9-8c0b-e1eee3519b75"
+                ],
+                "initial_unique_rank": 4,
+                "lot": 4,
+                "unique_rank": 3,
+                "rank": 3,
+                "played_matches": [
+                  "cdf98bf8-6bef-5b92-831a-35ced477e896",
+                  "842bf417-6c72-54e8-b43a-e91ee561af27",
+                  "22946eaa-fbea-5bb1-93b3-9daf918f329b"
+                ],
+                "metrics": [
+                  {
+                    "type": "tournament_engine::wins_draws_losses",
+                    "value": {
+                      "wins": 1,
+                      "draws": 0,
+                      "losses": 2,
+                      "byes": 0
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_balance",
+                    "value": {
+                      "won": 5,
+                      "lost": 8
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::games_difference",
+                    "value": -3
+                  }
+                ]
+              }
+            ],
+            "ranking_ids_ordered_by_unique_rank": [
+              "e681838c-238c-5806-b6fb-17125efdb14f",
+              "7a71a001-0dab-5cad-815a-010f4ed44d03",
+              "8a717afc-6e0d-58ce-a50b-9c270e57e871",
+              "a44ec3a0-a3f0-5707-8a86-5c07a48e4302"
+            ],
+            "matches": [
+              {
+                "id": "cdf98bf8-6bef-5b92-831a-35ced477e896",
+                "team_a": [
+                  "7a71a001-0dab-5cad-815a-010f4ed44d03"
+                ],
+                "team_b": [
+                  "8a717afc-6e0d-58ce-a50b-9c270e57e871"
+                ],
+                "round": 1,
+                "number": 1,
+                "contest": {
+                  "decision": {
+                    "result": "AWins",
+                    "reason": null
+                  },
+                  "values": [],
+                  "parts": [
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 3
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 5
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 7
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    }
+                  ],
+                  "annotations": []
+                },
+                "tallies": [
+                  {
+                    "type": "tournament_engine::games_won",
+                    "value": {
+                      "a": 3,
+                      "b": 0
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::points_scored",
+                    "value": {
+                      "a": 33,
+                      "b": 15
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c183351c-e878-5155-8425-cfb3bc761866",
+                "team_a": [
+                  "a44ec3a0-a3f0-5707-8a86-5c07a48e4302"
+                ],
+                "team_b": [
+                  "e681838c-238c-5806-b6fb-17125efdb14f"
+                ],
+                "round": 1,
+                "number": 2,
+                "contest": {
+                  "decision": {
+                    "result": "BWins",
+                    "reason": null
+                  },
+                  "values": [],
+                  "parts": [
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 9
+                            },
+                            "b": {
+                              "Count": 11
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 8
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 5
+                            },
+                            "b": {
+                              "Count": 11
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 9
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 12
+                            },
+                            "b": {
+                              "Count": 14
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    }
+                  ],
+                  "annotations": []
+                },
+                "tallies": [
+                  {
+                    "type": "tournament_engine::games_won",
+                    "value": {
+                      "a": 2,
+                      "b": 3
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::points_scored",
+                    "value": {
+                      "a": 48,
+                      "b": 53
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "842bf417-6c72-54e8-b43a-e91ee561af27",
+                "team_a": [
+                  "e681838c-238c-5806-b6fb-17125efdb14f"
+                ],
+                "team_b": [
+                  "8a717afc-6e0d-58ce-a50b-9c270e57e871"
+                ],
+                "round": 2,
+                "number": 3,
+                "contest": {
+                  "decision": {
+                    "result": "AWins",
+                    "reason": null
+                  },
+                  "values": [],
+                  "parts": [
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 6
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 8
+                            },
+                            "b": {
+                              "Count": 11
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 4
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 13
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 2
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    }
+                  ],
+                  "annotations": []
+                },
+                "tallies": [
+                  {
+                    "type": "tournament_engine::games_won",
+                    "value": {
+                      "a": 3,
+                      "b": 2
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::points_scored",
+                    "value": {
+                      "a": 52,
+                      "b": 36
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "286721f8-44bf-51df-a308-dcde85ad85a6",
+                "team_a": [
+                  "7a71a001-0dab-5cad-815a-010f4ed44d03"
+                ],
+                "team_b": [
+                  "a44ec3a0-a3f0-5707-8a86-5c07a48e4302"
+                ],
+                "round": 2,
+                "number": 4,
+                "contest": {
+                  "decision": {
+                    "result": "AWins",
+                    "reason": null
+                  },
+                  "values": [],
+                  "parts": [
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 3
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 5
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 7
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    }
+                  ],
+                  "annotations": []
+                },
+                "tallies": [
+                  {
+                    "type": "tournament_engine::games_won",
+                    "value": {
+                      "a": 3,
+                      "b": 0
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::points_scored",
+                    "value": {
+                      "a": 33,
+                      "b": 15
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "22946eaa-fbea-5bb1-93b3-9daf918f329b",
+                "team_a": [
+                  "a44ec3a0-a3f0-5707-8a86-5c07a48e4302"
+                ],
+                "team_b": [
+                  "8a717afc-6e0d-58ce-a50b-9c270e57e871"
+                ],
+                "round": 3,
+                "number": 5,
+                "contest": {
+                  "decision": {
+                    "result": "BWins",
+                    "reason": null
+                  },
+                  "values": [],
+                  "parts": [
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 9
+                            },
+                            "b": {
+                              "Count": 11
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 8
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 5
+                            },
+                            "b": {
+                              "Count": 11
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 9
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 12
+                            },
+                            "b": {
+                              "Count": 14
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    }
+                  ],
+                  "annotations": []
+                },
+                "tallies": [
+                  {
+                    "type": "tournament_engine::games_won",
+                    "value": {
+                      "a": 2,
+                      "b": 3
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::points_scored",
+                    "value": {
+                      "a": 48,
+                      "b": 53
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "a117ef6d-75fc-5964-ad83-fde4281c3164",
+                "team_a": [
+                  "e681838c-238c-5806-b6fb-17125efdb14f"
+                ],
+                "team_b": [
+                  "7a71a001-0dab-5cad-815a-010f4ed44d03"
+                ],
+                "round": 3,
+                "number": 6,
+                "contest": {
+                  "decision": {
+                    "result": "AWins",
+                    "reason": null
+                  },
+                  "values": [],
+                  "parts": [
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 6
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 8
+                            },
+                            "b": {
+                              "Count": 11
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 4
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "BWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 13
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    },
+                    {
+                      "decision": {
+                        "result": "AWins",
+                        "reason": null
+                      },
+                      "values": [
+                        [
+                          "score",
+                          {
+                            "a": {
+                              "Count": 11
+                            },
+                            "b": {
+                              "Count": 2
+                            }
+                          }
+                        ]
+                      ],
+                      "parts": [],
+                      "annotations": []
+                    }
+                  ],
+                  "annotations": []
+                },
+                "tallies": [
+                  {
+                    "type": "tournament_engine::games_won",
+                    "value": {
+                      "a": 3,
+                      "b": 2
+                    }
+                  },
+                  {
+                    "type": "tournament_engine::points_scored",
+                    "value": {
+                      "a": 52,
+                      "b": 36
+                    }
+                  }
+                ]
+              }
+            ],
+            "byes": [],
+            "seed": [
+              110,
+              187,
+              12,
+              96,
+              32,
+              151,
+              141,
+              16,
+              245,
+              66,
+              96,
+              253
+            ]
+          },
+          "number_base": 0
+        }
+      ]
+    }
+  ],
+  "started": true,
+  "seed": [
+    134,
+    124,
+    206,
+    1,
+    43,
+    96,
+    120,
+    250,
+    194,
+    255,
+    164,
+    105
+  ],
+  "lots": [
+    "3da1b261-9aad-4b8c-a8ed-684c517549c8",
+    "d7794298-7ac4-45df-986c-4c96a168488e",
+    "2bb12667-3c68-4d89-b5db-5e7604be8776",
+    "881d902c-86d3-49b9-8c0b-e1eee3519b75"
+  ],
+  "registration": [
+    "3da1b261-9aad-4b8c-a8ed-684c517549c8",
+    "d7794298-7ac4-45df-986c-4c96a168488e",
+    "2bb12667-3c68-4d89-b5db-5e7604be8776",
+    "881d902c-86d3-49b9-8c0b-e1eee3519b75"
+  ],
+  "highest_number": 6
+}

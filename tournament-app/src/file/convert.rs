@@ -182,7 +182,7 @@ mod v2 {
     }
 }
 
-/// Format 2 to 3: a transition is written as `{<variant>: <transition>}`, where it was
+/// Format 2 to 3 (0.5.0): a transition is written as `{<variant>: <transition>}`, where it was
 /// `{"type": <tag>, "value": <transition>}`.
 mod v3 {
     use serde_json::{Map, Value};
@@ -213,9 +213,9 @@ mod v3 {
     }
 }
 
-/// Format 3 to 4: a phase holds its plugins as one `"plugins"`, as a phase is added with them,
-/// where it held its `"phase_format"`, `"match_format"`, `"ranker"` and `"metrics_calculators"`;
-/// every pairing of a knockout's bracket holds the number of its match.
+/// Format 3 to 4 (0.5.0): a phase holds its plugins as one `"plugins"`, as a phase is added with
+/// them, where it held its `"phase_format"`, `"match_format"`, `"ranker"` and
+/// `"metrics_calculators"`; every pairing of a knockout's bracket holds the number of its match.
 mod v4 {
     use serde_json::{Map, Value};
 
@@ -365,20 +365,20 @@ mod v4 {
     }
 }
 
-/// Format 4 to 5: a phase holds its divisions, each with its own copy of the phase's plugins,
-/// once it has started: what a phase held as its `"plugins"` and `"data"` is its only division,
-/// and the phase keeps the plugins, the `"seed"` of its data and whether it has `"started"`, as
-/// the competition has. A phase has a `"name"` (none) and `"sources"` (the whole registration),
-/// as an `AddPhase` has, and no `"columns"`, so that its tables of standings show what the rule
-/// shows. A started competition holds its `"lots"`, the order its phase started in, as its
-/// `"registration"` too, and every ranking its `"lot"`, its initial unique rank; the competition
-/// holds the `"highest_number"` of a match or of a pairing of a bracket, a division the
+/// Format 4 to 5 (0.5.0): a phase holds its divisions, each with its own copy of the phase's
+/// plugins, once it has started: what a phase held as its `"plugins"` and `"data"` is its only
+/// division, and the phase keeps the plugins, the `"seed"` of its data and whether it has
+/// `"started"`, as the competition has. A phase has a `"name"` (none) and `"sources"` (the whole
+/// registration), as an `AddPhase` has, and no `"columns"`, so that its tables of standings show
+/// what the rule shows. A started competition holds its `"lots"`, the order its phase started in,
+/// as its `"registration"` too, and every ranking its `"lot"`, its initial unique rank; the
+/// competition holds the `"highest_number"` of a match or of a pairing of a bracket, a division the
 /// `"number_base"` 0. The plugins of a phase, of a division and of an `AddPhase` keep the teams as
 /// they come in (`"teams"`), are played in one division (`"divisions"`), dealt back and forth
-/// (`"draw"`), seeded in order (`"seeding"`) and compared across divisions by nothing
-/// (`"across"`). The points of a ranking, saved as a number, are its `"total"` and the points of
-/// its matches (`"of_matches"`), its wins and draws as its division's points calculator scores
-/// them. The start, saved as `null`, gives no `"order"`. A person has no `"rating"`.
+/// (`"draw"`), seeded in order (`"seeding"`) and compared across divisions by nothing (`"across"`).
+/// The points of a ranking, saved as a number, are its `"total"` and the points of its matches
+/// (`"of_matches"`), its wins and draws as its division's points calculator scores them. The start,
+/// saved as `null`, gives no `"order"`. A person has no `"rating"`.
 mod v5 {
     use serde_json::{Map, Value, json};
 

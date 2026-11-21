@@ -12,6 +12,11 @@ keeps everything on your device: there is no account, no server and no tracking.
   (with an optional match for third place), double elimination (with an
   optional grand final reset) and Monster DYP (teams of two drawn anew every
   round).
+- **Phases** one after the other, each taking places of the registration or of
+  the phases before it (e.g. a qualification, then knockouts for places 1–8
+  and 9–16), played in one or several groups, by single entrants or by pairs
+  (DYP); presets set up common ones at once. Ratings seed the start, and the
+  competition ranks everyone by the phase they reached.
 - **Results** as who won, the score of each side (21–17) or the games of a best
   of, each with its score, as each phase sets.
 - **Rankings** by criteria you choose and order: points (for a win, a draw and
@@ -21,9 +26,10 @@ keeps everything on your device: there is no account, no server and no tracking.
 - **Reporting results** with a tap on the winner, by entering the scores in
   the row of the match, in the bracket, or by keyboard (`3 1` for match 3 won
   by the first side, `3 21-17` for its score, `ali` for the open match Alice
-  is in); every result can be undone.
+  is in); every result can be corrected or undone.
 - **Standings, a bracket and a cross table**, laid out for phones, tablets and
-  laptops, in light or dark.
+  laptops, in light or dark, showing the columns you choose; printed, or
+  copied into a spreadsheet.
 - **Offline and installable** as an app. Competitions are stored in the
   browser; export one as a file to back it up or move it to another device.
   Several tabs can show the same competition; one of them changes it at a time.

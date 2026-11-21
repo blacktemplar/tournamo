@@ -854,8 +854,8 @@ fn a_competition_of_several_phases_round_trips_as_a_snapshot() {
     assert_eq!(serde_json::to_value(binary).unwrap(), expected);
 }
 
-/// Ranked by nothing, everyone of the qualification shares the first place; the lot takes two of
-/// them on, and the two it leaves behind share the place after the final's.
+/// Ranked by nothing, everyone of the qualification shares the first place, also once the lot
+/// has taken two of them on; the two it leaves behind share the place after the final's.
 #[test]
 fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on() {
     let mut machine = registered(4);
@@ -876,13 +876,19 @@ fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on()
     start(&mut machine, phase(UPPER));
     play_out(&mut machine, phase(UPPER));
 
-    let places = machine
-        .current()
-        .ranking()
+    let competition = machine.current();
+    let qualification = competition.phases()[&phase(QUALIFICATION)].standings();
+    let ranks = qualification
+        .iter()
+        .map(|standing| standing.rank().get())
+        .collect_vec();
+    let ranking = competition.ranking();
+    let places = ranking
         .iter()
         .map(|placed| (placed.place.get(), placed.phase))
         .collect_vec();
 
+    assert_eq!(ranks, [1, 1, 1, 1]);
     assert_eq!(
         places,
         [
@@ -891,6 +897,15 @@ fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on()
             (3, phase(QUALIFICATION)),
             (3, phase(QUALIFICATION)),
         ]
+    );
+    // the lot's order of the tie decides who is taken on
+    let taken_on: HashSet<_> = ranking[..2].iter().map(|placed| placed.entrant).collect();
+    assert_eq!(
+        taken_on,
+        standings(&machine, phase(QUALIFICATION))[..2]
+            .iter()
+            .copied()
+            .collect()
     );
 }
 

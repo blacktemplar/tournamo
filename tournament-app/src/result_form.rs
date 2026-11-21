@@ -16,14 +16,13 @@
 //! screen asks ([`ResultForm::complete_score`]).
 //!
 //! A finished match is shown as it was reported by the view of a form of it
-//! ([`Session::reported_result`](crate::session::Session::reported_result)). Once reopened, its
-//! form starts out at that result, to be corrected
-//! ([`Session::result_form`](crate::session::Session::result_form)).
+//! ([`Session::reported_result`](crate::session::Session::reported_result)), and corrected in a
+//! form starting out at that result ([`Session::edit_form`](crate::session::Session::edit_form)).
 //!
 //! A result chosen by hand overrides the one suggested, which is rare: a screen may offer the
 //! choice only on request, except for a part that only a choice decides
-//! ([`PartView::needs_choice`]) and a form with a result chosen already, e.g. that of a match
-//! reopened ([`ResultForm::is_chosen`]).
+//! ([`PartView::needs_choice`]) and a form with a result chosen already, e.g. that of a result
+//! edited ([`ResultForm::is_chosen`]).
 //!
 //! Nothing entered is refused for breaking the rules of a sport: the form only warns of a score
 //! unlike those the match format hints a winner usually has, of a result chosen against the one the
@@ -540,7 +539,7 @@ impl ResultForm {
     /// of one level with a single field and no parts of their own, e.g. the score of each game of a
     /// best of. A match decided by its winner alone takes none, and neither does one of parts of
     /// several levels, e.g. the rubbers of a fixture, nor one with more entered than values, e.g. a
-    /// result chosen by hand before the match was reopened.
+    /// result chosen by hand, of a result edited.
     ///
     /// What the row enters goes into this form as [`enter`](Self::enter) or
     /// [`set_value`](Self::set_value) do; a result is never chosen there, so the form is reported

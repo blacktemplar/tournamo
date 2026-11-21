@@ -53,14 +53,15 @@ pub(crate) fn cut(name: &str) -> String {
 /// The most matches [`Session::scale`] plays out, far more than a day's play.
 pub const MOST_MATCHES: usize = 10_000;
 
-/// The result of a match taken back, and the template of the match it was reported with.
+/// The result of a match whose report was undone, and the template of the match it was reported
+/// with.
 #[derive(Debug, Clone)]
-struct TakenBack {
+struct UndoneReport {
     template: Template,
     contest: Part,
 }
 
-impl TakenBack {
+impl UndoneReport {
     /// What `r#match` of `division` had reported for it.
     fn of(division: &Division, r#match: &Match) -> Self {
         Self {
@@ -95,9 +96,10 @@ pub struct Session {
     /// The phase whose adding this session undid last, which the form of a new phase starts out
     /// at.
     undone_phase: Option<UndonePhase>,
-    /// What was reported for each match whose result this session took back, as it was then, the
-    /// latest of each, which the form of the match starts out at, see [`Self::result_form`].
-    reopened: HashMap<(PhaseId, MatchId), TakenBack>,
+    /// What was reported for each match whose report this session undid ([`Self::undo`]), the
+    /// latest of each, which the form of the match starts out at until the match is reopened, see
+    /// [`Self::result_form`].
+    undone_reports: HashMap<(PhaseId, MatchId), UndoneReport>,
     /// How often the session changed the people: with the length of the log, which every other
     /// change makes longer, undo and redo included, it counts the changes, see [`Self::changes`].
     people_changes: usize,
@@ -145,7 +147,7 @@ impl Session {
             people,
             history: SessionHistory::new(),
             undone_phase: None,
-            reopened: HashMap::new(),
+            undone_reports: HashMap::new(),
             people_changes: 0,
             saved_changes: 0,
             competition_saved: false,

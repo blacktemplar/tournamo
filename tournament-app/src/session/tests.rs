@@ -32,9 +32,10 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::{
-        AddEntrantError, AddPhaseError, EditPhaseError, ImportError, LoadError, NoPhase,
-        PhaseDraftError, RateEntrantError, RedoError, RemoveEntrantError, RenameEntrantError,
-        ReportEnteredError, ReportError, SourcesError, StartError, UndoError, UndoReportError,
+        AddEntrantError, AddPhaseError, EditPhaseError, EditReportError, ImportError, LoadError,
+        NoPhase, PhaseDraftError, RateEntrantError, RedoError, RemoveEntrantError,
+        RenameEntrantError, ReportEnteredError, ReportError, SourcesError, StartError, UndoError,
+        UndoReportError,
     },
     file::{self},
     form::PhaseForm,
@@ -42,8 +43,8 @@ use crate::{
     storage::{CompetitionKey, Listing, MemoryStorage, Progress, Save, Storage, Stored},
     view::{
         Action, BracketColumn, BracketEntry, BracketLine, BracketPart, BracketSection,
-        BracketSource, Chart, Column, Count, DivisionRef, EntrantRow, MatchRow, MatchesOf, Medal,
-        NameSearch, Outcome, Plugin, RoundSummary, RoundsView, Scale, Shown, StageName,
+        BracketSource, Chart, Column, Count, DivisionRef, Edited, EntrantRow, MatchRow, MatchesOf,
+        Medal, NameSearch, Outcome, Plugin, RoundSummary, RoundsView, Scale, Shown, StageName,
         StandingCell, Unplayed,
     },
 };

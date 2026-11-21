@@ -138,6 +138,14 @@ error-result-depended-on-by = { $count ->
         [one] the result of match { $numbers } depends on this one; reopen that match first
        *[other] the results of matches { $numbers } depend on this one; reopen those matches first
     }
+error-match-not-reported-to-edit = the match has no result that could be edited
+error-edit-depended-on = changed this way, a later result no longer fits; reopen that match first
+# $count: how many matches have a result that no longer fits the one edited; $numbers: their
+# numbers, e.g. "5, 7, 9"
+error-edit-does-not-fit = { $count ->
+        [one] changed this way, the result of match { $numbers } no longer fits; reopen that match first
+       *[other] changed this way, the results of matches { $numbers } no longer fit; reopen those matches first
+    }
 error-nothing-to-undo = there is nothing to undo
 error-nothing-to-redo = there is nothing to redo
 error-undo-changed-elsewhere = a change made elsewhere since keeps this from being undone, so nothing more can be undone

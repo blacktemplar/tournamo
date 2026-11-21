@@ -446,11 +446,11 @@ async fn the_details_of_a_result_start_from_the_row_of_the_match() {
     .await;
 }
 
-/// A match reopened keeps its scores in its row, so that correcting a typo takes changing only
-/// that value.
+/// A result is edited in a dialog starting out at its scores, so that correcting a typo takes
+/// changing only that value.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_match_reopened_keeps_its_scores_to_be_corrected() {
+async fn a_result_is_edited_from_its_scores() {
     run_in_new_competition(async |gui| {
         start(&gui, "Best of games").await?;
         for (game, alice, bob) in [(1, "21", "17"), (2, "19", "21"), (3, "21", "15")] {
@@ -461,15 +461,14 @@ async fn a_match_reopened_keeps_its_scores_to_be_corrected() {
         }
         gui.click_labelled("Report match 1").await?;
 
-        gui.click_labelled("Reopen match 1").await?;
+        gui.click_labelled("Edit result of match 1").await?;
 
-        gui.expect_in_row_value("Score of Alice in Game 2, match 1", "19")
-            .await?;
-        gui.expect_row_outcomes_either_way(&["Alice wins (2–1)"])
-            .await?;
-        gui.enter_in_row("Score of Bob in Game 3, match 1", "19")
-            .await?;
-        gui.click_labelled("Report match 1").await?;
+        gui.expect_value("Score of Alice in Game 2", "19").await?;
+        gui.page.check_accessibility().await?;
+        gui.enter_value("Score of Bob in Game 3", "19").await?;
+        gui.save_in_dialog().await?;
+        gui.expect_no_dialog().await?;
+        gui.expect_focus_labelled("Edit result of match 1").await?;
         // across the page, where the list has room for the scores of the games
         gui.page.resize(900, 900).await?;
         gui.expect_scores_either_way("2–1 (21–17 19–21 21–19)")
@@ -478,10 +477,39 @@ async fn a_match_reopened_keeps_its_scores_to_be_corrected() {
     .await;
 }
 
-/// A result reported against the score is reopened overriding it, which only the dialog shows.
+/// A match reopened is entered anew: its row keeps none of the scores it had. A report undone
+/// keeps them, to be reported again.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_result_overridden_is_reopened_overriding_in_the_dialog() {
+async fn a_match_reopened_is_entered_anew_and_a_report_undone_keeps_its_scores() {
+    run_in_new_competition(async |gui| {
+        start(&gui, "Score").await?;
+        gui.enter_in_row("Score of Alice, match 1", "21").await?;
+        gui.enter_in_row("Score of Bob, match 1", "17").await?;
+        gui.click_labelled("Report match 1").await?;
+
+        gui.click_labelled("Reopen match 1").await?;
+
+        gui.expect_in_row_value("Score of Alice, match 1", "")
+            .await?;
+        gui.expect_in_row_value("Score of Bob, match 1", "").await?;
+        gui.enter_in_row("Score of Alice, match 1", "21").await?;
+        gui.enter_in_row("Score of Bob, match 1", "19").await?;
+        gui.click_labelled("Report match 1").await?;
+
+        gui.click("Undo").await?;
+
+        gui.expect_in_row_value("Score of Alice, match 1", "21")
+            .await?;
+        gui.expect_in_row_value("Score of Bob, match 1", "19").await
+    })
+    .await;
+}
+
+/// A result reported against the score is edited overriding it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_overridden_is_edited_overriding() {
     run_in_new_competition(async |gui| {
         start(&gui, "Score").await?;
         gui.enter_in_row("Score of Alice, match 1", "1").await?;
@@ -492,14 +520,14 @@ async fn a_result_overridden_is_reopened_overriding_in_the_dialog() {
         gui.choose_result("Result: Match", "Bob wins").await?;
         gui.report_in_dialog().await?;
 
-        gui.click_labelled("Reopen match 1").await?;
+        gui.click_labelled("Edit result of match 1").await?;
 
-        gui.click_labelled("Enter result of match 1").await?;
         gui.expect_result_choices(&["Result: Match"]).await?;
         gui.expect_result_warnings(&["This is not the result the score suggests."])
             .await?;
-        gui.page.check_accessibility().await?;
-        gui.report_in_dialog().await?;
+        gui.enter_value("Score of Alice", "2").await?;
+        gui.save_in_dialog().await?;
+        gui.expect_scores_either_way("2–0").await?;
         gui.expect_standings(&["Bob", "Alice"]).await
     })
     .await;

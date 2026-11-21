@@ -1,17 +1,17 @@
 //! Reporting results and taking them back.
 
 use tournament_engine::{
-    CompetitionStateMachineExt as _, Division, Match, MatchId, MatchResult, Part, PhaseId,
-    ReportMatchResult,
+    CompetitionStateMachineExt as _, CompetitionTransition, Division, Match, MatchId, MatchResult,
+    Part, PhaseId, ReportMatchResult,
     plugins::match_format::Template,
-    transitions::{Change, ConflictsError, UndoMatchResultError},
+    transitions::{Change, ConflictsError, ReplaceMatchResultError, UndoMatchResultError},
 };
 
-use super::{Session, TakenBack, refused};
+use super::{Session, UndoneReport, refused};
 use crate::{
-    error::{Refusal, ReportError, UndoReportError},
+    error::{EditReportError, Refusal, ReportError, UndoReportError},
     result_form::{ResultForm, ResultView},
-    view::{Reopened, Reported},
+    view::{Edited, Reopened, Reported},
 };
 
 impl Session {
@@ -30,11 +30,10 @@ impl Session {
     }
 
     /// A form to enter the result of the match `id` of the phase `phase` into, see [`ResultForm`].
-    /// If this session took
-    /// back the result of the match, by reopening it ([`Self::undo_report`]), undoing its report
-    /// or redoing a reopening, the form starts out at that result, the one taken back last, so
-    /// that correcting a value takes changing only that one, as long as the match has the template
-    /// it was reported with; else, e.g. with the match format changed since, nothing is entered.
+    /// If this session undid the report of the match ([`Self::undo`]), the form starts out at the
+    /// result undone, so that it is reported again with a value corrected, as long as the match
+    /// has the template it was reported with; else, e.g. with the match reopened
+    /// ([`Self::undo_report`]) or its match format changed since, nothing is entered.
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, or the match has a
@@ -45,15 +44,13 @@ impl Session {
         let template = format.template(division.data(), r#match);
         // the match format may have changed since, e.g. with the phase edited; one that takes the
         // result may still read it otherwise, e.g. a winner alone as chosen against the score
-        let reopened = self
-            .reopened
+        let undone = self
+            .undone_reports
             .get(&(phase, id))
-            .filter(|taken_back| taken_back.template == template);
+            .filter(|undone| undone.template == template);
         let format = dyn_clone::clone_box(format);
-        let form = match reopened {
-            Some(taken_back) => {
-                ResultForm::reported(phase, id, format, template, &taken_back.contest)
-            }
+        let form = match undone {
+            Some(undone) => ResultForm::reported(phase, id, format, template, &undone.contest),
             None => ResultForm::new(phase, id, format, template),
         };
         Ok(form.in_language(self.language))
@@ -139,7 +136,8 @@ impl Session {
 
     /// Undoes the result reported for the match `id` of the phase `phase`, which may be any
     /// reported match rather than only the one reported last. Every other change stays in effect.
-    /// The form of the match starts out at the result, see [`Self::result_form`].
+    /// The form of the match starts out empty, see [`Self::result_form`]; to correct the result
+    /// instead, see [`Self::edit_report`].
     ///
     /// # Errors
     /// Returns an error if the phase has not started, has no such match, the match has no result,
@@ -158,7 +156,6 @@ impl Session {
             return Err(UndoReportError::UnknownMatch);
         };
         let row = self.match_row(phase, index, division, r#match);
-        let taken_back = TakenBack::of(division, r#match);
         let matches_before = division.data().matches().len();
         self.machine
             .undo_match_result(&mut self.history, phase, id)
@@ -166,7 +163,7 @@ impl Session {
                 UndoMatchResultError::NotReported => UndoReportError::NotReported,
                 UndoMatchResultError::Rejected(_) => self.undo_refusal(phase, id),
             })?;
-        self.reopened.insert((phase, id), taken_back);
+        self.undone_reports.remove(&(phase, id));
         let matches = self.phase(phase).expect("still added").divisions()[index]
             .data()
             .matches();
@@ -198,11 +195,104 @@ impl Session {
         &self,
         phase: PhaseId,
         id: MatchId,
-    ) -> Option<((PhaseId, MatchId), TakenBack)> {
+    ) -> Option<((PhaseId, MatchId), UndoneReport)> {
         let (_, division, r#match) = self.match_of(phase, id)?;
         r#match
             .is_finished()
-            .then(|| ((phase, id), TakenBack::of(division, r#match)))
+            .then(|| ((phase, id), UndoneReport::of(division, r#match)))
+    }
+
+    /// A form to correct the result of the finished match `id` of the phase `phase` in, starting
+    /// out at the result as it was reported, to be handed to [`Self::edit_report`].
+    ///
+    /// # Errors
+    /// Returns an error if the phase has not started, has no such match, or the match has no
+    /// result.
+    pub fn edit_form(&self, phase: PhaseId, id: MatchId) -> Result<ResultForm, EditReportError> {
+        let (division, r#match) = self.finished_match(phase, id)?;
+        let format = division.match_format();
+        let template = format.template(division.data(), r#match);
+        let form = ResultForm::reported(
+            phase,
+            id,
+            dyn_clone::clone_box(format),
+            template,
+            r#match.contest(),
+        );
+        Ok(form.in_language(self.language))
+    }
+
+    /// Replaces the result of the finished match of `form`, see [`Self::edit_form`], by the one
+    /// entered into it, as one action: undoing it brings the result before back. Every later
+    /// result stays as long as it still applies, e.g. with the winner of the match unchanged. A
+    /// result entered as it was reported changes nothing, and is no action.
+    ///
+    /// # Errors
+    /// Returns an error if the phase has not started, has no such match, the match has no result,
+    /// anything typed into the form was not taken ([`ResultForm::enter`]), the result neither says
+    /// nor suggests who won or is a draw the format does not take, later results no longer apply
+    /// with it ([`EditReportError::DoesNotFit`], naming every one), or a phase taking entrants
+    /// from its phase has started and would no longer take the same
+    /// ([`EditReportError::PhaseStarted`]).
+    pub fn edit_report(&mut self, form: &ResultForm) -> Result<Edited, EditReportError> {
+        let (phase, id) = (form.phase(), form.match_id());
+        self.finished_match(phase, id)?;
+        if form.has_rejected() {
+            return Err(EditReportError::NotTaken);
+        }
+        let report = || ReportMatchResult::of(phase, id, form.report());
+        let replacement = report().ok_or(EditReportError::Undecided)?;
+        self.machine
+            .replace_match_result(&mut self.history, replacement)
+            .map_err(|error| match error {
+                ReplaceMatchResultError::NotReported => EditReportError::NotReported,
+                ReplaceMatchResultError::Refused(error) => match Refusal::of(&error) {
+                    Some(Refusal::DrawNotAllowed) => EditReportError::DrawNotAllowed,
+                    _ => EditReportError::Rejected(error),
+                },
+                ReplaceMatchResultError::Rejected(_) => {
+                    let with: CompetitionTransition = report().expect("decided").into();
+                    let conflicts = self.machine.reported_by(phase, id).map(|target| {
+                        self.conflicting_numbers(Change::Replace {
+                            target,
+                            with: &with,
+                        })
+                    });
+                    match conflicts {
+                        Some(Ok(numbers)) if !numbers.is_empty() => {
+                            EditReportError::DoesNotFit(numbers)
+                        }
+                        Some(Err(ConflictsError::Other(entry, _))) => self
+                            .started_by(entry)
+                            .map_or(EditReportError::DependedOn, EditReportError::PhaseStarted),
+                        _ => EditReportError::DependedOn,
+                    }
+                }
+            })?;
+        let (index, division, r#match) = self.match_of(phase, id).expect("still scheduled");
+        Ok(Edited {
+            row: self.match_row(phase, index, division, r#match),
+        })
+    }
+
+    /// The division of the match `id` of the started phase `phase`, and the match, which has a
+    /// result.
+    fn finished_match(
+        &self,
+        phase: PhaseId,
+        id: MatchId,
+    ) -> Result<(&Division, &Match), EditReportError> {
+        let started = self.phase(phase).is_some_and(|phase| phase.is_started());
+        if !started {
+            return Err(EditReportError::NotStarted);
+        }
+        let (_, division, r#match) = self
+            .match_of(phase, id)
+            .ok_or(EditReportError::UnknownMatch)?;
+        if !r#match.is_finished() {
+            return Err(EditReportError::NotReported);
+        }
+        Ok((division, r#match))
     }
 
     /// The division of the match `id` of the started phase `phase`, and the match, which has no

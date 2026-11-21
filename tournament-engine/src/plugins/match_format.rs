@@ -11,6 +11,8 @@ mod scored;
 mod tallies;
 
 pub use best_of::BestOf;
+#[cfg(test)]
+pub(crate) use scored::SCORE;
 pub use scored::Scored;
 pub use tallies::{GamesWon, PointsScored};
 

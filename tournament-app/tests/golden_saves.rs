@@ -104,6 +104,20 @@ const SAVES: &[(&str, &str, &str)] = saves![
     "v0.4.0/scored",
     "v0.4.0/best-of",
     "v0.4.0/games",
+    "v0.5.0/setup",
+    "v0.5.0/round-robin",
+    "v0.5.0/random-rounds",
+    "v0.5.0/single-elimination",
+    "v0.5.0/double-elimination",
+    "v0.5.0/double-elimination-24",
+    "v0.5.0/monster-dyp",
+    "v0.5.0/scored",
+    "v0.5.0/best-of",
+    "v0.5.0/games",
+    "v0.5.0/groups-then-knockout",
+    "v0.5.0/qualification-then-knockouts",
+    "v0.5.0/dyp",
+    "v0.5.0/phases",
 ];
 
 #[test]

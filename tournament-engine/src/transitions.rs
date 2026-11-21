@@ -140,6 +140,22 @@ pub enum UndoMatchResultError {
     Rejected(#[from] StateMachineError),
 }
 
+/// Why the result reported for a match could not be replaced.
+#[derive(Debug, Error)]
+pub enum ReplaceMatchResultError {
+    #[error("no result that is in effect was reported for this match")]
+    NotReported,
+    /// The new report does not apply in place of the one in effect, e.g. a draw in a match format
+    /// without draws.
+    #[error(transparent)]
+    Refused(TransitionError),
+    /// The replacement was rejected by the state machine, because a later change in the log does
+    /// not apply after it, e.g. the result of a match that is only scheduled because of who won
+    /// the replaced one. The error names the change that would no longer apply.
+    #[error(transparent)]
+    Rejected(StateMachineError),
+}
+
 /// Why a phase could not be reconfigured.
 #[derive(Debug, Error)]
 pub enum ReconfigurePhaseError {
@@ -220,9 +236,10 @@ pub enum ConflictsError {
     Other(TransitionId, #[source] TransitionError),
 }
 
-/// Undoing a change by what it did, and reconfiguring a phase by its id rather than by the
-/// [`TransitionId`] of the log entry that added it, which is all [`CompetitionStateMachine`]
-/// itself takes; finding those entries, and what a change of them would conflict with.
+/// Undoing a change by what it did, and replacing a result by its match and reconfiguring a phase
+/// by its id rather than by the [`TransitionId`] of the log entry that reported or added it, which
+/// is all [`CompetitionStateMachine`] itself takes; finding those entries, and what a change of
+/// them would conflict with.
 ///
 /// A transition is applied by [`StateMachine::apply_new`], or, as an action of a session, by
 /// [`SessionHistory::apply_new`], so that [`SessionHistory::undo_last`] and
@@ -290,6 +307,71 @@ pub trait CompetitionStateMachineExt {
         phase_id: PhaseId,
         match_id: MatchId,
     ) -> Result<TransitionId, UndoMatchResultError>;
+
+    /// Replaces the result reported for the match of `report` by `report`, as an action of the
+    /// session of `history`, and returns the id of the entry appended for that: a
+    /// [`LogEntryKind::Replace`] of the [`ReportMatchResult`] in effect for the match (see
+    /// [`Self::reported_by`]). Every change made after it applies as before, so it is accepted as
+    /// long as the later results still apply, e.g. where the winner stays. Undoing that action,
+    /// see [`SessionHistory::undo_last`], brings the earlier result back.
+    ///
+    /// Returns `None`, leaving the log unchanged, if `report` enters the match as it was reported
+    /// already (see [`Part::is_entered_as`](crate::Part::is_entered_as)).
+    ///
+    /// # Errors
+    /// Returns [`ReplaceMatchResultError::NotReported`] if no report for that match is in effect,
+    /// [`ReplaceMatchResultError::Refused`] if `report` does not apply in its place, and
+    /// [`ReplaceMatchResultError::Rejected`] if a later change in the log does not apply after it
+    /// ([`Self::conflicts_of`] names the results among those). In either case neither the log nor
+    /// `history` changes.
+    ///
+    /// # Examples
+    /// ```
+    /// # use tournament_engine::{
+    /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
+    /// #     EntrantId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult, Seed,
+    /// #     SetCompetitionSeed, StartCompetition,
+    /// #     undoable_state_machine::SessionHistory, uuid::Uuid,
+    /// # };
+    /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
+    /// # let mut machine = CompetitionStateMachine::default();
+    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into())?;
+    /// # for entrant in 0..4 {
+    /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
+    /// #     machine.apply_new(AddEntrant::new(entrant).into())?;
+    /// # }
+    /// # let plugins = PhasePluginsBuilder::new().build()?;
+    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
+    /// # machine.apply_new(StartCompetition::default().into())?;
+    /// // a round robin between four entrants, its first match won by A
+    /// let first = *machine.current().phases()[&phase_id].divisions()[0]
+    ///     .data()
+    ///     .matches()
+    ///     .keys()
+    ///     .next()
+    ///     .expect("a round robin has matches");
+    /// machine.apply_new(ReportMatchResult::new(phase_id, first, MatchResult::AWins).into())?;
+    ///
+    /// let mut history = SessionHistory::new();
+    /// let won_by_b = ReportMatchResult::new(phase_id, first, MatchResult::BWins);
+    /// machine.replace_match_result(&mut history, won_by_b)?;
+    ///
+    /// let result = |machine: &CompetitionStateMachine| {
+    ///     machine.current().phases()[&phase_id].divisions()[0]
+    ///         .data()
+    ///         .matches()[&first]
+    ///         .result()
+    /// };
+    /// assert_eq!(result(&machine), Some(MatchResult::BWins));
+    /// history.undo_last(&mut machine)?;
+    /// assert_eq!(result(&machine), Some(MatchResult::AWins));
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    fn replace_match_result(
+        &mut self,
+        history: &mut SessionHistory,
+        report: ReportMatchResult,
+    ) -> Result<Option<TransitionId>, ReplaceMatchResultError>;
 
     /// Reconfigures the phase `phase.id()` as if it had been added by `phase`, as an action of
     /// the session of `history`, and returns the id of the entry appended for that: a
@@ -490,6 +572,37 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         let id = TransitionId::new();
         history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
         Ok(id)
+    }
+
+    fn replace_match_result(
+        &mut self,
+        history: &mut SessionHistory,
+        report: ReportMatchResult,
+    ) -> Result<Option<TransitionId>, ReplaceMatchResultError> {
+        let target = self
+            .reported_by(report.phase_id(), report.match_id())
+            .ok_or(ReplaceMatchResultError::NotReported)?;
+        if let Some(CompetitionTransition::ReportMatchResult(reported)) =
+            self.effective_transition(target)
+            && reported.contest().is_entered_as(report.contest())
+        {
+            return Ok(None);
+        }
+        let id = TransitionId::new();
+        let with = report.into();
+        history
+            .apply(
+                self,
+                LogEntry::new(id, LogEntryKind::Replace { target, with }),
+            )
+            .map_err(|error| match error {
+                // the state machine names a replacement that does not apply by the replacing entry
+                StateMachineError::Transition(failed, error) if failed == id => {
+                    ReplaceMatchResultError::Refused(error)
+                }
+                error => ReplaceMatchResultError::Rejected(error),
+            })?;
+        Ok(Some(id))
     }
 
     fn reconfigure_phase(
@@ -693,8 +806,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        Entrant, EntrantId, Match, MatchResult, PhasePluginsBuilder, Seed, Source,
+        EnteredValue, Entrant, EntrantId, Match, MatchResult, PhasePluginsBuilder, Seed, Sides,
+        Source,
         plugins::{
+            match_format::{SCORE, Scored},
             metrics_calculator::{WinsDrawsLosses, WinsDrawsLossesCalculator},
             phase_format::{MonsterDyp, SingleElimination},
         },
@@ -722,6 +837,24 @@ mod tests {
     /// A started knockout between `entrants` entrants, which schedules a match once the matches
     /// deciding who plays it are reported.
     fn knockout_of(entrants: u128) -> CompetitionStateMachine {
+        started(
+            entrants,
+            PhasePluginsBuilder::new().format(SingleElimination::new()),
+        )
+    }
+
+    /// A started knockout between four entrants decided by a score.
+    fn scored_knockout() -> CompetitionStateMachine {
+        started(
+            4,
+            PhasePluginsBuilder::new()
+                .format(SingleElimination::new())
+                .match_format(Scored::new(None)),
+        )
+    }
+
+    /// A started competition of `entrants` entrants and the phase `plugins` builds.
+    fn started(entrants: u128, plugins: PhasePluginsBuilder) -> CompetitionStateMachine {
         let mut machine = CompetitionStateMachine::default();
         machine
             .apply_new(SetCompetitionSeed::new(Seed::new(*b"undo-test!!!")).into())
@@ -730,10 +863,7 @@ mod tests {
             let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
             machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
         }
-        let plugins = PhasePluginsBuilder::new()
-            .format(SingleElimination::new())
-            .build()
-            .unwrap();
+        let plugins = plugins.build().unwrap();
         machine
             .apply_new(AddPhase::new(phase_id(), plugins).into())
             .unwrap();
@@ -929,6 +1059,163 @@ mod tests {
         assert_eq!(result_of(&machine, semifinals[0]), Some(MatchResult::AWins));
         assert_eq!(result_of(&machine, r#final), Some(MatchResult::AWins));
         assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
+    }
+
+    /// The report of the match `match_id` of the phase with the score `a`–`b`.
+    fn scored(match_id: MatchId, a: u16, b: u16) -> ReportMatchResult {
+        let score = |count| Some(EnteredValue::Count(count));
+        let result = if a > b {
+            MatchResult::AWins
+        } else {
+            MatchResult::BWins
+        };
+        ReportMatchResult::new(phase_id(), match_id, result)
+            .with_value(SCORE, Sides::new(score(a), score(b)))
+    }
+
+    /// The score reported for the match `match_id` of the phase.
+    fn score_of(machine: &CompetitionStateMachine, match_id: MatchId) -> Option<Sides<u16>> {
+        let r#match = &machine.current().phases()[&phase_id()].divisions()[0]
+            .data()
+            .matches()[&match_id];
+        match *r#match.contest().value(&SCORE)? {
+            Sides {
+                a: Some(EnteredValue::Count(a)),
+                b: Some(EnteredValue::Count(b)),
+            } => Some(Sides::new(a, b)),
+            _ => None,
+        }
+    }
+
+    /// A scored knockout with both semifinals won 3–1 by side A and the final reported, returning
+    /// the semifinals and the final.
+    fn final_played() -> (CompetitionStateMachine, [MatchId; 2], MatchId) {
+        let mut machine = scored_knockout();
+        let [first, second] = matches(&machine)[..] else {
+            panic!("a knockout between four entrants starts with two semifinals");
+        };
+        for semifinal in [first, second] {
+            machine.apply_new(scored(semifinal, 3, 1).into()).unwrap();
+        }
+        let r#final = matches(&machine)[2];
+        machine.apply_new(scored(r#final, 3, 0).into()).unwrap();
+        (machine, [first, second], r#final)
+    }
+
+    /// A semifinal corrected to another score of the same winner leaves the final as it was
+    /// played, which reopening the semifinal would not.
+    #[test]
+    fn a_result_is_replaced_keeping_the_results_that_still_apply() {
+        let (mut machine, [first, _], r#final) = final_played();
+        let mut history = SessionHistory::new();
+
+        machine
+            .replace_match_result(&mut history, scored(first, 3, 2))
+            .expect("the same winner keeps the final as it was played");
+
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
+        assert_eq!(score_of(&machine, r#final), Some(Sides::new(3, 0)));
+        history
+            .undo_last(&mut machine)
+            .expect("the replacement is an action of the session");
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 1)));
+        history.redo_last(&mut machine).unwrap();
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
+    }
+
+    /// Undoing a second correction brings back the first, not the result reported.
+    #[test]
+    fn undoing_a_second_replacement_brings_back_the_first() {
+        let (mut machine, [first, _], _) = final_played();
+        let mut history = SessionHistory::new();
+        machine
+            .replace_match_result(&mut history, scored(first, 3, 2))
+            .unwrap();
+        machine
+            .replace_match_result(&mut history, scored(first, 3, 0))
+            .unwrap();
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 0)));
+
+        history.undo_last(&mut machine).unwrap();
+
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
+    }
+
+    /// Another winner of a semifinal leaves the final reported between other entrants.
+    #[test]
+    fn a_replacement_a_later_result_does_not_fit_is_refused() {
+        let (mut machine, [first, _], r#final) = final_played();
+        let final_reported = machine.reported_by(phase_id(), r#final).unwrap();
+        let log_len = machine.log().len();
+
+        let error = machine
+            .replace_match_result(&mut SessionHistory::new(), scored(first, 1, 3))
+            .expect_err("the final was played by the winner reported");
+
+        assert!(matches!(error, ReplaceMatchResultError::Rejected(_)));
+        assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 1)));
+        let target = machine.reported_by(phase_id(), first).unwrap();
+        let with = scored(first, 1, 3).into();
+        assert_eq!(
+            machine
+                .conflicts_of(Change::Replace {
+                    target,
+                    with: &with
+                })
+                .unwrap(),
+            [conflict(final_reported, r#final)]
+        );
+    }
+
+    #[test]
+    fn a_replacement_that_does_not_apply_itself_is_refused() {
+        let mut machine = knockout();
+        let first = matches(&machine)[0];
+        report(&mut machine, first);
+
+        let error = machine
+            .replace_match_result(
+                &mut SessionHistory::new(),
+                ReportMatchResult::new(phase_id(), first, MatchResult::Draw),
+            )
+            .expect_err("a knockout takes no draw");
+
+        let ReplaceMatchResultError::Refused(error) = error else {
+            panic!("the replacement itself does not apply, not a later change: {error:?}");
+        };
+        assert!(matches!(
+            error.downcast_ref(),
+            Some(ReportMatchResultError::DrawNotAllowed)
+        ));
+    }
+
+    #[test]
+    fn a_result_entered_as_reported_is_not_replaced() {
+        let (mut machine, [first, _], _) = final_played();
+        let log_len = machine.log().len();
+
+        let replaced = machine
+            .replace_match_result(&mut SessionHistory::new(), scored(first, 3, 1))
+            .unwrap();
+
+        assert_eq!(replaced, None);
+        assert_eq!(machine.log().len(), log_len);
+    }
+
+    #[test]
+    fn an_open_match_has_no_result_to_replace() {
+        let mut machine = knockout();
+        let open = matches(&machine)[0];
+
+        let error = machine
+            .replace_match_result(
+                &mut SessionHistory::new(),
+                ReportMatchResult::new(phase_id(), open, MatchResult::AWins),
+            )
+            .expect_err("an open match has no result to replace");
+
+        assert!(matches!(error, ReplaceMatchResultError::NotReported));
     }
 
     /// A reconfigured phase is played as if it had been added that way, so the results of the

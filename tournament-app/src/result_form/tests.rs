@@ -785,6 +785,90 @@ fn the_form_editing_a_result_starts_out_at_it() {
     );
 }
 
+/// The score of the match entered by `form`, as its view shows it.
+fn score_shown(form: &ResultForm) -> Sides<Option<EnteredValue>> {
+    form.view().root.fields[0].values
+}
+
+/// A report undone is reported again with what was wrong changed: the form starts out at the
+/// result undone.
+#[test]
+fn the_form_of_a_match_whose_report_is_undone_starts_out_at_its_result() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    let reported = session.reported_result(session.first(), id).unwrap();
+
+    session.undo().unwrap();
+
+    assert_eq!(
+        session.result_form(session.first(), id).unwrap().view(),
+        reported
+    );
+}
+
+#[test]
+fn a_result_the_match_format_no_longer_takes_is_not_where_the_form_starts_out() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    session
+        .report_entered(session.all(), "1 21-17 21-15")
+        .unwrap();
+    session.undo().unwrap();
+
+    edit_match_format(&mut session, PluginConfig::of::<Scored>());
+
+    let form = session.result_form(session.first(), id).unwrap();
+    assert_eq!(score_shown(&form), Sides::new(None, None));
+    assert_eq!(form.result(), None);
+}
+
+/// A result the match format still takes may mean something else under it: a winner reported
+/// alone would be chosen by hand against the score, which takes the match its row.
+#[test]
+fn a_result_reported_under_another_match_format_is_not_where_the_form_starts_out() {
+    let (mut session, id) = started(PluginConfig::of::<WinnerOnly>());
+    session
+        .report(session.first(), id, MatchResult::AWins)
+        .unwrap();
+    session.undo().unwrap();
+
+    edit_match_format(&mut session, PluginConfig::of::<Scored>());
+
+    let form = session.result_form(session.first(), id).unwrap();
+    assert!(!form.is_chosen());
+    assert_eq!(form.result(), None);
+    assert!(form.quick_entry().is_some());
+}
+
+/// Scores typed in are the whole result, also of a match whose form starts out at the result
+/// whose report was undone.
+#[test]
+fn scores_typed_in_replace_the_result_a_form_starts_out_at() {
+    let (mut session, id) = started(PluginConfig::of::<BestOf>().with("games", 3));
+    session
+        .report_entered(session.all(), "1 21-17 19-21 21-15")
+        .unwrap();
+    session.undo().unwrap();
+
+    let row = session
+        .report_entered(session.all(), "1 21-17 21-19")
+        .unwrap()
+        .row;
+
+    assert_eq!(
+        row.scores,
+        [
+            Sides::new(count(21), count(17)),
+            Sides::new(count(21), count(19))
+        ]
+    );
+    assert!(
+        session.result_form(session.first(), id).is_err(),
+        "reported"
+    );
+}
+
 /// Edits the only phase of `session` to play its matches by `match_format`.
 fn edit_match_format(session: &mut Session, match_format: PluginConfig) {
     let draft = session

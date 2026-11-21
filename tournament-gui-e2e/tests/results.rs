@@ -477,10 +477,11 @@ async fn a_result_is_edited_from_its_scores() {
     .await;
 }
 
-/// A match reopened is entered anew: its row keeps none of the scores it had.
+/// A match reopened is entered anew: its row keeps none of the scores it had. A report undone
+/// keeps them, to be reported again.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn a_match_reopened_is_entered_anew() {
+async fn a_match_reopened_is_entered_anew_and_a_report_undone_keeps_its_scores() {
     run_in_new_competition(async |gui| {
         start(&gui, "Score").await?;
         gui.enter_in_row("Score of Alice, match 1", "21").await?;
@@ -491,7 +492,16 @@ async fn a_match_reopened_is_entered_anew() {
 
         gui.expect_in_row_value("Score of Alice, match 1", "")
             .await?;
-        gui.expect_in_row_value("Score of Bob, match 1", "").await
+        gui.expect_in_row_value("Score of Bob, match 1", "").await?;
+        gui.enter_in_row("Score of Alice, match 1", "21").await?;
+        gui.enter_in_row("Score of Bob, match 1", "19").await?;
+        gui.click_labelled("Report match 1").await?;
+
+        gui.click("Undo").await?;
+
+        gui.expect_in_row_value("Score of Alice, match 1", "21")
+            .await?;
+        gui.expect_in_row_value("Score of Bob, match 1", "19").await
     })
     .await;
 }

@@ -717,11 +717,19 @@ pub enum EnteredValue { Count(u16), Decimal(Score) }  // durations when a sport 
   result*), one action, without the match being open in between. So a typo in
   one game of a best of five is corrected in that game, also where reopening is
   refused since a later result depends on the match, as long as that result
-  still applies (the same winner). Reopening, and undoing a report, leave the
-  match open with an empty form: the match is to be entered anew, e.g. played
-  again. Rejected: a reopened match starting out at its result (the session
-  kept what it took back; editing does that job without a transition in
-  between, and an empty form says that the result is gone).
+  still applies (the same winner). Reopening leaves the match open with an
+  empty form: the match is to be entered anew, e.g. played again. Undoing a
+  report (`Session::undo`) is taking back a step just done, so the form starts
+  out at the result undone: the session keeps what was reported for each match
+  whose report it undid, the latest of each, as it keeps the configuration of
+  a phase whose adding it undid, while the match keeps the template it was
+  reported with (another match format may read it otherwise, e.g. a winner
+  alone as chosen against the score); reopening the match or catching up
+  drops it. Rejected: a reopened match starting out at its result (editing
+  does that job without a transition in between, and an empty form says that
+  the result is gone); reading the result from the undone report in the log
+  (it would come back after a reload or in another tab, in a form nobody
+  undid, and every form would search the log).
 
 *Planned:* lineups on parts (with rosters of players), league fixtures nesting
 the match formats of their rubbers, live reporting (an `UpdatePlay` on open

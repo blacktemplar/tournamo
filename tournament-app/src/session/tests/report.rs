@@ -296,25 +296,34 @@ fn an_edit_the_match_does_not_take_is_refused() {
     ));
 }
 
-/// Reopening a match leaves it to be entered anew: its form starts out empty, and so after undoing
-/// its report.
+/// Reopening a match leaves it to be entered anew: its form starts out empty, also after its report
+/// was undone, which keeps the result in the form.
 #[test]
 fn a_reopened_match_starts_out_empty() {
     let mut session = knockout_played();
     let final_match = numbered(&session, 3);
-    session.undo_report(session.first(), final_match).unwrap();
-    let empty = |session: &Session| {
+    let entered = |session: &Session| {
         session
             .result_form(session.first(), final_match)
             .unwrap()
-            .report()
-            .values()
-            .is_empty()
+            .view()
+            .root
+            .fields[0]
+            .values
     };
-    assert!(empty(&session));
+    let count = |count| Some(EnteredValue::Count(count));
+    session.undo_report(session.first(), final_match).unwrap();
+    assert_eq!(entered(&session), Sides::new(None, None));
 
     session.report_entered(session.all(), "3 3-2").unwrap();
     session.undo().unwrap();
+    assert_eq!(
+        entered(&session),
+        Sides::new(count(3), count(2)),
+        "the result whose report was undone"
+    );
 
-    assert!(empty(&session));
+    session.report_entered(session.all(), "3 3-2").unwrap();
+    session.undo_report(session.first(), final_match).unwrap();
+    assert_eq!(entered(&session), Sides::new(None, None));
 }

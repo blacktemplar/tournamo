@@ -22,7 +22,8 @@ impl Session {
 
     /// Undoes the latest action of this session that is still in effect, which may be an
     /// [`Self::undo_report`], bringing the result back, or every entrant of a list added at once.
-    /// Returns the action undone.
+    /// Returns the action undone. The form of a match whose report it undoes starts out at the
+    /// result, see [`Self::result_form`].
     ///
     /// The changes of other sessions, caught up with, are not undone, and stay in effect.
     ///
@@ -53,12 +54,22 @@ impl Session {
             },
             _ => None,
         };
+        let reported: Vec<_> = ids
+            .iter()
+            .filter_map(|id| match self.applied(*id) {
+                Some(CompetitionTransition::ReportMatchResult(report)) => {
+                    self.reported_contest(report.phase_id(), report.match_id())
+                }
+                _ => None,
+            })
+            .collect();
         self.history
             .undo_last(&mut self.machine)
             .map_err(|_| UndoError::ChangedElsewhere)?;
         if phase.is_some() {
             self.undone_phase = phase;
         }
+        self.undone_reports.extend(reported);
         Ok(self.action_of(&ids))
     }
 

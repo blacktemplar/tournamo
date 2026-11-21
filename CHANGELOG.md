@@ -111,8 +111,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
-- A match reopened, or whose report is undone, starts out empty, to be entered
-  anew; a result is corrected by editing it instead.
+- A match reopened starts out empty, to be entered anew; a result is corrected
+  by editing it instead. Undoing the report of a match still keeps its result
+  in the form, to be reported again.
 - A preset asks for the match format of its phases (e.g. a score, or a best of
   five), rather than adding every phase with who won only; a phase it does
   not fit keeps who won only.
@@ -245,6 +246,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Fixed
 
+- A match whose report was undone and that is then played by another match
+  format, e.g. a phase changed from the winner alone to a score, starts out
+  empty under it, with the row of values the other matches show. It started
+  out at the winner reported before, as if chosen against the score, and
+  showed only "Enter a result".
 - Clicking into the field naming a new competition right after going back to
   the list of competitions no longer loses what is typed: the list moved the
   focus to its top a moment later, taking it from the field.

@@ -7,7 +7,7 @@ use tournament_engine::{
     transitions::{Change, ConflictsError, ReplaceMatchResultError, UndoMatchResultError},
 };
 
-use super::{Session, refused};
+use super::{Session, UndoneReport, refused};
 use crate::{
     error::{EditReportError, Refusal, ReportError, UndoReportError},
     result_form::{ResultForm, ResultView},
@@ -29,8 +29,11 @@ impl Session {
         self.report_contest(phase, id, Part::new().with_decision(result))
     }
 
-    /// A form to enter the result of the match `id` of the phase `phase` into, see [`ResultForm`],
-    /// with nothing entered.
+    /// A form to enter the result of the match `id` of the phase `phase` into, see [`ResultForm`].
+    /// If this session undid the report of the match ([`Self::undo`]), the form starts out at the
+    /// result undone, so that it is reported again with a value corrected, as long as the match
+    /// has the template it was reported with; else, e.g. with the match reopened
+    /// ([`Self::undo_report`]) or its match format changed since, nothing is entered.
     ///
     /// # Errors
     /// Returns an error if the competition has not started, has no such match, or the match has a
@@ -39,7 +42,17 @@ impl Session {
         let (division, r#match) = self.open_match(phase, id)?;
         let format = division.match_format();
         let template = format.template(division.data(), r#match);
-        let form = ResultForm::new(phase, id, dyn_clone::clone_box(format), template);
+        // the match format may have changed since, e.g. with the phase edited; one that takes the
+        // result may still read it otherwise, e.g. a winner alone as chosen against the score
+        let undone = self
+            .undone_reports
+            .get(&(phase, id))
+            .filter(|undone| undone.template == template);
+        let format = dyn_clone::clone_box(format);
+        let form = match undone {
+            Some(undone) => ResultForm::reported(phase, id, format, template, &undone.contest),
+            None => ResultForm::new(phase, id, format, template),
+        };
         Ok(form.in_language(self.language))
     }
 
@@ -150,6 +163,7 @@ impl Session {
                 UndoMatchResultError::NotReported => UndoReportError::NotReported,
                 UndoMatchResultError::Rejected(_) => self.undo_refusal(phase, id),
             })?;
+        self.undone_reports.remove(&(phase, id));
         let matches = self.phase(phase).expect("still added").divisions()[index]
             .data()
             .matches();
@@ -173,6 +187,19 @@ impl Session {
                 .map_or(UndoReportError::DependedOn, UndoReportError::PhaseStarted),
             _ => UndoReportError::DependedOn,
         }
+    }
+
+    /// The match `id` of the phase `phase` with what was reported for it, if it has a result,
+    /// which undoing its report takes back.
+    pub(super) fn reported_contest(
+        &self,
+        phase: PhaseId,
+        id: MatchId,
+    ) -> Option<((PhaseId, MatchId), UndoneReport)> {
+        let (_, division, r#match) = self.match_of(phase, id)?;
+        r#match
+            .is_finished()
+            .then(|| ((phase, id), UndoneReport::of(division, r#match)))
     }
 
     /// A form to correct the result of the finished match `id` of the phase `phase` in, starting

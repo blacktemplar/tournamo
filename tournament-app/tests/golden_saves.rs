@@ -24,23 +24,26 @@ use serde::de::IgnoredAny;
 use serde_json::Value;
 use tournament_app::{
     file::{self, File},
-    form::PhaseForm,
+    form::{Editable as _, End, PhaseForm, PresetForm},
+    i18n::{Language, Translator},
     result_form::ResultForm,
     session::Session,
     storage::{MemoryStorage, Storage as _},
     view::{DivisionRef, MatchesOf},
 };
 use tournament_engine::{
-    Competition, EnteredValue, MatchResult, PhaseId, Sides,
+    Competition, EnteredValue, MatchResult, PhaseId, Sides, Table,
     plugins::{
         match_format::{BestOf, Scored},
         metrics_calculator::{
-            GamesBalanceCalculator, HigherGamesDifference, HigherPointsDifference, MoreGamesWon,
-            MorePointsScored, MoreWins, PointsBalanceCalculator, WinsDrawsLossesCalculator,
+            GamesBalanceCalculator, HigherGamesDifference, HigherPointsDifference, MetricId as _,
+            MoreGamesWon, MorePointsScored, MoreWins, PointsBalanceCalculator, PointsPerMatch,
+            WinsDrawsLossesCalculator,
         },
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
+        preset::{Dyp, GroupsThenKnockout, PresetChoice, QualificationThenKnockouts},
     },
 };
 #[cfg(target_arch = "wasm32")]
@@ -321,6 +324,10 @@ const SCRIPTS: &[(&str, Script)] = &[
     ("scored", scored),
     ("best-of", best_of),
     ("games", games),
+    ("groups-then-knockout", groups_then_knockout),
+    ("qualification-then-knockouts", qualification_then_knockouts),
+    ("dyp", dyp),
+    ("phases", phases),
 ];
 
 /// Entrants renamed and removed, a phase added, undone, added again and edited, not started.
@@ -564,6 +571,178 @@ fn games(session: &mut Session) {
         ],
         usize::MAX,
     );
+}
+
+/// Entrants pasted with ratings, some without, then the preset of groups and a knockout: three
+/// groups, played with draws, then the knockout of the best of them, played to the end.
+fn groups_then_knockout(session: &mut Session) {
+    let pasted = session
+        .add_entrants(
+            "Alice;1800\nBob;1650\nCarol\t1650\nDave;1500\nErin\nFrank;1400\nGrace;1720\n\
+             Heidi\nIvan;1300\nJudy;1550\nMallory",
+        )
+        .unwrap();
+    assert!(pasted.refused.is_empty());
+    let mut form = Session::preset_form(GroupsThenKnockout::ID).unwrap();
+    form.enter(&preset_field("groups"), "3").unwrap();
+    add_preset(session, &form);
+    session.start().unwrap();
+    let [groups, knockout] = phases_of(session);
+    play_phase(
+        session,
+        groups,
+        &[MatchResult::AWins, MatchResult::Draw, MatchResult::BWins],
+        usize::MAX,
+    );
+    session.start_phase(knockout).unwrap();
+    play_phase(
+        session,
+        knockout,
+        &[MatchResult::BWins, MatchResult::AWins],
+        usize::MAX,
+    );
+    assert_eq!(session.competition().phases()[&groups].divisions().len(), 3);
+    assert!(finished(session, knockout));
+}
+
+/// The preset of a qualification and knockouts in blocks: the qualification played to the end,
+/// the knockouts partly.
+fn qualification_then_knockouts(session: &mut Session) {
+    let names: Vec<_> = (1..=12).map(|number| format!("P{number:02}")).collect();
+    enter(
+        session,
+        &names.iter().map(String::as_str).collect::<Vec<_>>(),
+    );
+    add_preset(
+        session,
+        &Session::preset_form(QualificationThenKnockouts::ID).unwrap(),
+    );
+    session.start().unwrap();
+    let [qualification, knockouts] = phases_of(session);
+    play_phase(
+        session,
+        qualification,
+        &[MatchResult::AWins, MatchResult::BWins, MatchResult::Draw],
+        usize::MAX,
+    );
+    session.start_phase(knockouts).unwrap();
+    play_phase(session, knockouts, &[MatchResult::AWins], 5);
+}
+
+/// The preset of a DYP: drawn pairs in a double elimination, played to the end.
+fn dyp(session: &mut Session) {
+    enter(
+        session,
+        &["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"],
+    );
+    add_preset(session, &Session::preset_form(Dyp::ID).unwrap());
+    session.start().unwrap();
+    let [pairs] = phases_of(session);
+    play_phase(
+        session,
+        pairs,
+        &[MatchResult::AWins, MatchResult::BWins, MatchResult::BWins],
+        usize::MAX,
+    );
+    assert!(finished(session, pairs));
+}
+
+/// Phases set up by hand: a named qualification of the registration's places 3–8 showing a metric
+/// it is not ranked by, and a final of its best two and the registration's places 1–2; a third
+/// phase added and removed. A result of the qualification edited, the start of the final undone
+/// and started again, both played to the end.
+fn phases(session: &mut Session) {
+    enter(
+        session,
+        &[
+            "Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Grace", "Heidi",
+        ],
+    );
+    session
+        .enter_rating(session.entrants()[0].id, "1900")
+        .unwrap();
+    session
+        .enter_rating(session.entrants()[1].id, "1850")
+        .unwrap();
+    let mut qualification = session.phase_form().unwrap();
+    qualification.set_name("Qualification");
+    qualification.take_some_places();
+    qualification.enter_place(0, End::From, "3");
+    qualification.add_metric(PointsPerMatch::ID).unwrap();
+    qualification.set_shown(PointsPerMatch::ID, Table::Division, true);
+    session.add_phase(&qualification).unwrap();
+    let mut final_ = session.phase_form().unwrap();
+    final_
+        .choose(
+            &ConfigPath::ROOT.field("format"),
+            Some(SingleElimination::ID),
+        )
+        .unwrap();
+    final_.set_name("Final");
+    final_.enter_place(0, End::To, "2");
+    final_.add_source();
+    final_.choose_source(1, None);
+    final_.enter_place(1, End::From, "1");
+    final_.enter_place(1, End::To, "2");
+    session.add_phase(&final_).unwrap();
+    session.add_phase(&session.phase_form().unwrap()).unwrap();
+    let removed = session.phases()[2].id;
+    session.remove_phase(removed).unwrap();
+    session.start().unwrap();
+    let [qualification, final_] = phases_of(session);
+    play_phase(
+        session,
+        qualification,
+        &[MatchResult::AWins, MatchResult::Draw, MatchResult::BWins],
+        usize::MAX,
+    );
+    let first = session
+        .round(MatchesOf::phase(qualification), round(1))
+        .unwrap()
+        .matches[0]
+        .id;
+    let mut form = session.edit_form(qualification, first).unwrap();
+    form.choose(&[], Some(MatchResult::BWins));
+    session.edit_report(&form).unwrap();
+    session.start_phase(final_).unwrap();
+    session.unstart_phase(final_).unwrap();
+    session.start_phase(final_).unwrap();
+    play_phase(session, final_, &[MatchResult::AWins], usize::MAX);
+    assert!(finished(session, final_));
+}
+
+/// Whether every match of the phase `phase` has its result.
+fn finished(session: &Session, phase: PhaseId) -> bool {
+    session.competition().phases()[&phase].is_finished()
+}
+
+/// The path of the field `name` of the preset of a form.
+fn preset_field(name: &str) -> ConfigPath {
+    ConfigPath::ROOT.field(PresetChoice::PRESET).field(name)
+}
+
+/// Adds the phases of the preset `form`.
+fn add_preset(session: &mut Session, form: &PresetForm) {
+    session
+        .add_preset(form, &Translator::new(Language::English, &[]))
+        .unwrap();
+}
+
+/// The ids of the `N` phases of the competition, in order.
+fn phases_of<const N: usize>(session: &Session) -> [PhaseId; N] {
+    let ids: Vec<_> = session.phases().iter().map(|phase| phase.id).collect();
+    ids.try_into().unwrap()
+}
+
+/// Reports up to `matches` of the playable matches of the phase `phase`, one at a time, with
+/// `results` in turn.
+fn play_phase(session: &mut Session, phase: PhaseId, results: &[MatchResult], matches: usize) {
+    for result in results.iter().cycle().take(matches) {
+        let Some(row) = session.playable(MatchesOf::phase(phase)).into_iter().next() else {
+            return;
+        };
+        session.report(phase, row.id, *result).unwrap();
+    }
 }
 
 /// Reports up to `matches` of the playable matches, one at a time, with the scores of `played` in

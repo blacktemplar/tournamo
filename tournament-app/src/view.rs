@@ -973,12 +973,17 @@ fn score(level: &Level, part: &Part) -> Option<Sides<Option<EnteredValue>>> {
 
 /// `rows` of cells as text to copy, e.g. a table of standings: the cells of a row apart by tabs,
 /// the rows by line breaks, which a spreadsheet pastes as a table and a message shows as lines.
-/// A tab or a line break within a cell becomes a space.
+/// A tab or a line break within a cell becomes a space, and the invisible marks isolating the
+/// variables of a translated text (U+2068, U+2069) are dropped, so that e.g. a number pastes as a
+/// number.
 pub fn tab_separated(rows: &[Vec<String>]) -> String {
     rows.iter()
         .map(|row| {
             row.iter()
-                .map(|cell| cell.replace(['\t', '\r', '\n'], " "))
+                .map(|cell| {
+                    cell.replace(['\t', '\r', '\n'], " ")
+                        .replace(['\u{2068}', '\u{2069}'], "")
+                })
                 .collect::<Vec<_>>()
                 .join("\t")
         })
@@ -1001,5 +1006,14 @@ mod tests {
         ];
 
         assert_eq!(tab_separated(&rows), "Rank\tName\n1\tAnn Lee Jr.");
+    }
+
+    #[test]
+    fn a_copied_cell_has_no_isolation_marks() {
+        let rows = [vec![
+            "\u{2068}2\u{2069} · \u{2068}Single elimination\u{2069}".to_owned(),
+        ]];
+
+        assert_eq!(tab_separated(&rows), "2 · Single elimination");
     }
 }

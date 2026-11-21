@@ -8,7 +8,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Commands
 
-`git commit` runs the hooks from `.pre-commit-config.yaml` (CI runs the same ones) on what it commits, so don't run `prek` by hand; while working, run the tests of what you change (`cargo test -p ..`). The slow hooks of the manual stage (`wasm-test`, `web-e2e`, `gui-e2e`) run only in CI: run one locally only where a change is more likely than not to break it.
+`git commit` runs the hooks from `.pre-commit-config.yaml` (CI runs the same ones) on what it commits, so don't run `prek` by hand; while working, run the tests of what you change (`cargo test -p ..`). The slow hooks of the manual stage (`wasm-test`, `web-e2e`, `gui-e2e`, `wasm-size`) run only in CI: run one locally only where a change is more likely than not to break it.
 
 ```sh
 prek run --all-files --stage manual gui-e2e   # one slow hook, if needed
@@ -28,7 +28,7 @@ The hooks are `cargo-fmt` (needs **nightly** rustfmt: `rustfmt.toml` uses unstab
 - Benchmark: `cargo bench -p tournament-engine --bench large_tournament` (criterion). Example: `cargo run -p tournament-engine --example run_tournament`.
 - CLI: `cargo run -p tournament-cli -- [FILE]` (`tournament-cli/README.md`). Web: `cd tournament-web && trunk serve` (`tournament-web/README.md`). GUI: `dx serve -p tournament-gui` (`--hot-patch` patches Rust code into the running page); release build `dx build -p tournament-gui --release --debug-symbols false` (the debug build tries to reach `dx serve`), `--base-path <path>` for a page served under a path, `TOURNAMO_MEDIA_OWNER="<name>, <town>"` for the media owner the help names (CI: repository variable `MEDIA_OWNER`) (`tournament-gui/README.md`).
 - **Dev container** (`.devcontainer/`, see its `README.md`): reaches only the hosts in `proxy/allowed-domains.txt` (through a proxy; anything else fails), cannot push, and `.git/hooks` and `.git/config` are read-only there. If a build needs another host, say so rather than working around it.
-- Profiles: `release-checked` (release with debug assertions and overflow checks), `wasm-test`, `wasm-release` (what `dx build --release` uses for the GUI; keep it under 1 MB gzipped), `wasm-e2e` (the GUI for its e2e tests).
+- Profiles: `release-checked` (release with debug assertions and overflow checks), `wasm-test`, `wasm-release` (what `dx build --release` uses for the GUI; its wasm must stay within the budget of `tournament-gui/check-size.sh`, 1.5 MB gzipped, hook `wasm-size`: raise it only on purpose), `wasm-e2e` (the GUI for its e2e tests).
 - Keep `Cargo.toml` dependency lists sorted (`cargo-sort`). Versions are declared only in the root `[workspace.dependencies]`; members use `dep.workspace = true`. Exception on purpose: `plugin-factory` and `plugin-factory-derive` declare everything themselves (including `version`/`edition`/`license`) so they can leave the workspace together; don't give them workspace references or let them depend on the other crates.
 - `undoable-state-machine` is a git dependency (same author) pinned to a tag of its repository: its log entries are part of every saved competition. Pick up a change by tagging a new version there and changing the `tag` in the root `Cargo.toml`, after checking that saved logs still load.
 

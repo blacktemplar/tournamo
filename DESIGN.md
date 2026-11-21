@@ -2021,9 +2021,11 @@ The page is a PWA (files in `tournament-gui/public/`, copied next to
   read.
 - **The release build** is `dx build --release --debug-symbols false` (dx keeps
   debug symbols otherwise) with the `wasm-release` profile (`opt-level = "s"`,
-  LTO, one codegen unit), keeping the wasm under 1 MB with gzip at about the
-  speed of `release`; `"z"` is smaller but more than twice as slow. The e2e
-  tests run on the same build.
+  LTO, one codegen unit), at about the speed of `release`; `"z"` is smaller but
+  much slower. CI keeps the wasm within a budget (`tournament-gui/check-size.sh`,
+  1.5 MB with gzip): a guard against a change making it much larger, not a
+  target, since the page is installed once and cached; a page for visitors,
+  who load it once, would need a budget of its own.
 
 Rejected: precaching a build-time list (dx makes none); network first for
 assets (waits on a bad venue connection, and content-named assets never go

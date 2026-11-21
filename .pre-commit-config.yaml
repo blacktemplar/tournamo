@@ -68,6 +68,17 @@ repos:
         pass_filenames: false
         stages: [manual]
 
+      # the size of the GUI's release build, which takes minutes (LTO), built anew since dx leaves the
+      # wasm of earlier builds next to it:
+      # `prek run --all-files --stage manual wasm-size`
+      - id: wasm-size
+        name: wasm size
+        entry: sh -c 'rm -rf target/dx/tournament-gui/release && dx build -p tournament-gui --release --debug-symbols false && tournament-gui/check-size.sh'
+        language: system
+        types_or: [rust, toml]
+        pass_filenames: false
+        stages: [manual]
+
       - id: cargo-doc
         name: cargo doc
         entry: env RUSTDOCFLAGS=-Dwarnings cargo doc --workspace --no-deps

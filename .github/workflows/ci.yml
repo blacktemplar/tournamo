@@ -102,6 +102,22 @@ jobs:
           name: gui-e2e-failures
           path: target/e2e-failures
 
+  # the size of the GUI's release build, against its budget (tournament-gui/check-size.sh)
+  wasm-size:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: dioxus-cli@0.7.10
+      - uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+        with:
+          extra-args: --all-files --stage manual wasm-size
+
   fmt:
     runs-on: ubuntu-latest
     steps:
@@ -150,7 +166,7 @@ jobs:
   # above) that passes the jobs above, so that the page is always a release
   pages-build:
     if: needs.release.outputs.deploy == 'true'
-    needs: [release, test, wasm-test, web-e2e, gui-e2e, fmt]
+    needs: [release, test, wasm-test, web-e2e, gui-e2e, wasm-size, fmt]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

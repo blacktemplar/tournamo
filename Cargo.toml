@@ -50,7 +50,7 @@ inventory = "0.3.25"
 itertools = "0.15.0"
 js-sys = "0.3.107"
 plugin-factory = { path = "plugin-factory" }
-postcard = { version = "1.2.0", features = ["use-std"] }
+postcard = { version = "1.2.0", default-features = false, features = ["use-std"] }
 # without the default features, which draw from the operating system: the engine only uses seeded
 # generators, and so builds for targets that have no source of randomness
 rand = { version = "0.10.4", default-features = false, features = ["std", "std_rng"] }

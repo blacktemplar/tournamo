@@ -32,6 +32,35 @@ async fn a_format_brings_what_it_recommends() {
     .await;
 }
 
+/// The form shows the settings of the level chosen last, which the browser remembers; below
+/// expert, it says how many it hides that differ from the defaults.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_settings_shown_are_those_of_the_level_chosen_last() {
+    run_in_new_competition(async |gui| {
+        gui.choose_format("Single elimination").await?;
+        gui.expect_field_shown("Seeding", false).await?;
+
+        gui.choose_level("Expert").await?;
+        gui.expect_field_shown("Seeding", true).await?;
+        gui.choose_plugin("seeding", "At random").await?;
+        gui.expect_hidden_settings(None).await?;
+        gui.choose_level("Advanced").await?;
+        gui.expect_field_shown("Seeding", false).await?;
+        gui.expect_hidden_settings(Some(
+            "One setting differs from the defaults, see the expert settings.",
+        ))
+        .await?;
+        gui.page.check_accessibility().await?;
+
+        gui.choose_level("Expert").await?;
+        gui.page.reload().await?;
+        gui.choose_format("Single elimination").await?;
+        gui.expect_field_shown("Seeding", true).await
+    })
+    .await;
+}
+
 /// A field only mattering for draws is left out of a format without draws.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

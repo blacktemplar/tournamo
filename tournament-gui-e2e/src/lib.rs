@@ -1255,6 +1255,33 @@ impl Gui {
         Ok(())
     }
 
+    /// Shows the settings of the level labelled `label` ("Advanced", "Expert") in every form of a
+    /// phase from now on, by the choice of the first form shown.
+    pub async fn choose_level(&self, label: &str) -> WebDriverResult<()> {
+        let radio = self
+            .driver
+            .query(By::XPath(format!(
+                "//fieldset[contains(@class, 'levels')]//label[normalize-space()='{label}']\
+                 /input[@type='radio']"
+            )))
+            .first()
+            .await?;
+        self.click_in_sight(&radio).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the form of the phase says how many settings the level hides that differ from
+    /// the defaults, `text`, or says nothing about them for `None`.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_hidden_settings(&self, text: Option<&str>) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Id("hidden-settings"), text.as_slice())
+            .await
+    }
+
     /// Waits until the choice of how a competition without phases is played is shown, if
     /// `shown`, or else gone.
     ///
@@ -2384,8 +2411,10 @@ impl Gui {
     /// # Panics
     /// Panics if it does not in time.
     pub async fn expect_field_shown(&self, label: &str, shown: bool) -> WebDriverResult<()> {
+        // a field taking a number or yes or no is labelled by a label, one choosing a plugin by a
+        // span labelling its choice
         let field = By::XPath(format!(
-            "//form//label[{}='{label}']",
+            "//form//*[self::label or self::span[contains(@class, 'label')]][{}='{label}']",
             without_isolation_marks("normalize-space()")
         ));
         if shown {

@@ -9,6 +9,13 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings by level.** The form of a phase shows the settings of the level
+  chosen above it, advanced or expert, which the browser remembers. The draw,
+  the seeding and how groups are compared show only to experts; below that,
+  the form says how many of them differ from the defaults.
+
 ## [0.5.0] - 2026-11-21
 
 Competitions saved with 0.4.0 and earlier open unchanged. Earlier versions

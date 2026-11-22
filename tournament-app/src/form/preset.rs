@@ -190,6 +190,7 @@ impl PresetForm {
             draft: &self.draft,
             rejected: &self.rejected,
             offered: Draft::default_value,
+            level: plugin_factory::schema::Level::Expert,
         }
     }
 }

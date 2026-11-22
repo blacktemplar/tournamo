@@ -397,3 +397,21 @@ input[type="checkbox"].by-rule:checked::before {
 [role="alertdialog"].discard-changes {
   max-width: min(28rem, calc(100% - 2rem));
 }
+
+/* how many settings the form shows (phase/mod.rs), on a line of its own above them */
+fieldset.levels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  border: 0;
+  color: inherit;
+}
+
+fieldset.levels legend {
+  float: left;
+  padding: 0;
+  font-weight: 600;
+}

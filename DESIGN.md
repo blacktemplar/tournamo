@@ -1752,8 +1752,23 @@ rather than snapshotting fields before they have been chosen.
   explicitly replaces the lists and their settings and resumes following. There is no per-field comparison or merging.
   Existing and undone phases start customized, preserving their configuration.
   The state belongs to the form and is not saved.
-- **Visibility does not imply customization**. Future preset, advanced, and expert
-  levels may expose different fields without changing this state. A preset can
+- **Fields have levels: basic, advanced, expert**. A form at a level shows the
+  fields up to it, so what a lower level shows is always part of what a higher
+  one shows. A plugin declares the level of each field (`#[plugin(level = ..)]`,
+  advanced by default, so a plugin that ignores levels still shows to those
+  who know the formats); the phase's own fields have theirs: the format basic;
+  teams, groups, match format, ranking and metrics advanced; draw, seeding and
+  `across` expert. A field hidden by the level hides the fields of the plugins
+  answering it, and keeps its answer. The level is a setting of the operator,
+  not of a form or a competition: the GUI keeps the one chosen last in the
+  browser, as it keeps the theme, so every form opens at it. Where hidden
+  fields differ from what the draft would answer by itself, the form says how
+  many (`FormView::hidden`), so that a seeding set by someone else is no
+  surprise; a field counts once, whatever its plugins hold. Rejected: a level
+  per form, which an operator would set again in every dialog; levels chosen
+  by a template, which would have to be remembered with the phases.
+- **Visibility does not imply customization**. The levels expose different
+  fields without changing this state. A preset can
   supply a complete draft; an actual edit takes control of the section. Keeping
   hidden fields following after customization would require a separate design;
   the current section-wide state intentionally freezes them too. Suggestion

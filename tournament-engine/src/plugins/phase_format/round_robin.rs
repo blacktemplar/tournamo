@@ -65,6 +65,10 @@ impl PhaseFormat for RoundRobin {
         }
         schedule
     }
+
+    fn has_basic_divisions(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

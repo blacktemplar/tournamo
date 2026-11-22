@@ -109,6 +109,15 @@ pub trait PhaseFormat: Plugin + DynClone {
     fn reads_seeding(&self) -> bool {
         true
     }
+
+    /// Whether how many divisions a phase of this format is played in is something anyone
+    /// setting up a competition decides, as for a round robin, whose matches grow with the square
+    /// of the size of a group, so that splitting it into groups is what keeps it short; `false`
+    /// unless the format says otherwise, and then a consumer asks for divisions only from those
+    /// who know the formats.
+    fn has_basic_divisions(&self) -> bool {
+        false
+    }
 }
 
 dyn_clone::clone_trait_object!(PhaseFormat);

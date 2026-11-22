@@ -32,6 +32,7 @@ pub struct Scored {
     #[serde(default)]
     #[plugin(
         label = "winning score",
+        level = basic,
         description = "what a winner usually has, or more, then winning by one or two; any other \
                        score is pointed out, as it may be a typo",
         min = 1,

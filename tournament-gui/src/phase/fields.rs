@@ -2,10 +2,7 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{
-        Editable, FormField, Input, MetricOption, Path, PhaseForm, PluginInput, PluginOption,
-        PresetForm,
-    },
+    form::{Editable, FormField, Input, MetricOption, Path, PhaseForm, PluginInput, PluginOption},
     i18n::{MetricText, PluginText, Text, Translator},
 };
 use tournament_engine::{PhasePlugins, plugin_factory::config::ConfigError};
@@ -21,31 +18,21 @@ use crate::{
     toggletip::Toggletip,
 };
 
-/// The form whose fields are laid out: of a phase, or of a preset.
+/// The form of a phase whose fields are laid out.
 #[derive(Clone, Copy, PartialEq)]
-pub(super) enum EditedForm {
-    Phase(Signal<PhaseForm>),
-    Preset(Signal<PresetForm>),
-}
+pub(super) struct EditedForm(pub(super) Signal<PhaseForm>);
 
 impl EditedForm {
     /// Applies `edit` to the form. Its error is dropped: a field laid out is one of the form, and
     /// takes what its input hands over.
     pub(super) fn edit(self, edit: impl FnOnce(&mut dyn Editable) -> Result<(), ConfigError>) {
-        _ = match self {
-            Self::Phase(mut form) => edit(&mut *form.write()),
-            Self::Preset(mut form) => edit(&mut *form.write()),
-        };
+        let Self(mut form) = self;
+        _ = edit(&mut *form.write());
     }
 
     /// Why the field at `path` would not take `typed`, see [`Editable::issue_entering`].
     fn issue_entering(self, path: &Path, typed: &str) -> Option<Text> {
-        match self {
-            Self::Phase(form) => form.read().issue_entering(path, typed),
-            Self::Preset(form) => form.read().issue_entering(path, typed),
-        }
-        .ok()
-        .flatten()
+        self.0.read().issue_entering(path, typed).ok().flatten()
     }
 }
 
@@ -231,9 +218,9 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                         list,
                         disabled,
                     }
-                } else if let (true, EditedForm::Phase(form)) = (is_metrics, form) {
+                } else if is_metrics {
                     MetricsList {
-                        form,
+                        form: form.0,
                         list_id: id.clone(),
                         list,
                         compared,

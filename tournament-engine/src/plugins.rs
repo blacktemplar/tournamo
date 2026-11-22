@@ -77,10 +77,10 @@ pub mod facts;
 pub mod match_format;
 pub mod metrics_calculator;
 pub mod phase_format;
-pub mod preset;
 pub mod ranker;
 pub mod seeding;
 pub mod teams;
+pub mod template;
 
 /// The plugins of one phase: the format its matches are scheduled by, who plays together, how
 /// many divisions it is

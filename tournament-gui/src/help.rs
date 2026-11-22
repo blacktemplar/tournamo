@@ -1,4 +1,4 @@
-//! The help, at `#help`: how a competition is run, what each preset, format, criterion of the
+//! The help, at `#help`: how a competition is run, what each template, format, criterion of the
 //! standings and metric is, how entrants are seeded, that the competitions are kept in the browser
 //! and nowhere else, what follows from that, the version, where the source code is, and who owns
 //! the page. `#help-<section>` opens it at the section whose heading has that id, e.g.
@@ -31,8 +31,8 @@ pub const RUNNING: &str = "help-running";
 /// The fragment of the URL of the section on the formats and the standings.
 pub const FORMATS: &str = "help-formats";
 
-/// The fragment of the URL of the section on presets.
-pub const PRESETS: &str = "help-presets";
+/// The fragment of the URL of the section on templates.
+pub const TEMPLATES: &str = "help-templates";
 
 /// The fragment of the URL of the section on seeding: ratings, draw and seeding.
 pub const SEEDING: &str = "help-seeding";
@@ -79,9 +79,9 @@ pub fn Help() -> Element {
             section { class: "card", aria_labelledby: FORMATS,
                 h2 { id: FORMATS, {tr.get("help-formats")} }
                 Glossary { plugins: glossary.formats }
-                h3 { id: PRESETS, {tr.get("help-presets")} }
-                p { {tr.get("help-presets-text")} }
-                Glossary { plugins: Session::presets() }
+                h3 { id: TEMPLATES, {tr.get("help-templates")} }
+                p { {tr.get("help-templates-text")} }
+                Glossary { plugins: Session::templates() }
                 h3 { {tr.get("help-standings")} }
                 p { {tr.get("help-standings-text")} }
                 p { {tr.get("help-columns-text")} }

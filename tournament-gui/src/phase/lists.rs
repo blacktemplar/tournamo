@@ -606,7 +606,7 @@ fn MetricDetails(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled
             }
         }
         if let Some(item) = row.metric.item {
-            Fields { form: EditedForm::Phase(form), fields: item.fields, disabled }
+            Fields { form: EditedForm(form), fields: item.fields, disabled }
             Issues { id: "{id(&item.path)}-issues", issues: item.issues }
         }
     }

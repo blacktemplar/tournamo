@@ -9,7 +9,7 @@ use std::{fmt::Display, num::NonZeroU32};
 use plugin_factory::{config::ConfigError, draft::Issue};
 use thiserror::Error;
 use tournament_engine::{
-    plugins::preset::PresetError,
+    plugins::template::TemplateError,
     transitions::{self as engine, CompetitionAlreadyStarted},
     undoable_state_machine::{StateMachineError, TransitionError},
 };
@@ -101,27 +101,16 @@ pub enum PhaseDraftError {
     Configuration(#[from] ConfigError),
 }
 
-/// Why there is no form of a preset.
+/// Why the phases of a template were not added, or not previewed; then none was added.
 #[derive(Debug, Error)]
 #[error("{}", english(self))]
-pub enum PresetFormError {
-    /// No registered preset has this id.
-    UnknownPreset(String),
-    /// The preset offers an answer its own schema does not take.
-    Configuration(ConfigError),
-}
-
-/// Why the phases of a preset were not added; then none was.
-#[derive(Debug, Error)]
-#[error("{}", english(self))]
-pub enum AddPresetError {
-    /// The competition has a phase: a preset sets up a competition without one.
+pub enum AddTemplateError {
+    /// The competition has a phase: a template sets up a competition without one.
     HasPhases,
-    /// The form of the preset is not complete, as its
-    /// [`PresetView`](crate::form::PresetView) shows.
-    Incomplete,
-    /// The preset does not expand into phases: a bug of the preset.
-    DoesNotExpand(PresetError),
+    /// No registered template has this id.
+    UnknownTemplate(String),
+    /// The template does not expand into phases: a bug of the template.
+    DoesNotExpand(TemplateError),
     #[error(transparent)]
     Sources(#[from] SourcesError),
     /// The engine refused a phase for a reason this crate does not know.
@@ -669,26 +658,15 @@ impl Message for PhaseDraftError {
     }
 }
 
-impl Message for PresetFormError {
-    fn text(&self) -> Text {
-        match self {
-            Self::UnknownPreset(preset) => {
-                Text::new("error-unknown-preset").with("preset", preset.as_str())
-            }
-            Self::Configuration(error) => {
-                Text::new("error-preset-misconfigured").with("reason", error.to_string())
-            }
-        }
-    }
-}
-
-impl Message for AddPresetError {
+impl Message for AddTemplateError {
     fn text(&self) -> Text {
         match self {
             Self::HasPhases => Text::new("error-has-phases"),
-            Self::Incomplete => Text::new("issue-preset-incomplete"),
+            Self::UnknownTemplate(template) => {
+                Text::new("error-unknown-template").with("template", template.as_str())
+            }
             Self::DoesNotExpand(error) => {
-                Text::new("error-preset-does-not-expand").with("reason", error.to_string())
+                Text::new("error-template-does-not-expand").with("reason", error.to_string())
             }
             Self::Sources(error) => error.text(),
             Self::Rejected(error) => rejected(error),

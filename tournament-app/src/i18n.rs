@@ -276,7 +276,8 @@ pub enum PluginText<'a> {
     EnteredValue(&'a str),
     /// A reason of this key a match format gives for a decision, e.g. a walkover, `.reason-<key>`.
     Reason(&'a str),
-    /// The name of a preset's phase of this key, `.phase-<key>`, see [`Translator::preset_phase`].
+    /// The name of a template's phase of this key, `.phase-<key>`, see
+    /// [`Translator::template_phase`].
     Phase(&'a str),
 }
 
@@ -632,11 +633,11 @@ impl Translator {
             .unwrap_or_else(|| phrase.to_string())
     }
 
-    /// The name of the phase `phrase` of the preset `preset` in the language, as the preset's
-    /// [`PluginText::Phase`] with the phrase's numbers set, or else in English, as the preset's
-    /// code names it.
-    pub fn preset_phase(&self, preset: &str, phrase: &Phrase) -> String {
-        self.plugin_phrase(preset, PluginText::Phase(phrase.key()), phrase)
+    /// The name of the phase `phrase` of the template `template` in the language, as the
+    /// template's [`PluginText::Phase`] with the phrase's numbers set, or else in English, as the
+    /// template's code names it.
+    pub fn template_phase(&self, template: &str, phrase: &Phrase) -> String {
+        self.plugin_phrase(template, PluginText::Phase(phrase.key()), phrase)
     }
 
     /// The label of `field` in the language, or else its English one. A field of a plugin is

@@ -23,7 +23,6 @@ use thiserror::Error;
 use tournament_app::{
     error::{self as app_error, ImportError, RedoError, UndoError},
     file::{File, Format},
-    form::Editable as _,
     i18n::{Language, Translator},
     people::Rating,
     session::Session as AppSession,
@@ -34,10 +33,8 @@ use tournament_engine::{
     MatchResult, Phase, PhaseId, PhasePlugins, RankingId, Sides, Source, SourceOf, Standing, Table,
     TypeMap,
     plugins::{
-        metrics_calculator::MetricColumn,
-        phase_format::PhaseFormat,
-        preset::{Preset, PresetChoice},
-        ranker::SliceRanker,
+        metrics_calculator::MetricColumn, phase_format::PhaseFormat, ranker::SliceRanker,
+        template::Template,
     },
 };
 
@@ -123,18 +120,18 @@ pub enum Error {
         formats = format_names().join(", ")
     )]
     UnknownFormat(String),
-    /// No registered preset goes by this name.
+    /// No registered template goes by this name.
     #[error(
-        "there is no preset {0:?}; the presets are: {presets}",
-        presets = AnyAxis::of::<dyn Preset>()
+        "there is no template {0:?}; the templates are: {templates}",
+        templates = AnyAxis::of::<dyn Template>()
             .entries()
             .map(format_name)
             .collect::<Vec<_>>()
             .join(", ")
     )]
-    UnknownPreset(String),
+    UnknownTemplate(String),
     #[error(transparent)]
-    AddPreset(app_error::AddPresetError),
+    AddTemplate(app_error::AddTemplateError),
     /// An answer to a field of a format is not written as `FIELD=VALUE`.
     #[error("{0:?} is no answer; write it as FIELD=VALUE")]
     NotAnAnswer(String),
@@ -292,8 +289,8 @@ impl Session {
                 let format = format.ok_or(Error::NotConfigured)?;
                 self.add_phase_in(&format, &answers, Configuring::Added { name, from })?
             }
-            Command::Presets => presets(),
-            Command::AddPreset { preset, answers } => self.add_preset(&preset, &answers)?,
+            Command::Templates => templates(),
+            Command::AddTemplate { template } => self.add_template(&template)?,
             Command::EditPhase { .. } => return Err(Error::NotEdited),
             Command::Start => self.start()?,
             Command::StartPhase { phase } => self.start_phase(phase)?,
@@ -643,63 +640,19 @@ impl Session {
         self.apply_phase(&configuring, &draft)
     }
 
-    /// Adds the phases of the preset named `preset`, with its fields answered by `answers`, each
-    /// written as `FIELD=VALUE`, every other field answered as offered.
-    fn add_preset(&mut self, preset: &str, answers: &[String]) -> Result<String, Error> {
-        let entry = AnyAxis::of::<dyn Preset>()
+    /// Adds the phases of the template named `template`.
+    fn add_template(&mut self, template: &str) -> Result<String, Error> {
+        let entry = AnyAxis::of::<dyn Template>()
             .entries()
-            .find(|entry| entry.id() == preset || format_name(entry).eq_ignore_ascii_case(preset))
-            .ok_or_else(|| Error::UnknownPreset(preset.to_owned()))?;
-        let mut form = AppSession::preset_form(entry.id())
-            .map_err(|_| Error::UnknownPreset(preset.to_owned()))?;
-        let schema = entry.schema();
-        for answer in answers {
-            let (field, value) = answer
-                .split_once('=')
-                .ok_or_else(|| Error::NotAnAnswer(answer.clone()))?;
-            let kind =
-                schema
-                    .field_named(field)
-                    .map(Field::kind)
-                    .ok_or_else(|| Error::UnknownField {
-                        format: entry.label(),
-                        field: field.to_owned(),
-                    })?;
-            let invalid = || Error::InvalidAnswer {
-                field: field.to_owned(),
-                value: value.to_owned(),
-            };
-            let path = ConfigPath::ROOT.field(PresetChoice::PRESET).field(field);
-            match kind {
-                kind if kind.range().is_some() => {
-                    if form.issue_entering(&path, value)?.is_some() {
-                        return Err(invalid());
-                    }
-                    form.enter(&path, value)?;
-                }
-                FieldKind::Bool => {
-                    let Some(Value::Bool(answer)) = questionnaire::parse_answer(kind, value) else {
-                        return Err(invalid());
-                    };
-                    form.set_bool(&path, answer)?;
-                }
-                FieldKind::Plugin(axis) => {
-                    let chosen = axis
-                        .entries()
-                        .find(|entry| {
-                            entry.id() == value || format_name(entry).eq_ignore_ascii_case(value)
-                        })
-                        .ok_or_else(invalid)?;
-                    form.choose(&path, Some(chosen.id()))?;
-                }
-                _ => return Err(invalid()),
-            }
-        }
+            .find(|entry| {
+                entry.id() == template || format_name(entry).eq_ignore_ascii_case(template)
+            })
+            .ok_or_else(|| Error::UnknownTemplate(template.to_owned()))?;
         let english = Translator::new(Language::English, &[]);
         let ids = self
             .session
-            .add_preset(&form, &english)
-            .map_err(Error::AddPreset)?;
+            .add_template(entry.id(), &english)
+            .map_err(Error::AddTemplate)?;
         let mut output = format!("{} phases added:", ids.len());
         for (number, id) in ids.iter().enumerate() {
             let phase = self.phase(*id)?;
@@ -1233,9 +1186,9 @@ fn format_name(entry: &PluginEntry) -> String {
     entry.label().replace(' ', "-").to_lowercase()
 }
 
-/// The presets, each by its name and what it does.
-fn presets() -> String {
-    AnyAxis::of::<dyn Preset>()
+/// The templates, each by its name and what it does.
+fn templates() -> String {
+    AnyAxis::of::<dyn Template>()
         .entries()
         .map(|entry| match entry.description() {
             Some(description) => format!("{} — {description}", format_name(entry)),
@@ -1407,43 +1360,32 @@ mod tests {
     }
 
     #[test]
-    fn a_preset_adds_its_phases_which_one_undo_takes_back() {
+    fn a_template_adds_its_phases_which_one_undo_takes_back() {
         let mut session = Session::new(MemoryStorage::default());
         output(&mut session, "add Alice Bob Carol Dave Eve Frank");
-        assert!(output(&mut session, "presets").contains("groups-then-knockout — "));
+        assert!(output(&mut session, "templates").contains("groups-and-knockout — "));
 
-        let added = output(
-            &mut session,
-            "add-preset groups-then-knockout groups=3 advancing=1",
-        );
+        let added = output(&mut session, "add-template groups-and-knockout");
 
         assert!(added.starts_with("2 phases added:\n1. Group phase: round robin"));
         assert!(added.contains("\n2. Knockout: single elimination"));
-        assert!(output(&mut session, "phases").contains("1:1-3"));
+        assert!(output(&mut session, "phases").contains("1:1-4"));
         output(&mut session, "undo");
         assert_eq!(output(&mut session, "phases"), "there are no phases yet");
     }
 
     #[test]
-    fn a_preset_is_refused_unknown_with_an_unknown_field_or_a_value_it_does_not_take() {
+    fn a_template_is_refused_unknown_or_once_there_are_phases() {
         let mut session = Session::new(MemoryStorage::default());
 
         assert!(matches!(
-            execute(&mut session, "add-preset nothing"),
-            Err(Error::UnknownPreset(_))
+            execute(&mut session, "add-template nothing"),
+            Err(Error::UnknownTemplate(_))
         ));
+        output(&mut session, "add-template round-robin");
         assert!(matches!(
-            execute(&mut session, "add-preset dyp rounds=3"),
-            Err(Error::UnknownField { .. })
-        ));
-        assert!(matches!(
-            execute(&mut session, "add-preset groups-then-knockout groups=0"),
-            Err(Error::InvalidAnswer { .. })
-        ));
-        output(&mut session, "add-preset dyp");
-        assert!(matches!(
-            execute(&mut session, "add-preset dyp"),
-            Err(Error::AddPreset(app_error::AddPresetError::HasPhases))
+            execute(&mut session, "add-template round-robin"),
+            Err(Error::AddTemplate(app_error::AddTemplateError::HasPhases))
         ));
     }
 

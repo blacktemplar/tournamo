@@ -46,7 +46,7 @@ cup> exit
 | `rate <NAME> [<N>]` | Rates an entrant `N`, higher is better, or removes its rating. The start orders the registration by rating, equal ratings and the unrated by lot; only that order is saved in the log, the ratings are saved with the names. |
 | `remove-entrant <NAME>` (`remove`) | Removes an entrant. |
 | `add-phase [FORMAT [FIELD=VALUE]...] [--name <NAME>] [--from <SOURCE>]...` | Adds a phase: the format named, or, without a format, the phase configured at the prompt, see below. `--from` takes places of the registration or of a phase, e.g. `registration:1-8`, `1:9-` or `2`; by default the whole registration for the first phase, else every place of the phase before. A phase played in several divisions (groups) is added with `divisions=<N>` and, if they are not dealt in order, `draw=<DRAW>` (e.g. `in-blocks`). |
-| `presets` / `add-preset <PRESET> [FIELD=VALUE]...` | Lists the presets, or adds the phases of one while the competition has no phase, see below. |
+| `templates` / `add-template <TEMPLATE>` | Lists the templates, or adds the phases of one while the competition has no phase, see below. |
 | `phases` / `start-phase <PHASE>` | Lists the phases, or starts one taking entrants from phases that are finished. |
 | `edit-phase` | Changes the configuration of the phase at the prompt, see below. |
 | `start` | Starts the competition and schedules the first matches. Entrants and ratings cannot be changed afterwards. |
@@ -82,20 +82,21 @@ that is linked in is named the same way. A field of the format is answered as
 For example `add-phase random-rounds rounds=7` or
 `add-phase single-elimination third_place_match=no`.
 
-## Setting up the phases by a preset
+## Setting up the phases by a template
 
-`add-preset <PRESET>` adds the phases of a whole competition at once, while it
-has none: ordinary phases, each edited and removed as any phase, and one `undo`
-takes all of them back. A preset is named as a format is, its fields are
-answered as `FIELD=VALUE`, and `presets` lists them.
+`add-template <TEMPLATE>` adds the phases of a whole competition at once, while
+it has none: ordinary phases, each edited and removed as any phase, and one
+`undo` takes all of them back. A template is named as a format is, and
+`templates` lists them. It has no fields: change what it sets up with
+`edit-phase`.
 
-| Preset | Fields (offered answer) | Phases |
-|---|---|---|
-| `groups-then-knockout` | `groups` (2), `advancing` (2) | A round robin in that many groups, dealt back and forth, compared across groups by points per match, then points; then a single elimination of the best `advancing` of each group, those of one group meeting as late as possible. |
-| `qualification-then-knockouts` | `rounds` (5), `knockouts` (2) | Random rounds for everyone; then everyone in that many single eliminations by their places: the best in the first, the next in the second, and so on. |
-| `dyp` | — | Drawn pairs playing a double elimination. |
+| Template | Phases |
+|---|---|
+| `groups-and-knockout` | A round robin in 2 groups, compared across groups by points per match, then points; then a single elimination of the best 4 of them, those of one group meeting as late as possible. |
+| `rounds-and-knockout` | Random rounds for everyone; then a single elimination of the best 8. |
+| `single-elimination`, `double-elimination`, `monster-dyp`, `round-robin`, `random-rounds` | One phase of everyone in that format. |
 
-For example `add-preset groups-then-knockout groups=4 advancing=2`.
+For example `add-template groups-and-knockout`.
 
 ## Configuring a phase
 

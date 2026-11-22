@@ -61,18 +61,14 @@ pub enum Command {
         #[arg(long, value_name = "SOURCE")]
         from: Vec<SourceArg>,
     },
-    /// List the presets, each setting up the phases of a whole competition
-    Presets,
-    /// Add the phases of a preset (see `presets`), while the competition has no phase; they are
-    /// ordinary phases, and one `undo` takes all of them back
-    AddPreset {
-        /// The preset, by its label with hyphens for spaces (e.g. `groups-then-knockout`) or by
+    /// List the templates, each setting up the phases of a whole competition
+    Templates,
+    /// Add the phases of a template (see `templates`), while the competition has no phase; they
+    /// are ordinary phases, and one `undo` takes all of them back
+    AddTemplate {
+        /// The template, by its label with hyphens for spaces (e.g. `groups-and-knockout`) or by
         /// its id
-        preset: String,
-        /// Answers to the fields of the preset, e.g. `groups=3`; a field not answered here is
-        /// answered as it offers
-        #[arg(value_name = "FIELD=VALUE")]
-        answers: Vec<String>,
+        template: String,
     },
     /// Change the configuration of a phase at the prompt, starting out at its current one; the
     /// results reported so far stay as long as the changed phase schedules their matches

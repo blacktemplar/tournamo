@@ -15,7 +15,7 @@ keeps everything on your device: there is no account, no server and no tracking.
 - **Phases** one after the other, each taking places of the registration or of
   the phases before it (e.g. a qualification, then knockouts for places 1–8
   and 9–16), played in one or several groups, by single entrants or by pairs
-  (DYP); presets set up common ones at once. Ratings seed the start, and the
+  (DYP); templates set up common ones at once. Ratings seed the start, and the
   competition ranks everyone by the phase they reached.
 - **Results** as who won, the score of each side (21–17) or the games of a best
   of, each with its score, as each phase sets.

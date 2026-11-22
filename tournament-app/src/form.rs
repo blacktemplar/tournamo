@@ -46,11 +46,11 @@ use crate::{
 mod edit;
 mod entry;
 pub mod metrics;
-mod preset;
+pub(crate) mod template;
 
 use edit::{Answering, Generator};
 pub use metrics::{MetricOption, MetricRow};
-pub use preset::{PresetForm, PresetView, PreviewPhase};
+pub use template::PreviewPhase;
 
 /// The plugins of a phase being configured, see the [module](self), with its name and where it
 /// takes its entrants from, see [`Self::entry_view`].
@@ -377,8 +377,7 @@ impl PluginOption {
     }
 }
 
-/// The edits of the fields of a form, by the [`Path`] of the field: a [`PhaseForm`] or a
-/// [`PresetForm`].
+/// The edits of the fields of a form, by the [`Path`] of the field, as a [`PhaseForm`] takes them.
 pub trait Editable {
     /// Answers the field at `path`, which takes yes or no, with `answer`.
     ///

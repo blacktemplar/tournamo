@@ -7,9 +7,11 @@ use tournament_app::{
     session::{MAX_NAME, Session},
     view::EntrantRow,
 };
+use tournament_engine::plugin_factory::schema::Level;
 use wasm_bindgen::JsCast as _;
 
 use crate::{
+    Page,
     announcement::Announcement,
     competition::Ctx,
     components::dialog::{Dialog, DialogDescription, DialogTitle},
@@ -18,7 +20,7 @@ use crate::{
     i18n::t,
     icons,
     notices::use_cleared_on_language_change,
-    phase::{HowPlayed, NewPhase, PhaseSummary},
+    phase::{BasicView, HowPlayed, LevelChoice, NewPhase, PhaseSummary},
     phases::sources_text,
     team_name,
 };
@@ -533,6 +535,7 @@ pub fn Phases() -> Element {
     let tr = ctx.translator.read();
     let several = phases.len() > 1;
     let has_phase = !phases.is_empty();
+    let basic = *use_context::<Page>().level.read() == Level::Basic;
     rsx! {
         section { class: "card", aria_labelledby: "phase",
             // focused once the phase is added, unless it can start
@@ -546,18 +549,25 @@ pub fn Phases() -> Element {
             p {
                 HelpLink { section: help::FORMATS, text: tr.get("formats-explained") }
             }
+            LevelChoice {}
             if has_phase {
-                ol {
-                    id: "phases",
-                    class: if several { "phases numbered" } else { "phases" },
-                    tabindex: "-1",
-                    for phase in phases.iter() {
-                        li { key: "{phase.id:?}",
-                            if several {
-                                h3 { {tr.phase_name(&phase.name)} }
-                                p { class: "sources", {sources_text(&tr, &phases, &phase.sources)} }
+                if basic {
+                    BasicView {}
+                } else {
+                    ol {
+                        id: "phases",
+                        class: if several { "phases numbered" } else { "phases" },
+                        tabindex: "-1",
+                        for phase in phases.iter() {
+                            li { key: "{phase.id:?}",
+                                if several {
+                                    h3 { {tr.phase_name(&phase.name)} }
+                                    p { class: "sources",
+                                        {sources_text(&tr, &phases, &phase.sources)}
+                                    }
+                                }
+                                PhaseSummary { phase: phase.id }
                             }
-                            PhaseSummary { phase: phase.id }
                         }
                     }
                 }

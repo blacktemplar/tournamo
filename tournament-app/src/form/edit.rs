@@ -219,8 +219,10 @@ pub(super) struct Generator<'a, T> {
     ///
     /// [`PhasePlugins::default_value`]: tournament_engine::PhasePlugins::default_value
     pub(super) offered: fn(&Draft<T>, &Path) -> Result<Option<Value>, ConfigError>,
-    /// The fields shown are those up to it.
+    /// The fields shown are those up to it, and those of [`Self::anyway`].
     pub(super) level: Level,
+    /// The fields shown whatever their level, e.g. the groups of a round robin at basic level.
+    pub(super) anyway: &'a [Path],
 }
 
 impl<T: Configurable> Generator<'_, T> {
@@ -238,7 +240,7 @@ impl<T: Configurable> Generator<'_, T> {
             .zip(completed)
             // Rejected input stays visible even when the field becomes irrelevant.
             .filter(|(node, _)| {
-                node.field.level() <= self.level
+                self.shows(node)
                     && (!whole.irrelevant.contains(&node.path)
                         || self.rejected.contains(&node.path))
             })
@@ -395,7 +397,7 @@ impl<T: Configurable> Generator<'_, T> {
             .iter()
             .filter(|node| !whole.irrelevant.contains(&node.path))
             .map(|node| {
-                if node.field.level() > self.level {
+                if !self.shows(node) {
                     usize::from(self.differs(node))
                 } else {
                     node.plugins()
@@ -405,6 +407,11 @@ impl<T: Configurable> Generator<'_, T> {
                 }
             })
             .sum()
+    }
+
+    /// Whether the enumerated field is shown at the level, or anyway.
+    fn shows(&self, node: &FieldNode) -> bool {
+        node.field.level() <= self.level || self.anyway.contains(&node.path)
     }
 
     /// Whether the enumerated field is answered otherwise than it offers, the plugins of either

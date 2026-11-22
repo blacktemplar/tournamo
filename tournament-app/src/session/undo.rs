@@ -114,16 +114,21 @@ impl Session {
                 let actions = ids.iter().map(|id| self.action_of_entry(*id));
                 let mut entrants = Vec::new();
                 let mut phases = Vec::new();
+                let mut edited = Vec::new();
                 for action in actions {
                     match action {
                         Action::AddEntrant(row) => entrants.push(row),
                         Action::AddPhase(name) => phases.push(name),
+                        Action::EditPhase(name) => edited.push(name),
                         _ => unreachable!(
-                            "the only actions of several entries add entrants or phases"
+                            "the only actions of several entries add entrants or phases, or edit \
+                             phases"
                         ),
                     }
                 }
-                if phases.is_empty() {
+                if !edited.is_empty() {
+                    Action::EditPhases(edited)
+                } else if phases.is_empty() {
                     Action::AddEntrants(entrants)
                 } else {
                     Action::AddPhases(phases)

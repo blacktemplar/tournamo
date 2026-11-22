@@ -181,6 +181,18 @@ pub enum EditPhaseError {
     DoesNotFit(TransitionError),
 }
 
+/// Why a setting of the whole competition was not set on its phases, see
+/// [`Session::set_match_format`](crate::session::Session::set_match_format); then no phase
+/// changed.
+#[derive(Debug, Error)]
+#[error("{}", english(self))]
+pub enum EditPhasesError {
+    /// The setting does not fit this phase, e.g. a match format allowing draws for a knockout.
+    DoesNotFit(PhaseName),
+    /// The engine refused a phase for a reason this crate does not know.
+    Rejected(TransitionError),
+}
+
 /// Matches of one phase, see [`EditPhaseError::ResultDoesNotFit`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchesOfPhase {
@@ -812,6 +824,17 @@ impl Message for EditPhaseError {
             Self::DoesNotFit(error) => {
                 Text::new("error-phase-change-does-not-fit").with("reason", error.to_string())
             }
+        }
+    }
+}
+
+impl Message for EditPhasesError {
+    fn text(&self) -> Text {
+        match self {
+            Self::DoesNotFit(phase) => {
+                Text::new("error-setting-does-not-fit").with("phase", phase.clone())
+            }
+            Self::Rejected(error) => rejected(error),
         }
     }
 }

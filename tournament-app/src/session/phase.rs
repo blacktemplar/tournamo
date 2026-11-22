@@ -401,7 +401,7 @@ impl Session {
 
 /// The plugins `draft`, a phase draft, configures, with the plugins its answers imply added, see
 /// [`Draft::add_implied`].
-pub(super) fn completed(
+pub(crate) fn completed(
     draft: &Draft<PhasePlugins>,
 ) -> Result<PhasePlugins, Vec<plugin_factory::draft::Issue>> {
     let mut draft = draft.clone();

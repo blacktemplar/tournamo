@@ -1,6 +1,7 @@
 //! The phase: the form configuring it, generated from the [`FormView`] of a [`PhaseForm`], a
 //! summary of how it is played, and the dialog changing it once added.
 
+mod basic;
 mod entry;
 mod fields;
 mod lists;
@@ -16,12 +17,12 @@ use tournament_app::{
 };
 use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::schema::Level};
 
+pub use self::{basic::BasicView, summary::answer, template::HowPlayed};
 use self::{
     entry::Entry,
     fields::{EditedForm, Fields, Issues},
     summary::Summary,
 };
-pub use self::{summary::answer, template::HowPlayed};
 use crate::{
     Page,
     announcement::Announcement,
@@ -40,6 +41,10 @@ pub fn NewPhase(
     form: Option<Signal<PhaseForm>>,
     on_added: Option<EventHandler<()>>,
     on_discarded: Option<EventHandler<()>>,
+    /// Whether it is in a dialog, which then offers the choice of the level of its settings,
+    /// which the page offers otherwise.
+    #[props(default)]
+    in_dialog: bool,
 ) -> Element {
     let ctx = use_context::<Ctx>();
     let created = use_hook(|| match form {
@@ -79,7 +84,7 @@ pub fn NewPhase(
                     }
                 }
             },
-            Form { form, disabled: !actions.add_phase }
+            Form { form, disabled: !actions.add_phase, level_choice: in_dialog }
             PhaseScale { form }
             div { class: "form-actions",
                 if let Some(on_discarded) = on_discarded {
@@ -145,7 +150,7 @@ pub fn AddPhaseDialog() -> Element {
             match form {
                 Some(Ok(form)) => rsx! {
                     div { class: "dialog-form",
-                        NewPhase { form, on_added: move |()| close() }
+                        NewPhase { form, on_added: move |()| close(), in_dialog: true }
                         div { class: "dialog-buttons",
                             button {
                                 r#type: "button",
@@ -471,7 +476,7 @@ fn EditPhase(phase: PhaseId) -> Element {
                             Err(refused) => error.set(Some(refused)),
                         }
                     },
-                    Form { form, disabled: false }
+                    Form { form, disabled: false, level_choice: true }
                     // next to the buttons, which stay in sight below a long form
                     div { class: "dialog-buttons",
                         p { class: "error", role: "alert",
@@ -617,10 +622,10 @@ fn UnstartPhase(phase: PhaseId) -> Element {
     }
 }
 
-/// The fields of `form`, which the operator changes unless `disabled`, with what is wrong with
-/// the answers as a whole.
+/// The fields of `form` at the level the operator chose, which they change unless `disabled`,
+/// with what is wrong with the answers as a whole, and the choice of the level if `level_choice`.
 #[component]
-fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
+fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let mut error = use_signal(|| None::<Text>);
@@ -650,7 +655,9 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
     });
     rsx! {
         div { class: "phase-form",
-            LevelChoice {}
+            if level_choice {
+                LevelChoice {}
+            }
             if let Some(outdated) = outdated {
                 div { class: "notice",
                     p { id: "outdated-plugins", "{outdated}" }
@@ -667,36 +674,36 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
                 }
             }
             Entry { form, entry, disabled }
-            Fields { form: EditedForm(form), fields, disabled }
-            if hidden > 0 && level < Level::Expert {
+            Fields { form: EditedForm::new(form), fields, disabled }
+            // what a basic view leaves out is what it is: no note about it
+            if hidden > 0 && level == Level::Advanced {
                 p { class: "hint", id: "hidden-settings",
                     {t!(tr, "hidden-settings", count = hidden)}
                 }
             }
-            p { role: "status",
-                if following_suggestions {
-                    {tr.get("following-suggestions")}
-                } else {
-                    {tr.get("customized-settings")}
-                }
-            }
-            button {
-                r#type: "button",
-                disabled,
-                aria_disabled: following_suggestions,
-                onclick: move |_| {
-                    if !disabled && !form.read().view().following_suggestions {
-                        error
-                            .set(
-                                form
-                                    .write()
-                                    .apply_suggestions()
-                                    .err()
-                                    .map(|error| { PhaseDraftError::Configuration(error).text() }),
-                            );
+            // ranking and scoring follow the suggestions where they are not shown
+            if level > Level::Basic {
+                p { role: "status",
+                    if following_suggestions {
+                        {tr.get("following-suggestions")}
+                    } else {
+                        {tr.get("customized-settings")}
                     }
-                },
-                {tr.get("apply-suggested-ranking")}
+                }
+                button {
+                    r#type: "button",
+                    disabled,
+                    aria_disabled: following_suggestions,
+                    onclick: move |_| {
+                        if !disabled && !form.read().view().following_suggestions {
+                            let applied = form.write().apply_suggestions();
+                            error.set(applied.err().map(|error| {
+                                PhaseDraftError::Configuration(error).text()
+                            }));
+                        }
+                    },
+                    {tr.get("apply-suggested-ranking")}
+                }
             }
             if let Some(error) = error() {
                 Issues { id: "suggestion-issues", issues: vec![error] }
@@ -706,10 +713,10 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
     }
 }
 
-/// The choice of how many settings of a phase the forms show, which every form follows and the
-/// browser remembers.
+/// The choice of how many settings of a phase the forms and the setup show, which every form
+/// follows and the browser remembers.
 #[component]
-fn LevelChoice() -> Element {
+pub fn LevelChoice() -> Element {
     let ctx = use_context::<Ctx>();
     let page = use_context::<Page>();
     let tr = ctx.translator.read();

@@ -6,10 +6,11 @@ use tournament_app::{
     i18n::{Message as _, PluginText},
     session::Session,
 };
+use tournament_engine::plugin_factory::schema::Level;
 
 use super::{NewPhase, summary::Summary};
 use crate::{
-    announcement::Announcement, capitalized, competition::Ctx, focus::focus_later,
+    Page, announcement::Announcement, capitalized, competition::Ctx, focus::focus_later,
     phases::sources_named, sentence,
 };
 
@@ -83,6 +84,7 @@ pub fn HowPlayed() -> Element {
 #[component]
 fn TemplateSetup(id: &'static str) -> Element {
     let ctx = use_context::<Ctx>();
+    let page = use_context::<Page>();
     let actions = ctx.actions();
     let tr = ctx.translator.read();
     let preview = Session::template_preview(id, &tr).map_err(|error| error.text());
@@ -94,6 +96,8 @@ fn TemplateSetup(id: &'static str) -> Element {
                 let tr = ctx.translator.peek();
                 if let Some(ids) = ctx.act(|session| session.add_template(id, &tr)) {
                     ctx.announce(Announcement::AddedPhases(ids.len()));
+                    // a template is refined in the basic view, whatever the level before
+                    page.choose_level(Level::Basic);
                     // the choice is gone, and with it what had the focus
                     focus_later(&["#start:enabled", "#phase"]);
                 }

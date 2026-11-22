@@ -552,6 +552,21 @@ pub struct Field {
     default: Option<Value>,
     /// The type of the fact whose presence makes the field irrelevant.
     irrelevant_with: Option<fn() -> TypeId>,
+    level: Level,
+}
+
+/// Who a [`Field`] is for: a UI showing the fields of one level shows every field up to it, so
+/// that what an operator of a lower level sees is always part of what one of a higher level sees.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum Level {
+    /// What anyone setting up a competition decides, e.g. how many rounds are played.
+    Basic,
+    /// What an operator who knows the formats decides, e.g. what a phase is ranked by.
+    #[default]
+    Advanced,
+    /// What only matters to an operator who wants it a particular way, e.g. how entrants are
+    /// dealt to groups.
+    Expert,
 }
 
 impl Field {
@@ -566,7 +581,22 @@ impl Field {
             kind,
             default: None,
             irrelevant_with: None,
+            level: Level::Advanced,
         }
+    }
+
+    /// This field for operators of `level`, from `#[plugin(level = ..)]`. Called by the derive;
+    /// not part of the API.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn at_level(mut self, level: Level) -> Self {
+        self.level = level;
+        self
+    }
+
+    /// Who this field is for, [`Level::Advanced`] unless the plugin says otherwise.
+    pub fn level(&self) -> Level {
+        self.level
     }
 
     /// This field irrelevant where the composite provides a fact of type `F`, from

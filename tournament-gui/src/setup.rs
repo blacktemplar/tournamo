@@ -20,7 +20,7 @@ use crate::{
     i18n::t,
     icons,
     notices::use_cleared_on_language_change,
-    phase::{BasicView, HowPlayed, LevelChoice, NewPhase, PhaseSummary},
+    phase::{BasedOn, BasicView, HowPlayed, LevelChoice, NewPhase, PhaseSummary},
     phases::sources_text,
     team_name,
 };
@@ -551,6 +551,7 @@ pub fn Phases() -> Element {
             }
             LevelChoice {}
             if has_phase {
+                BasedOn {}
                 if basic {
                     BasicView {}
                 } else {

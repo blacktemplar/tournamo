@@ -1,8 +1,9 @@
 //! Templates of a whole competition: the [`Template`] axis and the templates of this crate.
 //!
 //! A template is a quick start: the phases of a competition, which applying it adds as ordinary
-//! phases (see [`Competition::expand`]), refined and removed as any phase is. It is never saved:
-//! the phases added are, and nothing about the template they came from.
+//! phases (see [`Competition::expand`]), refined and removed as any phase is. A template is never
+//! saved: the phases added are, each with where it came from (its [`TemplateOrigin`]), so that
+//! what differs from the template can be told.
 
 use std::num::NonZeroU32;
 
@@ -31,8 +32,7 @@ use crate::{
 };
 
 /// A template of a whole competition: the phases it stands for. It has no fields: what it sets
-/// up is refined in the phases it adds. Its id names it for translations only, since a template
-/// is never saved.
+/// up is refined in the phases it adds, which remember it by its id (see [`TemplateOrigin`]).
 #[plugin_factory::axis]
 pub trait Template: Plugin + DynClone {
     /// The phases this template stands for, in the order they are added.
@@ -124,6 +124,15 @@ pub enum TemplateSourceOf {
     Phase(usize),
 }
 
+/// Where a phase added by a template came from: the phase at the position `phase` among the
+/// phases of the template `template`, by its id. What the template is now, not what it was when
+/// the phase was added, is what the phase is compared with.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TemplateOrigin {
+    pub template: String,
+    pub phase: usize,
+}
+
 /// Why the phases of a template do not expand, a bug of the template.
 #[derive(Error, Debug)]
 #[error("phase {} of the template: {problem}", .phase + 1)]
@@ -148,8 +157,9 @@ pub enum TemplateProblem {
 }
 
 impl Competition {
-    /// The phases `phases` of a template (see [`Template::phases`]), to be added to this
-    /// competition in this order: each with the id `ids` gives it next, named `name` of its name
+    /// The phases `phases` of the template `template`, by its id (see [`Template::phases`]), to
+    /// be added to this competition in this order, each remembering its [`TemplateOrigin`]: each
+    /// with the id `ids` gives it next, named `name` of its name
     /// if it has one, built from its answers to the draft of its sources (see
     /// [`Self::phase_draft`]), what they leave open answered as the format suggests (see
     /// [`PhasePlugins::with_suggestions`]), with the plugins they imply (see
@@ -162,6 +172,7 @@ impl Competition {
     /// Returns a [`TemplateError`] if a phase does not expand: a bug of the template.
     pub fn expand(
         &self,
+        template: &str,
         phases: &[TemplatePhase],
         mut ids: impl FnMut() -> PhaseId,
         name: impl Fn(&Phrase) -> String,
@@ -205,7 +216,11 @@ impl Competition {
             let per_ranking = plugins.teams().entrants_per_team(per_qualifier);
             let added = AddPhase::new(ids(), plugins)
                 .with_name(phase.name.as_ref().map(&name))
-                .with_sources(sources);
+                .with_sources(sources)
+                .with_template(Some(TemplateOrigin {
+                    template: template.to_owned(),
+                    phase: index,
+                }));
             expanded.push((added, per_ranking));
         }
         Ok(expanded.into_iter().map(|(added, _)| added).collect())

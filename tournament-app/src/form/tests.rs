@@ -1,5 +1,6 @@
 use plugin_factory::PluginType;
 use tournament_engine::plugins::{
+    draw::Random,
     match_format::{BestOf, Scored},
     metrics_calculator::{
         BuchholzCalculator, FewerLosses, LaterElimination, LaterFirstLoss, MoreBuchholz,
@@ -1134,13 +1135,13 @@ fn the_fields_hidden_otherwise_than_they_offer_are_counted() {
     let mut form = new_form();
     form.choose(&path("format"), Some(SingleElimination::ID))
         .unwrap();
-    let hidden = |form: &PhaseForm| form.view_at(Level::Advanced).hidden;
+    let hidden = |form: &PhaseForm| form.view_at(Level::Advanced).hidden.count;
     assert_eq!(hidden(&form), 0);
 
     form.choose(&path("seeding"), Some(SeededAtRandom::ID))
         .unwrap();
     assert_eq!(hidden(&form), 1);
-    assert_eq!(form.view().hidden, 0, "an expert sees it");
+    assert_eq!(form.view().hidden.count, 0, "an expert sees it");
     form.choose(&path("format"), Some(RandomRounds::ID))
         .unwrap();
     assert_eq!(
@@ -1157,6 +1158,59 @@ fn the_fields_hidden_otherwise_than_they_offer_are_counted() {
     );
     form.remove(&path("across[0]")).unwrap();
     assert_eq!(hidden(&form), 1);
+}
+
+/// The basic view says which level shows every hidden field that differs, and leaves out what
+/// it shows for every phase at once: the match format, and the teams of a phase of the
+/// registration.
+#[test]
+fn the_basic_view_counts_what_it_hides_up_to_the_level_showing_it() {
+    let mut form = new_form();
+    let hidden = |form: &PhaseForm| form.view_at(Level::Basic).hidden;
+    form.choose(&path("match_format"), Some(BestOf::ID))
+        .unwrap();
+    form.choose(&path("teams"), Some(RandomPairs::ID)).unwrap();
+    assert_eq!(hidden(&form), Hidden::default());
+
+    form.remove(&path("ranking[0]")).unwrap();
+    assert_eq!(
+        hidden(&form),
+        Hidden {
+            count: 1,
+            shown_at: Level::Advanced,
+            of_template: false,
+        }
+    );
+    form.choose(&path("seeding"), Some(SeededAtRandom::ID))
+        .unwrap();
+    assert_eq!(
+        hidden(&form),
+        Hidden {
+            count: 2,
+            shown_at: Level::Expert,
+            of_template: false,
+        }
+    );
+}
+
+/// A form of a phase of a template counts the hidden fields that differ from what the template
+/// answers, and where it answers nothing, from what they offer.
+#[test]
+fn a_phase_of_a_template_counts_what_differs_from_the_template() {
+    let template = Config::new().with(PhasePlugins::SEEDING, PluginConfig::of::<SeededAtRandom>());
+    let mut form = new_form().compared_with(template);
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    let hidden = |form: &PhaseForm| form.view_at(Level::Advanced).hidden.count;
+    assert_eq!(hidden(&form), 1, "the seeding is not the template's");
+    assert!(form.view().hidden.of_template);
+
+    form.choose(&path("seeding"), Some(SeededAtRandom::ID))
+        .unwrap();
+    assert_eq!(hidden(&form), 0);
+    form.enter(&path("divisions"), "2").unwrap();
+    form.choose(&path("draw"), Some(Random::ID)).unwrap();
+    assert_eq!(hidden(&form), 1, "the template says nothing of the draw");
 }
 
 mod columns;

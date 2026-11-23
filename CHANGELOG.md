@@ -19,6 +19,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
   phase's sources change. The DYP preset is gone: a double elimination played
   by drawn pairs is the same. In the CLI, `add-template` replaces
   `add-preset`. Presets were never saved, so saved competitions are unaffected.
+- **A competition remembers its template.** The setup says which template the
+  phases came from, and which phases were added to it or removed. A setting
+  the level hides that differs from the template, or for phases of no
+  template from the defaults, is said in each phase, with the level that
+  shows it. Earlier versions cannot open what this version saves.
 - **Settings by level.** The setup and the form of a phase show the settings
   of the level chosen above them, basic, advanced or expert, which the browser
   remembers. The draw, the seeding and how groups are compared show only to

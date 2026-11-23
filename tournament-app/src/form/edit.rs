@@ -3,14 +3,14 @@
 
 use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
-    config::{ConfigError, PluginConfig, Value},
+    config::{Config, ConfigError, PluginConfig, Segment, Value},
     draft::{Draft, FieldNode},
     schema::{Configurable, FieldKind, Level, NumberRange},
 };
 
 use super::{
-    Chosen, FormField, Implied, Input, Item, ListInput, NotTaken, Path, PluginInput, PluginOption,
-    Whole, needed_by, number, position, with_range,
+    Chosen, FormField, Hidden, Implied, Input, Item, ListInput, NotTaken, Path, PluginInput,
+    PluginOption, Whole, needed_by, number, position, with_range,
 };
 use crate::{
     i18n::{Language, Text},
@@ -223,6 +223,12 @@ pub(super) struct Generator<'a, T> {
     pub(super) level: Level,
     /// The fields shown whatever their level, e.g. the groups of a round robin at basic level.
     pub(super) anyway: &'a [Path],
+    /// The fields shown elsewhere, neither among the fields nor counted as hidden, e.g. the match
+    /// format the basic view shows for every phase at once.
+    pub(super) elsewhere: &'a [Path],
+    /// What a hidden field is compared with where it answers it, e.g. the answers of the phase of
+    /// a template; elsewhere what the field offers.
+    pub(super) baseline: Option<&'a Config>,
 }
 
 impl<T: Configurable> Generator<'_, T> {
@@ -388,25 +394,27 @@ impl<T: Configurable> Generator<'_, T> {
         }
     }
 
-    /// How many of the enumerated fields and those of the plugins they hold are hidden by the
-    /// level, though they matter, and are answered otherwise than they offer, see
-    /// [`FormView::hidden`](super::FormView::hidden). A field hidden counts once, whatever the
+    /// The enumerated fields and those of the plugins they hold that are hidden by the level,
+    /// though they matter, and are answered otherwise than the baseline or else than they offer,
+    /// see [`FormView::hidden`](super::FormView::hidden). A field hidden counts once, whatever the
     /// plugins answering it hold.
-    pub(super) fn hidden(&self, nodes: &[FieldNode], whole: &Whole) -> usize {
+    pub(super) fn hidden(&self, nodes: &[FieldNode], whole: &Whole) -> Hidden {
         nodes
             .iter()
-            .filter(|node| !whole.irrelevant.contains(&node.path))
+            .filter(|node| {
+                !whole.irrelevant.contains(&node.path) && !self.elsewhere.contains(&node.path)
+            })
             .map(|node| {
                 if !self.shows(node) {
-                    usize::from(self.differs(node))
+                    Hidden::of(self.differs(node), node.field.level())
                 } else {
                     node.plugins()
                         .iter()
                         .map(|plugin| self.hidden(&plugin.fields(), whole))
-                        .sum()
+                        .fold(Hidden::default(), Hidden::and)
                 }
             })
-            .sum()
+            .fold(Hidden::default(), Hidden::and)
     }
 
     /// Whether the enumerated field is shown at the level, or anyway.
@@ -414,22 +422,51 @@ impl<T: Configurable> Generator<'_, T> {
         node.field.level() <= self.level || self.anyway.contains(&node.path)
     }
 
-    /// Whether the enumerated field is answered otherwise than it offers, the plugins of either
-    /// configured as they offer where they are not.
+    /// Whether the enumerated field is answered otherwise than the baseline or else than it
+    /// offers, the plugins of either configured as they offer where they are not.
     fn differs(&self, node: &FieldNode) -> bool {
         let Some(answer) = node.answer else {
             return false;
         };
-        let Ok(Some(offered)) = (self.offered)(self.draft, &node.path) else {
-            return false;
+        let offered = match self.baseline_at(&node.path) {
+            Some(answer) => answer,
+            None => match (self.offered)(self.draft, &node.path) {
+                Ok(Some(offered)) => offered,
+                _ => return false,
+            },
         };
         let mut offering = self.draft.clone();
         if offering.set(&node.path, offered).is_err() {
             return true;
         }
-        offering.with_defaults().map_or(true, |offering| {
+        // with what it needs, as the form adds it
+        offering.with_defaults().map_or(true, |mut offering| {
+            offering.add_implied();
             offering.answers().get_at(&node.path) != Some(answer)
         })
+    }
+
+    /// What the baseline answers at `path`, if it answers it with the same plugins on the way as
+    /// the draft: a field of another plugin is not compared with it.
+    fn baseline_at(&self, path: &Path) -> Option<Value> {
+        let baseline = self.baseline?;
+        let plugin = |answer: Option<&Value>| {
+            answer
+                .and_then(PluginConfig::from_answer)
+                .map(|config| config.plugin().to_owned())
+        };
+        let (_, outer) = path.segments().split_last()?;
+        let mut prefix = Path::ROOT;
+        for segment in outer {
+            prefix = match segment {
+                Segment::Field(name) => prefix.field(name.clone()),
+                Segment::Index(position) => prefix.index(*position),
+            };
+            if plugin(baseline.get_at(&prefix)) != plugin(self.draft.answers().get_at(&prefix)) {
+                return None;
+            }
+        }
+        baseline.get_at(path).cloned()
     }
 
     /// The ids of the plugins the field at `path` offers.

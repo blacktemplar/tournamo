@@ -382,7 +382,9 @@ pub trait CompetitionStateMachineExt {
     ///
     /// The plugins are built from a draft holding the config of the phase, see
     /// [`Phase::config`](crate::Phase::config), changed as needed. Returns `None`, leaving the log
-    /// unchanged, if the phase has its name, sources, config and columns already.
+    /// unchanged, if the phase has its name, sources, config and columns already. The phase keeps
+    /// the [`TemplateOrigin`](crate::plugins::template::TemplateOrigin) it was added with, whatever
+    /// `phase` says.
     ///
     /// # Errors
     /// Returns [`ReconfigurePhaseError::NotAdded`] if no [`AddPhase`] in effect added a phase with
@@ -621,8 +623,13 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         }) {
             return Ok(None);
         }
+        // where the phase came from stays with it
+        let template = self
+            .current()
+            .phase(&phase.id())
+            .and_then(|added| added.template().cloned());
         let id = TransitionId::new();
-        let with = phase.into();
+        let with = phase.with_template(template).into();
         history.apply(
             self,
             LogEntry::new(id, LogEntryKind::Replace { target, with }),

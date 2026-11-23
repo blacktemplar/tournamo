@@ -17,6 +17,7 @@ fn every_template_expands_into_phases_added_one_after_the_other() {
         let phases = machine
             .current()
             .expand(
+                entry.id(),
                 &template.phases(),
                 || {
                     next += 1;

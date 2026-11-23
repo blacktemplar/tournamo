@@ -23,12 +23,12 @@ pub use plugin_factory::config::Path;
 use plugin_factory::{
     PluginType,
     catalog::{AnyAxis, PluginEntry},
-    config::{ConfigError, PluginConfig, Segment, Value},
+    config::{Config, ConfigError, PluginConfig, Segment, Value},
     draft::{Draft, FieldNode, Issue, Problem},
     schema::{Configurable, DecimalRange, IntegerRange, Level, NumberRange},
 };
 use tournament_engine::{
-    Columns, PhasePlugins, Table,
+    Columns, PhasePlugins, SourceOf, Table,
     entities::columns::{self, Rule},
     plugins::{
         metrics_calculator::{MetricEntry, MetricsCalculator},
@@ -73,6 +73,9 @@ pub struct PhaseForm {
     memory: metrics::Memory,
     /// The language numbers are typed in, see [`Self::in_language`].
     language: Language,
+    /// What the hidden fields are compared with where it answers them, see
+    /// [`Self::compared_with`].
+    baseline: Option<Config>,
 }
 
 /// What the basic view of a phase shows besides the fields of the basic level, see
@@ -104,10 +107,55 @@ pub struct FormView {
     pub outdated: Vec<PluginOption>,
     /// The level of the fields shown, see [`PhaseForm::view_at`].
     pub level: Level,
-    /// How many fields the level hides that are answered otherwise than they offer, e.g. a
-    /// seeding chosen by a template, and that matter: a field hidden counts once, whatever the
-    /// plugins answering it hold.
-    pub hidden: usize,
+    /// The fields the level hides that matter and are answered otherwise than the phase of the
+    /// template the phase was added as, else otherwise than they offer.
+    pub hidden: Hidden,
+}
+
+/// The fields a view hides that differ from what is expected of them, see [`FormView::hidden`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hidden {
+    /// How many: a field hidden counts once, whatever the plugins answering it hold.
+    pub count: usize,
+    /// The lowest level showing every one of them; [`Level::Basic`] where there are none.
+    pub shown_at: Level,
+    /// Whether they differ from the phase of the template the phase was added as, else from what
+    /// they offer, see [`PhaseForm::compared_with`].
+    pub of_template: bool,
+}
+
+impl Default for Hidden {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            shown_at: Level::Basic,
+            of_template: false,
+        }
+    }
+}
+
+impl Hidden {
+    /// One field of `level`, if it `differs`, else none.
+    fn of(differs: bool, level: Level) -> Self {
+        if differs {
+            Self {
+                count: 1,
+                shown_at: level,
+                of_template: false,
+            }
+        } else {
+            Self::default()
+        }
+    }
+
+    /// These fields and `other`.
+    fn and(self, other: Self) -> Self {
+        Self {
+            count: self.count + other.count,
+            shown_at: self.shown_at.max(other.shown_at),
+            of_template: self.of_template || other.of_template,
+        }
+    }
 }
 
 impl FormView {
@@ -587,7 +635,17 @@ impl PhaseForm {
             context: entry::Context::default(),
             columns: Columns::new(),
             language: Language::default(),
+            baseline: None,
         }
+    }
+
+    /// This form telling the hidden fields that differ from `answers`, the answers of the phase
+    /// of a template it was added as, rather than those differing from what they offer, where
+    /// `answers` answer them, see [`FormView::hidden`].
+    #[must_use]
+    pub fn compared_with(mut self, answers: Config) -> Self {
+        self.baseline = Some(answers);
+        self
     }
 
     /// This form with the numbers typed into it read as `language` writes them, see
@@ -705,14 +763,22 @@ impl PhaseForm {
         needer
     }
 
-    /// What the fields of the draft up to `level`, and those of `anyway`, are shown from.
-    fn generator<'a>(&'a self, level: Level, anyway: &'a [Path]) -> Generator<'a, PhasePlugins> {
+    /// What the fields of the draft up to `level`, and those of `anyway`, are shown from, those
+    /// of `elsewhere` left out.
+    fn generator<'a>(
+        &'a self,
+        level: Level,
+        anyway: &'a [Path],
+        elsewhere: &'a [Path],
+    ) -> Generator<'a, PhasePlugins> {
         Generator {
             draft: &self.draft,
             rejected: &self.rejected,
             offered: PhasePlugins::default_value,
             level,
             anyway,
+            elsewhere,
+            baseline: self.baseline.as_ref(),
         }
     }
 
@@ -740,18 +806,28 @@ impl PhaseForm {
 
     /// What the form shows in the basic view laid out by `basic`: the fields of the basic level,
     /// and the groups if `basic` shows them. Where the entrants come from is
-    /// [`FormView::entry`], which a screen shows if `basic` says so.
+    /// [`FormView::entry`], which a screen shows if `basic` says so. The match format, and the
+    /// teams of a phase taking places of the registration, are neither shown nor counted as
+    /// hidden: the basic view shows them for every phase at once.
     pub fn view_basic(&self, basic: BasicFields) -> FormView {
         let divisions = [Path::ROOT.field(PhasePlugins::DIVISIONS)];
         let anyway: &[Path] = if basic.divisions { &divisions } else { &[] };
-        self.view_showing(Level::Basic, anyway)
+        let mut elsewhere = vec![Path::ROOT.field(PhasePlugins::MATCH_FORMAT)];
+        if self
+            .sources()
+            .iter()
+            .any(|source| source.of() == SourceOf::Registration)
+        {
+            elsewhere.push(Path::ROOT.field(PhasePlugins::TEAMS));
+        }
+        self.view_showing(Level::Basic, anyway, &elsewhere)
     }
 
     /// The field of the match format, with the fields of its plugin up to `level`, as the view
     /// at `level` would show it if it showed the field, with what is wrong with it.
     pub fn match_format_field(&self, level: Level) -> Option<FormField> {
         let path = Path::ROOT.field(PhasePlugins::MATCH_FORMAT);
-        self.view_showing(level, std::slice::from_ref(&path))
+        self.view_showing(level, std::slice::from_ref(&path), &[])
             .fields
             .into_iter()
             .find(|field| field.path == path)
@@ -790,12 +866,12 @@ impl PhaseForm {
         if level == Level::Basic {
             return self.view_basic(self.basic_fields());
         }
-        self.view_showing(level, &[])
+        self.view_showing(level, &[], &[])
     }
 
     /// What the form shows to an operator of `level`, and the fields of `anyway` whatever their
-    /// level.
-    fn view_showing(&self, level: Level, anyway: &[Path]) -> FormView {
+    /// level, without those of `elsewhere`.
+    fn view_showing(&self, level: Level, anyway: &[Path], elsewhere: &[Path]) -> FormView {
         let completed = self.completed();
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
@@ -829,9 +905,12 @@ impl PhaseForm {
             completed: &completed_nodes,
             irrelevant: &irrelevant,
         };
-        let generator = self.generator(level, anyway);
+        let generator = self.generator(level, anyway, elsewhere);
         let mut fields = generator.fields(&nodes, None, &completed_nodes, &whole);
-        let hidden = generator.hidden(&nodes, &whole);
+        let hidden = Hidden {
+            of_template: self.baseline.is_some(),
+            ..generator.hidden(&nodes, &whole)
+        };
         let mut unplaced = Vec::new();
         for issue in &issues {
             let needer = match issue.problem() {

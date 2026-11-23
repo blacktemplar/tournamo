@@ -47,6 +47,11 @@ const CONVERTERS: &[Converter] = &[
         competition: v5::competition,
         person: v5::person,
     },
+    Converter {
+        log_entry: v6::log_entry,
+        competition: v6::competition,
+        person: |_| {},
+    },
 ];
 
 const _: () = assert!(
@@ -596,6 +601,38 @@ mod v5 {
             json!([{ "of": "Registration", "from": 1, "to": null }]),
         );
         phase.entry("columns").or_insert_with(|| json!([]));
+    }
+}
+
+/// A phase, added or of the competition, comes from no template.
+mod v6 {
+    use serde_json::{Map, Value};
+
+    pub(super) fn log_entry(entry: &mut Value) {
+        let transition = if entry.pointer("/kind/Apply").is_some() {
+            "/kind/Apply/AddPhase"
+        } else {
+            "/kind/Replace/with/AddPhase"
+        };
+        if let Some(Value::Object(add_phase)) = entry.pointer_mut(transition) {
+            of_no_template(add_phase);
+        }
+    }
+
+    pub(super) fn competition(competition: &mut Value) {
+        if let Some(Value::Array(phases)) = competition.get_mut("phases") {
+            phases
+                .iter_mut()
+                .filter_map(Value::as_object_mut)
+                .for_each(of_no_template);
+        }
+    }
+
+    /// A phase, which has its sources and plugins, of no template.
+    fn of_no_template(phase: &mut Map<String, Value>) {
+        if phase.contains_key("sources") && phase.contains_key("plugins") {
+            phase.entry("template").or_insert(Value::Null);
+        }
     }
 }
 
@@ -1287,6 +1324,53 @@ mod tests {
         assert_eq!(
             converted_by(v5::log_entry, apply(&converted)),
             apply(&converted)
+        );
+    }
+
+    /// A phase of format 5, added, edited or of the competition, comes from no template.
+    #[test]
+    fn a_phase_comes_from_no_template_in_format_6() {
+        let round_robin = json!({ "type": "tournament_engine::round_robin", "value": null });
+        let sources = json!([{ "of": "Registration", "from": 1, "to": null }]);
+        let added =
+            json!({ "id": "phase", "sources": sources, "plugins": { "format": round_robin } });
+        let converted = json!({
+            "id": "phase",
+            "sources": sources,
+            "plugins": { "format": round_robin },
+            "template": null,
+        });
+        let apply =
+            |phase: &Value| json!({ "id": "add", "kind": { "Apply": { "AddPhase": phase } } });
+        let replace = |phase: &Value| {
+            json!({ "id": "edit", "kind": { "Replace": {
+                "target": "add",
+                "with": { "AddPhase": phase },
+            } } })
+        };
+        let of_competition = |phase: &Value| json!({ "phases": [phase] });
+
+        assert_eq!(
+            converted_by(v6::log_entry, apply(&added)),
+            apply(&converted)
+        );
+        assert_eq!(
+            converted_by(v6::log_entry, replace(&added)),
+            replace(&converted)
+        );
+        let mut competition = of_competition(&added);
+        v6::competition(&mut competition);
+        assert_eq!(competition, of_competition(&converted));
+        // a phase of a template stays of it
+        let of_template = json!({
+            "id": "phase",
+            "sources": sources,
+            "plugins": { "format": round_robin },
+            "template": { "template": "a template", "phase": 0 },
+        });
+        assert_eq!(
+            converted_by(v6::log_entry, apply(&of_template)),
+            apply(&of_template)
         );
     }
 

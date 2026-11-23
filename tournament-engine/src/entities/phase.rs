@@ -22,6 +22,7 @@ use crate::{
         metrics_calculator::MetricEntry,
         ranker::RankingScope,
         seeding::SeedingView,
+        template::TemplateOrigin,
     },
 };
 #[cfg(doc)]
@@ -41,6 +42,7 @@ pub struct Phase {
     /// As configured; never changed after the phase is added.
     plugins: PhasePlugins,
     columns: Columns,
+    template: Option<TemplateOrigin>,
     seed: Seed,
     started: bool,
     /// Empty until the phase is started.
@@ -63,6 +65,7 @@ impl Phase {
         sources: Vec1<Source>,
         plugins: PhasePlugins,
         columns: Columns,
+        template: Option<TemplateOrigin>,
         seed: Seed,
     ) -> Self {
         Self {
@@ -71,6 +74,7 @@ impl Phase {
             sources,
             plugins,
             columns,
+            template,
             seed,
             started: false,
             divisions: Vec::new(),
@@ -117,6 +121,11 @@ impl Phase {
     /// What the operator said about the columns of its tables of standings, see [`Self::shown`].
     pub fn columns(&self) -> &Columns {
         &self.columns
+    }
+
+    /// The phase of a template this phase was added as, if it was, see [`Competition::expand`].
+    pub fn template(&self) -> Option<&TemplateOrigin> {
+        self.template.as_ref()
     }
 
     /// The metrics of this phase that `table` shows by rule, by id, with why, see
@@ -376,6 +385,7 @@ impl<'de> Deserialize<'de> for Phase {
             sources: Vec1<Source>,
             plugins: PhasePlugins,
             columns: Columns,
+            template: Option<TemplateOrigin>,
             seed: Seed,
             started: bool,
             divisions: Vec<Division>,
@@ -390,6 +400,7 @@ impl<'de> Deserialize<'de> for Phase {
             sources: saved.sources,
             plugins: saved.plugins.without_state(),
             columns: saved.columns,
+            template: saved.template,
             seed: saved.seed,
             started: saved.started,
             divisions: saved.divisions,

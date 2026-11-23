@@ -20,7 +20,7 @@ pub enum Announcement {
     /// An entrant renamed, as it was and as it is.
     RenamedEntrant(EntrantRow, EntrantRow),
     AddedPhase,
-    /// The phases of a preset added, as many as there are.
+    /// The phases of a template added, as many as there are.
     AddedPhases(usize),
     /// The phase changed, with the number of matches that have a result after the change.
     EditedPhase(usize),

@@ -1,57 +1,55 @@
-//! How a competition without phases is played: by a preset, set up by its fields, or by phases
-//! of its own, configured one by one.
+//! How a competition without phases is played: by a template, whose phases are refined once
+//! added, or by phases of its own, configured one by one.
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::PresetForm,
     i18n::{Message as _, PluginText},
     session::Session,
 };
 
-use super::{
-    NewPhase,
-    fields::{EditedForm, Fields, Issues},
-    focus_first_issue,
-    summary::Summary,
-};
+use super::{NewPhase, summary::Summary};
 use crate::{
     announcement::Announcement, capitalized, competition::Ctx, focus::focus_later,
     phases::sources_named, sentence,
 };
 
-/// The choice of how the competition is played, presets first and own phases last, chosen at
-/// first, and below it the form of what is chosen.
+/// The choice of how the competition is played, templates first and own phases last, chosen at
+/// first, and below it the phases of the template chosen, or the form of a phase.
 #[component]
 pub fn HowPlayed() -> Element {
     let ctx = use_context::<Ctx>();
-    // the preset chosen, by its id; `None` for own phases
+    // the template chosen, by its id; `None` for own phases
     let mut chosen = use_signal(|| None::<&'static str>);
     let tr = ctx.translator.read();
     rsx! {
         fieldset { class: "how-played",
             legend { {tr.get("how-played")} }
-            for preset in Session::presets() {
-                div { key: "{preset.id}", class: "choice",
+            for template in Session::templates() {
+                div { key: "{template.id}", class: "choice",
                     label {
                         input {
                             r#type: "radio",
                             name: "how-played",
-                            id: "preset-{preset.id.replace(\"::\", \"-\")}",
-                            checked: chosen() == Some(preset.id),
-                            aria_describedby: preset
+                            id: "template-{template.id.replace(\"::\", \"-\")}",
+                            checked: chosen() == Some(template.id),
+                            aria_describedby: template
                                 .description
                                 .is_some()
-                                .then(|| format!("about-{}", preset.id.replace("::", "-"))),
-                            onchange: move |_| chosen.set(Some(preset.id)),
+                                .then(|| format!("about-{}", template.id.replace("::", "-"))),
+                            onchange: move |_| chosen.set(Some(template.id)),
                         }
                         " "
-                        {capitalized(&tr.plugin(preset.id, PluginText::Label, preset.label))}
+                        {capitalized(&tr.plugin(template.id, PluginText::Label, template.label))}
                     }
-                    if let Some(description) = preset.description {
+                    if let Some(description) = template.description {
                         p {
                             class: "hint",
-                            id: "about-{preset.id.replace(\"::\", \"-\")}",
-                            {sentence(&tr.plugin(preset.id, PluginText::Description, description))}
+                            id: "about-{template.id.replace(\"::\", \"-\")}",
+                            {
+                                sentence(
+                                    &tr.plugin(template.id, PluginText::Description, description),
+                                )
+                            }
                         }
                     }
                 }
@@ -75,57 +73,35 @@ pub fn HowPlayed() -> Element {
                 NewPhase {}
             },
             Some(id) => rsx! {
-                PresetSetup { key: "{id}", id }
+                TemplateSetup { key: "{id}", id }
             },
         }
     }
 }
 
-/// The fields of the preset `id`, the phases it adds, and the button adding them.
+/// The phases the template `id` adds, and the button adding them.
 #[component]
-fn PresetSetup(id: &'static str) -> Element {
+fn TemplateSetup(id: &'static str) -> Element {
     let ctx = use_context::<Ctx>();
-    let created = use_hook(|| {
-        Session::preset_form(id)
-            .map(|form| Signal::new(form.in_language(ctx.session.peek().language())))
-            .map_err(|error| error.text())
-    });
     let actions = ctx.actions();
     let tr = ctx.translator.read();
-    let form: Signal<PresetForm> = match created {
-        Ok(form) => form,
-        Err(error) => return rsx! { p { class: "error", {tr.sentence(&error)} } },
-    };
-    let view = form.read().view();
-    let preview = form.read().preview(&tr);
+    let preview = Session::template_preview(id, &tr).map_err(|error| error.text());
     rsx! {
         form {
-            id: "new-preset",
+            id: "new-template",
             onsubmit: move |event| {
                 event.prevent_default();
-                if !form.read().view().complete {
-                    focus_first_issue("new-preset");
-                    return;
-                }
                 let tr = ctx.translator.peek();
-                if let Some(ids) = ctx.act(|session| session.add_preset(&form.read(), &tr)) {
+                if let Some(ids) = ctx.act(|session| session.add_template(id, &tr)) {
                     ctx.announce(Announcement::AddedPhases(ids.len()));
-                    // the form is gone, and with it what had the focus
+                    // the choice is gone, and with it what had the focus
                     focus_later(&["#start:enabled", "#phase"]);
                 }
             },
-            div { class: "phase-form",
-                Fields {
-                    form: EditedForm::Preset(form),
-                    fields: view.fields,
-                    disabled: !actions.add_phase,
-                }
-                Issues { id: "preset-issues", issues: view.issues }
-            }
-            h3 { id: "preset-preview", {tr.get("preset-preview")} }
+            h3 { id: "template-preview", {tr.get("template-preview")} }
             match preview {
                 Ok(phases) => rsx! {
-                    ol { class: "phases numbered", aria_labelledby: "preset-preview",
+                    ol { class: "phases numbered", aria_labelledby: "template-preview",
                         for phase in phases.iter() {
                             li { key: "{phase.name.number}",
                                 h4 { {tr.phase_name(&phase.name)} }
@@ -149,9 +125,10 @@ fn PresetSetup(id: &'static str) -> Element {
                     }
                 },
                 Err(why) => rsx! {
-                    p { class: "hint", {tr.sentence(&why)} }
+                    p { class: "error", {tr.sentence(&why)} }
                 },
             }
+            p { class: "hint", {tr.get("template-refined")} }
             div { class: "form-actions",
                 button {
                     class: "primary",

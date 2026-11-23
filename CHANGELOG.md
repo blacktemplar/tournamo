@@ -11,6 +11,14 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Changed
 
+- **Templates instead of presets.** A competition without phases is set up by
+  a template: groups and knockout, rounds and knockout, single elimination,
+  double elimination, Monster DYP, round robin or random rounds. A template
+  has no questions of its own; its phases are refined once added, as any
+  phase, e.g. a knockout after groups takes the best 4 in total, which the
+  phase's sources change. The DYP preset is gone: a double elimination played
+  by drawn pairs is the same. In the CLI, `add-template` replaces
+  `add-preset`. Presets were never saved, so saved competitions are unaffected.
 - **Settings by level.** The form of a phase shows the settings of the level
   chosen above it, advanced or expert, which the browser remembers. The draw,
   the seeding and how groups are compared show only to experts; below that,

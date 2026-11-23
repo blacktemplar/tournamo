@@ -1151,56 +1151,56 @@ Rejected:
   metric for show (ticking its box does it), a text next to a box on by rule
   (the look tells it apart, the reason is its description).
 
-### Presets
+### Templates
 
-A preset (`plugins::preset::Preset`, an axis like any other) is a template of
-a whole competition: one or more phases (`PresetPhase`: a name as a `Phrase`,
-sources naming earlier phases of the preset by position, and answers to the
-draft of the phase), configured by fields of its own, so that its schema,
-catalog entry, form and questions come as for every plugin.
-`Competition::expand` turns it into ordinary `AddPhase`s: each phase is
-drafted from its sources (the context of a later one knows what the teams of
-the phases before it send, before any of them is added), answered, completed
-by the format's suggestions and the implied plugins, and built. A phase that
-does not expand is a bug of the preset (`PresetError`); a test over the
-catalog expands every preset registered with its defaults and adds its phases.
+A template (`plugins::template::Template`, an axis whose plugins have no
+fields) is a quick start: the phases of a whole competition
+(`TemplatePhase`: a name as a `Phrase` or none, sources naming earlier phases
+of the template by position, and answers to the draft of the phase), which
+applying it adds as ordinary phases, refined afterwards in the same form as
+any phase. `Competition::expand` turns the phases into `AddPhase`s: each phase
+is drafted from its sources (the context of a later one knows what the teams
+of the phases before it send, before any of them is added), answered,
+completed by the format's suggestions and the implied plugins, and built. A
+phase that does not expand is a bug of the template (`TemplateError`); a test
+over the catalog expands every template registered and adds its phases.
 
-- **Only while the competition has no phase** (D19): a preset sets up a
-  competition, its first phase taking the registration. There are no presets
-  of a single phase: a phase added by hand follows the suggestions of its
-  format, and scoring presets (#7) are an idea of their own.
+- **Data, not a calculation**: a template has no fields of its own that are
+  translated into phases and then lost, as presets had ("groups", "advancing
+  per group"). What a template sets up is said in the configuration of its
+  phases, so that templates made from a past competition, or shared, can be
+  data too: `expand` takes the phases, not the template. A knockout after
+  groups takes how many go on **in total** (places 1..=N of the group phase),
+  not per group: a total fills a bracket, which is what matters, and stays
+  right when the number of groups changes; where it does not divide by the
+  groups, the best of the next place go on, compared across the groups.
+- **Only while the competition has no phase** (D19): a template sets up a
+  competition, its first phase taking the registration. A template of one
+  phase (a round robin, a single elimination, ...) leaves the phase unnamed,
+  as one added by hand.
 - **Never saved**: the log records the phases it expanded into, each edited
   and removed through its own `AddPhase` as any phase, and a competition set
-  up by a preset is one set up by hand. So a preset's id is a translation key,
-  not a persistence contract, and a preset changed later changes nothing
-  saved. Its phases follow the rule of what the standings show; a preset says
-  nothing about columns.
+  up by a template is one set up by hand. So a template's id is a translation
+  key, not a persistence contract, and a template changed later changes
+  nothing saved. Its phases follow the rule of what the standings show; a
+  template says nothing about columns.
 - **One undo step** (D20): the session adds its phases with
   `SessionHistory::apply_all`, so one undo takes all of them back.
 - **Names in the operator's language**: the app expands with the names its
-  `Translator` gives the preset's phrases (`.phase-<key>`), as the operator
+  `Translator` gives the template's phrases (`.phase-<key>`), as the operator
   would have typed them; they are names like any other afterwards.
-- **The form of a preset shares the machinery of the form of a phase**: its
-  draft is of the composite `PresetChoice` (the preset and the match format
-  of its phases), its fields generated and edited by the same code
-  (`form/edit.rs`, the trait `Editable`), without name, sources and
-  suggestions; its preview expands it into an empty competition, which is the
-  only one it applies to.
-- **The match format is asked once for all phases** (#82): every preset is
-  played in some match format, so `PresetChoice` asks for it rather than each
-  preset declaring a field of its own, labelled as the field of a phase so that
-  it is translated once. Expanding answers it on each phase whose answers leave
-  the match format open, where the phase then builds; a phase it does not fit
-  (a match format needing a winner of every match, for groups) gets the
-  default, as a further phase does (*A new phase takes over the match format
-  of the phase before*), and a phase answering its own (a final played as a
-  best of five) keeps it.
+- **No DYP templates**: whether the phases taking the registration are played
+  by drawn pairs is the operator's choice for any template but a Monster DYP,
+  which is a DYP of its own; no template sets it.
 
-Rejected: a transition adding a preset's phases (editing or removing one of
+Rejected: a transition adding a template's phases (editing or removing one of
 them would need entries of its own, and the log would hold a template, not
-what is played); saving which preset set up a competition (nothing reads it,
-and the phases may have been edited since); presets as code of the app (a
-third party could not add one, and the CLI would repeat them).
+what is played); saving which template set up a competition (nothing reads
+it, and the phases may have been edited since); templates as code of the app
+(a third party could not add one, and the CLI would repeat them); fields of a
+template (they are lost once applied, and the operator then edits what they
+turned into in another vocabulary); a template of several knockouts by places
+(rare, and usually of different sizes, i.e. separate phases).
 
 ## Persistence
 
@@ -1332,7 +1332,7 @@ later versions, only what the engine provides every plugin (the bracket of a
 knockout, the traits) and the types a saved competition holds (annotations,
 metrics), whose tags have one type each. So a later change of the plugin cannot
 reach the version saved competitions replay with, and dropping that version
-deletes a file. The versions share the id their texts, presets and suggestions
+deletes a file. The versions share the id their texts, templates and suggestions
 go by (`plugin_factory::unversioned`).
 The catalog offers the latest version only (`AnyAxis::entries`, which is also
 what is implied and suggested from); any version is found by its id
@@ -1357,7 +1357,7 @@ read-only from the competition next to it (see
 [The competition next to its log](#the-competition-next-to-its-log)).
 
 Rejected: a new plugin under a new id with the old one marked deprecated
-(duplicates label, translations and presets, and says nothing about which
+(duplicates label, translations and templates, and says nothing about which
 replaces which); a hidden revision field in one type (a draft builds a plugin
 by deserializing its answers, so a field left out would be read as the oldest
 revision unless the draft special-cased it, and the old behaviour would live
@@ -1496,7 +1496,7 @@ the action. Operations appending an action take the history
 - **A targeted undo is an action**: after `undo-report`, `undo` brings the
   result back.
 - **Several entries can be one action** (`SessionHistory::apply_all`): who
-  pastes a list of entrants or applies a preset of several phases
+  pastes a list of entrants or applies a template of several phases
   and dislikes it expects one undo to take all of it back. The log keeps one
   entry per entrant or phase, each edited and removed through its own entry, so
   the grouping belongs to the history, which is not saved. `apply_all` undoes
@@ -1768,7 +1768,7 @@ rather than snapshotting fields before they have been chosen.
   per form, which an operator would set again in every dialog; levels chosen
   by a template, which would have to be remembered with the phases.
 - **Visibility does not imply customization**. The levels expose different
-  fields without changing this state. A preset can
+  fields without changing this state. A template can
   supply a complete draft; an actual edit takes control of the section. Keeping
   hidden fields following after customization would require a separate design;
   the current section-wide state intentionally freezes them too. Suggestion
@@ -1790,7 +1790,7 @@ rather than snapshotting fields before they have been chosen.
   before returning, and retries unresolved conflicts and missing dependencies.
   Its lists start with recommendations or existing answers, without sole-supplier
   preselection. The recursive completion predictor was removed rather than kept
-  behind a visibility switch; future preset/advanced/expert visibility is separate.
+  behind a visibility switch; the levels of the fields are separate.
 - **The form of a new phase starts at the phase undone last**, so adding it again
   adds the same phase.
 - **A new phase takes over the match format of the phase before**, with its

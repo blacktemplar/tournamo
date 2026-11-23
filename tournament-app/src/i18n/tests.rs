@@ -22,10 +22,10 @@ use tournament_engine::{
             DoubleElimination, DoubleEliminationRound, KnockoutRound, PhaseFormat, RoundRobin,
             SingleElimination, Stage,
         },
-        preset::Preset,
         ranker::SliceRanker,
         seeding::Seeding,
         teams::Teams,
+        template::Template,
     },
 };
 #[cfg(target_arch = "wasm32")]
@@ -329,7 +329,7 @@ fn engine_plugins() -> Vec<&'static PluginEntry> {
         AnyAxis::of::<dyn SliceRanker>(),
         AnyAxis::of::<dyn MetricsCalculator>(),
         AnyAxis::of::<dyn MatchFormat>(),
-        AnyAxis::of::<dyn Preset>(),
+        AnyAxis::of::<dyn Template>(),
     ]
     .iter()
     .flat_map(AnyAxis::entries)
@@ -351,13 +351,13 @@ fn translatable(entry: &PluginEntry) -> BTreeSet<String> {
             .iter()
             .map(|stage| PluginText::Stage(stage.key()).attribute()),
     );
-    // the phases of a preset are the same whatever its fields
-    if let Ok(preset) = entry.default_config().build::<dyn Preset>() {
+    if let Ok(template) = entry.default_config().build::<dyn Template>() {
         attributes.extend(
-            preset
+            template
                 .phases()
                 .iter()
-                .map(|phase| PluginText::Phase(phase.name.key()).attribute()),
+                .filter_map(|phase| phase.name.as_ref())
+                .map(|name| PluginText::Phase(name.key()).attribute()),
         );
     }
     if AnyAxis::of::<dyn MatchFormat>()

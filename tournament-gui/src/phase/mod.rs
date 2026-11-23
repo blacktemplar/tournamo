@@ -4,8 +4,8 @@
 mod entry;
 mod fields;
 mod lists;
-mod preset;
 mod summary;
+mod template;
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -21,7 +21,7 @@ use self::{
     fields::{EditedForm, Fields, Issues},
     summary::Summary,
 };
-pub use self::{preset::HowPlayed, summary::answer};
+pub use self::{summary::answer, template::HowPlayed};
 use crate::{
     Page,
     announcement::Announcement,
@@ -667,7 +667,7 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
                 }
             }
             Entry { form, entry, disabled }
-            Fields { form: EditedForm::Phase(form), fields, disabled }
+            Fields { form: EditedForm(form), fields, disabled }
             if hidden > 0 && level < Level::Expert {
                 p { class: "hint", id: "hidden-settings",
                     {t!(tr, "hidden-settings", count = hidden)}

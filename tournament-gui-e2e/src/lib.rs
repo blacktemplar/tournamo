@@ -1238,7 +1238,7 @@ impl Gui {
             .await
     }
 
-    /// Chooses how a competition without phases is played: the preset labelled `label`, or
+    /// Chooses how a competition without phases is played: the template labelled `label`, or
     /// "Own phases, one by one".
     pub async fn choose_how_played(&self, label: &str) -> WebDriverResult<()> {
         let radio = self
@@ -1298,7 +1298,7 @@ impl Gui {
         }
     }
 
-    /// Waits until the preview of a preset shows the phases `phases`, each its name and where it
+    /// Waits until the preview of a template shows the phases `phases`, each its name and where it
     /// takes its entrants from, e.g. `("Knockout", "Places 1–6 of Group phase")`.
     ///
     /// # Panics
@@ -1310,7 +1310,9 @@ impl Gui {
             .collect();
         self.page
             .expect_texts(
-                By::Css("#new-preset ol.phases > li > h4, #new-preset ol.phases > li > p.sources"),
+                By::Css(
+                    "#new-template ol.phases > li > h4, #new-template ol.phases > li > p.sources",
+                ),
                 &texts,
             )
             .await

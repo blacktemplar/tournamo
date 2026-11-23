@@ -307,23 +307,30 @@ plugin-tournament_engine-later_elimination =
     .label = späteres Ausscheiden
     .description = nach der Runde des Ausscheidens; noch dabei zu sein ist am besten
 
-## Presets
+## Templates
 
-plugin-tournament_engine-groups_then_knockout =
-    .label = Gruppen mit anschließendem K.-o.-System
-    .description = alle spielen gegen alle anderen ihrer Gruppe, dann spielen die Besten jeder Gruppe im K.-o.-System weiter
-    .field-groups = Gruppen
-    .field-advancing = Aufsteiger je Gruppe
+plugin-tournament_engine-template-groups_and_knockout =
+    .label = Gruppen und K.-o.-Phase
+    .description = alle spielen gegen alle anderen ihrer Gruppe, dann spielen die Besten im K.-o.-System weiter
     .phase-group-phase = Gruppenphase
     .phase-knockout = K.-o.-Phase
-plugin-tournament_engine-qualification_then_knockouts =
-    .label = Qualifikation mit anschließenden K.-o.-Turnieren
-    .description = einige Runden gegen zufällige Gegner ordnen alle, die dann nach ihren Plätzen in K.-o.-Turnieren spielen: die Besten im ersten, die Nächsten im zweiten und so weiter
-    .field-rounds = Runden
-    .field-knockouts = K.-o.-Turniere
+plugin-tournament_engine-template-rounds_and_knockout =
+    .label = Runden und K.-o.-Phase
+    .description = einige Runden gegen zufällige Gegner ordnen alle, dann spielen die Besten im K.-o.-System weiter
     .phase-qualification = Qualifikation
-    .phase-knockouts = K.-o.-Turniere
-plugin-tournament_engine-dyp =
-    .label = DYP
-    .description = Draw Your Partner: die Teilnehmer werden zu Paaren gelost, die im Doppel-K.-o.-System spielen
-    .phase-dyp = DYP
+    .phase-knockout = K.-o.-Phase
+plugin-tournament_engine-template-single_elimination =
+    .label = K.-o.-System
+    .description = wer ein Spiel verliert, scheidet aus
+plugin-tournament_engine-template-double_elimination =
+    .label = Doppel-K.-o.-System
+    .description = wer ein Spiel verliert, bekommt eine zweite Chance und scheidet erst nach einer zweiten Niederlage aus
+plugin-tournament_engine-template-monster_dyp =
+    .label = Monster-DYP
+    .description = Runden mit einem neu gelosten Partner für jedes Spiel, jeder für sich gewertet
+plugin-tournament_engine-template-round_robin =
+    .label = Jeder gegen jeden
+    .description = alle spielen gegen alle
+plugin-tournament_engine-template-random_rounds =
+    .label = zufällige Runden
+    .description = einige Runden, jede gegen einen zufällig gelosten Gegner

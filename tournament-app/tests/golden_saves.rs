@@ -24,7 +24,7 @@ use serde::de::IgnoredAny;
 use serde_json::Value;
 use tournament_app::{
     file::{self, File},
-    form::{Editable as _, End, PhaseForm, PresetForm},
+    form::{Editable as _, End, PhaseForm},
     i18n::{Language, Translator},
     result_form::ResultForm,
     session::Session,
@@ -34,6 +34,7 @@ use tournament_app::{
 use tournament_engine::{
     Competition, EnteredValue, MatchResult, PhaseId, Sides, Table,
     plugins::{
+        draw::Blocks,
         match_format::{BestOf, Scored},
         metrics_calculator::{
             GamesBalanceCalculator, HigherGamesDifference, HigherPointsDifference, MetricId as _,
@@ -43,7 +44,8 @@ use tournament_engine::{
         phase_format::{
             DoubleElimination, MonsterDyp, RandomRounds, RoundRobin, SingleElimination,
         },
-        preset::{Dyp, GroupsThenKnockout, PresetChoice, QualificationThenKnockouts},
+        teams::RandomPairs,
+        template::{DoubleEliminationTemplate, GroupsAndKnockout, RoundsAndKnockout},
     },
 };
 #[cfg(target_arch = "wasm32")]
@@ -587,8 +589,8 @@ fn games(session: &mut Session) {
     );
 }
 
-/// Entrants pasted with ratings, some without, then the preset of groups and a knockout: three
-/// groups, played with draws, then the knockout of the best of them, played to the end.
+/// Entrants pasted with ratings, some without, then the template of groups and a knockout, in
+/// three groups: played with draws, then the knockout of the best of them, played to the end.
 fn groups_then_knockout(session: &mut Session) {
     let pasted = session
         .add_entrants(
@@ -597,11 +599,12 @@ fn groups_then_knockout(session: &mut Session) {
         )
         .unwrap();
     assert!(pasted.refused.is_empty());
-    let mut form = Session::preset_form(GroupsThenKnockout::ID).unwrap();
-    form.enter(&preset_field("groups"), "3").unwrap();
-    add_preset(session, &form);
-    session.start().unwrap();
+    add_template(session, GroupsAndKnockout::ID);
     let [groups, knockout] = phases_of(session);
+    edit(session, groups, |form| {
+        form.enter(&ConfigPath::ROOT.field("divisions"), "3")
+    });
+    session.start().unwrap();
     play_phase(
         session,
         groups,
@@ -619,20 +622,21 @@ fn groups_then_knockout(session: &mut Session) {
     assert!(finished(session, knockout));
 }
 
-/// The preset of a qualification and knockouts in blocks: the qualification played to the end,
-/// the knockouts partly.
+/// The template of rounds and a knockout, the knockout in two blocks: the qualification played to
+/// the end, the knockouts partly.
 fn qualification_then_knockouts(session: &mut Session) {
     let names: Vec<_> = (1..=12).map(|number| format!("P{number:02}")).collect();
     enter(
         session,
         &names.iter().map(String::as_str).collect::<Vec<_>>(),
     );
-    add_preset(
-        session,
-        &Session::preset_form(QualificationThenKnockouts::ID).unwrap(),
-    );
-    session.start().unwrap();
+    add_template(session, RoundsAndKnockout::ID);
     let [qualification, knockouts] = phases_of(session);
+    edit(session, knockouts, |form| {
+        form.enter(&ConfigPath::ROOT.field("divisions"), "2")?;
+        form.choose(&ConfigPath::ROOT.field("draw"), Some(Blocks::ID))
+    });
+    session.start().unwrap();
     play_phase(
         session,
         qualification,
@@ -643,15 +647,18 @@ fn qualification_then_knockouts(session: &mut Session) {
     play_phase(session, knockouts, &[MatchResult::AWins], 5);
 }
 
-/// The preset of a DYP: drawn pairs in a double elimination, played to the end.
+/// A DYP: the template of a double elimination, played by drawn pairs, played to the end.
 fn dyp(session: &mut Session) {
     enter(
         session,
         &["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"],
     );
-    add_preset(session, &Session::preset_form(Dyp::ID).unwrap());
-    session.start().unwrap();
+    add_template(session, DoubleEliminationTemplate::ID);
     let [pairs] = phases_of(session);
+    edit(session, pairs, |form| {
+        form.choose(&ConfigPath::ROOT.field("teams"), Some(RandomPairs::ID))
+    });
+    session.start().unwrap();
     play_phase(
         session,
         pairs,
@@ -730,16 +737,22 @@ fn finished(session: &Session, phase: PhaseId) -> bool {
     session.competition().phases()[&phase].is_finished()
 }
 
-/// The path of the field `name` of the preset of a form.
-fn preset_field(name: &str) -> ConfigPath {
-    ConfigPath::ROOT.field(PresetChoice::PRESET).field(name)
+/// Adds the phases of the template `id`.
+fn add_template(session: &mut Session, id: &str) {
+    session
+        .add_template(id, &Translator::new(Language::English, &[]))
+        .unwrap();
 }
 
-/// Adds the phases of the preset `form`.
-fn add_preset(session: &mut Session, form: &PresetForm) {
-    session
-        .add_preset(form, &Translator::new(Language::English, &[]))
-        .unwrap();
+/// Edits the phase `phase` by `change` to its form.
+fn edit(
+    session: &mut Session,
+    phase: PhaseId,
+    change: impl FnOnce(&mut PhaseForm) -> Result<(), plugin_factory::config::ConfigError>,
+) {
+    let mut form = session.phase_form_to_edit(phase).unwrap();
+    change(&mut form).unwrap();
+    assert!(session.edit_phase(phase, &form).unwrap());
 }
 
 /// The ids of the `N` phases of the competition, in order.

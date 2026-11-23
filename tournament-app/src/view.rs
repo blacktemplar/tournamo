@@ -870,8 +870,8 @@ pub enum Action {
     AddEntrants(Vec<EntrantRow>),
     RemoveEntrant(EntrantRow),
     AddPhase(PhaseName),
-    /// Several phases added at once, by a preset, in the order added: one action, see
-    /// [`Session::add_preset`](crate::session::Session::add_preset).
+    /// Several phases added at once, by a template, in the order added: one action, see
+    /// [`Session::add_template`](crate::session::Session::add_template).
     AddPhases(Vec<PhaseName>),
     EditPhase(PhaseName),
     /// A phase removed, as it was called.

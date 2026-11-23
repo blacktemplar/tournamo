@@ -13,7 +13,7 @@ use crate::{
     Columns, Entrant, EntrantId, MatchId, Origin, Part, Phase, PhaseId, Qualifier, Ranking,
     RankingId, Seed, Source, SourceOf,
     map::{IdMap, Map},
-    plugins::{PhasePlugins, teams::TeamsView},
+    plugins::{PhasePlugins, teams::TeamsView, template::TemplateOrigin},
 };
 
 /// A competition: its entrants, its phases, and the random seed everything random in it derives
@@ -102,10 +102,12 @@ impl Competition {
         sources: Vec1<Source>,
         plugins: PhasePlugins,
         columns: Columns,
+        template: Option<TemplateOrigin>,
     ) {
         let seed = Seed::new(self.seed.rng(id).random());
-        self.phases
-            .insert(Phase::new(id, name, sources, plugins, columns, seed));
+        self.phases.insert(Phase::new(
+            id, name, sources, plugins, columns, template, seed,
+        ));
     }
 
     /// Declares the facts that hold for a phase of this competition taking its entrants from

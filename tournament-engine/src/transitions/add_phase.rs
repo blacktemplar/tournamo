@@ -7,7 +7,7 @@ use vec1::{Vec1, vec1};
 use crate::{
     Columns, Source, SourceOf,
     entities::{Competition, PhaseId},
-    plugins::PhasePlugins,
+    plugins::{PhasePlugins, template::TemplateOrigin},
 };
 
 /// Adds a phase to a competition: its name, where its entrants come from, and its plugins.
@@ -27,6 +27,7 @@ pub struct AddPhase {
     sources: Vec1<Source>,
     plugins: PhasePlugins,
     columns: Columns,
+    template: Option<TemplateOrigin>,
 }
 
 impl AddPhase {
@@ -42,6 +43,7 @@ impl AddPhase {
             sources: vec1![Source::registration()],
             plugins,
             columns: Columns::new(),
+            template: None,
         }
     }
 
@@ -74,6 +76,15 @@ impl AddPhase {
         self
     }
 
+    /// This phase added as the phase `template` of a template, see [`Competition::expand`].
+    /// Reconfiguring a phase keeps where it came from, whatever the phase replacing it says, see
+    /// [`reconfigure_phase`](crate::CompetitionStateMachineExt::reconfigure_phase).
+    #[must_use]
+    pub fn with_template(mut self, template: Option<TemplateOrigin>) -> Self {
+        self.template = template;
+        self
+    }
+
     pub fn id(&self) -> PhaseId {
         self.id
     }
@@ -93,6 +104,11 @@ impl AddPhase {
     /// What the operator said about the columns of the tables of standings of the phase.
     pub fn columns(&self) -> &Columns {
         &self.columns
+    }
+
+    /// The phase of a template this phase is added as, if it is.
+    pub fn template(&self) -> Option<&TemplateOrigin> {
+        self.template.as_ref()
     }
 }
 
@@ -192,6 +208,7 @@ impl Transition<Competition> for AddPhase {
             self.sources.clone(),
             self.plugins.clone(),
             self.columns.clone(),
+            self.template.clone(),
         );
     }
 }

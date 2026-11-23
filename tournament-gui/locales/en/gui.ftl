@@ -173,6 +173,14 @@ phase-heading = Phase
 how-played = How is it played?
 own-phases = Own phases, one by one
 template-preview = Phases added
+# $template: the label of the template the phases were added by
+based-on = Based on the template “{ $template }”.
+# $phases: the phases added besides those of the template, listed
+added-to-template = Added to the template: { $phases }.
+# $phases: the phases of the template that were removed, listed
+removed-from-template = Removed from the template: { $phases }.
+# a phase of a template without a name, by its position among them
+template-phase-number = phase { $number }
 # below the phases a template adds
 template-refined = Once added, each phase can be changed, removed, or followed by more.
 add-phases = Add phases
@@ -264,10 +272,24 @@ basic-of-phase = of { $phase }
 basic-of-registration = of the registration
 level-advanced = Advanced
 level-expert = Expert
-# $count: how many settings the level hides that differ from what the phase would have by itself
+# $count: how many settings the level hides that differ from the phase of the template the phase was
+# added as, or else from what it would have by itself; $baseline: template or defaults; $level: the
+# level showing them all, advanced or expert
 hidden-settings = { $count ->
-    [one] One setting differs from the defaults, see the expert settings.
-   *[other] { $count } settings differ from the defaults, see the expert settings.
+    [one] One setting differs from { $baseline ->
+        [template] the template
+       *[defaults] the defaults
+    }, see the { $level ->
+        [expert] expert
+       *[advanced] advanced
+    } settings.
+   *[other] { $count } settings differ from { $baseline ->
+        [template] the template
+       *[defaults] the defaults
+    }, see the { $level ->
+        [expert] expert
+       *[advanced] advanced
+    } settings.
 }
 following-suggestions = Ranking and scoring follow suggestions for the format until you edit them.
 customized-settings = Your ranking and scoring settings are kept when the format changes. Applying suggestions replaces them and resumes automatic updates.

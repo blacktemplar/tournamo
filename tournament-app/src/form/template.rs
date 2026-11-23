@@ -37,6 +37,7 @@ pub(crate) fn preview(
     let mut next = 0;
     let competition = Competition::default();
     let phases = competition.expand(
+        id,
         &template.phases(),
         || {
             next += 1;

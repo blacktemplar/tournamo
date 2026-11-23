@@ -1,10 +1,15 @@
-use tournament_engine::plugins::template::{GroupsAndKnockout, RoundRobinTemplate, Template};
+use plugin_factory::schema::Level;
+use tournament_engine::plugins::{
+    seeding::SeededAtRandom,
+    template::{GroupsAndKnockout, RoundRobinTemplate, Template},
+};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
 use crate::{
     error::AddTemplateError,
+    form::Editable,
     i18n::{Language, Translator},
     view::SourceRow,
 };
@@ -130,4 +135,71 @@ fn an_unknown_template_is_neither_previewed_nor_added() {
         Err(AddTemplateError::UnknownTemplate(_))
     ));
     assert!(<dyn Template>::of("nothing").is_none());
+}
+
+/// The phases of a template remember it: the competition is based on it, and what the template
+/// sets beyond the basic fields, e.g. the seeding of the knockout, is no difference.
+#[test]
+fn a_competition_is_based_on_the_template_its_phases_came_from() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    assert_eq!(session.based_on(&english()), None);
+    let ids = session
+        .add_template(GroupsAndKnockout::ID, &english())
+        .unwrap();
+
+    let based_on = session.based_on(&english()).unwrap();
+    assert_eq!(based_on.template.id, GroupsAndKnockout::ID);
+    assert!(based_on.added.is_empty() && based_on.removed.is_empty());
+    for id in ids {
+        let form = session.phase_form_to_edit(id).unwrap();
+        assert_eq!(form.view_at(Level::Basic).hidden.count, 0);
+        assert_eq!(form.view_at(Level::Advanced).hidden.count, 0);
+    }
+}
+
+/// A hidden setting changed in a phase of a template differs from the template, also after the
+/// phase was edited otherwise.
+#[test]
+fn a_setting_changed_in_a_phase_of_a_template_differs_from_it() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let ids = session
+        .add_template(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    let mut form = session.phase_form_to_edit(ids[1]).unwrap();
+    form.choose(&"seeding".parse().unwrap(), Some(SeededAtRandom::ID))
+        .unwrap();
+    session.edit_phase(ids[1], &form).unwrap();
+
+    let form = session.phase_form_to_edit(ids[1]).unwrap();
+    assert_eq!(form.view_at(Level::Advanced).hidden.count, 1);
+    assert_eq!(form.view_at(Level::Basic).hidden.shown_at, Level::Expert);
+}
+
+/// A phase added besides those of the template, and one of the template removed, are named.
+#[test]
+fn the_phases_added_to_a_template_and_removed_from_it_are_named() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let ids = session
+        .add_template(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    session.remove_phase(ids[1]).unwrap();
+    let draft = session.phase_draft(RoundRobin::ID).unwrap();
+    let mut form = session.phase_form_with(draft, None).unwrap();
+    form.set_name("Finals");
+    session.add_phase(&form).unwrap();
+
+    let based_on = session.based_on(&english()).unwrap();
+    let added: Vec<_> = based_on
+        .added
+        .iter()
+        .map(|name| name.name.as_deref())
+        .collect();
+    assert_eq!(added, [Some("Finals")]);
+    assert_eq!(
+        based_on.removed,
+        [RemovedPhase {
+            number: 2,
+            name: Some("Knockout".to_owned()),
+        }]
+    );
 }

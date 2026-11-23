@@ -10,7 +10,7 @@ use tournament_engine::plugin_factory::schema::Level;
 
 use super::{NewPhase, summary::Summary};
 use crate::{
-    Page, announcement::Announcement, capitalized, competition::Ctx, focus::focus_later,
+    Page, announcement::Announcement, capitalized, competition::Ctx, focus::focus_later, i18n::t,
     phases::sources_named, sentence,
 };
 
@@ -140,6 +140,50 @@ fn TemplateSetup(id: &'static str) -> Element {
                     disabled: !actions.add_phase,
                     {tr.get("add-phases")}
                 }
+            }
+        }
+    }
+}
+
+/// The template the phases were added by, with the phases added besides and those of it removed,
+/// if they were added by one.
+#[component]
+pub fn BasedOn() -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let Some(based_on) = ctx.session.read().based_on(&tr) else {
+        return rsx! {};
+    };
+    let template = capitalized(&tr.plugin(
+        based_on.template.id,
+        PluginText::Label,
+        based_on.template.label,
+    ));
+    let added = based_on
+        .added
+        .iter()
+        .map(|name| tr.phase_name(name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let removed = based_on
+        .removed
+        .iter()
+        .map(|phase| match &phase.name {
+            Some(name) => name.clone(),
+            None => t!(tr, "template-phase-number", number = phase.number),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    rsx! {
+        p { id: "based-on", {t!(tr, "based-on", template = template)} }
+        if !added.is_empty() {
+            p { class: "hint", id: "added-to-template",
+                {t!(tr, "added-to-template", phases = added)}
+            }
+        }
+        if !removed.is_empty() {
+            p { class: "hint", id: "removed-from-template",
+                {t!(tr, "removed-from-template", phases = removed)}
             }
         }
     }

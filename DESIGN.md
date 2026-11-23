@@ -1178,12 +1178,21 @@ over the catalog expands every template registered and adds its phases.
   competition, its first phase taking the registration. A template of one
   phase (a round robin, a single elimination, ...) leaves the phase unnamed,
   as one added by hand.
-- **Never saved**: the log records the phases it expanded into, each edited
-  and removed through its own `AddPhase` as any phase, and a competition set
-  up by a template is one set up by hand. So a template's id is a translation
-  key, not a persistence contract, and a template changed later changes
-  nothing saved. Its phases follow the rule of what the standings show; a
-  template says nothing about columns.
+- **Remembered by its phases, not saved**: the log records the phases it
+  expanded into, each edited and removed through its own `AddPhase` as any
+  phase. Each remembers where it came from (`TemplateOrigin`: the template's
+  id and the phase's position in it), which `reconfigure_phase` keeps whatever
+  the edit says, so a template's id is a persistence contract. The competition
+  is based on the template of its phases while one of them is left
+  (`Session::based_on`, which names the phases added besides and those of it
+  removed). A phase of a template counts the hidden fields that differ from
+  what its phase of the template answers, those it leaves open from the
+  defaults (`PhaseForm::compared_with`). The template is compared **as it is
+  now**: its name is what the operator sees, so what is expected of it is
+  what it says now, and a template changed for a good reason makes the
+  phases it set up earlier differ where they no longer match. Its phases
+  follow the rule of what the standings show; a template says nothing about
+  columns.
 - **One undo step** (D20): the session adds its phases with
   `SessionHistory::apply_all`, so one undo takes all of them back.
 - **Names in the operator's language**: the app expands with the names its
@@ -1193,10 +1202,15 @@ over the catalog expands every template registered and adds its phases.
   by drawn pairs is the operator's choice for any template but a Monster DYP,
   which is a DYP of its own; no template sets it.
 
-Rejected: a transition adding a template's phases (editing or removing one of
-them would need entries of its own, and the log would hold a template, not
-what is played); saving which template set up a competition (nothing reads
-it, and the phases may have been edited since); templates as code of the app
+Rejected: a transition adding a template's phases, or recording which
+template set up a competition (removing a phase is an undo of its `AddPhase`,
+which would leave such an entry behind; the origin on each `AddPhase` follows
+it by itself); saving the template's phases as they were when applied (what
+the operator expects of a template is what its name stands for now, and
+saving them would make every template a frozen copy in every log); only
+templates whose hidden settings are the defaults, so that nothing needs
+remembering (it holds for the first templates, not for those to come);
+templates as code of the app
 (a third party could not add one, and the CLI would repeat them); fields of a
 template (they are lost once applied, and the operator then edits what they
 turned into in another vocabulary); a template of several knockouts by places
@@ -1762,9 +1776,13 @@ rather than snapshotting fields before they have been chosen.
   answering it, and keeps its answer. The level is a setting of the operator,
   not of a form or a competition: the GUI keeps the one chosen last in the
   browser, as it keeps the theme, so every form opens at it. Where hidden
-  fields differ from what the draft would answer by itself, the form says how
-  many (`FormView::hidden`), so that a seeding set by someone else is no
-  surprise; a field counts once, whatever its plugins hold. Rejected: a level
+  fields differ from what the phase of its template answers, or else from
+  what the draft would answer by itself, the form, and each phase of the
+  basic view, says how many and which level shows them all
+  (`FormView::hidden`), so that a seeding set by someone else is no surprise;
+  a field counts once, whatever its plugins hold. The basic view leaves out
+  what it shows for every phase at once: the match format, and the teams of
+  the phases taking the registration. Rejected: a level
   per form, which an operator would set again in every dialog; levels chosen
   by a template, which would have to be remembered with the phases.
 - **The basic view** (the GUI's setup at level basic, which applying a template
@@ -1779,7 +1797,8 @@ rather than snapshotting fields before they have been chosen.
   (`PhaseForm::basic_fields`), not on every change, so a field does not go
   while it is edited (groups set to one). Each change is made at once, as an
   edit of the phase. No ranking or metrics, and no note about what a template
-  set beyond the basic fields, which is part of what the template is.
+  set beyond the basic fields, which is part of what the template is; the
+  setup names the template ("Based on the template …").
 - **Settings of the whole competition** in the basic view, each a view of the
   phases not started, never saved, set on each of them as one action
   (`Action::EditPhases`): the match format (`Session::match_formats`), shown

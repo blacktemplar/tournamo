@@ -11,13 +11,17 @@ mod template;
 use dioxus::prelude::*;
 use tournament_app::{
     error::PhaseDraftError,
-    form::{FormView, Path, PhaseForm},
+    form::{FormView, Hidden, Path, PhaseForm},
     i18n::{Arg, Message as _, Text},
     view::{Count, MatchesOf},
 };
 use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::schema::Level};
 
-pub use self::{basic::BasicView, summary::answer, template::HowPlayed};
+pub use self::{
+    basic::BasicView,
+    summary::answer,
+    template::{BasedOn, HowPlayed},
+};
 use self::{
     entry::Entry,
     fields::{EditedForm, Fields, Issues},
@@ -675,12 +679,7 @@ fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element 
             }
             Entry { form, entry, disabled }
             Fields { form: EditedForm::new(form), fields, disabled }
-            // what a basic view leaves out is what it is: no note about it
-            if hidden > 0 && level == Level::Advanced {
-                p { class: "hint", id: "hidden-settings",
-                    {t!(tr, "hidden-settings", count = hidden)}
-                }
-            }
+            HiddenSettings { id: "hidden-settings", hidden }
             // ranking and scoring follow the suggestions where they are not shown
             if level > Level::Basic {
                 p { role: "status",
@@ -764,4 +763,33 @@ fn focus_first_issue(form: &str) {
         issue?.focus({{ preventScroll: true }});
         "##
     ));
+}
+
+/// The hint that `hidden` settings differ from the template or from the defaults, naming the level
+/// showing them, if any do.
+#[component]
+pub(crate) fn HiddenSettings(id: String, hidden: Hidden) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let level = match hidden.shown_at {
+        Level::Expert => "expert",
+        _ => "advanced",
+    };
+    let baseline = if hidden.of_template {
+        "template"
+    } else {
+        "defaults"
+    };
+    let text = t!(
+        tr,
+        "hidden-settings",
+        count = hidden.count,
+        level = level,
+        baseline = baseline,
+    );
+    rsx! {
+        if hidden.count > 0 {
+            p { class: "hint hidden-settings", id, {text} }
+        }
+    }
 }

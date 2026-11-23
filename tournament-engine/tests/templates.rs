@@ -7,18 +7,19 @@ use plugin_factory::{
     config::{Config, ConfigError, PluginConfig},
 };
 use tournament_engine::{
-    AddEntrant, AddPhase, Competition, CompetitionStateMachine, Entrant, EntrantId, MatchResult,
-    PhaseId, PhasePlugins, ReportMatchResult, Seed, SetCompetitionSeed, Source, SourceOf,
-    StartCompetition, StartPhase,
+    AddEntrant, AddPhase, Competition, CompetitionStateMachine, CompetitionStateMachineExt,
+    Entrant, EntrantId, MatchResult, PhaseId, PhasePlugins, ReportMatchResult, Seed,
+    SetCompetitionSeed, Source, SourceOf, StartCompetition, StartPhase,
     plugins::{
         phase_format::{DoubleElimination, RoundRobin},
         seeding::GroupWinnersApart,
         teams::RandomPairs,
         template::{
             GroupsAndKnockout, RoundRobinTemplate, RoundsAndKnockout, Template, TemplateError,
-            TemplatePhase, TemplateProblem, TemplateSource, TemplateSourceOf,
+            TemplateOrigin, TemplatePhase, TemplateProblem, TemplateSource, TemplateSourceOf,
         },
     },
+    undoable_state_machine::SessionHistory,
     uuid::Uuid,
 };
 use vec1::{Vec1, vec1};
@@ -37,6 +38,7 @@ fn expand(
 ) -> Result<Vec<AddPhase>, TemplateError> {
     let mut next = 0;
     competition.expand(
+        "test",
         phases,
         || {
             next += 1;
@@ -149,6 +151,37 @@ fn the_phase_of_a_template_of_one_format_is_unnamed() {
         panic!("one phase");
     };
     assert_eq!(phase.name(), None);
+}
+
+/// Each phase remembers the phase of the template it was added as, also once reconfigured.
+#[test]
+fn a_phase_remembers_where_in_the_template_it_came_from() {
+    let mut machine = set_up(8, &phases_of::<RoundsAndKnockout>());
+    let origins = |machine: &CompetitionStateMachine| -> Vec<Option<TemplateOrigin>> {
+        machine
+            .current()
+            .phases()
+            .values()
+            .map(|phase| phase.template().cloned())
+            .collect()
+    };
+    let of_test = |phase| {
+        Some(TemplateOrigin {
+            template: "test".to_owned(),
+            phase,
+        })
+    };
+    assert_eq!(origins(&machine), [of_test(0), of_test(1)]);
+
+    let knockout = machine.current().phases().values().nth(1).unwrap();
+    let plugins = knockout.plugins().clone();
+    let renamed = AddPhase::new(knockout.id(), plugins)
+        .with_name(Some("Finals".to_owned()))
+        .with_sources(knockout.sources().clone());
+    machine
+        .reconfigure_phase(&mut SessionHistory::new(), renamed)
+        .unwrap();
+    assert_eq!(origins(&machine), [of_test(0), of_test(1)]);
 }
 
 /// The phases of a broken template, each taking its entrants from its sources and answering the

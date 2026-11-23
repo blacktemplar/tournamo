@@ -10,7 +10,10 @@ use tournament_app::{
 };
 use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::schema::Level};
 
-use super::fields::{EditedForm, Fields, Issues};
+use super::{
+    HiddenSettings,
+    fields::{EditedForm, Fields, Issues},
+};
 use crate::{competition::Ctx, i18n::t, phases::phase_id_text};
 
 /// The settings of the whole competition, then the phases, each as the basic view shows it.
@@ -241,6 +244,10 @@ fn BasicPhase(phase: PhaseId) -> Element {
         Issues {
             id: format!("basic-issues-{}", phase_id_text(phase)),
             issues: view.issues,
+        }
+        HiddenSettings {
+            id: format!("hidden-settings-{}", phase_id_text(phase)),
+            hidden: view.hidden,
         }
     }
 }

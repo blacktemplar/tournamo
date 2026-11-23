@@ -76,3 +76,37 @@ async fn the_phases_of_a_template_are_undone_and_redone_as_a_whole() {
     })
     .await;
 }
+
+/// The setup says which template the phases came from; a setting the basic view hides that is
+/// changed from the template, and a phase removed from it, are said.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_differs_from_the_template_is_said() {
+    run_in_new_competition(async |gui| {
+        groups_and_knockout(&gui).await?;
+        gui.expect_based_on(&["Based on the template “Groups and knockout”."])
+            .await?;
+        gui.expect_basic_hidden_settings(&[]).await?;
+
+        gui.choose_level("Expert").await?;
+        gui.click_labelled("Edit phase: Knockout").await?;
+        gui.choose_plugin("seeding", "At random").await?;
+        gui.click("Save changes").await?;
+        gui.expect_announcement("The phase is changed.").await?;
+        gui.choose_level("Basic").await?;
+        gui.expect_basic_hidden_settings(&[
+            "One setting differs from the template, see the expert settings.",
+        ])
+        .await?;
+        gui.page.check_accessibility().await?;
+
+        gui.choose_level("Advanced").await?;
+        gui.click_labelled("Remove phase: Knockout").await?;
+        gui.expect_based_on(&[
+            "Based on the template “Groups and knockout”.",
+            "Removed from the template: Knockout.",
+        ])
+        .await
+    })
+    .await;
+}

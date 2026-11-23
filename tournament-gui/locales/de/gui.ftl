@@ -145,6 +145,14 @@ phase-heading = Phase
 how-played = Wie wird gespielt?
 own-phases = Eigene Phasen, eine nach der anderen
 template-preview = Hinzugefügte Phasen
+# $template: the label of the template the phases were added by
+based-on = Basiert auf der Vorlage „{ $template }“.
+# $phases: the phases added besides those of the template, listed
+added-to-template = Zur Vorlage hinzugefügt: { $phases }.
+# $phases: the phases of the template that were removed, listed
+removed-from-template = Aus der Vorlage entfernt: { $phases }.
+# a phase of a template without a name, by its position among them
+template-phase-number = Phase { $number }
 template-refined = Einmal hinzugefügt, kann jede Phase geändert oder entfernt werden, und weitere können folgen.
 add-phases = Phasen hinzufügen
 finished = Beendet
@@ -214,8 +222,20 @@ basic-of-registration = der Anmeldung
 level-advanced = Fortgeschritten
 level-expert = Experte
 hidden-settings = { $count ->
-    [one] Eine Einstellung weicht von den Standardwerten ab, siehe die Experteneinstellungen.
-   *[other] { $count } Einstellungen weichen von den Standardwerten ab, siehe die Experteneinstellungen.
+    [one] Eine Einstellung weicht { $baseline ->
+        [template] von der Vorlage
+       *[defaults] von den Standardwerten
+    } ab, siehe die { $level ->
+        [expert] Experteneinstellungen
+       *[advanced] Einstellungen für Fortgeschrittene
+    }.
+   *[other] { $count } Einstellungen weichen { $baseline ->
+        [template] von der Vorlage
+       *[defaults] von den Standardwerten
+    } ab, siehe die { $level ->
+        [expert] Experteneinstellungen
+       *[advanced] Einstellungen für Fortgeschrittene
+    }.
 }
 following-suggestions = Reihenfolge der Tabelle und Kennzahlen folgen den Empfehlungen für das Format, bis du sie bearbeitest.
 customized-settings = Deine Reihenfolge der Tabelle und deine Kennzahlen bleiben bei einem Formatwechsel erhalten. Die Empfehlungen zu übernehmen ersetzt sie, und sie folgen wieder dem Format.

@@ -1293,6 +1293,31 @@ impl Gui {
             .await
     }
 
+    /// Waits until the phases of the basic view say how many settings they hide that differ from
+    /// the template or the defaults, `texts`, in order, each a phase that says so.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_basic_hidden_settings(&self, texts: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#phases .hidden-settings"), texts)
+            .await
+    }
+
+    /// Waits until the setup says which template the phases were added by, and which were added
+    /// to it or removed from it, `texts`, in order; nothing for no template.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it says instead.
+    pub async fn expect_based_on(&self, texts: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(
+                By::Css("#based-on, #added-to-template, #removed-from-template"),
+                texts,
+            )
+            .await
+    }
+
     /// Waits until the basic view of the phases before the start shows the phases named `names`,
     /// in order.
     ///

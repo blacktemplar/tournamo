@@ -148,6 +148,10 @@ impl Session {
         Ok(match id {
             Some(id) => {
                 let phase = self.phase(id).ok_or(NoPhase)?;
+                let form = match Self::template_answers(phase) {
+                    Some(answers) => form.compared_with(answers),
+                    None => form,
+                };
                 form.of_phase(
                     context,
                     phase.name(),

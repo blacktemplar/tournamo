@@ -42,7 +42,8 @@ impl Session {
         // read before the undo, which removes the phase, or the result
         let phase = match ids.as_slice() {
             [id] => match self.applied(*id) {
-                Some(CompetitionTransition::AddPhase(added)) => {
+                // a phase of a template comes back with its template, not as a form
+                Some(CompetitionTransition::AddPhase(added)) if added.template().is_none() => {
                     self.phase(added.id()).map(|phase| UndonePhase {
                         name: phase.name().map(str::to_owned),
                         sources: phase.sources().clone(),

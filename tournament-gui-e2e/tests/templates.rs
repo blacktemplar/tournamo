@@ -1,7 +1,7 @@
 //! Templates: the phases of a whole competition set up at once, while it has none, then refined
 //! as any phase.
 
-use tournament_gui_e2e::{Gui, run_in_new_competition, thirtyfour::error::WebDriverResult};
+use tournament_gui_e2e::{Gui, run_in_competition_to_set_up, thirtyfour::error::WebDriverResult};
 
 /// Enters six entrants, chooses groups and a knockout, and adds its phases.
 async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
@@ -23,7 +23,7 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_template_sets_up_phases_edited_and_played_as_any() {
-    run_in_new_competition(async |gui| {
+    run_in_competition_to_set_up(async |gui| {
         groups_and_knockout(&gui).await?;
         gui.expect_how_played(false).await?;
 
@@ -64,7 +64,7 @@ async fn a_template_sets_up_phases_edited_and_played_as_any() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_phases_of_a_template_are_undone_and_redone_as_a_whole() {
-    run_in_new_competition(async |gui| {
+    run_in_competition_to_set_up(async |gui| {
         groups_and_knockout(&gui).await?;
 
         gui.click("Undo").await?;
@@ -72,6 +72,12 @@ async fn the_phases_of_a_template_are_undone_and_redone_as_a_whole() {
         gui.expect_how_played(true).await?;
         gui.click("Redo").await?;
         gui.expect_announcement("Redone: adding 2 phases.").await?;
+        gui.expect_basic_phases(&["Group phase", "Knockout"])
+            .await?;
+
+        // a competition set up by a template opens at the basic settings, whatever was chosen
+        gui.choose_level("Expert").await?;
+        gui.page.reload().await?;
         gui.expect_basic_phases(&["Group phase", "Knockout"]).await
     })
     .await;
@@ -82,7 +88,7 @@ async fn the_phases_of_a_template_are_undone_and_redone_as_a_whole() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn what_differs_from_the_template_is_said() {
-    run_in_new_competition(async |gui| {
+    run_in_competition_to_set_up(async |gui| {
         groups_and_knockout(&gui).await?;
         gui.expect_based_on(&["Based on the template “Groups and knockout”."])
             .await?;

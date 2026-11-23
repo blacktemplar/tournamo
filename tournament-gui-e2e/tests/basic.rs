@@ -2,7 +2,7 @@
 //! what anyone setting up a competition decides, and the settings of the whole competition, each
 //! change made at once.
 
-use tournament_gui_e2e::{Gui, run_in_new_competition, thirtyfour::error::WebDriverResult};
+use tournament_gui_e2e::{Gui, run_in_competition_to_set_up, thirtyfour::error::WebDriverResult};
 
 /// Enters six entrants and sets them up by the template `template`.
 async fn set_up(gui: &Gui, template: &str) -> WebDriverResult<()> {
@@ -17,7 +17,7 @@ async fn set_up(gui: &Gui, template: &str) -> WebDriverResult<()> {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_phases_of_a_template_are_refined_in_the_basic_view() {
-    run_in_new_competition(async |gui| {
+    run_in_competition_to_set_up(async |gui| {
         set_up(&gui, "Groups and knockout").await?;
         gui.expect_basic_phases(&["Group phase", "Knockout"])
             .await?;
@@ -50,7 +50,7 @@ async fn the_phases_of_a_template_are_refined_in_the_basic_view() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_match_format_is_set_for_the_whole_competition() {
-    run_in_new_competition(async |gui| {
+    run_in_competition_to_set_up(async |gui| {
         set_up(&gui, "Groups and knockout").await?;
 
         gui.choose_plugin("match_format", "Score").await?;
@@ -67,7 +67,7 @@ async fn the_match_format_is_set_for_the_whole_competition() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_competition_is_played_by_drawn_pairs_by_a_checkbox() {
-    run_in_new_competition(async |gui| {
+    run_in_competition_to_set_up(async |gui| {
         set_up(&gui, "Groups and knockout").await?;
 
         gui.toggle("Draw your partner (DYP): the entrants play in pairs drawn by lot")

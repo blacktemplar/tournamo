@@ -25,15 +25,15 @@ later one: a file whose `"format"` changes is migrated, not refused.
   template from the defaults, is said in each phase, with the level that
   shows it. Earlier versions cannot open what this version saves.
 - **Settings by level.** The setup and the form of a phase show the settings
-  of the level chosen above them, basic, advanced or expert, which the browser
-  remembers. The draw, the seeding and how groups are compared show only to
-  experts; at advanced, the form says how many of them differ from the
-  defaults.
+  of the level chosen above them, basic, advanced or expert. A competition
+  opens at basic while it has no phase or was set up by a template, else at
+  advanced; own phases are set up at advanced. The draw, the seeding and how
+  groups are compared show only to experts; below, each phase says how many
+  settings it hides that differ from the template or the defaults.
 
 ### Added
 
-- **The basic view.** At level basic, which applying a template switches to,
-  the setup shows each phase with only its format, where its entrants come
+- **The basic view.** At level basic, the setup shows each phase with only its format, where its entrants come
   from (how many go on, editable), its groups where they matter, and the few
   settings of its format anyone decides, e.g. the rounds; each change is made
   at once. The match format and whether everyone plays in drawn pairs (DYP)

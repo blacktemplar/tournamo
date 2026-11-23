@@ -24,7 +24,7 @@ use tournament_browser::{
     indexed_db::IndexedDb,
     lock::{self, Lock},
 };
-use tournament_engine::PhaseId;
+use tournament_engine::{PhaseId, plugin_factory::schema::Level};
 
 use crate::{
     Notices, Page,
@@ -71,9 +71,18 @@ pub struct Ctx {
     /// The phase shown, as the URL names it, or else the one shown first; `None` while there is
     /// none.
     phase: Memo<Option<PhaseId>>,
+    /// How many settings of a phase the forms and the setup show: those of the level the
+    /// competition opened at, until the operator chooses another.
+    pub level: Signal<Level>,
 }
 
 impl Ctx {
+    /// Shows the settings of `level` in every form of the competition from now on.
+    pub fn choose_level(&self, level: Level) {
+        let mut chosen = self.level;
+        chosen.set(level);
+    }
+
     /// The phase shown, see [`Self::phase`](Ctx#structfield.phase).
     pub fn phase(&self) -> Option<PhaseId> {
         *self.phase.read()
@@ -267,8 +276,10 @@ fn Screen(competition: CompetitionKey, loaded: Loaded) -> Element {
             .borrow_mut()
             .take()
             .expect("a competition loaded is shown once");
+        let level = Signal::new(session.opening_level());
         let session = Signal::new(session);
         Ctx {
+            level,
             session,
             lock: Signal::new(lock.map(Rc::new)),
             storage: page.storage,

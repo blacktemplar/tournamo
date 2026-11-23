@@ -11,7 +11,6 @@ use tournament_engine::plugin_factory::schema::Level;
 use wasm_bindgen::JsCast as _;
 
 use crate::{
-    Page,
     announcement::Announcement,
     competition::Ctx,
     components::dialog::{Dialog, DialogDescription, DialogTitle},
@@ -535,7 +534,7 @@ pub fn Phases() -> Element {
     let tr = ctx.translator.read();
     let several = phases.len() > 1;
     let has_phase = !phases.is_empty();
-    let basic = *use_context::<Page>().level.read() == Level::Basic;
+    let basic = *ctx.level.read() == Level::Basic;
     rsx! {
         section { class: "card", aria_labelledby: "phase",
             // focused once the phase is added, unless it can start
@@ -588,6 +587,10 @@ pub fn Phases() -> Element {
                     button {
                         id: "add-phase",
                         onclick: move |_| {
+                            // a phase set up by hand needs its name and sources
+                            if *ctx.level.peek() < Level::Advanced {
+                                ctx.choose_level(Level::Advanced);
+                            }
                             adding.set(true);
                             focus_later(&["#field-name"]);
                         },

@@ -1,6 +1,6 @@
 use plugin_factory::PluginType;
 use tournament_engine::plugins::{
-    match_format::Scored,
+    match_format::{BestOf, Scored},
     metrics_calculator::{
         BuchholzCalculator, FewerLosses, LaterElimination, LaterFirstLoss, MoreBuchholz,
         MorePoints, MorePointsPerMatch, MoreSonnebornBerger, MoreWins, PointsBalanceCalculator,
@@ -1039,7 +1039,11 @@ fn a_form_shows_the_fields_up_to_a_level() {
             "metrics"
         ]
     );
-    assert_eq!(shown(&form, Level::Basic), ["format"]);
+    assert_eq!(
+        shown(&form, Level::Basic),
+        ["format", "divisions"],
+        "several groups are basic"
+    );
     assert_eq!(
         shown(&form, Level::Expert),
         form.view()
@@ -1049,6 +1053,60 @@ fn a_form_shows_the_fields_up_to_a_level() {
             .collect::<Vec<_>>()
     );
     assert!(shown(&form, Level::Expert).contains(&"draw"));
+}
+
+/// The basic view shows the groups where there are several or the format says they are basic,
+/// as it opens: once open, the groups stay while they are edited.
+#[test]
+fn the_basic_view_shows_the_groups_decided_as_it_opens() {
+    let mut form = new_form();
+    let shows_groups = |form: &PhaseForm, basic| {
+        find(&form.view_basic(basic).fields, &path("divisions")).is_some()
+    };
+    assert!(
+        form.basic_fields().divisions,
+        "a round robin's groups are basic"
+    );
+    assert!(
+        !form.basic_fields().sources,
+        "the first phase takes everyone"
+    );
+
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert!(!form.basic_fields().divisions);
+    form.enter(&path("divisions"), "2").unwrap();
+    let opened = form.basic_fields();
+    assert!(opened.divisions);
+
+    form.enter(&path("divisions"), "1").unwrap();
+    assert!(shows_groups(&form, opened), "the groups stay while open");
+    assert!(!form.basic_fields().divisions);
+    assert!(!shows_groups(&form, form.basic_fields()));
+}
+
+/// The match format shows with the fields of its plugin of a level, though the field itself is
+/// advanced.
+#[test]
+fn the_match_format_shows_with_the_fields_of_its_plugin_at_a_level() {
+    let mut form = new_form();
+    form.choose(&path("match_format"), Some(BestOf::ID))
+        .unwrap();
+
+    let field = form.match_format_field(Level::Basic).unwrap();
+    let Input::Plugin(PluginInput {
+        chosen: Some(chosen),
+        ..
+    }) = &field.input
+    else {
+        panic!("the match format takes a plugin");
+    };
+    assert_eq!(chosen.plugin.id, BestOf::ID);
+    assert!(!chosen.fields.is_empty());
+    assert!(
+        find(&form.view_at(Level::Basic).fields, &path("match_format")).is_none(),
+        "the match format is advanced"
+    );
 }
 
 /// A plugin's field shows at the level the plugin says, advanced unless it says otherwise.

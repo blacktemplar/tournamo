@@ -49,6 +49,7 @@ use crate::{
     },
 };
 
+mod basic;
 mod bracket;
 mod cross_table;
 mod divisions;

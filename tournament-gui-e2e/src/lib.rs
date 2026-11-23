@@ -1255,6 +1255,17 @@ impl Gui {
         Ok(())
     }
 
+    /// Waits until the field at `path` of the form of a phase shows the plugin labelled `label`
+    /// as chosen.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_chosen(&self, path: &str, label: &str) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css(format!("#{} > span", field_id(path))), &[label])
+            .await
+    }
+
     /// Shows the settings of the level labelled `label` ("Advanced", "Expert") in every form of a
     /// phase from now on, by the choice of the first form shown.
     pub async fn choose_level(&self, label: &str) -> WebDriverResult<()> {
@@ -1280,6 +1291,65 @@ impl Gui {
         self.page
             .expect_texts(By::Id("hidden-settings"), text.as_slice())
             .await
+    }
+
+    /// Waits until the basic view of the phases before the start shows the phases named `names`,
+    /// in order.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_basic_phases(&self, names: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("ol.basic > li > h3"), names)
+            .await
+    }
+
+    /// The input of the basic view of the phase named `phase` whose id ends in `id`.
+    async fn basic_input(&self, phase: &str, id: &str) -> WebDriverResult<WebElement> {
+        self.driver
+            .query(By::XPath(format!(
+                "//ol[contains(@class, 'basic')]/li[h3[{}='{phase}']]//input[substring(@id, \
+                 string-length(@id) - string-length('{id}') + 1) = '{id}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await
+    }
+
+    /// Enters `text` into the field at `path` of the phase named `phase` in the basic view, as
+    /// [`Self::enter`] does in the form of a phase.
+    pub async fn enter_in_phase(&self, phase: &str, path: &str, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .basic_input(phase, &format!("-{}", field_id(path)))
+            .await?;
+        // replaced at once, since clearing it first would be a change of its own, made at once
+        input.send_keys(Key::Control + "a").await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        input.send_keys(Key::Tab).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Enters `text` as the last place the phase named `phase` takes of its first source in the
+    /// basic view, e.g. the best 6.
+    pub async fn enter_last_place_in_phase(&self, phase: &str, text: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol[contains(@class, 'basic')]/li[h3[{}='{phase}']]\
+                 //p[contains(@class, 'basic-source')]//input",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        // replaced at once, since clearing it first would be a change of its own, made at once
+        input.send_keys(Key::Control + "a").await?;
+        input.send_keys(text).await?;
+        Page::pause().await;
+        input.send_keys(Key::Tab).await?;
+        Page::pause().await;
+        Ok(())
     }
 
     /// Waits until the choice of how a competition without phases is played is shown, if
@@ -2413,10 +2483,11 @@ impl Gui {
     /// # Panics
     /// Panics if it does not in time.
     pub async fn expect_field_shown(&self, label: &str, shown: bool) -> WebDriverResult<()> {
-        // a field taking a number or yes or no is labelled by a label, one choosing a plugin by a
-        // span labelling its choice
+        // in the form of a phase or the basic view: a field taking a number or yes or no is
+        // labelled by a label, one choosing a plugin by a span labelling its choice
         let field = By::XPath(format!(
-            "//form//*[self::label or self::span[contains(@class, 'label')]][{}='{label}']",
+            "//*[contains(concat(' ', @class, ' '), ' field ')]\
+             //*[self::label or self::span[contains(@class, 'label')]][{}='{label}']",
             without_isolation_marks("normalize-space()")
         ));
         if shown {

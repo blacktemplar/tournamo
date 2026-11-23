@@ -874,6 +874,9 @@ pub enum Action {
     /// [`Session::add_template`](crate::session::Session::add_template).
     AddPhases(Vec<PhaseName>),
     EditPhase(PhaseName),
+    /// Several phases changed at once, by a setting of the whole competition, in order: one
+    /// action, see [`Session::set_match_format`](crate::session::Session::set_match_format).
+    EditPhases(Vec<PhaseName>),
     /// A phase removed, as it was called.
     RemovePhase(PhaseName),
     /// The competition started.

@@ -19,10 +19,20 @@ later one: a file whose `"format"` changes is migrated, not refused.
   phase's sources change. The DYP preset is gone: a double elimination played
   by drawn pairs is the same. In the CLI, `add-template` replaces
   `add-preset`. Presets were never saved, so saved competitions are unaffected.
-- **Settings by level.** The form of a phase shows the settings of the level
-  chosen above it, advanced or expert, which the browser remembers. The draw,
-  the seeding and how groups are compared show only to experts; below that,
-  the form says how many of them differ from the defaults.
+- **Settings by level.** The setup and the form of a phase show the settings
+  of the level chosen above them, basic, advanced or expert, which the browser
+  remembers. The draw, the seeding and how groups are compared show only to
+  experts; at advanced, the form says how many of them differ from the
+  defaults.
+
+### Added
+
+- **The basic view.** At level basic, which applying a template switches to,
+  the setup shows each phase with only its format, where its entrants come
+  from (how many go on, editable), its groups where they matter, and the few
+  settings of its format anyone decides, e.g. the rounds; each change is made
+  at once. The match format and whether everyone plays in drawn pairs (DYP)
+  are set there once for the whole competition.
 
 ## [0.5.0] - 2026-11-21
 

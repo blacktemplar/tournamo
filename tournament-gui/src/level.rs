@@ -4,7 +4,7 @@
 use tournament_engine::plugin_factory::schema::Level;
 
 /// The levels an operator chooses among, in order.
-pub const ALL: [Level; 2] = [Level::Advanced, Level::Expert];
+pub const ALL: [Level; 3] = [Level::Basic, Level::Advanced, Level::Expert];
 
 /// How local storage names `level`.
 fn tag(level: Level) -> &'static str {

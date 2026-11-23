@@ -1767,6 +1767,28 @@ rather than snapshotting fields before they have been chosen.
   surprise; a field counts once, whatever its plugins hold. Rejected: a level
   per form, which an operator would set again in every dialog; levels chosen
   by a template, which would have to be remembered with the phases.
+- **The basic view** (the GUI's setup at level basic, which applying a template
+  switches to) reads only the phases, not the template they came from, so it
+  works for any competition and survives a reload. Each phase shows its name,
+  where its entrants come from (a line per source with the last place taken
+  editable; none for a phase taking everyone registered), its format and the
+  basic fields of its plugins, and its groups where there are several or its
+  format says they are basic (`PhaseFormat::has_basic_divisions`: a round
+  robin's matches grow with the square of the group size, so groups are its
+  lever). Which of these show is decided when it opens
+  (`PhaseForm::basic_fields`), not on every change, so a field does not go
+  while it is edited (groups set to one). Each change is made at once, as an
+  edit of the phase. No ranking or metrics, and no note about what a template
+  set beyond the basic fields, which is part of what the template is.
+- **Settings of the whole competition** in the basic view, each a view of the
+  phases not started, never saved, set on each of them as one action
+  (`Action::EditPhases`): the match format (`Session::match_formats`), shown
+  only where every phase has the same with the same settings, else "mixed …,
+  see the advanced settings"; and drawn pairs (`Session::dyp`), `RandomPairs`
+  as the teams of the phases taking the registration, offered where each of
+  their drafts with it builds, the generic form of "the format takes pairs",
+  so not for a Monster DYP. A match format that does not fit a phase is
+  refused naming the phase, rather than leaving that phase at another one.
 - **Visibility does not imply customization**. The levels expose different
   fields without changing this state. A template can
   supply a complete draft; an actual edit takes control of the section. Keeping

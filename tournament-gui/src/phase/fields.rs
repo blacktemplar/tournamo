@@ -5,7 +5,7 @@ use tournament_app::{
     form::{Editable, FormField, Input, MetricOption, Path, PhaseForm, PluginInput, PluginOption},
     i18n::{MetricText, PluginText, Text, Translator},
 };
-use tournament_engine::{PhasePlugins, plugin_factory::config::ConfigError};
+use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::config::ConfigError};
 
 use super::lists::{MetricsList, OrderedList, UnorderedList};
 use crate::{
@@ -14,25 +14,51 @@ use crate::{
     components::select::{Select, SelectOption},
     focus::focus_later,
     i18n::collation_key,
-    icons, sentence,
+    icons,
+    phases::phase_id_text,
+    sentence,
     toggletip::Toggletip,
 };
 
-/// The form of a phase whose fields are laid out.
+/// The form of a phase whose fields are laid out, and the phase whose fields they are where
+/// several forms show at once, as in the basic view, which their ids then name.
 #[derive(Clone, Copy, PartialEq)]
-pub(super) struct EditedForm(pub(super) Signal<PhaseForm>);
+pub(super) struct EditedForm {
+    pub(super) form: Signal<PhaseForm>,
+    of: Option<PhaseId>,
+}
 
 impl EditedForm {
+    pub(super) fn new(form: Signal<PhaseForm>) -> Self {
+        Self { form, of: None }
+    }
+
+    /// The form of the phase `phase`, shown next to the forms of other phases.
+    pub(super) fn of_phase(form: Signal<PhaseForm>, phase: PhaseId) -> Self {
+        Self {
+            form,
+            of: Some(phase),
+        }
+    }
+
+    /// The id of the element of the field at `path`, see [`id`].
+    fn id(self, path: &Path) -> String {
+        match self.of {
+            Some(phase) => format!("{}-{}", phase_id_text(phase), id(path)),
+            None => id(path),
+        }
+    }
+
     /// Applies `edit` to the form. Its error is dropped: a field laid out is one of the form, and
     /// takes what its input hands over.
     pub(super) fn edit(self, edit: impl FnOnce(&mut dyn Editable) -> Result<(), ConfigError>) {
-        let Self(mut form) = self;
+        let mut form = self.form;
         _ = edit(&mut *form.write());
     }
 
     /// Why the field at `path` would not take `typed`, see [`Editable::issue_entering`].
     fn issue_entering(self, path: &Path, typed: &str) -> Option<Text> {
-        self.0.read().issue_entering(path, typed).ok().flatten()
+        self.form.read().issue_entering(path, typed).ok().flatten()
     }
 }
 
@@ -62,7 +88,7 @@ pub(super) fn Fields(form: EditedForm, fields: Vec<FormField>, disabled: bool) -
 fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
-    let id = id(&field.path);
+    let id = form.id(&field.path);
     let label = capitalized(&tr.field_label(&field));
     let description = tr.field_description(&field);
     let path = field.path.clone();
@@ -220,7 +246,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                     }
                 } else if is_metrics {
                     MetricsList {
-                        form: form.0,
+                        form: form.form,
                         list_id: id.clone(),
                         list,
                         compared,

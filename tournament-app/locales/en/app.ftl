@@ -17,6 +17,7 @@ error-unknown-format = there is no format “{ $format }”
 error-format-misconfigured = { $reason }
 error-unknown-template = there is no template “{ $template }”
 error-template-does-not-expand = the template does not work: { $reason }
+error-setting-does-not-fit = { $phase } cannot be played so; change it in the advanced settings
 error-has-phases = the competition has phases already; a template sets up a competition without any
 error-invalid-phase = the phase cannot be played this way; the form shows what to change
 error-no-sources = choose where the phase takes its entrants from

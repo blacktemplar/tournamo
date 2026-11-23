@@ -75,6 +75,16 @@ pub struct PhaseForm {
     language: Language,
 }
 
+/// What the basic view of a phase shows besides the fields of the basic level, see
+/// [`PhaseForm::basic_fields`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BasicFields {
+    /// Whether it shows the groups.
+    pub divisions: bool,
+    /// Whether it shows where the entrants come from.
+    pub sources: bool,
+}
+
 /// What a [`PhaseForm`] shows: plain data for a screen to lay out.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FormView {
@@ -695,14 +705,56 @@ impl PhaseForm {
         needer
     }
 
-    /// What the fields of the draft up to `level` are shown from.
-    fn generator(&self, level: Level) -> Generator<'_, PhasePlugins> {
+    /// What the fields of the draft up to `level`, and those of `anyway`, are shown from.
+    fn generator<'a>(&'a self, level: Level, anyway: &'a [Path]) -> Generator<'a, PhasePlugins> {
         Generator {
             draft: &self.draft,
             rejected: &self.rejected,
             offered: PhasePlugins::default_value,
             level,
+            anyway,
         }
+    }
+
+    /// What the basic view of the phase shows besides the fields of the basic level, as it would
+    /// open now: the groups where there are several or its format says they are basic (see
+    /// [`PhaseFormat::has_basic_divisions`]), and where its entrants come from unless it takes
+    /// every entrant registered. A screen decides it once when it opens, so that a field does not
+    /// go while it is being edited, e.g. the groups set to one.
+    pub fn basic_fields(&self) -> BasicFields {
+        let answers = self.draft.answers();
+        let several = answers
+            .get(PhasePlugins::DIVISIONS)
+            .and_then(Value::as_u64)
+            .is_some_and(|divisions| divisions > 1);
+        let basic = answers
+            .get(PhasePlugins::FORMAT)
+            .and_then(PluginConfig::from_answer)
+            .and_then(|config| config.build::<dyn PhaseFormat>().ok())
+            .is_some_and(|format| format.has_basic_divisions());
+        BasicFields {
+            divisions: several || basic,
+            sources: !self.entry_view().everyone_registered,
+        }
+    }
+
+    /// What the form shows in the basic view laid out by `basic`: the fields of the basic level,
+    /// and the groups if `basic` shows them. Where the entrants come from is
+    /// [`FormView::entry`], which a screen shows if `basic` says so.
+    pub fn view_basic(&self, basic: BasicFields) -> FormView {
+        let divisions = [Path::ROOT.field(PhasePlugins::DIVISIONS)];
+        let anyway: &[Path] = if basic.divisions { &divisions } else { &[] };
+        self.view_showing(Level::Basic, anyway)
+    }
+
+    /// The field of the match format, with the fields of its plugin up to `level`, as the view
+    /// at `level` would show it if it showed the field, with what is wrong with it.
+    pub fn match_format_field(&self, level: Level) -> Option<FormField> {
+        let path = Path::ROOT.field(PhasePlugins::MATCH_FORMAT);
+        self.view_showing(level, std::slice::from_ref(&path))
+            .fields
+            .into_iter()
+            .find(|field| field.path == path)
     }
 
     /// The draft with the plugins it implies, see [`Draft::add_implied`].
@@ -735,6 +787,15 @@ impl PhaseForm {
     /// Only what is shown depends on the level, not what the form does, e.g. whether it follows
     /// suggestions.
     pub fn view_at(&self, level: Level) -> FormView {
+        if level == Level::Basic {
+            return self.view_basic(self.basic_fields());
+        }
+        self.view_showing(level, &[])
+    }
+
+    /// What the form shows to an operator of `level`, and the fields of `anyway` whatever their
+    /// level.
+    fn view_showing(&self, level: Level, anyway: &[Path]) -> FormView {
         let completed = self.completed();
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
@@ -768,7 +829,7 @@ impl PhaseForm {
             completed: &completed_nodes,
             irrelevant: &irrelevant,
         };
-        let generator = self.generator(level);
+        let generator = self.generator(level, anyway);
         let mut fields = generator.fields(&nodes, None, &completed_nodes, &whole);
         let hidden = generator.hidden(&nodes, &whole);
         let mut unplaced = Vec::new();

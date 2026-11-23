@@ -155,6 +155,7 @@ fn action_text(tr: &Translator, action: &Action) -> String {
         Action::AddPhase(phase) => t!(tr, "action-add-phase", phase = tr.phase_name(phase)),
         Action::AddPhases(phases) => t!(tr, "action-add-phases", count = phases.len()),
         Action::EditPhase(phase) => t!(tr, "action-edit-phase", phase = tr.phase_name(phase)),
+        Action::EditPhases(phases) => t!(tr, "action-edit-phases", count = phases.len()),
         Action::RemovePhase(phase) => {
             t!(tr, "action-remove-phase", phase = tr.phase_name(phase))
         }

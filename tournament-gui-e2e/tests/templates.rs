@@ -16,11 +16,8 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
     gui.page.check_accessibility().await?;
     gui.click("Add phases").await?;
     gui.expect_announcement("2 phases are added.").await?;
-    gui.expect_phase_list(&[
-        ("Group phase", "Everyone registered"),
-        ("Knockout", "Places 1–4 of Group phase"),
-    ])
-    .await
+    // refined in the basic view
+    gui.expect_basic_phases(&["Group phase", "Knockout"]).await
 }
 
 #[tokio::test]
@@ -30,10 +27,13 @@ async fn a_template_sets_up_phases_edited_and_played_as_any() {
         groups_and_knockout(&gui).await?;
         gui.expect_how_played(false).await?;
 
-        gui.click_labelled("Edit phase: Group phase").await?;
-        gui.enter("divisions", "3").await?;
-        gui.click("Save changes").await?;
-        gui.expect_announcement("The phase is changed.").await?;
+        gui.enter_in_phase("Group phase", "divisions", "3").await?;
+        gui.choose_level("Advanced").await?;
+        gui.expect_phase_list(&[
+            ("Group phase", "Everyone registered"),
+            ("Knockout", "Places 1–4 of Group phase"),
+        ])
+        .await?;
         gui.click_labelled("Edit phase: Knockout").await?;
         gui.toggle("Match for third place").await?;
         gui.click("Save changes").await?;
@@ -72,11 +72,7 @@ async fn the_phases_of_a_template_are_undone_and_redone_as_a_whole() {
         gui.expect_how_played(true).await?;
         gui.click("Redo").await?;
         gui.expect_announcement("Redone: adding 2 phases.").await?;
-        gui.expect_phase_list(&[
-            ("Group phase", "Everyone registered"),
-            ("Knockout", "Places 1–4 of Group phase"),
-        ])
-        .await
+        gui.expect_basic_phases(&["Group phase", "Knockout"]).await
     })
     .await;
 }

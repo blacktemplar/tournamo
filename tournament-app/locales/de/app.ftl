@@ -14,6 +14,7 @@ error-unknown-format = es gibt kein Format „{ $format }“
 error-format-misconfigured = das Format ist fehlerhaft: { $reason }
 error-unknown-template = es gibt keine Vorlage „{ $template }“
 error-template-does-not-expand = die Vorlage funktioniert nicht: { $reason }
+error-setting-does-not-fit = { $phase } kann so nicht gespielt werden; ändere sie in den Einstellungen für Fortgeschrittene
 error-has-phases = der Wettbewerb hat schon Phasen; eine Vorlage richtet einen Wettbewerb ohne Phasen ein
 error-invalid-phase = so kann die Phase nicht gespielt werden; das Formular zeigt, was zu ändern ist
 error-no-sources = wähle, woher die Phase ihre Teilnehmer nimmt

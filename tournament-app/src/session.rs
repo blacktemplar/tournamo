@@ -427,6 +427,7 @@ fn refused<E>(
         .unwrap_or_else(|| rejected(error))
 }
 
+mod basic;
 mod bracket;
 mod cross_table;
 mod entrants;
@@ -434,6 +435,7 @@ mod entry;
 mod phase;
 mod phases;
 mod template;
+pub use basic::{Dyp, MatchFormats};
 pub(crate) use phases::named;
 mod report;
 mod scale;

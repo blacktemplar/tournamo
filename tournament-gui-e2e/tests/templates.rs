@@ -3,21 +3,52 @@
 
 use tournament_gui_e2e::{Gui, run_in_competition_to_set_up, thirtyfour::error::WebDriverResult};
 
-/// Enters six entrants, chooses groups and a knockout, and adds its phases.
+/// Enters six entrants, chooses groups and a knockout, and adds its phases as it sets them up.
 async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
     gui.paste_entrant_names("Alice\nBob\nCarol\nDave\nEve\nFrank")
         .await?;
     gui.choose_how_played("Groups and knockout").await?;
-    gui.expect_preview(&[
-        ("Group phase", "Everyone registered"),
-        ("Knockout", "Places 1–4 of Group phase"),
-    ])
-    .await?;
+    gui.expect_basic_phases(&["Group phase", "Knockout"])
+        .await?;
     gui.page.check_accessibility().await?;
     gui.click("Add phases").await?;
     gui.expect_announcement("2 phases are added.").await?;
-    // refined in the basic view
+    gui.expect_how_played(false).await?;
     gui.expect_basic_phases(&["Group phase", "Knockout"]).await
+}
+
+/// The phases of a template are changed before they are added, as the form of a phase is: in the
+/// basic view, and above it each in its dialog; what is added is what was changed.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn the_phases_of_a_template_are_changed_before_they_are_added() {
+    run_in_competition_to_set_up(async |gui| {
+        gui.paste_entrant_names("Alice\nBob\nCarol\nDave\nEve\nFrank")
+            .await?;
+        gui.choose_how_played("Groups and knockout").await?;
+        gui.enter_in_phase("Group phase", "divisions", "3").await?;
+        gui.enter_last_place_in_phase("Knockout", "6").await?;
+
+        gui.choose_level("Advanced").await?;
+        gui.expect_template_phases(&[
+            ("Group phase", "Everyone registered"),
+            ("Knockout", "Places 1–6 of Group phase"),
+        ])
+        .await?;
+        gui.click_labelled("Edit phase: Knockout").await?;
+        gui.toggle("Match for third place").await?;
+        gui.click("Save changes").await?;
+        gui.page.check_accessibility().await?;
+
+        gui.click("Add phases").await?;
+        gui.expect_announcement("2 phases are added.").await?;
+        gui.expect_phase_list(&[
+            ("Group phase", "Everyone registered"),
+            ("Knockout", "Places 1–6 of Group phase"),
+        ])
+        .await
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -25,7 +56,6 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
 async fn a_template_sets_up_phases_edited_and_played_as_any() {
     run_in_competition_to_set_up(async |gui| {
         groups_and_knockout(&gui).await?;
-        gui.expect_how_played(false).await?;
 
         gui.enter_in_phase("Group phase", "divisions", "3").await?;
         gui.choose_level("Advanced").await?;

@@ -673,7 +673,7 @@ pub struct SourceRow {
 
 impl SourceRow {
     /// The row of `source`.
-    pub(crate) fn of(source: &Source) -> Self {
+    pub fn of(source: &Source) -> Self {
         Self {
             phase: match source.of() {
                 SourceOf::Registration => None,

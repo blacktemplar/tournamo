@@ -2,16 +2,20 @@
 
 use plugin_factory::{catalog::AnyAxis, config::Config, schema::Level};
 use tournament_engine::{
-    AddPhase, Phase, PhaseId,
-    plugins::template::Template,
+    AddPhase, Columns, Phase, PhaseId, PhasePlugins,
+    plugins::template::{Template, TemplateError, TemplateOrigin, TemplateProblem},
     undoable_state_machine::{LogEntry, LogEntryKind, TransitionId},
     uuid::Uuid,
 };
 
-use super::{Session, phase::plugins, refused};
+use super::{
+    Session,
+    phase::{completed, plugins},
+    refused,
+};
 use crate::{
     error::{AddTemplateError, Refusal},
-    form::{self, PreviewPhase},
+    form::{Context, PhaseForm, TemplateForm},
     i18n::Translator,
     view::{PhaseName, Plugin},
 };
@@ -112,46 +116,102 @@ impl Session {
         plugins(AnyAxis::of::<dyn Template>())
     }
 
-    /// The phases the template `id`, a [`Plugin::id`], would add to a competition without phases,
-    /// in order, named in the language of `tr`, each with how it is played.
+    /// The phases of the template `id`, a [`Plugin::id`], as forms to be refined before
+    /// [`Self::add_template_form`] adds them, named in the language of `tr`, each compared with
+    /// the template (see [`PhaseForm::compared_with`]).
     ///
     /// # Errors
-    /// Returns an error if there is no such template, or it does not expand.
-    pub fn template_preview(
+    /// Returns an error if the competition has a phase, there is no such template, or it does not
+    /// expand.
+    pub fn template_form(
+        &self,
         id: &str,
         tr: &Translator,
-    ) -> Result<Vec<PreviewPhase>, AddTemplateError> {
-        form::template::preview(id, &*template(id)?, tr).map_err(AddTemplateError::DoesNotExpand)
-    }
-
-    /// Adds the phases of the template `id`, a [`Plugin::id`], named in the language of `tr`, as
-    /// one action, which one [`Self::undo`] takes back, and returns their ids in order. They are
-    /// ordinary phases, each edited and removed as any phase.
-    ///
-    /// # Errors
-    /// Returns an error if the competition has a phase, there is no such template, it does not
-    /// expand, or a phase is refused, as [`Self::add_phase`] would refuse it; then none is added.
-    pub fn add_template(
-        &mut self,
-        id: &str,
-        tr: &Translator,
-    ) -> Result<Vec<PhaseId>, AddTemplateError> {
+    ) -> Result<TemplateForm, AddTemplateError> {
         if !self.competition().phases().is_empty() {
             return Err(AddTemplateError::HasPhases);
         }
+        let of_template = template(id)?.phases();
         let phases = self
             .competition()
             .expand(
                 id,
-                &template(id)?.phases(),
+                &of_template,
                 || PhaseId::new(Uuid::new_v4()),
                 |phrase| tr.template_phase(id, phrase),
             )
             .map_err(AddTemplateError::DoesNotExpand)?;
         let ids = phases.iter().map(AddPhase::id).collect();
-        let entries = phases
-            .into_iter()
-            .map(|added| LogEntry::new(TransitionId::new(), LogEntryKind::Apply(added.into())));
+        let forms = phases
+            .iter()
+            .zip(&of_template)
+            .enumerate()
+            .map(|(index, (added, phase))| {
+                let draft = self
+                    .competition()
+                    .phase_draft(added.sources())
+                    .with_answers(&added.plugins().config())
+                    .map_err(|error| {
+                        AddTemplateError::DoesNotExpand(TemplateError {
+                            phase: index,
+                            problem: TemplateProblem::Answers(error),
+                        })
+                    })?;
+                let mut form = PhaseForm::new(draft)
+                    .in_language(self.language)
+                    .compared_with(phase.answers.clone())
+                    .of_phase(
+                        Context::default(),
+                        added.name(),
+                        added.sources().to_vec(),
+                        Columns::new(),
+                    );
+                // ranking and scoring follow the format, as for a new phase, unless the template
+                // says what they are
+                if PhasePlugins::SUGGESTED
+                    .iter()
+                    .all(|field| phase.answers.get(field).is_none())
+                {
+                    _ = form.apply_suggestions();
+                }
+                Ok(form)
+            })
+            .collect::<Result<_, AddTemplateError>>()?;
+        Ok(TemplateForm::new(id, ids, forms))
+    }
+
+    /// Adds the phases of `form`, as their forms stand, as one action, which one [`Self::undo`]
+    /// takes back, and returns their ids in order. They are ordinary phases, each edited and
+    /// removed as any phase, remembering the template.
+    ///
+    /// # Errors
+    /// Returns an error if the competition has a phase, a phase cannot be played as its form
+    /// stands, or a phase is refused, as [`Self::add_phase`] would refuse it; then none is added.
+    pub fn add_template_form(
+        &mut self,
+        form: &TemplateForm,
+    ) -> Result<Vec<PhaseId>, AddTemplateError> {
+        if !self.competition().phases().is_empty() {
+            return Err(AddTemplateError::HasPhases);
+        }
+        let mut entries = Vec::new();
+        for (index, (id, phase)) in form.ids().iter().zip(form.forms()).enumerate() {
+            let (name, sources) = phase.entry()?;
+            let plugins = completed(phase.draft())
+                .map_err(|_| AddTemplateError::Invalid(form.name(index)))?;
+            let added = AddPhase::new(*id, plugins)
+                .with_name(name)
+                .with_sources(sources)
+                .with_columns(phase.columns().clone())
+                .with_template(Some(TemplateOrigin {
+                    template: form.template().to_owned(),
+                    phase: index,
+                }));
+            entries.push(LogEntry::new(
+                TransitionId::new(),
+                LogEntryKind::Apply(added.into()),
+            ));
+        }
         self.history
             .apply_all(&mut self.machine, entries)
             .map_err(|error| {
@@ -160,6 +220,20 @@ impl Session {
                     _ => None,
                 })
             })?;
-        Ok(ids)
+        Ok(form.ids().to_vec())
+    }
+
+    /// Adds the phases of the template `id`, a [`Plugin::id`], as it sets them up, named in the
+    /// language of `tr`: [`Self::template_form`] added by [`Self::add_template_form`].
+    ///
+    /// # Errors
+    /// Returns an error as either does; then none is added.
+    pub fn add_template(
+        &mut self,
+        id: &str,
+        tr: &Translator,
+    ) -> Result<Vec<PhaseId>, AddTemplateError> {
+        let form = self.template_form(id, tr)?;
+        self.add_template_form(&form)
     }
 }

@@ -111,6 +111,8 @@ pub enum AddTemplateError {
     UnknownTemplate(String),
     /// The template does not expand into phases: a bug of the template.
     DoesNotExpand(TemplateError),
+    /// This phase cannot be played as its form stands; the form shows what to change.
+    Invalid(PhaseName),
     #[error(transparent)]
     Sources(#[from] SourcesError),
     /// The engine refused a phase for a reason this crate does not know.
@@ -679,6 +681,9 @@ impl Message for AddTemplateError {
             }
             Self::DoesNotExpand(error) => {
                 Text::new("error-template-does-not-expand").with("reason", error.to_string())
+            }
+            Self::Invalid(phase) => {
+                Text::new("error-invalid-template-phase").with("phase", phase.clone())
             }
             Self::Sources(error) => error.text(),
             Self::Rejected(error) => rejected(error),

@@ -14,9 +14,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
 - **Templates instead of presets.** A competition without phases is set up by
   a template: groups and knockout, rounds and knockout, single elimination,
   double elimination, Monster DYP, round robin or random rounds. A template
-  has no questions of its own; its phases are refined once added, as any
-  phase, e.g. a knockout after groups takes the best 4 in total, which the
-  phase's sources change. The DYP preset is gone: a double elimination played
+  has no questions of its own; its phases are changed before they are added,
+  as the form of a new phase is, e.g. a knockout after groups takes the best 4
+  in total, which its sources change. The DYP preset is gone: a double elimination played
   by drawn pairs is the same. In the CLI, `add-template` replaces
   `add-preset`. Presets were never saved, so saved competitions are unaffected.
 - **A competition remembers its template.** The setup says which template the

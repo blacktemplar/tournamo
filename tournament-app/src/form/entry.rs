@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// What a [`PhaseForm`] knows of the competition its phase is of, to offer and check sources.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Context {
     /// The number the phase has, or will have once added, from 1.
     pub(crate) number: usize,
@@ -277,7 +277,7 @@ impl PhaseForm {
     /// How many entrants each team of the phase stands for, as the sources and its teams stand
     /// (as registered while none are chosen): `None` if they would not all be of one size, see
     /// [`Teams::entrants_per_team`].
-    fn teams_of_one_size(&self) -> Option<NonZeroU32> {
+    pub(crate) fn teams_of_one_size(&self) -> Option<NonZeroU32> {
         let teams = self
             .draft
             .answers()
@@ -286,6 +286,17 @@ impl PhaseForm {
             .and_then(|config| config.build::<dyn Teams>().ok())
             .unwrap_or_else(|| Box::new(Keep));
         teams.entrants_per_team(self.entrants_per_qualifier())
+    }
+
+    /// Knows the competition as `context` describes it from now on, making the draft anew if it
+    /// changed; returns whether it did.
+    pub(crate) fn set_context(&mut self, context: Context) -> bool {
+        if self.context == context {
+            return false;
+        }
+        self.context = context;
+        self.redraft();
+        true
     }
 
     /// Makes the draft anew for the sources as they stand, with its answers, so that what is

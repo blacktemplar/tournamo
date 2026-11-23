@@ -172,7 +172,6 @@ entrant-new-name = New name of { $name }
 phase-heading = Phase
 how-played = How is it played?
 own-phases = Own phases, one by one (advanced)
-template-preview = Phases added
 # $template: the label of the template the phases were added by
 based-on = Based on the template “{ $template }”.
 # $phases: the phases added besides those of the template, listed
@@ -182,7 +181,9 @@ removed-from-template = Removed from the template: { $phases }.
 # a phase of a template without a name, by its position among them
 template-phase-number = phase { $number }
 # below the phases a template adds
-template-refined = Once added, each phase can be changed, removed, or followed by more.
+template-phases = Its phases
+template-refined = Change them here as they should be played, then add them; each can also be changed, removed, or followed by more once added.
+edit-template-phase-description = Change how the phase is played; it is added with the others.
 add-phases = Add phases
 # the heading once every match is played
 finished = Finished

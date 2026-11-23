@@ -132,7 +132,8 @@ pub struct PhasePlugins {
     #[plugin(
         label = "format",
         description = "how the matches are scheduled",
-        default = Box::new(phase_format::RoundRobin)
+        default = Box::new(phase_format::RoundRobin),
+        level = basic
     )]
     format: Box<dyn PhaseFormat>,
     #[plugin(
@@ -150,13 +151,15 @@ pub struct PhasePlugins {
     #[plugin(
         label = "draw",
         description = "how the entrants are dealt to the groups",
-        default = Box::new(draw::Snake)
+        default = Box::new(draw::Snake),
+        level = expert
     )]
     draw: Box<dyn Draw>,
     #[plugin(
         label = "seeding",
         description = "the order the format sets the entrants of a group in",
-        default = Box::new(seeding::SeededInOrder)
+        default = Box::new(seeding::SeededInOrder),
+        level = expert
     )]
     seeding: Box<dyn Seeding>,
     #[plugin(
@@ -179,7 +182,8 @@ pub struct PhasePlugins {
         label = "compared across groups by",
         description = "after the place in the group: how entrants of the same place in different \
                        groups are ranked against each other",
-        default = Vec::new()
+        default = Vec::new(),
+        level = expert
     )]
     across: Vec<Box<dyn SliceRanker>>,
 }

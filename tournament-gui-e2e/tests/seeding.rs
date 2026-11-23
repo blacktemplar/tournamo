@@ -89,6 +89,7 @@ async fn groups_are_dealt_the_rated_registration_back_and_forth() {
         eight_rated(&gui).await?;
         gui.choose_format("Round robin").await?;
         gui.enter("divisions", "2").await?;
+        gui.choose_level("Expert").await?;
         gui.choose_plugin("draw", "Back and forth").await?;
         gui.click("Add phase").await?;
 

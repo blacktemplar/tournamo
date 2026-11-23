@@ -22,6 +22,7 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
     gui.click("Add phase").await?;
     gui.open_new_phase("Knockout").await?;
     gui.choose_format("Single elimination").await?;
+    gui.choose_level("Expert").await?;
     gui.choose_plugin("seeding", "Groups kept apart").await?;
     gui.enter_place(0, "to", "8").await?;
     gui.expect_source_in_groups(
@@ -126,6 +127,7 @@ async fn knockouts_in_blocks_play_for_places_of_their_own() {
         }
         gui.choose_format("Single elimination").await?;
         gui.enter("divisions", "2").await?;
+        gui.choose_level("Expert").await?;
         gui.choose_plugin("draw", "In blocks").await?;
         gui.click("Add phase").await?;
         gui.click("Start").await?;

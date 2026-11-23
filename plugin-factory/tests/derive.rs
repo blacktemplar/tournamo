@@ -8,7 +8,7 @@ use plugin_factory::{
     compatibility::{Declaration, Fact, Incompatibility, check},
     config::{ConfigError, Path, PluginConfig, Value},
     register,
-    schema::{Configurable, DecimalRange, Field, FieldKind, FieldType, IntegerRange},
+    schema::{Configurable, DecimalRange, Field, FieldKind, FieldType, IntegerRange, Level},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error};
 use serde_json::json;
@@ -157,7 +157,7 @@ impl Derived for Unit {}
 #[derive(Debug, Serialize, Deserialize, Plugin)]
 #[plugin(id = "derive::bounded", label = "bounded")]
 struct Bounded {
-    #[plugin(label = "Rounds", min = 3, max = 9, multiple_of = 3)]
+    #[plugin(label = "Rounds", min = 3, max = 9, multiple_of = 3, level = basic)]
     rounds: u8,
     #[serde(deserialize_with = "Option::deserialize")]
     #[plugin(label = "Points for a win", min = 0, multiple_of = 0.5, default = Some(1.0))]
@@ -217,7 +217,7 @@ impl Derived for Counter {}
 struct Composite {
     #[plugin(label = "Main", description = "what the composite is built around")]
     main: Box<dyn Derived>,
-    #[plugin(label = "Others", default)]
+    #[plugin(label = "Others", default, level = expert)]
     others: Vec<Box<dyn Derived>>,
     #[serde(rename = "limit", deserialize_with = "Option::deserialize")]
     #[plugin(label = "Limit")]
@@ -351,6 +351,18 @@ fn a_field_is_described_by_its_attribute() {
     assert_eq!(field.label(), "Points for a win");
     assert_eq!(field.description(), Some("what winning a match is worth"));
     assert_eq!(field_of::<Points>("byes").description(), None);
+}
+
+#[test]
+fn a_field_is_for_the_level_its_attribute_names_or_else_advanced() {
+    let composite = Composite::schema();
+
+    assert_eq!(field_of::<Bounded>("rounds").level(), Level::Basic);
+    assert_eq!(field_of::<Bounded>("for_win").level(), Level::Advanced);
+    assert_eq!(
+        composite.field_named("others").map(Field::level),
+        Some(Level::Expert)
+    );
 }
 
 #[test]

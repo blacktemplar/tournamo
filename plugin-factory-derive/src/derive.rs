@@ -297,6 +297,8 @@ struct Field {
     irrelevant_with: Option<Type>,
     /// The function the field is serialized with instead of its `Serialize` impl.
     serialize_with: Option<ExprPath>,
+    /// Who the field is for, from `#[plugin(level = basic)]`, `advanced` or `expert`.
+    level: Option<Ident>,
 }
 
 /// How a field narrows the range of numbers its type takes: its `#[plugin(min = .., max = ..,
@@ -387,6 +389,7 @@ impl Field {
         let mut default = None;
         let mut narrowing = Narrowing::default();
         let mut irrelevant_with = None;
+        let mut level = None;
         let mut left_out = None;
         for attribute in attributes(&field.attrs, "plugin") {
             attribute.parse_nested_meta(|meta| {
@@ -404,12 +407,21 @@ impl Field {
                     set_once(&mut narrowing.multiple_of, &meta, meta.value()?.parse()?)
                 } else if meta.path.is_ident("irrelevant_with") {
                     set_once(&mut irrelevant_with, &meta, meta.value()?.parse()?)
+                } else if meta.path.is_ident("level") {
+                    let ident: Ident = meta.value()?.parse()?;
+                    if !["basic", "advanced", "expert"].contains(&ident.to_string().as_str()) {
+                        return Err(Error::new_spanned(
+                            ident,
+                            "expected `basic`, `advanced` or `expert`",
+                        ));
+                    }
+                    set_once(&mut level, &meta, ident)
                 } else if meta.path.is_ident("skip") {
                     set_once(&mut left_out, &meta, meta.path.clone())
                 } else {
                     Err(meta.error(
                         "expected `label`, `description`, `default`, `min`, `max`, `multiple_of`, \
-                         `irrelevant_with` or `skip`",
+                         `irrelevant_with`, `level` or `skip`",
                     ))
                 }
             })?;
@@ -420,12 +432,13 @@ impl Field {
                 || default.is_some()
                 || narrowing.narrows()
                 || irrelevant_with.is_some()
+                || level.is_some()
             {
                 return Err(Error::new_spanned(
                     left_out,
                     format!(
                         "a field of a {what} left out of the schema takes no label, description, \
-                         default, range or fact making it irrelevant"
+                         default, range, fact making it irrelevant or level"
                     ),
                 ));
             }
@@ -470,6 +483,7 @@ impl Field {
             narrowing,
             irrelevant_with,
             serialize_with,
+            level,
         }))))
     }
 
@@ -485,7 +499,16 @@ impl Field {
             narrowing,
             irrelevant_with,
             serialize_with,
+            level,
         } = self;
+        let level = level.as_ref().map(|level| {
+            let variant = match level.to_string().as_str() {
+                "basic" => quote!(Basic),
+                "expert" => quote!(Expert),
+                _ => quote!(Advanced),
+            };
+            quote!(let field = field.at_level(::plugin_factory::schema::Level::#variant);)
+        });
         let described = description
             .as_ref()
             .map(|description| quote!(let field = field.described(#description);));
@@ -525,6 +548,7 @@ impl Field {
                 );
                 #described
                 #irrelevant_with
+                #level
                 #narrowing
                 #default
                 field
@@ -766,7 +790,43 @@ mod tests {
                 }
             }),
             "a field of a plugin left out of the schema takes no label, description, default, \
-             range or fact making it irrelevant"
+             range, fact making it irrelevant or level"
+        );
+    }
+
+    #[test]
+    fn a_field_names_its_level() {
+        let expanded = expand_plugin(&parse_quote! {
+            #[plugin(id = "rounds", label = "rounds")]
+            struct Rounds {
+                #[plugin(label = "rounds", level = basic)]
+                rounds: u32,
+                #[plugin(label = "pairing")]
+                pairing: u32,
+            }
+        })
+        .unwrap()
+        .to_string();
+
+        assert_eq!(
+            expanded.matches("at_level").count(),
+            1,
+            "only a field naming its level sets it"
+        );
+        assert!(
+            expanded.contains(
+                &quote!(field.at_level(::plugin_factory::schema::Level::Basic)).to_string()
+            )
+        );
+        assert_eq!(
+            error_of(parse_quote! {
+                #[plugin(id = "rounds", label = "rounds")]
+                struct Rounds {
+                    #[plugin(label = "rounds", level = beginner)]
+                    rounds: u32,
+                }
+            }),
+            "expected `basic`, `advanced` or `expert`"
         );
     }
 

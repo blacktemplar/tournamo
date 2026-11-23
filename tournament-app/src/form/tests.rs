@@ -1013,5 +1013,93 @@ fn a_summary_leaves_out_one_division_seeding_in_order_and_teams_as_they_come() {
     );
 }
 
+/// The names of the fields of the phase `form` shows at `level`.
+fn shown(form: &PhaseForm, level: Level) -> Vec<&'static str> {
+    form.view_at(level)
+        .fields
+        .iter()
+        .map(|field| field.name)
+        .collect()
+}
+
+/// A form shows the fields of a level and those below it, every field by default.
+#[test]
+fn a_form_shows_the_fields_up_to_a_level() {
+    let mut form = new_form();
+    form.enter(&path("divisions"), "2").unwrap();
+
+    assert_eq!(
+        shown(&form, Level::Advanced),
+        [
+            "format",
+            "teams",
+            "divisions",
+            "match_format",
+            "ranking",
+            "metrics"
+        ]
+    );
+    assert_eq!(shown(&form, Level::Basic), ["format"]);
+    assert_eq!(
+        shown(&form, Level::Expert),
+        form.view()
+            .fields
+            .iter()
+            .map(|field| field.name)
+            .collect::<Vec<_>>()
+    );
+    assert!(shown(&form, Level::Expert).contains(&"draw"));
+}
+
+/// A plugin's field shows at the level the plugin says, advanced unless it says otherwise.
+#[test]
+fn the_fields_of_a_plugin_show_at_their_levels() {
+    let mut form = new_form();
+    form.choose(&path("format"), Some(RandomRounds::ID))
+        .unwrap();
+
+    assert_eq!(
+        field(&form.view_at(Level::Basic), "format.rounds").name,
+        "rounds"
+    );
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    let third_place = path("format.third_place_match");
+    assert!(find(&form.view_at(Level::Basic).fields, &third_place).is_none());
+    assert!(find(&form.view_at(Level::Advanced).fields, &third_place).is_some());
+}
+
+/// A field hidden by the level that is answered otherwise than it offers is counted, once for
+/// all it holds; one that does not matter is not.
+#[test]
+fn the_fields_hidden_otherwise_than_they_offer_are_counted() {
+    let mut form = new_form();
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    let hidden = |form: &PhaseForm| form.view_at(Level::Advanced).hidden;
+    assert_eq!(hidden(&form), 0);
+
+    form.choose(&path("seeding"), Some(SeededAtRandom::ID))
+        .unwrap();
+    assert_eq!(hidden(&form), 1);
+    assert_eq!(form.view().hidden, 0, "an expert sees it");
+    form.choose(&path("format"), Some(RandomRounds::ID))
+        .unwrap();
+    assert_eq!(
+        hidden(&form),
+        0,
+        "the seeding does not matter to random rounds"
+    );
+
+    form.enter(&path("divisions"), "2").unwrap();
+    assert_eq!(
+        hidden(&form),
+        0,
+        "comparing across groups follows the suggestion"
+    );
+    form.remove(&path("across[0]")).unwrap();
+    assert_eq!(hidden(&form), 1);
+}
+
 mod columns;
 mod metrics;

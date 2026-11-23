@@ -33,6 +33,7 @@ use crate::{
 pub struct RandomRounds {
     #[plugin(
         label = "rounds",
+        level = basic,
         description = "a full round robin is scheduled if that is shorter",
         min = 1,
         default = 5

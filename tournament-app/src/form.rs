@@ -25,7 +25,7 @@ use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{ConfigError, PluginConfig, Segment, Value},
     draft::{Draft, FieldNode, Issue, Problem},
-    schema::{Configurable, DecimalRange, IntegerRange, NumberRange},
+    schema::{Configurable, DecimalRange, IntegerRange, Level, NumberRange},
 };
 use tournament_engine::{
     Columns, PhasePlugins, Table,
@@ -92,6 +92,12 @@ pub struct FormView {
     /// The plugins chosen that are an earlier version, wherever in the form, each once, in the
     /// order of the fields; [`PhaseForm::update_plugins`] replaces them by their latest versions.
     pub outdated: Vec<PluginOption>,
+    /// The level of the fields shown, see [`PhaseForm::view_at`].
+    pub level: Level,
+    /// How many fields the level hides that are answered otherwise than they offer, e.g. a
+    /// seeding chosen by a template, and that matter: a field hidden counts once, whatever the
+    /// plugins answering it hold.
+    pub hidden: usize,
 }
 
 impl FormView {
@@ -690,12 +696,13 @@ impl PhaseForm {
         needer
     }
 
-    /// What the fields of the draft are shown from.
-    fn generator(&self) -> Generator<'_, PhasePlugins> {
+    /// What the fields of the draft up to `level` are shown from.
+    fn generator(&self, level: Level) -> Generator<'_, PhasePlugins> {
         Generator {
             draft: &self.draft,
             rejected: &self.rejected,
             offered: PhasePlugins::default_value,
+            level,
         }
     }
 
@@ -718,8 +725,17 @@ impl PhaseForm {
         )
     }
 
-    /// What the form shows now.
+    /// What the form shows now, every field, as [`Self::view_at`] shows it at [`Level::Expert`].
     pub fn view(&self) -> FormView {
+        self.view_at(Level::Expert)
+    }
+
+    /// What the form shows now to an operator of `level`: the fields up to it, of the plugins
+    /// chosen too. A field of a higher level is hidden, with every field of the plugins answering
+    /// it, and stays as it is answered; what is wrong with it is said with the form as a whole.
+    /// Only what is shown depends on the level, not what the form does, e.g. whether it follows
+    /// suggestions.
+    pub fn view_at(&self, level: Level) -> FormView {
         let completed = self.completed();
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
@@ -753,9 +769,9 @@ impl PhaseForm {
             completed: &completed_nodes,
             irrelevant: &irrelevant,
         };
-        let mut fields = self
-            .generator()
-            .fields(&nodes, None, &completed_nodes, &whole);
+        let generator = self.generator(level);
+        let mut fields = generator.fields(&nodes, None, &completed_nodes, &whole);
+        let hidden = generator.hidden(&nodes, &whole);
         let mut unplaced = Vec::new();
         for issue in &issues {
             let needer = match issue.problem() {
@@ -801,6 +817,8 @@ impl PhaseForm {
             issues: unplaced,
             entry: self.entry_view(),
             outdated: self.outdated(),
+            level,
+            hidden,
         }
     }
 

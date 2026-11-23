@@ -5,7 +5,7 @@ use plugin_factory::{
     catalog::{AnyAxis, PluginEntry},
     config::{ConfigError, PluginConfig, Value},
     draft::{Draft, FieldNode},
-    schema::{Configurable, FieldKind, NumberRange},
+    schema::{Configurable, FieldKind, Level, NumberRange},
 };
 
 use super::{
@@ -219,6 +219,8 @@ pub(super) struct Generator<'a, T> {
     ///
     /// [`PhasePlugins::default_value`]: tournament_engine::PhasePlugins::default_value
     pub(super) offered: fn(&Draft<T>, &Path) -> Result<Option<Value>, ConfigError>,
+    /// The fields shown are those up to it.
+    pub(super) level: Level,
 }
 
 impl<T: Configurable> Generator<'_, T> {
@@ -236,7 +238,9 @@ impl<T: Configurable> Generator<'_, T> {
             .zip(completed)
             // Rejected input stays visible even when the field becomes irrelevant.
             .filter(|(node, _)| {
-                !whole.irrelevant.contains(&node.path) || self.rejected.contains(&node.path)
+                node.field.level() <= self.level
+                    && (!whole.irrelevant.contains(&node.path)
+                        || self.rejected.contains(&node.path))
             })
             .map(|(node, completed)| {
                 let field = &node.field;
@@ -380,6 +384,45 @@ impl<T: Configurable> Generator<'_, T> {
                 .collect(),
             options,
         }
+    }
+
+    /// How many of the enumerated fields and those of the plugins they hold are hidden by the
+    /// level, though they matter, and are answered otherwise than they offer, see
+    /// [`FormView::hidden`](super::FormView::hidden). A field hidden counts once, whatever the
+    /// plugins answering it hold.
+    pub(super) fn hidden(&self, nodes: &[FieldNode], whole: &Whole) -> usize {
+        nodes
+            .iter()
+            .filter(|node| !whole.irrelevant.contains(&node.path))
+            .map(|node| {
+                if node.field.level() > self.level {
+                    usize::from(self.differs(node))
+                } else {
+                    node.plugins()
+                        .iter()
+                        .map(|plugin| self.hidden(&plugin.fields(), whole))
+                        .sum()
+                }
+            })
+            .sum()
+    }
+
+    /// Whether the enumerated field is answered otherwise than it offers, the plugins of either
+    /// configured as they offer where they are not.
+    fn differs(&self, node: &FieldNode) -> bool {
+        let Some(answer) = node.answer else {
+            return false;
+        };
+        let Ok(Some(offered)) = (self.offered)(self.draft, &node.path) else {
+            return false;
+        };
+        let mut offering = self.draft.clone();
+        if offering.set(&node.path, offered).is_err() {
+            return true;
+        }
+        offering.with_defaults().map_or(true, |offering| {
+            offering.answers().get_at(&node.path) != Some(answer)
+        })
     }
 
     /// The ids of the plugins the field at `path` offers.

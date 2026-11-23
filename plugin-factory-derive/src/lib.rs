@@ -50,6 +50,8 @@ pub fn axis(arguments: TokenStream, input: TokenStream) -> TokenStream {
 /// - `irrelevant_with = Fact`, optional: a type implementing `Fact` whose presence in the
 ///   composite makes the field irrelevant, so that a UI may leave it out (`Field::irrelevant_with`,
 ///   `Draft::irrelevant`); it is answered all the same;
+/// - `level = basic`, `advanced` or `expert`, optional, `advanced` by default: who the field is
+///   for, see `schema::Level`;
 /// - or `skip` alone, which leaves the field out of the schema, e.g. for state a plugin builds up
 ///   once it is configured. Such a field needs a `#[serde(default)]`, on the field or the struct,
 ///   which is what a plugin built from a config holds in it; a config answering it is not

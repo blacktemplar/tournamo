@@ -40,6 +40,7 @@ pub struct MonsterDyp {
     // all rounds are scheduled at once, so far more than a day's play would hold the page up
     #[plugin(
         label = "rounds",
+        level = basic,
         description = "all of them are drawn at the start",
         min = 1,
         max = 100,

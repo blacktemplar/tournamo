@@ -749,3 +749,45 @@ fn calculators_requiring_each_other_cannot_be_ordered() {
     );
     assert!(serde_json::from_value::<PhasePlugins>(saved).is_err());
 }
+
+/// The fields of a phase each anyone, those knowing the formats, or experts decide.
+#[test]
+fn the_fields_of_a_phase_are_for_the_levels_of_their_operators() {
+    use plugin_factory::schema::{Configurable as _, Level};
+
+    let schema = PhasePlugins::schema();
+    let level = |name| schema.field_named(name).map(Field::level);
+
+    assert_eq!(level(PhasePlugins::FORMAT), Some(Level::Basic));
+    for advanced in [
+        PhasePlugins::TEAMS,
+        PhasePlugins::DIVISIONS,
+        PhasePlugins::MATCH_FORMAT,
+        PhasePlugins::RANKING,
+        PhasePlugins::METRICS,
+    ] {
+        assert_eq!(level(advanced), Some(Level::Advanced), "{advanced}");
+    }
+    for expert in [
+        PhasePlugins::DRAW,
+        PhasePlugins::SEEDING,
+        PhasePlugins::ACROSS,
+    ] {
+        assert_eq!(level(expert), Some(Level::Expert), "{expert}");
+    }
+}
+
+#[test]
+fn only_a_round_robin_has_basic_divisions() {
+    let formats: [Box<dyn PhaseFormat>; 4] = [
+        Box::new(RoundRobin),
+        Box::new(SingleElimination::new()),
+        Box::new(DoubleElimination::new()),
+        Box::new(MonsterDyp::new(3)),
+    ];
+
+    assert_eq!(
+        formats.map(|format| format.has_basic_divisions()),
+        [true, false, false, false]
+    );
+}

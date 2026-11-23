@@ -14,7 +14,7 @@ use tournament_app::{
     i18n::{Arg, Message as _, Text},
     view::{Count, MatchesOf},
 };
-use tournament_engine::{PhaseId, PhasePlugins};
+use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::schema::Level};
 
 use self::{
     entry::Entry,
@@ -23,12 +23,13 @@ use self::{
 };
 pub use self::{preset::HowPlayed, summary::answer};
 use crate::{
+    Page,
     announcement::Announcement,
     competition::Ctx,
     components::dialog::{Dialog, DialogDescription, DialogTitle},
     focus::focus_later,
     i18n::t,
-    icons,
+    icons, level,
     phases::{StartPhaseButton, phase_id_text, sources_text},
 };
 
@@ -624,14 +625,17 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
     let tr = ctx.translator.read();
     let mut error = use_signal(|| None::<Text>);
     let mut update_error = use_signal(|| None::<Text>);
+    let page = use_context::<Page>();
     let FormView {
         fields,
         issues,
         following_suggestions,
         entry,
         outdated,
+        level,
+        hidden,
         ..
-    } = form.read().view();
+    } = form.read().view_at(*page.level.read());
     let outdated = (!outdated.is_empty()).then(|| {
         t!(
             tr,
@@ -646,6 +650,7 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
     });
     rsx! {
         div { class: "phase-form",
+            LevelChoice {}
             if let Some(outdated) = outdated {
                 div { class: "notice",
                     p { id: "outdated-plugins", "{outdated}" }
@@ -663,6 +668,11 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
             }
             Entry { form, entry, disabled }
             Fields { form: EditedForm::Phase(form), fields, disabled }
+            if hidden > 0 && level < Level::Expert {
+                p { class: "hint", id: "hidden-settings",
+                    {t!(tr, "hidden-settings", count = hidden)}
+                }
+            }
             p { role: "status",
                 if following_suggestions {
                     {tr.get("following-suggestions")}
@@ -692,6 +702,34 @@ fn Form(form: Signal<PhaseForm>, disabled: bool) -> Element {
                 Issues { id: "suggestion-issues", issues: vec![error] }
             }
             Issues { id: "phase-issues", issues }
+        }
+    }
+}
+
+/// The choice of how many settings of a phase the forms show, which every form follows and the
+/// browser remembers.
+#[component]
+fn LevelChoice() -> Element {
+    let ctx = use_context::<Ctx>();
+    let page = use_context::<Page>();
+    let tr = ctx.translator.read();
+    let chosen = *page.level.read();
+    rsx! {
+        fieldset { class: "levels",
+            legend { {tr.get("levels")} }
+            for option in level::ALL {
+                label { key: "{level::message(option)}",
+                    input {
+                        r#type: "radio",
+                        name: "level",
+                        value: level::message(option),
+                        checked: option == chosen,
+                        onchange: move |_| page.choose_level(option),
+                    }
+                    " "
+                    {tr.get(level::message(option))}
+                }
+            }
         }
     }
 }

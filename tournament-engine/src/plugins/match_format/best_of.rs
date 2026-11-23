@@ -32,11 +32,12 @@ use crate::{
 pub struct BestOf {
     // a result is entered from the fewest games that may decide the match, more than half of
     // them, so far more than are played (a snooker final has 35 frames) would hold the page up
-    #[plugin(label = "best of", min = 1, max = 99, default = 3)]
+    #[plugin(label = "best of", min = 1, max = 99, default = 3, level = basic)]
     games: u32,
     #[serde(default)]
     #[plugin(
         label = "winning score of a game",
+        level = basic,
         description = "what the winner of a game usually has, or more, then winning by one or \
                        two; any other score is pointed out, as it may be a typo",
         min = 1,

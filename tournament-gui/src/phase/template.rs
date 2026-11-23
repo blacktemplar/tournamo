@@ -1,5 +1,5 @@
 //! How a competition without phases is played: by a template, whose phases are refined once
-//! added, or by phases of its own, configured one by one.
+//! added, or by phases of its own, configured one by one at the advanced level.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -10,17 +10,32 @@ use tournament_engine::plugin_factory::schema::Level;
 
 use super::{NewPhase, summary::Summary};
 use crate::{
-    Page, announcement::Announcement, capitalized, competition::Ctx, focus::focus_later, i18n::t,
+    announcement::Announcement, capitalized, competition::Ctx, focus::focus_later, i18n::t,
     phases::sources_named, sentence,
 };
 
-/// The choice of how the competition is played, templates first and own phases last, chosen at
-/// first, and below it the phases of the template chosen, or the form of a phase.
+/// How the competition is played: by a template or own phases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Played {
+    /// By the template of this id.
+    Template(&'static str),
+    OwnPhases,
+}
+
+/// The choice of how the competition is played, templates first and own phases last, none
+/// chosen at first unless a phase added by hand was undone, and below it the phases of the
+/// template chosen, or the form of a phase. Choosing own phases shows the advanced settings, which
+/// setting up phases by hand needs.
 #[component]
 pub fn HowPlayed() -> Element {
     let ctx = use_context::<Ctx>();
-    // the template chosen, by its id; `None` for own phases
-    let mut chosen = use_signal(|| None::<&'static str>);
+    // the phase whose adding was undone comes back in its form
+    let mut chosen = use_signal(|| {
+        ctx.session
+            .peek()
+            .has_undone_phase()
+            .then_some(Played::OwnPhases)
+    });
     let tr = ctx.translator.read();
     rsx! {
         fieldset { class: "how-played",
@@ -32,12 +47,12 @@ pub fn HowPlayed() -> Element {
                             r#type: "radio",
                             name: "how-played",
                             id: "template-{template.id.replace(\"::\", \"-\")}",
-                            checked: chosen() == Some(template.id),
+                            checked: chosen() == Some(Played::Template(template.id)),
                             aria_describedby: template
                                 .description
                                 .is_some()
                                 .then(|| format!("about-{}", template.id.replace("::", "-"))),
-                            onchange: move |_| chosen.set(Some(template.id)),
+                            onchange: move |_| chosen.set(Some(Played::Template(template.id))),
                         }
                         " "
                         {capitalized(&tr.plugin(template.id, PluginText::Label, template.label))}
@@ -61,8 +76,13 @@ pub fn HowPlayed() -> Element {
                         r#type: "radio",
                         name: "how-played",
                         id: "own-phases",
-                        checked: chosen().is_none(),
-                        onchange: move |_| chosen.set(None),
+                        checked: chosen() == Some(Played::OwnPhases),
+                        onchange: move |_| {
+                            chosen.set(Some(Played::OwnPhases));
+                            if *ctx.level.peek() < Level::Advanced {
+                                ctx.choose_level(Level::Advanced);
+                            }
+                        },
                     }
                     " "
                     {tr.get("own-phases")}
@@ -70,10 +90,11 @@ pub fn HowPlayed() -> Element {
             }
         }
         match chosen() {
-            None => rsx! {
+            None => rsx! {},
+            Some(Played::OwnPhases) => rsx! {
                 NewPhase {}
             },
-            Some(id) => rsx! {
+            Some(Played::Template(id)) => rsx! {
                 TemplateSetup { key: "{id}", id }
             },
         }
@@ -84,7 +105,6 @@ pub fn HowPlayed() -> Element {
 #[component]
 fn TemplateSetup(id: &'static str) -> Element {
     let ctx = use_context::<Ctx>();
-    let page = use_context::<Page>();
     let actions = ctx.actions();
     let tr = ctx.translator.read();
     let preview = Session::template_preview(id, &tr).map_err(|error| error.text());
@@ -96,8 +116,6 @@ fn TemplateSetup(id: &'static str) -> Element {
                 let tr = ctx.translator.peek();
                 if let Some(ids) = ctx.act(|session| session.add_template(id, &tr)) {
                     ctx.announce(Announcement::AddedPhases(ids.len()));
-                    // a template is refined in the basic view, whatever the level before
-                    page.choose_level(Level::Basic);
                     // the choice is gone, and with it what had the focus
                     focus_later(&["#start:enabled", "#phase"]);
                 }

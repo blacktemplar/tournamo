@@ -1773,9 +1773,16 @@ rather than snapshotting fields before they have been chosen.
   who know the formats); the phase's own fields have theirs: the format basic;
   teams, groups, match format, ranking and metrics advanced; draw, seeding and
   `across` expert. A field hidden by the level hides the fields of the plugins
-  answering it, and keeps its answer. The level is a setting of the operator,
-  not of a form or a competition: the GUI keeps the one chosen last in the
-  browser, as it keeps the theme, so every form opens at it. Where hidden
+  answering it, and keeps its answer. The level is what the operator does now,
+  not who they are: nothing remembers it. A competition opens at basic while
+  it has no phase or was set up by a template, else at advanced, where its
+  own phases were set up (`Session::opening_level`); "Own phases (advanced)"
+  and adding a phase by hand switch to advanced, since a phase set up by hand
+  needs its name and sources. The level chosen holds for every form of the
+  competition while it is open. A basic operator who once needs an advanced
+  setting does not become an advanced one, and an advanced one starts with
+  the basic settings and goes on to the details; since nothing hidden is
+  forgotten, each view says what it hides that differs. Where hidden
   fields differ from what the phase of its template answers, or else from
   what the draft would answer by itself, the form, and each phase of the
   basic view, says how many and which level shows them all
@@ -1783,10 +1790,11 @@ rather than snapshotting fields before they have been chosen.
   a field counts once, whatever its plugins hold. The basic view leaves out
   what it shows for every phase at once: the match format, and the teams of
   the phases taking the registration. Rejected: a level
-  per form, which an operator would set again in every dialog; levels chosen
-  by a template, which would have to be remembered with the phases.
-- **The basic view** (the GUI's setup at level basic, which applying a template
-  switches to) reads only the phases, not the template they came from, so it
+  per form, which an operator would set again in every dialog; the level
+  chosen last kept in the browser, as the theme is (one advanced change made
+  a basic operator advanced for every competition after it); hiding own
+  phases at basic (the choice says it is advanced instead).
+- **The basic view** (the GUI's setup at level basic) reads only the phases, not the template they came from, so it
   works for any competition and survives a reload. Each phase shows its name,
   where its entrants come from (a line per source with the last place taken
   editable; none for a phase taking everyone registered), its format and the

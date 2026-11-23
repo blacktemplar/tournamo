@@ -1,4 +1,6 @@
-use tournament_gui_e2e::{Gui, Key, run_in_new_competition, thirtyfour::error::WebDriverResult};
+use tournament_gui_e2e::{
+    Gui, Key, OWN_PHASES, run_in_new_competition, thirtyfour::error::WebDriverResult,
+};
 
 /// Enters Alice and Bob, adds a round robin with what it recommends, and starts.
 async fn start_round_robin(gui: &Gui) -> WebDriverResult<()> {
@@ -32,11 +34,11 @@ async fn a_format_brings_what_it_recommends() {
     .await;
 }
 
-/// The form shows the settings of the level chosen last, which the browser remembers; below
-/// expert, it says how many it hides that differ from the defaults.
+/// The form shows the settings of the level chosen, until the competition opens again at the
+/// level it was set up at; below expert, it says how many it hides that differ from the defaults.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
-async fn the_settings_shown_are_those_of_the_level_chosen_last() {
+async fn the_settings_shown_are_those_of_the_level_chosen() {
     run_in_new_competition(async |gui| {
         gui.choose_format("Single elimination").await?;
         gui.expect_field_shown("Seeding", false).await?;
@@ -55,8 +57,10 @@ async fn the_settings_shown_are_those_of_the_level_chosen_last() {
 
         gui.choose_level("Expert").await?;
         gui.page.reload().await?;
+        // without a phase, it opens at basic; own phases are set up at advanced
+        gui.choose_how_played(OWN_PHASES).await?;
         gui.choose_format("Single elimination").await?;
-        gui.expect_field_shown("Seeding", true).await
+        gui.expect_field_shown("Seeding", false).await
     })
     .await;
 }

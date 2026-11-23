@@ -1,5 +1,5 @@
 use tournament_gui_e2e::{
-    COMPETITION, Gui, Key, run, run_in_new_competition,
+    COMPETITION, Gui, Key, OWN_PHASES, run, run_in_new_competition,
     thirtyfour::{By, error::WebDriverResult},
 };
 
@@ -691,6 +691,7 @@ async fn the_view_chosen_is_in_the_url() {
         for name in ["Alice", "Bob"] {
             gui.add_entrant(name).await?;
         }
+        gui.choose_how_played(OWN_PHASES).await?;
         gui.choose_format("Single elimination").await?;
         gui.click("Add phase").await?;
         gui.click("Start").await?;
@@ -710,6 +711,7 @@ async fn the_view_chosen_is_in_the_url() {
         for name in ["Alice", "Bob"] {
             gui.add_entrant(name).await?;
         }
+        gui.choose_how_played(OWN_PHASES).await?;
         gui.choose_format("Single elimination").await?;
         gui.click("Add phase").await?;
         gui.click("Start").await?;

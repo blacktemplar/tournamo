@@ -22,18 +22,39 @@ pub use e2e_harness::{failures, thirtyfour, thirtyfour::Key};
 /// The name of the competition [`run_in_new_competition`] creates.
 pub const COMPETITION: &str = "Cup";
 
-/// Runs `test` on a new competition named [`COMPETITION`], open on the page freshly opened, see
-/// [`run`].
+/// Runs `test` on a new competition named [`COMPETITION`], open on the page freshly opened, its
+/// phases set up one by one ([`OWN_PHASES`]), see [`run`].
 ///
 /// # Panics
 /// Panics as [`run`] does.
 pub async fn run_in_new_competition(test: impl AsyncFnOnce(Gui) -> WebDriverResult<()>) {
     run(async move |gui| {
         gui.new_competition(COMPETITION).await?;
+        gui.choose_how_played(OWN_PHASES).await?;
+        // back at the top, where a new competition opens
+        gui.driver
+            .execute("window.scrollTo(0, 0);", Vec::new())
+            .await?;
         test(gui).await
     })
     .await;
 }
+
+/// Runs `test` on a new competition named [`COMPETITION`], open on the page freshly opened, which
+/// offers how it is played, none chosen yet, see [`run`].
+///
+/// # Panics
+/// Panics as [`run`] does.
+pub async fn run_in_competition_to_set_up(test: impl AsyncFnOnce(Gui) -> WebDriverResult<()>) {
+    run(async move |gui| {
+        gui.new_competition(COMPETITION).await?;
+        test(gui).await
+    })
+    .await;
+}
+
+/// How [`Gui::choose_how_played`] chooses phases set up one by one rather than a template.
+pub const OWN_PHASES: &str = "Own phases, one by one (advanced)";
 
 /// Runs `test` on the page freshly opened, which lists the competitions stored, none yet, see
 /// [`e2e_harness::run`].
@@ -1239,7 +1260,7 @@ impl Gui {
     }
 
     /// Chooses how a competition without phases is played: the template labelled `label`, or
-    /// "Own phases, one by one".
+    /// [`OWN_PHASES`].
     pub async fn choose_how_played(&self, label: &str) -> WebDriverResult<()> {
         let radio = self
             .driver

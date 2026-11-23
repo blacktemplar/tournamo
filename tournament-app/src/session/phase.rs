@@ -62,6 +62,11 @@ impl Session {
         )?)
     }
 
+    /// Whether this session undid adding a phase by hand, which [`Self::phase_form`] brings back.
+    pub fn has_undone_phase(&self) -> bool {
+        self.undone_phase.is_some()
+    }
+
     /// A form of a new phase of this competition, answered as the phase was played whose adding
     /// this session undid last, so that adding it again adds the same phase; if it undid none,
     /// with every field answered as offered: in the format a phase offers, with what that

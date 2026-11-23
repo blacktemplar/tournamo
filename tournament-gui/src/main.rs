@@ -43,7 +43,7 @@ use tournament_app::{
     view::{EntrantRow, MatchRow},
 };
 use tournament_browser::{channel::Events, indexed_db::IndexedDb, persistence};
-use tournament_engine::{MatchResult, plugin_factory::schema::Level, uuid::Uuid};
+use tournament_engine::{MatchResult, uuid::Uuid};
 
 use crate::{
     competition::{Competition, Place, ShownPhase, View},
@@ -158,8 +158,6 @@ struct Page {
     translator: Signal<Translator>,
     /// Whether the page is light or dark.
     theme: Signal<Theme>,
-    /// How many settings of a phase the forms show.
-    level: Signal<Level>,
     /// Why the last action was refused, shown until the next one.
     error: Signal<Option<Text>>,
     /// Whether the browser keeps what is stored even when short of space; `None` until asked.
@@ -195,13 +193,6 @@ impl Page {
         theme::remember(theme);
     }
 
-    /// Shows the settings of `level` in every form from now on, and remembers it as the one
-    /// chosen.
-    fn choose_level(mut self, level: Level) {
-        self.level.set(level);
-        level::remember(level);
-    }
-
     /// Asks the browser to keep what is stored, unless it was asked already.
     fn ask_to_persist(self) {
         if self.persisted.peek().is_none() {
@@ -225,7 +216,6 @@ fn App() -> Element {
             &[i18n::resources],
         )),
         theme: Signal::new(theme::initial()),
-        level: Signal::new(level::initial()),
         error: Signal::new(None),
         persisted: Signal::new(None),
         warning_dismissed: Signal::new(notices::warning_dismissed()),

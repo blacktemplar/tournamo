@@ -1,4 +1,6 @@
-use tournament_gui_e2e::{Key, run_in_new_competition, thirtyfour::By};
+use tournament_gui_e2e::{
+    Key, run_in_competition_to_set_up, run_in_new_competition, thirtyfour::By,
+};
 
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -94,7 +96,7 @@ async fn a_name_like_one_entered_is_pointed_out_and_refused() {
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_new_competition_opens_at_its_first_entrant() {
-    run_in_new_competition(async |gui| gui.expect_focus_on_entrant_name().await).await;
+    run_in_competition_to_set_up(async |gui| gui.expect_focus_on_entrant_name().await).await;
 }
 
 /// Adding or removing an entrant is announced; after a removal, the focus moves on to the entrant

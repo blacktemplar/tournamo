@@ -1,6 +1,6 @@
 //! Setting up the phases of a competition by a template.
 
-use plugin_factory::{catalog::AnyAxis, config::Config};
+use plugin_factory::{catalog::AnyAxis, config::Config, schema::Level};
 use tournament_engine::{
     AddPhase, Phase, PhaseId,
     plugins::template::Template,
@@ -83,6 +83,17 @@ impl Session {
             added,
             removed,
         })
+    }
+
+    /// The level of the settings a screen opens the competition at: basic while it has no phase
+    /// or was set up by a template, else advanced, the level its own phases were set up at.
+    pub fn opening_level(&self) -> Level {
+        let phases = self.competition().phases();
+        if phases.is_empty() || phases.values().any(|phase| phase.template().is_some()) {
+            Level::Basic
+        } else {
+            Level::Advanced
+        }
     }
 
     /// The answers of the phase of a template the phase `phase` was added as, as the template

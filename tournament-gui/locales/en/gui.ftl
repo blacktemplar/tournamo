@@ -171,7 +171,7 @@ entrant-new-name = New name of { $name }
 # not `phase`, which is the app's message of the fields of a phase
 phase-heading = Phase
 how-played = How is it played?
-own-phases = Own phases, one by one
+own-phases = Own phases, one by one (advanced)
 template-preview = Phases added
 # $template: the label of the template the phases were added by
 based-on = Based on the template “{ $template }”.

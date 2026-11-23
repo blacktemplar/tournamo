@@ -203,3 +203,17 @@ fn the_phases_added_to_a_template_and_removed_from_it_are_named() {
         }]
     );
 }
+
+/// A competition opens at the basic settings while it has no phase or was set up by a template,
+/// else at the advanced ones its phases were set up at.
+#[test]
+fn a_competition_opens_at_the_level_it_was_set_up_at() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    assert_eq!(session.opening_level(), Level::Basic);
+    session
+        .add_template(RoundRobinTemplate::ID, &english())
+        .unwrap();
+    assert_eq!(session.opening_level(), Level::Basic);
+
+    assert_eq!(Given::new().added().opening_level(), Level::Advanced);
+}

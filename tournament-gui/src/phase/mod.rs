@@ -28,7 +28,6 @@ use self::{
     summary::Summary,
 };
 use crate::{
-    Page,
     announcement::Announcement,
     competition::Ctx,
     components::dialog::{Dialog, DialogDescription, DialogTitle},
@@ -634,7 +633,6 @@ fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element 
     let tr = ctx.translator.read();
     let mut error = use_signal(|| None::<Text>);
     let mut update_error = use_signal(|| None::<Text>);
-    let page = use_context::<Page>();
     let FormView {
         fields,
         issues,
@@ -644,7 +642,7 @@ fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element 
         level,
         hidden,
         ..
-    } = form.read().view_at(*page.level.read());
+    } = form.read().view_at(*ctx.level.read());
     let outdated = (!outdated.is_empty()).then(|| {
         t!(
             tr,
@@ -712,14 +710,13 @@ fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element 
     }
 }
 
-/// The choice of how many settings of a phase the forms and the setup show, which every form
-/// follows and the browser remembers.
+/// The choice of how many settings of a phase the forms and the setup show, which every form of
+/// the competition follows.
 #[component]
 pub fn LevelChoice() -> Element {
     let ctx = use_context::<Ctx>();
-    let page = use_context::<Page>();
     let tr = ctx.translator.read();
-    let chosen = *page.level.read();
+    let chosen = *ctx.level.read();
     rsx! {
         fieldset { class: "levels",
             legend { {tr.get("levels")} }
@@ -730,7 +727,7 @@ pub fn LevelChoice() -> Element {
                         name: "level",
                         value: level::message(option),
                         checked: option == chosen,
-                        onchange: move |_| page.choose_level(option),
+                        onchange: move |_| ctx.choose_level(option),
                     }
                     " "
                     {tr.get(level::message(option))}

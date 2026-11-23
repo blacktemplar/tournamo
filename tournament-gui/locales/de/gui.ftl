@@ -143,7 +143,7 @@ seeding-explained = Setzung erklärt
 entrant-new-name = Neuer Name von { $name }
 phase-heading = Phase
 how-played = Wie wird gespielt?
-own-phases = Eigene Phasen, eine nach der anderen
+own-phases = Eigene Phasen, eine nach der anderen (für Fortgeschrittene)
 template-preview = Hinzugefügte Phasen
 # $template: the label of the template the phases were added by
 based-on = Basiert auf der Vorlage „{ $template }“.

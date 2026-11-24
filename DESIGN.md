@@ -1803,7 +1803,10 @@ rather than snapshotting fields before they have been chosen.
   so the operator goes through them anyway); naming hidden settings in the
   basic view (it is for operators who need not know them); templates
   pinning an answer equal to the default, so that it never follows (no
-  template needs it yet; it may come if following surprises).
+  template needs it yet; it may come if following surprises). The GUI has no
+  button applying suggestions: it read as the way back to following, which
+  needs none now; resetting a phase to the defaults of its format and match
+  format may come.
 - **Fields have levels: basic, advanced, expert**. A form at a level shows the
   fields up to it, so what a lower level shows is always part of what a higher
   one shows. A plugin declares the level of each field (`#[plugin(level = ..)]`,

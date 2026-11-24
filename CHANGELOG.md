@@ -36,7 +36,8 @@ later one: a file whose `"format"` changes is migrated, not refused.
   scoring follow suggestions whenever they are what is suggested, also for a
   phase already added or set back by hand, no longer only until first edited.
   The form says below the format what followed, naming only the settings its
-  level shows, and offers to show the others.
+  level shows, and offers to show the others. The button applying the
+  suggested ranking is gone.
 
 ### Added
 

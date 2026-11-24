@@ -291,9 +291,6 @@ hidden-settings = { $count ->
        *[advanced] advanced
     } settings.
 }
-following-suggestions = Ranking and scoring follow suggestions for the format while they are what it suggests.
-customized-settings = Your ranking and scoring settings are kept when the format changes. Applying suggestions replaces them and resumes automatic updates.
-apply-suggested-ranking = Apply suggested ranking
 # under the format and the match format of a phase
 followed-hint = Settings you have not changed follow it.
 # $level: advanced or expert

@@ -641,15 +641,12 @@ pub(super) fn Form(
         None => EditedForm::new(form),
     };
     let tr = ctx.translator.read();
-    let mut error = use_signal(|| None::<Text>);
     let mut update_error = use_signal(|| None::<Text>);
     let FormView {
         fields,
         issues,
-        following_suggestions,
         entry,
         outdated,
-        level,
         hidden,
         followed,
         ..
@@ -694,33 +691,6 @@ pub(super) fn Form(
                 followed,
             }
             HiddenSettings { id: edited.element("hidden-settings"), hidden }
-            // ranking and scoring follow the suggestions where they are not shown
-            if level > Level::Basic {
-                p { role: "status",
-                    if following_suggestions {
-                        {tr.get("following-suggestions")}
-                    } else {
-                        {tr.get("customized-settings")}
-                    }
-                }
-                button {
-                    r#type: "button",
-                    disabled,
-                    aria_disabled: following_suggestions,
-                    onclick: move |_| {
-                        if !disabled && !form.read().view().following_suggestions {
-                            let applied = form.write().apply_suggestions();
-                            error.set(applied.err().map(|error| {
-                                PhaseDraftError::Configuration(error).text()
-                            }));
-                        }
-                    },
-                    {tr.get("apply-suggested-ranking")}
-                }
-            }
-            if let Some(error) = error() {
-                Issues { id: edited.element("suggestion-issues"), issues: vec![error] }
-            }
             Issues { id: edited.element("phase-issues"), issues }
         }
     }

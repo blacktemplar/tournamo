@@ -144,7 +144,6 @@ entrant-new-name = Neuer Name von { $name }
 phase-heading = Phase
 how-played = Wie wird gespielt?
 own-phases = Eigene Phasen, eine nach der anderen (für Fortgeschrittene)
-template-preview = Hinzugefügte Phasen
 # $template: the label of the template the phases were added by
 based-on = Basiert auf der Vorlage „{ $template }“.
 # $phases: the phases added besides those of the template, listed
@@ -153,7 +152,9 @@ added-to-template = Zur Vorlage hinzugefügt: { $phases }.
 removed-from-template = Aus der Vorlage entfernt: { $phases }.
 # a phase of a template without a name, by its position among them
 template-phase-number = Phase { $number }
-template-refined = Einmal hinzugefügt, kann jede Phase geändert oder entfernt werden, und weitere können folgen.
+template-phases = Ihre Phasen
+template-refined = Ändere sie hier so, wie sie gespielt werden sollen, und füge sie dann hinzu; einmal hinzugefügt, kann jede auch geändert oder entfernt werden, und weitere können folgen.
+edit-template-phase-description = Ändere, wie die Phase gespielt wird; sie wird mit den anderen hinzugefügt.
 add-phases = Phasen hinzufügen
 finished = Beendet
 medal-gold = Goldmedaille,

@@ -436,7 +436,7 @@ mod phase;
 mod phases;
 mod template;
 pub use basic::{Dyp, MatchFormats};
-pub(crate) use phases::named;
+pub(crate) use phase::completed;
 pub use template::{BasedOn, RemovedPhase};
 mod report;
 mod scale;

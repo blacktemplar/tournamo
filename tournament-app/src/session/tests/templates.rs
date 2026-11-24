@@ -1,7 +1,8 @@
 use plugin_factory::schema::Level;
 use tournament_engine::plugins::{
     seeding::SeededAtRandom,
-    template::{GroupsAndKnockout, RoundRobinTemplate, Template},
+    teams::RandomPairs,
+    template::{GroupsAndKnockout, MonsterDypTemplate, RoundRobinTemplate, Template},
 };
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -11,7 +12,7 @@ use crate::{
     error::AddTemplateError,
     form::Editable,
     i18n::{Language, Translator},
-    view::SourceRow,
+    session::{Dyp, MatchFormats},
 };
 
 fn english() -> Translator {
@@ -35,32 +36,126 @@ fn the_templates_of_the_engine_are_offered() {
     assert!(templates.contains(&RoundRobinTemplate::ID));
 }
 
+/// The forms of a template's phases are named in the language, and a later one knows the
+/// phases before it, which are not added yet, so that it takes places of them.
 #[test]
-fn the_preview_names_the_phases_in_the_language_and_where_they_take_their_entrants_from() {
-    let preview = Session::template_preview(
-        GroupsAndKnockout::ID,
-        &Translator::new(Language::German, &[]),
-    )
-    .unwrap();
-    let names: Vec<_> = preview
-        .iter()
-        .map(|phase| (phase.name.number, phase.name.name.as_deref()))
-        .collect();
-    assert_eq!(names, [(1, Some("Gruppenphase")), (2, Some("K.-o.-Phase"))]);
+fn the_forms_of_a_template_know_the_phases_before_them() {
+    let session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let template = session
+        .template_form(
+            GroupsAndKnockout::ID,
+            &Translator::new(Language::German, &[]),
+        )
+        .unwrap();
+    let names: Vec<_> = (0..2).map(|index| template.name(index).name).collect();
     assert_eq!(
-        preview[1].sources,
-        [SourceRow {
-            phase: Some(preview[0].id),
-            from: NonZeroU32::MIN,
-            to: NonZeroU32::new(4),
-        }]
+        names,
+        [
+            Some("Gruppenphase".to_owned()),
+            Some("K.-o.-Phase".to_owned())
+        ]
     );
+
+    let knockout = template.forms()[1].entry_view();
+    assert_eq!(knockout.rows[0].of, Some(template.ids()[0]));
+    assert_eq!(knockout.rows[0].to, "4");
     assert!(
-        preview[0]
-            .summary
+        knockout
+            .choices
             .iter()
-            .any(|field| field.name == PhasePlugins::DIVISIONS)
+            .any(|choice| choice.phase == Some(template.ids()[0]))
     );
+    assert!(template.complete());
+    assert_eq!(
+        session.competition().phases().len(),
+        0,
+        "nothing is added yet"
+    );
+}
+
+/// What is changed in the forms before adding is what is added, and the forms after a changed
+/// one follow it, e.g. a knockout takes places of three groups.
+#[test]
+fn the_phases_of_a_template_are_added_as_their_forms_were_changed() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave", "Eve", "Frank"]);
+    let mut template = session
+        .template_form(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    let knockout = template.revision(1);
+    let mut groups = template.forms()[0].clone();
+    groups.enter(&"divisions".parse().unwrap(), "3").unwrap();
+    template.replace(0, groups);
+    assert!(
+        template.revision(1) > knockout,
+        "the knockout knows the groups"
+    );
+
+    let ids = session.add_template_form(&template).unwrap();
+    assert_eq!(
+        session.competition().phases()[&ids[0]]
+            .plugins()
+            .divisions()
+            .get(),
+        3
+    );
+    assert!(session.based_on(&english()).is_some());
+    session.undo().unwrap();
+    assert!(session.competition().phases().is_empty());
+}
+
+/// The match format and drawn pairs are set on the forms at once, the pairs on those taking the
+/// registration, which a later phase then takes as pairs.
+#[test]
+fn the_settings_of_the_whole_competition_are_set_on_the_forms() {
+    let session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let mut template = session
+        .template_form(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    assert!(matches!(template.match_formats(), MatchFormats::Same(_)));
+    assert_eq!(template.dyp(), Some(Dyp::Off));
+
+    assert!(template.set_dyp(true).unwrap());
+    assert_eq!(template.dyp(), Some(Dyp::On));
+    assert_eq!(
+        template.forms()[1].entrants_per_qualifier(),
+        NonZeroU32::new(2),
+        "the knockout takes the pairs"
+    );
+
+    let mut best_of = template.forms()[0].clone();
+    best_of
+        .choose(&"match_format".parse().unwrap(), Some(BestOf::ID))
+        .unwrap();
+    assert!(template.set_match_format(&best_of).unwrap());
+    let MatchFormats::Same(form) = template.match_formats() else {
+        panic!("one match format");
+    };
+    assert_eq!(
+        form.draft().answers().get(PhasePlugins::MATCH_FORMAT),
+        best_of.draft().answers().get(PhasePlugins::MATCH_FORMAT)
+    );
+}
+
+/// A phase that cannot be played as its form stands keeps the template from being added, e.g. a
+/// Monster DYP of drawn pairs, which draws pairs of its own.
+#[test]
+fn a_template_with_a_phase_that_cannot_be_played_is_not_added() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let mut template = session
+        .template_form(MonsterDypTemplate::ID, &english())
+        .unwrap();
+    let mut pairs = template.forms()[0].clone();
+    pairs
+        .choose(&"teams".parse().unwrap(), Some(RandomPairs::ID))
+        .unwrap();
+    template.replace(0, pairs);
+    assert!(!template.complete());
+
+    assert!(matches!(
+        session.add_template_form(&template),
+        Err(AddTemplateError::Invalid(phase)) if phase.number == 1
+    ));
+    assert!(session.competition().phases().is_empty());
 }
 
 #[test]
@@ -124,10 +219,10 @@ fn every_template_plays_through() {
 }
 
 #[test]
-fn an_unknown_template_is_neither_previewed_nor_added() {
+fn an_unknown_template_is_neither_set_up_nor_added() {
     let mut session = with_entrants(&["Alice", "Bob"]);
     assert!(matches!(
-        Session::template_preview("nothing", &english()),
+        session.template_form("nothing", &english()),
         Err(AddTemplateError::UnknownTemplate(id)) if id == "nothing"
     ));
     assert!(matches!(

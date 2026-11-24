@@ -50,7 +50,7 @@ pub(crate) mod template;
 
 use edit::{Answering, Generator};
 pub use metrics::{MetricOption, MetricRow};
-pub use template::PreviewPhase;
+pub use template::TemplateForm;
 
 /// The plugins of a phase being configured, see the [module](self), with its name and where it
 /// takes its entrants from, see [`Self::entry_view`].

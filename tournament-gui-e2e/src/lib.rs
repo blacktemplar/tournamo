@@ -1339,22 +1339,24 @@ impl Gui {
             .await
     }
 
-    /// Waits until the basic view of the phases before the start shows the phases named `names`,
-    /// in order.
+    /// Waits until the basic view of the phases before the start, or of the phases of a template
+    /// before they are added, shows the phases named `names`, in order.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it shows instead.
     pub async fn expect_basic_phases(&self, names: &[&str]) -> WebDriverResult<()> {
         self.page
-            .expect_texts(By::Css("ol.basic > li > h3"), names)
+            .expect_texts(By::Css("ol.basic > li > h3, ol.basic > li > h4"), names)
             .await
     }
 
-    /// The input of the basic view of the phase named `phase` whose id ends in `id`.
+    /// The input of the basic view of the phase named `phase`, added or of a template, whose id
+    /// ends in `id`.
     async fn basic_input(&self, phase: &str, id: &str) -> WebDriverResult<WebElement> {
         self.driver
             .query(By::XPath(format!(
-                "//ol[contains(@class, 'basic')]/li[h3[{}='{phase}']]//input[substring(@id, \
+                "//ol[contains(@class, 'basic')]/li[*[self::h3 or self::h4][{}='{phase}']]\
+                 //input[substring(@id, \
                  string-length(@id) - string-length('{id}') + 1) = '{id}']",
                 without_isolation_marks("normalize-space()")
             )))
@@ -1383,7 +1385,7 @@ impl Gui {
         let input = self
             .driver
             .query(By::XPath(format!(
-                "//ol[contains(@class, 'basic')]/li[h3[{}='{phase}']]\
+                "//ol[contains(@class, 'basic')]/li[*[self::h3 or self::h4][{}='{phase}']]\
                  //p[contains(@class, 'basic-source')]//input",
                 without_isolation_marks("normalize-space()")
             )))
@@ -1414,12 +1416,13 @@ impl Gui {
         }
     }
 
-    /// Waits until the preview of a template shows the phases `phases`, each its name and where it
-    /// takes its entrants from, e.g. `("Knockout", "Places 1–6 of Group phase")`.
+    /// Waits until the phases of a template, before they are added and above the basic level,
+    /// show as `phases`, each its name and where it takes its entrants from, e.g.
+    /// `("Knockout", "Places 1–6 of Group phase")`.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it shows instead.
-    pub async fn expect_preview(&self, phases: &[(&str, &str)]) -> WebDriverResult<()> {
+    pub async fn expect_template_phases(&self, phases: &[(&str, &str)]) -> WebDriverResult<()> {
         let texts: Vec<_> = phases
             .iter()
             .flat_map(|(name, from)| [*name, *from])
@@ -1435,7 +1438,7 @@ impl Gui {
     }
 
     /// Waits until the list of phases before the start shows the phases `phases`, as
-    /// [`Self::expect_preview`] says them.
+    /// [`Self::expect_template_phases`] says them.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it shows instead.

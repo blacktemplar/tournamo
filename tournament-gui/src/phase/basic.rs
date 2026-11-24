@@ -4,7 +4,8 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{BasicFields, End, PhaseForm},
+    form::{BasicFields, End, PhaseForm, TemplateForm},
+    i18n::{Message as _, Text},
     session::{Dyp, MatchFormats},
     view::PhaseName,
 };
@@ -21,8 +22,9 @@ use crate::{competition::Ctx, i18n::t, phases::phase_id_text};
 pub fn BasicView() -> Element {
     let ctx = use_context::<Ctx>();
     let phases = ctx.session.read().phases();
+    let actions = ctx.actions();
     rsx! {
-        CompetitionSettings {}
+        CompetitionSettings { phases: Phases::Added, disabled: !actions.edit_phase }
         ol { id: "phases", class: "phases numbered basic", tabindex: "-1",
             for phase in phases.iter() {
                 li { key: "{phase.id:?}",
@@ -33,20 +35,87 @@ pub fn BasicView() -> Element {
     }
 }
 
-/// The match format of every phase not started, and whether the phases taking the registration
-/// are played by drawn pairs, where that is offered.
+/// The phases the settings of the whole competition are set on: those added and not started, or
+/// the forms of a template before they are added.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Phases {
+    Added,
+    Template(Signal<TemplateForm>),
+}
+
+impl Phases {
+    /// Their match format, subscribing to what it is read from.
+    fn match_formats(self, ctx: Ctx) -> Option<MatchFormats> {
+        match self {
+            Self::Added => ctx.session.read().match_formats(),
+            Self::Template(template) => Some(template.read().match_formats()),
+        }
+    }
+
+    /// Their match format, subscribing to nothing.
+    fn match_formats_now(self, ctx: Ctx) -> Option<MatchFormats> {
+        match self {
+            Self::Added => ctx.session.peek().match_formats(),
+            Self::Template(template) => Some(template.peek().match_formats()),
+        }
+    }
+
+    /// Whether they are played by drawn pairs, subscribing to what it is read from.
+    fn dyp(self, ctx: Ctx) -> Option<Dyp> {
+        match self {
+            Self::Added => ctx.session.read().dyp(),
+            Self::Template(template) => template.read().dyp(),
+        }
+    }
+
+    /// Sets the match format `form` answers on them; why not, if refused, for `error` to show
+    /// where the session does not.
+    fn set_match_format(self, ctx: Ctx, form: &PhaseForm, mut error: Signal<Option<Text>>) {
+        match self {
+            Self::Added => {
+                ctx.act(|session| session.set_match_format(form));
+            }
+            Self::Template(mut template) => {
+                let set = template.write().set_match_format(form);
+                error.set(set.err().map(|refused| refused.text()));
+            }
+        }
+    }
+
+    /// Plays them by drawn pairs if `on`; why not, if refused, for `error` to show where the
+    /// session does not.
+    fn set_dyp(self, ctx: Ctx, on: bool, mut error: Signal<Option<Text>>) {
+        match self {
+            Self::Added => {
+                ctx.act(|session| session.set_dyp(on));
+            }
+            Self::Template(mut template) => {
+                let set = template.write().set_dyp(on);
+                error.set(set.err().map(|refused| refused.text()));
+            }
+        }
+    }
+}
+
+/// The match format of every phase of `phases`, and whether those taking the registration are
+/// played by drawn pairs, where that is offered.
 #[component]
-fn CompetitionSettings() -> Element {
+pub(super) fn CompetitionSettings(phases: Phases, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
-    let actions = ctx.actions();
-    let match_formats = ctx.session.read().match_formats();
-    let dyp = ctx.session.read().dyp();
+    let error = use_signal(|| None::<Text>);
+    let match_formats = phases.match_formats(ctx);
+    let dyp = phases.dyp(ctx);
     let tr = ctx.translator.read();
     rsx! {
         div { class: "competition-settings",
             match match_formats {
                 Some(MatchFormats::Same(form)) => rsx! {
-                    MatchFormat { initial: Initial(*form) }
+                    MatchFormat {
+                        initial: Initial(*form),
+                        phases,
+                        disabled,
+                        error,
+                    }
                 },
                 Some(MatchFormats::Mixed) => rsx! {
                     p { id: "mixed-match-formats",
@@ -72,11 +141,8 @@ fn CompetitionSettings() -> Element {
                                 r#type: "checkbox",
                                 id: "dyp",
                                 checked: dyp == Dyp::On,
-                                disabled: !actions.edit_phase,
-                                onchange: move |event| {
-                                    let on = event.checked();
-                                    ctx.act(|session| session.set_dyp(on));
-                                },
+                                disabled,
+                                onchange: move |event| phases.set_dyp(ctx, event.checked(), error),
                             }
                             " "
                             {tr.get("dyp")}
@@ -84,6 +150,9 @@ fn CompetitionSettings() -> Element {
                     }
                 },
                 None => rsx! {},
+            }
+            if let Some(error) = error() {
+                p { class: "error", role: "alert", {tr.sentence(&error)} }
             }
         }
     }
@@ -100,12 +169,16 @@ impl PartialEq for Initial {
     }
 }
 
-/// The match format of every phase, with the basic fields of its plugin, set on every phase not
-/// started as soon as it changes and fits.
+/// The match format of every phase of `phases`, with the basic fields of its plugin, set on each
+/// as soon as it changes and fits.
 #[component]
-fn MatchFormat(initial: Initial) -> Element {
+fn MatchFormat(
+    initial: Initial,
+    phases: Phases,
+    disabled: bool,
+    error: Signal<Option<Text>>,
+) -> Element {
     let ctx = use_context::<Ctx>();
-    let actions = ctx.actions();
     let mut form = use_signal(|| initial.0.clone());
     let answer = |form: &PhaseForm| {
         form.draft()
@@ -118,17 +191,17 @@ fn MatchFormat(initial: Initial) -> Element {
         let edited = form.read().clone();
         let field = edited.match_format_field(Level::Basic);
         let taken = field.is_some_and(|field| field.issues.is_empty()) && edited.view().complete;
-        let changed = match ctx.session.peek().match_formats() {
+        let changed = match phases.match_formats_now(ctx) {
             Some(MatchFormats::Same(shown)) => answer(&shown) != answer(&edited),
             _ => false,
         };
         if taken && changed {
-            ctx.act(|session| session.set_match_format(&edited));
+            phases.set_match_format(ctx, &edited, error);
         }
     });
-    // what an undo, or another tab, made of it
+    // what an undo, another tab or a refusal made of it
     use_effect(move || {
-        if let Some(MatchFormats::Same(shown)) = ctx.session.read().match_formats()
+        if let Some(MatchFormats::Same(shown)) = phases.match_formats(ctx)
             && answer(&shown) != answer(&form.peek())
         {
             form.set(*shown);
@@ -137,11 +210,7 @@ fn MatchFormat(initial: Initial) -> Element {
     let field = form.read().match_format_field(Level::Basic);
     rsx! {
         if let Some(field) = field {
-            Fields {
-                form: EditedForm::new(form),
-                fields: vec![field],
-                disabled: !actions.edit_phase,
-            }
+            Fields { form: EditedForm::new(form), fields: vec![field], disabled }
         }
     }
 }
@@ -186,6 +255,32 @@ fn BasicPhase(phase: PhaseId) -> Element {
     });
     let tr = ctx.translator.read();
     let name = ctx.session.read().name_of_phase(phase);
+    rsx! {
+        if let Some(name) = &name {
+            h3 { {tr.phase_name(name)} }
+        }
+        BasicFieldsOf {
+            form,
+            basic,
+            of: phase,
+            disabled: !actions.edit_phase,
+        }
+    }
+}
+
+/// The phase `form` configures as the basic view shows it, laid out by `basic`: where its
+/// entrants come from, its fields, what is wrong with it, and the settings it hides that differ.
+/// The ids of its elements name the phase `of`.
+#[component]
+pub(super) fn BasicFieldsOf(
+    form: Signal<PhaseForm>,
+    basic: BasicFields,
+    of: PhaseId,
+    disabled: bool,
+) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let phase = of;
     let view = form.read().view_basic(basic);
     let entry = view.entry.clone();
     let name_of = |id: Option<PhaseId>| -> Option<PhaseName> {
@@ -195,11 +290,7 @@ fn BasicPhase(phase: PhaseId) -> Element {
             .find(|choice| choice.phase == id)
             .and_then(|choice| choice.name.clone())
     };
-    let disabled = !actions.edit_phase;
     rsx! {
-        if let Some(name) = &name {
-            h3 { {tr.phase_name(name)} }
-        }
         if basic.sources {
             for (index, row) in entry.rows.iter().enumerate() {
                 p { key: "{index}", class: "basic-source",

@@ -1157,8 +1157,14 @@ A template (`plugins::template::Template`, an axis whose plugins have no
 fields) is a quick start: the phases of a whole competition
 (`TemplatePhase`: a name as a `Phrase` or none, sources naming earlier phases
 of the template by position, and answers to the draft of the phase), which
-applying it adds as ordinary phases, refined afterwards in the same form as
-any phase. `Competition::expand` turns the phases into `AddPhase`s: each phase
+applying it adds as ordinary phases. Before they are added, its phases are
+forms (`TemplateForm`), changed as the form of a new phase is: in the basic
+view's layout, or above it each in the dialog of an added phase; "Add phases"
+adds them as they stand, as one action. A form of a later phase knows the
+forms before it as the phases before it (its context, which the form of a new
+phase takes from the phases added), so it takes places of a phase not added
+yet and the teams it sends; the match format and drawn pairs are set across
+the forms as across added phases. `Competition::expand` turns the phases into `AddPhase`s: each phase
 is drafted from its sources (the context of a later one knows what the teams
 of the phases before it send, before any of them is added), answered,
 completed by the format's suggestions and the implied plugins, and built. A
@@ -1202,7 +1208,11 @@ over the catalog expands every template registered and adds its phases.
   by drawn pairs is the operator's choice for any template but a Monster DYP,
   which is a DYP of its own; no template sets it.
 
-Rejected: a transition adding a template's phases, or recording which
+Rejected: a read-only preview of the phases, refined once added (it read as
+the form it is not: settings shown that could not be changed, unlike the form
+of a new phase); a draft copy of the competition the phases are added to
+before they are (the forms need only know each other, as a new phase knows
+the phases added); a transition adding a template's phases, or recording which
 template set up a competition (removing a phase is an undo of its `AddPhase`,
 which would leave such an entry behind; the origin on each `AddPhase` follows
 it by itself); saving the template's phases as they were when applied (what

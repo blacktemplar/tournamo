@@ -176,13 +176,13 @@ pub fn AddPhaseDialog() -> Element {
 /// Whether a dialog holding the form of a phase asks if the changes made in it are to be
 /// discarded, in a dialog on top of it, see [`DiscardChanges`].
 #[derive(Clone, Copy, PartialEq)]
-struct Discarding {
+pub(super) struct Discarding {
     asked: Signal<bool>,
 }
 
 /// Whether a dialog holding the form of a phase asks if the changes made in it are to be
 /// discarded: it does when asked to close (Escape, or a click beside it) with changes made.
-fn use_discarding() -> Discarding {
+pub(super) fn use_discarding() -> Discarding {
     Discarding {
         asked: use_signal(|| false),
     }
@@ -218,7 +218,7 @@ impl Discarding {
 /// changes made in it, while `discarding` asks: discarding by `on_discard`, else, by its button,
 /// Escape or a click beside it, keeping on editing.
 #[component]
-fn DiscardChanges(discarding: Discarding, on_discard: EventHandler<()>) -> Element {
+pub(super) fn DiscardChanges(discarding: Discarding, on_discard: EventHandler<()>) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     rsx! {
@@ -628,7 +628,7 @@ fn UnstartPhase(phase: PhaseId) -> Element {
 /// The fields of `form` at the level the operator chose, which they change unless `disabled`,
 /// with what is wrong with the answers as a whole, and the choice of the level if `level_choice`.
 #[component]
-fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element {
+pub(super) fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let mut error = use_signal(|| None::<Text>);
@@ -752,7 +752,7 @@ fn update(mut form: Signal<PhaseForm>) -> Option<Text> {
 /// Moves the focus to the first field marked as invalid or list of issues in the form whose element
 /// has the id `form`, whichever comes first, scrolled into the middle of the screen, so that the
 /// operator sees and hears what keeps the phase from being played.
-fn focus_first_issue(form: &str) {
+pub(super) fn focus_first_issue(form: &str) {
     _ = document::eval(&format!(
         r##"
         const issue = document.querySelector("#{form} [aria-invalid=true], #{form} .issues");

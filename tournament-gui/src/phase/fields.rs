@@ -100,24 +100,17 @@ pub(super) fn Fields(
             let below = followed
                 .clone()
                 .filter(|_| at.as_ref() == Some(&field.path));
-            // what the others follow
-            let followed_by_others = field.plugin.is_none()
-                && [PhasePlugins::FORMAT, PhasePlugins::MATCH_FORMAT].contains(&field.name);
-            (field, below, followed_by_others)
+            (field, below)
         })
         .collect();
-    let tr = use_context::<Ctx>().translator;
     rsx! {
-        for (field , below , followed_by_others) in fields {
+        for (field , below) in fields {
             Fragment { key: "{field.path}",
                 Field {
                     form,
                     field,
                     compared,
                     disabled,
-                }
-                if followed_by_others {
-                    p { class: "hint", {tr.read().get("followed-hint")} }
                 }
                 if let Some(followed) = below {
                     FollowedNote { key: "{followed.said:?}", followed }
@@ -168,7 +161,22 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
     let tr = ctx.translator.read();
     let id = form.id(&field.path);
     let label = capitalized(&tr.field_label(&field));
-    let description = tr.field_description(&field);
+    // what the field is, what it takes, and what follows it, behind its ⓘ, so that the form shows
+    // no more than the fields
+    let mut about_text: Vec<String> = tr
+        .field_description(&field)
+        .iter()
+        .map(|description| sentence(description))
+        .collect();
+    if let Input::Integer { hint, .. } | Input::Decimal { hint, .. } = &field.input {
+        about_text.push(tr.sentence(hint));
+    }
+    if field.plugin.is_none()
+        && [PhasePlugins::FORMAT, PhasePlugins::MATCH_FORMAT].contains(&field.name)
+    {
+        about_text.push(tr.get("followed-hint"));
+    }
+    let description = (!about_text.is_empty()).then(|| about_text.join(" "));
     let path = field.path.clone();
     let is_metrics = field.plugin.is_none() && field.name == PhasePlugins::METRICS;
     let described_by = format!("{id}-description {id}-issues {id}-warnings");
@@ -211,7 +219,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
             range,
             value,
             entered,
-            hint,
+            ..
         } => {
             let shown = entered.or_else(|| value.map(|value| value.to_string()));
             rsx! {
@@ -224,7 +232,6 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                     value: shown,
                     // a minus as well, where the keyboard of the numbers has none
                     keyboard: if range.min() < 0 { "text" } else { "numeric" },
-                    hint: tr.text(&hint),
                     about,
                     issues: field.issues,
                     warnings: field.warnings,
@@ -235,7 +242,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
             range,
             value,
             entered,
-            hint,
+            ..
         } => {
             let shown = entered.or_else(|| value.map(|value| tr.number(value)));
             let negative = range.min().is_none_or(|min| min < 0.0);
@@ -248,7 +255,6 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                     disabled,
                     value: shown,
                     keyboard: if negative { "text" } else { "decimal" },
-                    hint: tr.text(&hint),
                     about,
                     issues: field.issues,
                     warnings: field.warnings,
@@ -361,7 +367,6 @@ fn NumberField(
     label: String,
     value: Option<String>,
     keyboard: String,
-    hint: String,
     disabled: bool,
     about: Element,
     issues: Vec<Text>,
@@ -377,7 +382,7 @@ fn NumberField(
     let invalid = !issues.is_empty();
     let take = path.clone();
     rsx! {
-        // on a grid of a column of labels and one of inputs, the numbers it takes below its input
+        // on a grid of a column of labels and one of inputs
         div { class: "field number-field",
             span { class: "number-label",
                 label { r#for: "{id}", "{label}" }
@@ -392,7 +397,7 @@ fn NumberField(
                 value: typed().or(value).unwrap_or_default(),
                 disabled,
                 aria_invalid: invalid.then_some("true"),
-                aria_describedby: "{id}-hint {id}-description {id}-issues",
+                aria_describedby: "{id}-description {id}-issues",
                 oninput: move |event| typed.set(Some(event.value())),
                 onkeydown: move |event| {
                     if event.key() == Key::Enter {
@@ -407,7 +412,6 @@ fn NumberField(
                     typed.set(None);
                 },
             }
-            span { class: "hint", id: "{id}-hint", {sentence(&hint)} }
             Issues { id: "{id}-issues", issues }
             Warnings { id: "{id}-warnings", warnings }
         }
@@ -437,7 +441,7 @@ fn PluginField(
     let options = in_label_order(&tr, &plugin.options);
     let choose = path.clone();
     let trigger = format!("#{id}");
-    // what the plugin chosen does, below the choice, rather than a second ⓘ next to the field's
+    // what the plugin chosen does, behind an ⓘ of the choice, rather than one next to the field's
     let chosen_description = plugin
         .chosen
         .as_ref()
@@ -450,7 +454,7 @@ fn PluginField(
             Select {
                 id: "{id}",
                 labelled_by: "{id}-label",
-                described_by: chosen_description.is_some().then(|| format!("{id}-chosen")),
+                description: chosen_description.map(|description| sentence(&description)),
                 value: chosen.or_else(|| plugin.optional.then(String::new)),
                 placeholder: tr.get("choose-plugin"),
                 disabled,
@@ -477,9 +481,6 @@ fn PluginField(
                         span { class: "option-label", "{none}" }
                     }
                 }
-            }
-            if let Some(description) = chosen_description {
-                p { class: "hint chosen-description", id: "{id}-chosen", {sentence(&description)} }
             }
             {children}
             if let Some(chosen) = plugin.chosen {

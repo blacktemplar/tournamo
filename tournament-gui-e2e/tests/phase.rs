@@ -617,6 +617,30 @@ async fn a_number_is_read_with_a_comma_and_what_is_none_is_named() {
     .await;
 }
 
+/// What the plugin chosen does shows while the pointer is on its choice rather than below it, and
+/// what a number field takes, with what it is, behind its ⓘ.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_a_field_takes_shows_on_hover() {
+    run_in_new_competition(async |gui| {
+        gui.expect_chosen_description("format", None).await?;
+        gui.hover_choice("format").await?;
+        gui.expect_chosen_description("format", Some("Everyone plays everyone."))
+            .await?;
+
+        gui.hover_labelled("About points for a win").await?;
+        gui.expect_toggletip(Some("A number from 0 to 1000."))
+            .await?;
+        gui.page.check_accessibility().await?;
+
+        // on a phone, opening the list shows what the plugin chosen does
+        gui.page.resize(390, 844).await?;
+        gui.open_choice("format").await?;
+        gui.expect_chosen_option_described().await
+    })
+    .await;
+}
+
 /// In German, a number is written with a comma before its decimals.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
@@ -658,8 +682,9 @@ async fn what_is_said_on_a_phone_shows_at_its_button_until_the_focus_moves_on() 
                 "the toggletip must show at its button",
             )
             .await?;
+        // onto the button of what is said about the points for a win
         gui.press(Key::Tab).await?;
-        gui.expect_toggletip(None).await
+        gui.expect_toggletip(Some("A number from 0 to 1000.")).await
     })
     .await;
 }
@@ -688,8 +713,10 @@ async fn what_is_said_about_a_plugin_shows_on_hover_and_after_a_click() {
         ))
         .await?;
         gui.hover_labelled("About format").await?;
-        gui.expect_toggletip(Some("How the matches are scheduled."))
-            .await?;
+        gui.expect_toggletip(Some(
+            "How the matches are scheduled. Settings you have not changed follow it.",
+        ))
+        .await?;
         gui.click_labelled("About points").await?;
         gui.expect_toggletip(Some(POINTS)).await?;
         gui.page.check_accessibility().await?;
@@ -769,8 +796,10 @@ async fn what_is_said_about_a_field_at_the_right_of_the_dialog_shows_whole() {
         gui.hover_labelled("About weight of an opponent played to a draw")
             .await?;
 
-        gui.expect_toggletip(Some("The points of that opponent are multiplied by this."))
-            .await
+        gui.expect_toggletip(Some(
+            "The points of that opponent are multiplied by this. A number from 0 to 1000.",
+        ))
+        .await
     })
     .await;
 }

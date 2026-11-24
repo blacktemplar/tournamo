@@ -1021,6 +1021,68 @@ impl Gui {
         Ok(())
     }
 
+    /// Moves the pointer onto the choice of the field at `path` of the form of the phase, with the
+    /// list closed.
+    pub async fn hover_choice(&self, path: &str) -> WebDriverResult<()> {
+        let trigger = self.driver.query(By::Id(field_id(path))).first().await?;
+        self.scroll_to_middle(&trigger).await?;
+        self.driver
+            .action_chain()
+            .move_to_element_center(&trigger)
+            .perform()
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the choice of the field at `path` of the form of the phase shows what the
+    /// plugin chosen does, `text`, or shows it not for `None`; it is said to a screen reader
+    /// either way.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_chosen_description(
+        &self,
+        path: &str,
+        text: Option<&str>,
+    ) -> WebDriverResult<()> {
+        let id = format!("{}-chosen", field_id(path));
+        match text {
+            Some(text) => {
+                self.page
+                    .expect(
+                        By::Id(id),
+                        |query| query.with_text(text.to_owned()).and_displayed(),
+                        &format!("what the plugin chosen does shown: {text:?}"),
+                    )
+                    .await
+            }
+            None => {
+                self.page
+                    .expect(
+                        By::Id(id),
+                        |query| query.and_not_displayed(),
+                        "what the plugin chosen does not shown",
+                    )
+                    .await
+            }
+        }
+    }
+
+    /// Waits until the list of plugins open shows what the option chosen does.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_chosen_option_described(&self) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css("[role='option'][aria-selected='true'] .option-description"),
+                |query| query.and_displayed(),
+                "what the option chosen does, in the list open",
+            )
+            .await
+    }
+
     /// Waits until the toggletip shown says `text`, ignoring [`ISOLATION_MARKS`], or until none is
     /// shown for `None`.
     ///
@@ -1282,7 +1344,10 @@ impl Gui {
     /// Panics if it does not in time, with what it shows instead.
     pub async fn expect_chosen(&self, path: &str, label: &str) -> WebDriverResult<()> {
         self.page
-            .expect_texts(By::Css(format!("#{} > span", field_id(path))), &[label])
+            .expect_texts(
+                By::Css(format!("#{} > span:first-child", field_id(path))),
+                &[label],
+            )
             .await
     }
 
@@ -1486,7 +1551,7 @@ impl Gui {
                 By::XPath(format!(
                     "//ol/li[*[self::h3 or self::h4][{}='{phase}']]\
                      //*[substring(@id, string-length(@id) - string-length('{id}') + 1) = \
-                     '{id}']/span",
+                     '{id}']/span[1]",
                     without_isolation_marks("normalize-space()")
                 )),
                 &[label],

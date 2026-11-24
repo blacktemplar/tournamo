@@ -2089,6 +2089,12 @@ entrants, but any number and format.
   them keeping the focus.
 - **What can be clicked looks like a button**: bordered, 44px where the pointer
   is coarse; one primary action per card.
+- **A form shows its fields, little else**: what a field is, the numbers it
+  takes and what follows it are behind the ⓘ by its label; what the plugin
+  chosen does behind an ⓘ in its choice, shown while the pointer is on it or
+  the keyboard's focus, and in the list opened, at the option chosen until
+  another is under the pointer or the focus, which is how a touch screen sees
+  it. A number not taken says why at once, which is enough.
 - **A match is a card**: its number above ("Match 3", with the letter of its
   group), since a number between the names read as a score; below it the two
   sides, each name centred above its button, draw in the middle, columns

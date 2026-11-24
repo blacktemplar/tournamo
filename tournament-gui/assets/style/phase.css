@@ -15,7 +15,7 @@
 }
 
 /* the labels in a column wide enough for most, so that the inputs of a plugin's fields line up;
- * the numbers a field takes below its input; one column on a phone */
+ * one column on a phone */
 .number-field {
   display: grid;
   align-items: center;
@@ -23,11 +23,7 @@
   grid-template-columns: minmax(0, 15rem) auto;
 }
 
-.number-field > .hint {
-  grid-column: 2;
-}
-
-.number-field > :not(.number-label, input, .hint) {
+.number-field > :not(.number-label, input) {
   grid-column: 1 / -1;
 }
 
@@ -35,14 +31,6 @@
   .number-field {
     grid-template-columns: minmax(0, 1fr);
   }
-
-  .number-field > .hint {
-    grid-column: 1;
-  }
-}
-
-.chosen-description {
-  margin: var(--space-1) 0 0;
 }
 
 .field .label {
@@ -226,9 +214,13 @@
   font-size: 0.9em;
 }
 
-/* that of the option under the pointer, rather than both where it and the focus differ */
+/* that of the option under the pointer, rather than both where it and the focus differ; with
+ * neither, as the list opens, that of the option chosen, which a touch screen shows on a tap */
 [role="option"]:hover .option-description,
-[role="listbox"]:not(:has([role="option"]:hover)) [role="option"]:focus .option-description {
+[role="listbox"]:not(:has([role="option"]:hover)) [role="option"]:focus .option-description,
+[role="listbox"]:not(:has([role="option"]:hover, [role="option"]:focus))
+  [role="option"][aria-selected="true"]
+  .option-description {
   display: block;
 }
 

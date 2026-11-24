@@ -38,6 +38,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   The form says below the format what followed, naming only the settings its
   level shows, and offers to show the others. The button applying the
   suggested ranking is gone.
+- **A tighter form of a phase.** What the plugin chosen does no longer shows
+  below its choice but on its ⓘ, on hover or focus and in the list opened;
+  the numbers a field takes are said behind the ⓘ of its label.
 
 ### Added
 

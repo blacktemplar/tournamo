@@ -12,16 +12,20 @@ struct Styles;
 // Changed from the component `dx components add` copied: the trigger has an id and is named by a
 // label of the page together with the value it shows, since a `label` around the trigger would
 // also catch the clicks on the options; the value is a plugin's id, and only the single select is
-// kept. The trigger may be described by an element of the page, e.g. what the option chosen does.
+// kept. The trigger may be described by an element of the page, and shows what the option chosen
+// does behind an ⓘ, below it while the pointer is on it or the keyboard's focus, as an option of
+// the list does.
 
 /// A choice of one of its options, each a [`SelectOption`], whose trigger has the id `id` and is
 /// named by the element `labelled_by` followed by the option chosen, or else by `placeholder`, and
-/// described by the element `described_by`, if any.
+/// described by the element `described_by`, if any, and by `description`, what the option chosen
+/// does, which shows while the pointer is on the trigger or it has the focus of the keyboard.
 #[component]
 pub fn Select(
     id: String,
     labelled_by: String,
     #[props(default)] described_by: Option<String>,
+    #[props(default)] description: Option<String>,
     value: ReadSignal<Option<String>>,
     #[props(into)] placeholder: String,
     on_change: EventHandler<String>,
@@ -37,6 +41,11 @@ pub fn Select(
     // reach past the right edge of the page, e.g. of a trigger right of its label on a phone,
     // where it made the page scroll sideways
     let trigger = id.clone();
+    let chosen = format!("{id}-chosen");
+    let described_by = described_by
+        .into_iter()
+        .chain(description.is_some().then(|| chosen.clone()))
+        .reduce(|first, second| format!("{first} {second}"));
     use_effect(move || {
         _ = document::eval(&format!(
             r#"
@@ -97,6 +106,11 @@ pub fn Select(
                 aria_labelledby: "{labelled_by} {id}",
                 aria_describedby: described_by,
                 select::SelectValue { placeholder }
+                if description.is_some() {
+                    span { class: Styles::dx_select_info, aria_hidden: "true",
+                        crate::icons::Info {}
+                    }
+                }
                 ChevronDown {
                     class: "dx-select-expand-icon",
                     size: "20px",
@@ -107,6 +121,11 @@ pub fn Select(
                 class: Styles::dx_select_list,
                 aria_labelledby: "{labelled_by}",
                 {children}
+            }
+            if let Some(description) = description {
+                span { class: Styles::dx_select_description, id: "{chosen}",
+                    span { class: "option-description-text", {description} }
+                }
             }
         }
     }

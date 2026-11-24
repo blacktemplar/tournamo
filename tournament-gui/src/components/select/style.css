@@ -136,3 +136,33 @@
   color: var(--secondary-color-5);
   font-size: 0.75rem;
 }
+
+/* changed: what the option chosen does, behind an ⓘ in the trigger, shown below it while the
+ * pointer is on it or it has the focus of the keyboard and the list is closed, as an option of the
+ * list shows its own; its padding is transparent, so that the pointer moving onto it stays */
+.dx-select-info {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.dx-select-info .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.dx-select-description {
+  position: absolute;
+  z-index: 1000;
+  top: 100%;
+  left: 0;
+  display: none;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  padding-top: 0.25rem;
+}
+
+.dx-select:not([data-state="open"]):has(> .dx-select-trigger:hover) > .dx-select-description,
+.dx-select:not([data-state="open"]):has(> .dx-select-trigger:focus-visible) > .dx-select-description,
+.dx-select:not([data-state="open"]) > .dx-select-description:hover {
+  display: block;
+}

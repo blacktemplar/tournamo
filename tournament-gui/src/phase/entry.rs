@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use tournament_app::form::{End, EntryView};
 use tournament_engine::PhaseId;
 
-use super::fields::{EditedForm, Issues, Warnings};
+use super::fields::{EditedForm, Issues, MarkDot, Warnings};
 use crate::{competition::Ctx, i18n::t, icons, phases::phase_id_text};
 
 /// The name of the phase of `form`, and where it takes its entrants from: everyone registered for
@@ -59,6 +59,11 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
         div { class: "field number-field phase-name",
             span { class: "number-label",
                 label { r#for: element("field-name"), {tr.get("phase-name")} }
+                MarkDot {
+                    id: element("field-name-mark"),
+                    subject: tr.get("phase-name"),
+                    mark: entry.name_mark.clone(),
+                }
             }
             input {
                 r#type: "text",
@@ -72,7 +77,14 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
         }
         if entry.everyone_registered {
             div { class: "field number-field",
-                span { class: "number-label", {tr.get("entrants-from")} }
+                span { class: "number-label",
+                    {tr.get("entrants-from")}
+                    MarkDot {
+                        id: element("sources-mark"),
+                        subject: tr.get("entrants-from"),
+                        mark: entry.sources_mark.clone(),
+                    }
+                }
                 span { class: "answer",
                     {crate::capitalized(&tr.get("everyone-registered"))}
                     " "
@@ -91,7 +103,14 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
             }
         } else {
             fieldset { class: "field sources",
-                legend { {tr.get("entrants-from")} }
+                legend {
+                    {tr.get("entrants-from")}
+                    MarkDot {
+                        id: element("sources-mark"),
+                        subject: tr.get("entrants-from"),
+                        mark: entry.sources_mark.clone(),
+                    }
+                }
                 ul { class: "source-rows",
                     for (index, row) in entry.rows.iter().cloned().enumerate() {
                         li { key: "{index}", class: "source-row",
@@ -99,6 +118,11 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
                                 class: "visually-hidden",
                                 r#for: element(&format!("source-{index}")),
                                 {t!(tr, "source-of", number = index + 1)}
+                            }
+                            MarkDot {
+                                id: element(&format!("source-{index}-mark")),
+                                subject: t!(tr, "source-of", number = index + 1),
+                                mark: row.mark.clone(),
                             }
                             select {
                                 id: element(&format!("source-{index}")),

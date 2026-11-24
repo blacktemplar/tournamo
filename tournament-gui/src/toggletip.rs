@@ -83,9 +83,15 @@ impl Toggletips {
 /// A toggletip saying `text` as a sentence, see [`sentence`], about `subject`, e.g. the label of a
 /// plugin, which names its button
 /// for screen readers. `id` is that of the element of the text, unique on the page, which an
-/// element may name as its description.
+/// element may name as its description. A `mark` shows a dot rather than an ⓘ, saying that
+/// `subject` differs from what is expected of it, as `text` explains.
 #[component]
-pub fn Toggletip(id: String, subject: String, text: String) -> Element {
+pub fn Toggletip(
+    id: String,
+    subject: String,
+    text: String,
+    #[props(default)] mark: bool,
+) -> Element {
     let page = use_context::<Page>();
     let mut toggletips = use_context::<Toggletips>();
     let tr = page.translator.read();
@@ -123,8 +129,12 @@ pub fn Toggletip(id: String, subject: String, text: String) -> Element {
             onmouseleave: move |_| toggletips.unhide(),
             button {
                 r#type: "button",
-                class: "quiet small",
-                aria_label: t!(tr, "about", subject = subject.as_str()),
+                class: if mark { "quiet small mark" } else { "quiet small" },
+                aria_label: if mark {
+                    t!(tr, "mark-label", subject = subject.as_str())
+                } else {
+                    t!(tr, "about", subject = subject.as_str())
+                },
                 aria_describedby: "{id}",
                 onclick: move |_| {
                     if opened {
@@ -150,7 +160,11 @@ pub fn Toggletip(id: String, subject: String, text: String) -> Element {
                         toggletips.unhide();
                     }
                 },
-                icons::Info {}
+                if mark {
+                    span { class: "mark-dot", aria_hidden: "true", "●" }
+                } else {
+                    icons::Info {}
+                }
             }
             span {
                 class: "toggletip-text",

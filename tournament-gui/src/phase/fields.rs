@@ -3,10 +3,10 @@
 use dioxus::prelude::*;
 use tournament_app::{
     form::{
-        Editable, Followed, FormField, Input, MetricOption, Path, PhaseForm, PluginInput,
+        Editable, Followed, FormField, Input, Mark, MetricOption, Path, PhaseForm, PluginInput,
         PluginOption,
     },
-    i18n::{MetricText, PluginText, Text, Translator},
+    i18n::{Arg, MetricText, PluginText, Text, Translator},
 };
 use tournament_engine::{
     PhaseId, PhasePlugins,
@@ -177,6 +177,21 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
         about_text.push(tr.get("followed-hint"));
     }
     let description = (!about_text.is_empty()).then(|| about_text.join(" "));
+    let marked = match (&field.mark, &field.input) {
+        (Some(mark), _) => Some(mark_text(&tr, mark)),
+        (None, Input::List(list)) if !list.removed.is_empty() => Some(t!(
+            tr,
+            "mark-removed",
+            baseline = baseline(),
+            plugins = Arg::Plugins(
+                list.removed
+                    .iter()
+                    .map(|plugin| (plugin.id, plugin.label))
+                    .collect()
+            ),
+        )),
+        _ => None,
+    };
     let path = field.path.clone();
     let is_metrics = field.plugin.is_none() && field.name == PhasePlugins::METRICS;
     let described_by = format!("{id}-description {id}-issues {id}-warnings");
@@ -186,6 +201,15 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
     };
     // what is said about the field, next to its label
     let about = rsx! {
+        if let Some(text) = marked {
+            " "
+            Toggletip {
+                id: "{id}-mark",
+                subject: tr.field_label(&field),
+                text,
+                mark: true,
+            }
+        }
         if let Some(text) = description {
             " "
             Toggletip {
@@ -592,6 +616,52 @@ fn Choice(
             }
         }
     }
+}
+
+/// Whether the marks of the forms below say what differs from a template rather than from the
+/// defaults, see [`baseline`]; provided by a form of a phase of a template.
+#[derive(Clone, Copy)]
+pub(super) struct OfTemplate(pub(super) bool);
+
+/// What the marks of the form say a field differs from, as the selector of their messages:
+/// `template` or `defaults`, see [`OfTemplate`].
+pub(super) fn baseline() -> &'static str {
+    match try_consume_context::<OfTemplate>() {
+        Some(OfTemplate(true)) => "template",
+        _ => "defaults",
+    }
+}
+
+/// The dot saying how `subject` differs from what is expected of it, see [`Mark`]; nothing if
+/// `mark` is `None`. `id` is that of its text, unique on the page.
+#[component]
+pub(super) fn MarkDot(id: String, subject: String, mark: Option<Mark>) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    rsx! {
+        if let Some(mark) = mark {
+            " "
+            Toggletip {
+                id,
+                subject,
+                text: mark_text(&tr, &mark),
+                mark: true,
+            }
+        }
+    }
+}
+
+/// What `mark` says of a field or a plugin of a list, see [`Mark`].
+pub(super) fn mark_text(tr: &Translator, mark: &Mark) -> String {
+    let text = match mark {
+        Mark::Differs(None) => Text::new("mark-differs"),
+        Mark::Differs(Some(value)) => {
+            Text::new("mark-differs-from").with("value", Arg::Text(Box::new(value.clone())))
+        }
+        Mark::Added => Text::new("mark-added"),
+        Mark::Moved(place) => Text::new("mark-moved").with("place", *place),
+    };
+    tr.text(&text.with("baseline", baseline()))
 }
 
 /// What is wrong, as a list with the id `id`, which the inputs it is about name as their

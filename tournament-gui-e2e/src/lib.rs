@@ -1069,6 +1069,17 @@ impl Gui {
         }
     }
 
+    /// Waits until the forms shown mark what differs from what is expected of it, `subjects`, in
+    /// order, each the name of a mark's button, e.g. `"Changed: Points for a win"`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the marks they show instead.
+    pub async fn expect_marks(&self, subjects: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_accessible_names(By::Css(".toggletip > button.mark"), subjects)
+            .await
+    }
+
     /// Waits until the list of plugins open shows what the option chosen does.
     ///
     /// # Panics
@@ -1493,6 +1504,27 @@ impl Gui {
         // replaced at once, since clearing it first would be a change of its own, made at once
         input.send_keys(Key::Control + "a").await?;
         input.send_keys(text).await?;
+        Page::pause().await;
+        input.send_keys(Key::Tab).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Names the phase named `phase`, one of several forms shown at once, `name` instead.
+    pub async fn rename_in_phase(&self, phase: &str, name: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol/li[*[self::h3 or self::h4][{}='{phase}']]\
+                 //input[substring(@id, string-length(@id) - string-length('-field-name') + 1) \
+                 = '-field-name']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        self.scroll_to_middle(&input).await?;
+        input.send_keys(Key::Control + "a").await?;
+        input.send_keys(name).await?;
         Page::pause().await;
         input.send_keys(Key::Tab).await?;
         Page::pause().await;

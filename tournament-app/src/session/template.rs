@@ -2,8 +2,10 @@
 
 use plugin_factory::{catalog::AnyAxis, config::Config, schema::Level};
 use tournament_engine::{
-    AddPhase, Columns, Phase, PhaseId,
-    plugins::template::{Template, TemplateError, TemplateOrigin, TemplateProblem},
+    AddPhase, Columns, Phase, PhaseId, Source, SourceOf,
+    plugins::template::{
+        Template, TemplateError, TemplateOrigin, TemplateProblem, TemplateSourceOf,
+    },
     undoable_state_machine::{LogEntry, LogEntryKind, TransitionId},
     uuid::Uuid,
 };
@@ -111,6 +113,46 @@ impl Session {
             .map(|phase| phase.answers)
     }
 
+    /// The name, empty for none, and the sources of the phase of a template the phase `phase` was
+    /// added as, as the template gives them now, named in the language of the session, its
+    /// sources taking places of the phases added as those of the template it takes places of;
+    /// `None` if it was not added by a template, or by none this version knows.
+    pub(super) fn template_entry(&self, phase: &Phase) -> Option<(String, Vec<Source>)> {
+        let origin = phase.template()?;
+        let of_template = <dyn Template>::of(&origin.template)?.phases();
+        let of = of_template.get(origin.phase)?;
+        let tr = Translator::new(self.language, &[]);
+        let name = of
+            .name
+            .as_ref()
+            .map(|name| tr.template_phase(&origin.template, name))
+            .unwrap_or_default();
+        // a phase of the template not added, or removed, is none of the competition
+        let added_as = |index: usize| {
+            self.competition()
+                .phases()
+                .values()
+                .find(|phase| {
+                    phase.template().is_some_and(|added| {
+                        added.template == origin.template && added.phase == index
+                    })
+                })
+                .map_or(PhaseId::new(Uuid::nil()), Phase::id)
+        };
+        let sources = of
+            .sources
+            .iter()
+            .map(|source| {
+                let of = match source.of {
+                    TemplateSourceOf::Registration => SourceOf::Registration,
+                    TemplateSourceOf::Phase(index) => SourceOf::Phase(added_as(index)),
+                };
+                Source::new(of, source.from, source.to)
+            })
+            .collect();
+        Some((name, sources))
+    }
+
     /// Every template a competition can be set up by, in the order of their ids.
     pub fn templates() -> Vec<Plugin> {
         plugins(AnyAxis::of::<dyn Template>())
@@ -160,6 +202,10 @@ impl Session {
                 Ok(PhaseForm::new(draft)
                     .in_language(self.language)
                     .compared_with(phase.answers.clone())
+                    .expecting_entry(
+                        added.name().unwrap_or_default().to_owned(),
+                        added.sources().to_vec(),
+                    )
                     .of_phase(
                         Context::default(),
                         added.name(),

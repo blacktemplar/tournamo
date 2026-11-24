@@ -641,6 +641,31 @@ async fn what_a_field_takes_shows_on_hover() {
     .await;
 }
 
+/// What differs from the defaults is marked by a dot, explained below the form and on the dot; a
+/// criterion added marks only itself, not those after it.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_differs_from_the_defaults_is_marked() {
+    run_in_new_competition(async |gui| {
+        gui.expect_marks(&[]).await?;
+
+        gui.enter("metrics[1].points_for_win", "3").await?;
+        gui.choose_plugin("ranking", "More wins").await?;
+        gui.click_labelled("Move more wins up").await?;
+        gui.click_labelled("Move more wins up").await?;
+
+        gui.expect_marks(&["Changed: more wins", "Changed: points for a win"])
+            .await?;
+        gui.hover_labelled("Changed: more wins").await?;
+        gui.expect_toggletip(Some("Added, not suggested.")).await?;
+        gui.hover_labelled("Changed: points for a win").await?;
+        gui.expect_toggletip(Some("Differs from the default: 1."))
+            .await?;
+        gui.page.check_accessibility().await
+    })
+    .await;
+}
+
 /// In German, a number is written with a comma before its decimals.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]

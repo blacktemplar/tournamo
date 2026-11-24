@@ -23,8 +23,9 @@ pub(super) fn fields(draft: &Draft<PhasePlugins>) -> Vec<&'static str> {
 /// The answers of `answers`, those of the phase of a template, that override what their fields
 /// offer: answered with the defaults of their plugins, they differ from what the field offers in
 /// the phase of the template, i.e. with its own format and match format. An answer the same as
-/// what is offered is no override, and follows what is offered. `draft` is a draft of the phase,
-/// whose context the template's phase is configured in.
+/// what is offered is no override, and follows what is offered; but the format and match format,
+/// which follow nothing, are the template's whether it answers them or leaves them as offered.
+/// `draft` is a draft of the phase, whose context the template's phase is configured in.
 pub(super) fn overrides(draft: &Draft<PhasePlugins>, answers: &Config) -> Config {
     let names = fields(draft);
     let mut blank = draft.clone();
@@ -39,10 +40,16 @@ pub(super) fn overrides(draft: &Draft<PhasePlugins>, answers: &Config) -> Config
     };
     let mut overrides = Config::new();
     for name in names {
-        let Some(answer) = answers.get(name).and_then(|_| template.answers().get(name)) else {
+        let Some(answer) = template.answers().get(name) else {
             continue;
         };
-        if Some(answer) != offered(&template, &Path::ROOT.field(name)).as_ref() {
+        let overrides_it = if [PhasePlugins::FORMAT, PhasePlugins::MATCH_FORMAT].contains(&name) {
+            true
+        } else {
+            answers.get(name).is_some()
+                && Some(answer) != offered(&template, &Path::ROOT.field(name)).as_ref()
+        };
+        if overrides_it {
             overrides = overrides.with(name, answer.clone());
         }
     }

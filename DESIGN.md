@@ -1807,6 +1807,29 @@ rather than snapshotting fields before they have been chosen.
   button applying suggestions: it read as the way back to following, which
   needs none now; resetting a phase to the defaults of its format and match
   format may come.
+- **What differs is marked**: a field shown that differs from its expected
+  value gets a dot in the accent (`FormField::mark`), whose toggletip says
+  what it differs from, the template or the default, and what that has
+  (a number, on or off, the label of a plugin, a name, a source; a plugin
+  moved, the place it has there), on hover, focus or a tap. Not a star, which reads as mandatory. No legend below the form: it
+  came and went with the first mark, moving what is below it, e.g. the
+  button adding the phase, away from under a click. A
+  field taking a plugin is marked for another plugin; for the one expected,
+  its fields that differ are. A list is compared as a diff compares lines: by
+  the longest sequence of plugins in the expected order where the order
+  matters (a criterion inserted marks only itself, of two swapped one is
+  "in another place"), by plugin where it does not; a plugin matched is not
+  marked, its fields that differ are; one not expected is "added"; one
+  expected and gone is named at the list's label. A metric only needed is
+  not marked: what needs it is. The format of a phase of no template is
+  never marked, as nothing expects one; that of a phase of a template, and
+  its match format, are expected as the template has them even where it
+  leaves them as offered, since they follow nothing. The name and sources
+  are marked against those of the template's phase (a source by position;
+  fewer sources mark the label), and drawn pairs where the teams of a phase
+  they set differ. A hidden field is counted in
+  `FormView::hidden` as before. Rejected: comparing lists by position (an
+  insertion marked everything after it).
 - **Fields have levels: basic, advanced, expert**. A form at a level shows the
   fields up to it, so what a lower level shows is always part of what a higher
   one shows. A plugin declares the level of each field (`#[plugin(level = ..)]`,

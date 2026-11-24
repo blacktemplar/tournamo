@@ -65,8 +65,70 @@ async fn what_follows_a_new_format_is_said() {
         gui.click("Show the advanced settings").await?;
         gui.expect_template_phases(&["Group phase", "Knockout"])
             .await?;
+        gui.expect_marks(&["Changed: format"]).await?;
+
         gui.expect_chosen_in_phase("Knockout", "format", "Double elimination")
             .await
+    })
+    .await;
+}
+
+/// What is changed from a template is marked wherever it is changed, before and after the phases
+/// are added: the settings of the whole competition, a format the template leaves as offered, the
+/// places taken, the name.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_differs_from_the_template_is_marked() {
+    const DYP: &str = "Draw your partner (DYP): the entrants play in pairs drawn by lot";
+    run_in_competition_to_set_up(async |gui| {
+        gui.paste_entrant_names("Alice\nBob\nCarol\nDave\nEve\nFrank\nGrace\nHeidi")
+            .await?;
+        gui.choose_how_played("Groups and knockout").await?;
+        gui.expect_marks(&[]).await?;
+
+        gui.choose_plugin("match_format", "Best of games").await?;
+        gui.toggle(DYP).await?;
+        gui.choose_in_phase("Group phase", "format", "Double elimination")
+            .await?;
+        gui.enter_last_place_in_phase("Knockout", "2").await?;
+        let basic = [
+            "Changed: match format",
+            &format!("Changed: {DYP}"),
+            "Changed: format",
+            "Changed: Source 1",
+        ];
+        gui.expect_marks(&basic).await?;
+        for (mark, says) in [
+            (
+                "Changed: match format",
+                "Differs from the template: winner only.",
+            ),
+            (basic[1], "Differs from the template: off."),
+            ("Changed: format", "Differs from the template: round robin."),
+            (
+                "Changed: Source 1",
+                "Differs from the template: places 1–4 of Group phase.",
+            ),
+        ] {
+            gui.hover_labelled(mark).await?;
+            gui.expect_toggletip(Some(says)).await?;
+        }
+        gui.page.check_accessibility().await?;
+
+        gui.choose_level("Advanced").await?;
+        gui.expect_template_phases(&["Group phase", "Knockout"])
+            .await?;
+        gui.rename_in_phase("Knockout", "Finals").await?;
+        gui.expect_template_phases(&["Group phase", "Finals"])
+            .await?;
+        gui.click_labelled("Changed: Name").await?;
+        gui.expect_toggletip(Some("Differs from the template: “Knockout”."))
+            .await?;
+
+        gui.choose_level("Basic").await?;
+        gui.click("Add phases").await?;
+        gui.expect_announcement("2 phases are added.").await?;
+        gui.expect_marks(&basic).await
     })
     .await;
 }

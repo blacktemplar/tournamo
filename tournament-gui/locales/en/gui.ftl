@@ -202,14 +202,8 @@ remove-phase = Remove phase
 edit-phase-named = Edit phase: { $phase }
 remove-phase-named = Remove phase: { $phase }
 # where a phase takes its entrants from
-everyone-registered = everyone registered
 only-some-places = Only some places
 registration = the registration
-every-place-of = every place of { $phase }
-places-of = places { $from }–{ $to } of { $phase }
-places-from-of = places from { $from } of { $phase }
-registration-places = places { $from }–{ $to } of the registration
-registration-places-from = places from { $from } of the registration
 # how long the phase takes with the entrants entered, before the start; $rounds and $matches: what
 # the messages below say
 phase-scale = With { $entrants } entrants, the phase takes { $rounds } and { $matches }.
@@ -301,6 +295,32 @@ show-level = { $level ->
 # next to the choice of a plugin added to a list
 add-plugin = Add
 # the button showing what is said about $subject, a plugin or a field
+# a mark next to a field or a plugin of a list that differs from what is expected of it
+# $baseline: template or defaults
+mark-differs = { $baseline ->
+    [template] differs from the template
+   *[defaults] differs from the default
+}
+# $value: what the template has, or the default, e.g. "3" or "groups kept apart"
+mark-differs-from = { $baseline ->
+    [template] differs from the template: { $value }
+   *[defaults] differs from the default: { $value }
+}
+mark-added = { $baseline ->
+    [template] added, not in the template
+   *[defaults] added, not suggested
+}
+# $place: where the template has it, or where it is suggested, from 1
+mark-moved = { $baseline ->
+    [template] moved; the template has it in place { $place }
+   *[defaults] moved; suggested in place { $place }
+}
+mark-removed = { $baseline ->
+    [template] removed from the template: { $plugins }
+   *[defaults] removed from the suggestions: { $plugins }
+}
+# the name of the button of a mark
+mark-label = Changed: { $subject }
 about = About { $subject }
 # $plugin: a plugin in a list
 move-up = Move { $plugin } up

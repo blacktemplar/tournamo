@@ -104,6 +104,15 @@ impl Session {
         self.answer_phases(&pending, PhasePlugins::MATCH_FORMAT, &answer)
     }
 
+    /// Whether the teams of a phase [`Self::dyp`] is about differ from what is expected of them,
+    /// see [`PhaseForm::differs`].
+    pub fn dyp_differs(&self) -> bool {
+        self.of_registration().into_iter().any(|id| {
+            self.phase_form_to_edit(id)
+                .is_ok_and(|form| form.differs(PhasePlugins::TEAMS))
+        })
+    }
+
     /// Whether the phases not started that take places of the registration are played by drawn
     /// pairs; `None` where that is not offered: there is no such phase, or one of them cannot
     /// be played by pairs, e.g. a Monster DYP, which draws pairs of its own.

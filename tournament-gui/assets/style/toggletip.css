@@ -13,6 +13,15 @@
   color: var(--text-muted);
 }
 
+/* a mark: a dot in the accent, saying that what it is next to differs from what is expected */
+.toggletip > button.mark {
+  color: var(--accent);
+}
+
+.mark-dot {
+  font-size: 0.8em;
+}
+
 .toggletip-text {
   position: absolute;
   z-index: 10;

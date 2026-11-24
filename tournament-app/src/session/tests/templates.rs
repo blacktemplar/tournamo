@@ -10,7 +10,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::AddTemplateError,
-    form::Editable,
+    form::{Editable, End, Mark},
     i18n::{Language, Translator},
     session::{Dyp, MatchFormats},
 };
@@ -430,4 +430,157 @@ fn what_followed_a_new_format_is_said_as_far_as_the_level_shows_it() {
         None,
         "nothing followed the last change"
     );
+}
+
+/// A phase of a template marks what differs from the template: its format, a setting changed.
+#[test]
+fn what_differs_from_the_template_is_marked() {
+    let mut knockout = knockout();
+    assert!(!knockout.view().marked);
+
+    knockout
+        .choose(
+            &ConfigPath::ROOT.field(PhasePlugins::SEEDING),
+            Some(SeededAtRandom::ID),
+        )
+        .unwrap();
+    knockout
+        .choose(&format(), Some(DoubleElimination::ID))
+        .unwrap();
+
+    let view = knockout.view();
+    let mark = |name: &str| {
+        view.fields
+            .iter()
+            .find(|field| field.name == name)
+            .and_then(|field| field.mark.as_ref())
+            .map(Mark::said)
+    };
+    assert_eq!(
+        mark(PhasePlugins::SEEDING).as_deref(),
+        Some("differs: groups kept apart")
+    );
+    assert_eq!(
+        mark(PhasePlugins::FORMAT).as_deref(),
+        Some("differs: single elimination")
+    );
+    assert_eq!(mark(PhasePlugins::RANKING), None, "it followed the format");
+}
+
+/// The format and match format of a phase of a template differ from it once changed, also where
+/// the template leaves them as offered, e.g. the round robin of the groups.
+#[test]
+fn a_format_the_template_leaves_as_offered_is_marked_once_changed() {
+    let session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let mut template = session
+        .template_form(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    let mut groups = template.forms()[0].clone();
+    let match_format = ConfigPath::ROOT.field(PhasePlugins::MATCH_FORMAT);
+    assert_eq!(groups.match_format_field(Level::Basic).unwrap().mark, None);
+
+    groups.choose(&match_format, Some(BestOf::ID)).unwrap();
+    template.set_match_format(&groups).unwrap();
+    for form in template.forms() {
+        assert_eq!(
+            form.match_format_field(Level::Basic)
+                .unwrap()
+                .mark
+                .map(|mark| mark.said())
+                .as_deref(),
+            Some("differs: winner only")
+        );
+    }
+
+    groups
+        .choose(&format(), Some(SingleElimination::ID))
+        .unwrap();
+    let view = groups.view();
+    let format = view
+        .fields
+        .iter()
+        .find(|field| field.name == PhasePlugins::FORMAT)
+        .unwrap();
+    assert_eq!(
+        format.mark.as_ref().map(Mark::said).as_deref(),
+        Some("differs: round robin")
+    );
+}
+
+/// Drawn pairs differ from a template playing without them, before and after it is added, and
+/// from the defaults in a competition of no template.
+#[test]
+fn drawn_pairs_differ_from_a_template_without_them() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let mut template = session
+        .template_form(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    assert!(!template.dyp_differs());
+    template.set_dyp(true).unwrap();
+    assert!(template.dyp_differs());
+
+    session.add_template_form(&template).unwrap();
+    assert!(session.dyp_differs());
+    session.set_dyp(false).unwrap();
+    assert!(!session.dyp_differs());
+
+    let mut own = Given::new().added();
+    assert!(!own.dyp_differs());
+    own.set_dyp(true).unwrap();
+    assert!(own.dyp_differs());
+}
+
+/// The name and the sources of a phase of a template differ from it once changed, before and
+/// after it is added; a source past those of the template is added.
+#[test]
+fn the_name_and_sources_changed_differ_from_the_template() {
+    let mut session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let template = session
+        .template_form(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    let mut knockout = template.forms()[1].clone();
+    let entry = knockout.entry_view();
+    assert_eq!(
+        (
+            entry.name_mark,
+            entry.sources_mark,
+            entry.rows[0].mark.clone()
+        ),
+        (None, None, None)
+    );
+    assert!(!knockout.view().marked);
+
+    knockout.set_name("Finals");
+    knockout.enter_place(0, End::To, "2");
+    let entry = knockout.entry_view();
+    assert_eq!(
+        entry.name_mark.map(|mark| mark.said()).as_deref(),
+        Some("differs: “Knockout”")
+    );
+    assert_eq!(
+        entry.rows[0].mark.as_ref().map(Mark::said).as_deref(),
+        Some("differs: places 1–4 of Group phase")
+    );
+    assert!(knockout.view().marked);
+
+    let ids = session.add_template_form(&template).unwrap();
+    for id in &ids {
+        let entry = session.phase_form_to_edit(*id).unwrap().entry_view();
+        assert_eq!(
+            (entry.name_mark, entry.sources_mark),
+            (None, None),
+            "as the template has them"
+        );
+        assert!(entry.rows.iter().all(|row| row.mark.is_none()));
+    }
+    let mut knockout = session.phase_form_to_edit(ids[1]).unwrap();
+    knockout.enter_place(0, End::To, "2");
+    knockout.add_source();
+    let entry = knockout.entry_view();
+    assert_eq!(
+        entry.rows[0].mark.as_ref().map(Mark::said).as_deref(),
+        Some("differs: places 1–4 of Group phase"),
+        "taking places of the phase added as the group phase"
+    );
+    assert_eq!(entry.rows[1].mark, Some(Mark::Added));
 }

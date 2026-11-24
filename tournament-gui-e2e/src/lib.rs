@@ -453,18 +453,17 @@ impl Gui {
 
     /// Checks or unchecks the checkbox labelled `label`, e.g. a plugin of the metrics.
     pub async fn toggle(&self, label: &str) -> WebDriverResult<()> {
-        self.driver
+        let checkbox = self
+            .driver
             .query(By::XPath(format!(
                 "//label[{}='{label}']/input[@type='checkbox']",
                 without_isolation_marks("normalize-space()")
             )))
             .and_enabled()
             .first()
-            .await?
-            .click()
             .await?;
-        Page::pause().await;
-        Ok(())
+        // in sight, as it may be under the bar
+        self.click_in_sight(&checkbox).await
     }
 
     /// Waits until the checkbox labelled `label` is checked, if `ticked`, or else unchecked, as the
@@ -1377,6 +1376,41 @@ impl Gui {
         input.send_keys(Key::Tab).await?;
         Page::pause().await;
         Ok(())
+    }
+
+    /// Chooses the plugin labelled `label` for the field at `path` of the phase named `phase` in
+    /// the basic view, as [`Self::choose_plugin`] does in the form of a phase.
+    pub async fn choose_in_phase(
+        &self,
+        phase: &str,
+        path: &str,
+        label: &str,
+    ) -> WebDriverResult<()> {
+        let id = format!("-{}", field_id(path));
+        let trigger = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol[contains(@class, 'basic')]/li[*[self::h3 or self::h4][{}='{phase}']]\
+                 //*[substring(@id, string-length(@id) - string-length('{id}') + 1) = '{id}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        self.click_in_sight(&trigger).await?;
+        self.driver
+            .query(By::Css("[role='listbox'][data-state='open']:focus"))
+            .first()
+            .await?;
+        self.choose_option(label).await
+    }
+
+    /// Waits until the forms shown say what followed the last change of each, `texts`, in order,
+    /// a sentence each.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_followed(&self, texts: &[&str]) -> WebDriverResult<()> {
+        self.page.expect_texts(By::Css(".followed p"), texts).await
     }
 
     /// Enters `text` as the last place the phase named `phase` takes of its first source in the

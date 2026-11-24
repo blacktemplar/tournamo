@@ -8,9 +8,12 @@
 //! [`Session::add_phase`](crate::session::Session::add_phase) or
 //! [`Session::edit_phase`](crate::session::Session::edit_phase).
 //!
-//! New forms follow suggestions for their ranking, metrics and comparison across groups until one
-//! is edited. Then the whole section stays as chosen, until [`PhaseForm::apply_suggestions`]
-//! replaces it and resumes following. Existing phases start with their settings kept.
+//! A field holding what it is expected to hold follows when that changes, e.g. after a new format:
+//! the ranking, metrics and comparison across groups, as one, while they are what the format
+//! suggests ([`PhaseForm::apply_suggestions`] makes them so), and the fields the phase of a
+//! template overrides, while they hold the override, see [`PhaseForm::compared_with`]. What the
+//! operator answered otherwise stays as it is. The form says what followed its last change
+//! ([`FormView::followed`]).
 //!
 //! The metrics are a row per metric: those the operator added ([`PhaseForm::add_metric`]) and
 //! those something needs, which come and go with it, see [`metrics`]. Where they are shown is said
@@ -45,6 +48,7 @@ use crate::{
 
 mod edit;
 mod entry;
+mod expected;
 pub mod metrics;
 pub(crate) mod template;
 
@@ -73,9 +77,20 @@ pub struct PhaseForm {
     memory: metrics::Memory,
     /// The language numbers are typed in, see [`Self::in_language`].
     language: Language,
-    /// What the hidden fields are compared with where it answers them, see
-    /// [`Self::compared_with`].
-    baseline: Option<Config>,
+    /// What the phase of the template it was added as answers otherwise than its fields offer,
+    /// see [`Self::compared_with`].
+    overrides: Option<Config>,
+    /// What followed the last change, see [`FormView::followed`].
+    followed: Option<Moved>,
+}
+
+/// The fields that followed a change, see [`FormView::followed`].
+#[derive(Clone)]
+struct Moved {
+    /// The field of the phase changed; `None` for a change of the whole form.
+    at: Option<&'static str>,
+    /// The fields of the phase that followed, in schema order.
+    fields: Vec<&'static str>,
 }
 
 /// What the basic view of a phase shows besides the fields of the basic level, see
@@ -93,7 +108,8 @@ pub struct BasicFields {
 pub struct FormView {
     /// The fields of the phase, in schema order.
     pub fields: Vec<FormField>,
-    /// Whether changes to the basic settings refresh the whole ranking and scoring section.
+    /// Whether the ranking and scoring section is what is suggested, so that it follows changes
+    /// to the other settings as a whole.
     pub following_suggestions: bool,
     /// What is wrong with the answers that no field in particular fixes.
     pub issues: Vec<Text>,
@@ -107,9 +123,28 @@ pub struct FormView {
     pub outdated: Vec<PluginOption>,
     /// The level of the fields shown, see [`PhaseForm::view_at`].
     pub level: Level,
-    /// The fields the level hides that matter and are answered otherwise than the phase of the
-    /// template the phase was added as, else otherwise than they offer.
+    /// The fields the level hides that matter and are answered otherwise than expected of them:
+    /// as the phase of the template the phase was added as overrides them, while that fits, else
+    /// as they offer.
     pub hidden: Hidden,
+    /// What followed the last change of the form, if anything did.
+    pub followed: Option<Followed>,
+}
+
+/// The fields of the phase that followed a change of the form, e.g. the ranking following a new
+/// format, see [`FormView::followed`]. A field holding what it is expected to hold, as the
+/// template overrides it or else as it offers, follows when that changes; one answered otherwise
+/// stays as it is.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Followed {
+    /// The field of the phase changed, where what followed is said; `None` for a change of the
+    /// whole form.
+    pub at: Option<Path>,
+    /// What is said: the fields shown that followed, by name, then the levels hiding the others,
+    /// which are not named.
+    pub said: Vec<Text>,
+    /// The lowest level hiding a field that followed, which shows it, if the view hides any.
+    pub show: Option<Level>,
 }
 
 /// The fields a view hides that differ from what is expected of them, see [`FormView::hidden`].
@@ -576,14 +611,22 @@ impl Answering for PhaseForm {
         path: &Path,
         change: impl FnOnce(&mut Draft<PhasePlugins>) -> Result<(), ConfigError>,
     ) -> Result<(), ConfigError> {
+        let at = match path.segments().first() {
+            Some(Segment::Field(name)) => expected::fields(&self.draft)
+                .into_iter()
+                .find(|field| field == name),
+            _ => None,
+        };
+        let holding = self.holding(at);
         let mut draft = self.draft.clone();
         change(&mut draft)?;
         let following = self.following_suggestions && !is_suggested(path);
-        let draft = if following {
+        let mut draft = if following {
             suggested(draft)?
         } else {
             draft.with_defaults()?
         };
+        let mut moved = self.follow(&mut draft, &holding)?;
         // following suggestions, the operator has added nothing; else a calculator added or
         // removed by hand adds or removes its metric
         let added = if following {
@@ -592,23 +635,37 @@ impl Answering for PhaseForm {
             metrics::added_by_hand(&self.draft, &draft, &self.added)
         };
         let earlier = std::mem::replace(&mut self.added, added);
-        self.draft = match self.settle(draft) {
+        let settled = match self.settle(draft) {
             Ok(draft) => draft,
             Err(error) => {
                 self.added = earlier;
                 return Err(error);
             }
         };
+        let before = std::mem::replace(&mut self.draft, settled);
+        if following {
+            moved.extend(
+                PhasePlugins::SUGGESTED
+                    .into_iter()
+                    .filter(|field| before.answers().get(field) != self.draft.answers().get(field)),
+            );
+        }
+        // what no longer matters is not said to have followed
+        let irrelevant = irrelevant(&self.draft);
+        let order = expected::fields(&self.draft);
+        moved.retain(|field| !irrelevant.contains(&Path::ROOT.field(*field)));
+        moved.sort_by_key(|field| order.iter().position(|name| name == field));
+        self.followed = (!moved.is_empty()).then_some(Moved { at, fields: moved });
         // a metric that leaves the list takes what was said about its columns with it
         let calculated = metrics_of(&answered(&self.draft, PhasePlugins::METRICS));
         self.columns.retain(|id| calculated.contains(&id));
-        self.following_suggestions = following;
         if is_suggested(path) || following {
             self.rejected.clear();
         } else {
             // Basic settings do not move customized ranking or metric fields.
             self.rejected.retain(is_suggested);
         }
+        self.following_suggestions = self.follows_suggestions();
         Ok(())
     }
 
@@ -620,8 +677,9 @@ impl Answering for PhaseForm {
 }
 
 impl PhaseForm {
-    /// A form preserving the settings of `draft`, of the first phase of a competition, without a
-    /// name. [`Self::apply_suggestions`] starts following suggestions;
+    /// A form of the settings of `draft`, of the first phase of a competition, without a name,
+    /// following suggestions where they are what is suggested. [`Self::apply_suggestions`] makes
+    /// them so;
     /// [`Session::phase_form`](crate::session::Session::phase_form) does so for a new phase, and
     /// knows the phases of its competition.
     pub fn new(draft: Draft<PhasePlugins>) -> Self {
@@ -635,17 +693,89 @@ impl PhaseForm {
             context: entry::Context::default(),
             columns: Columns::new(),
             language: Language::default(),
-            baseline: None,
+            overrides: None,
+            followed: None,
         }
+        .following()
     }
 
-    /// This form telling the hidden fields that differ from `answers`, the answers of the phase
-    /// of a template it was added as, rather than those differing from what they offer, where
-    /// `answers` answer them, see [`FormView::hidden`].
+    /// This form expecting of its fields what `answers`, the answers of the phase of a template
+    /// it was added as, override: those differing from what the fields offer with the template's
+    /// own format and match format. A field is expected to hold its override while that fits the
+    /// phase and matters, else what it offers; the hidden fields differing from that are counted
+    /// (see [`FormView::hidden`]), and a field holding it follows when it changes (see
+    /// [`FormView::followed`]).
     #[must_use]
     pub fn compared_with(mut self, answers: Config) -> Self {
-        self.baseline = Some(answers);
+        self.overrides = Some(expected::overrides(&self.draft, &answers));
         self
+    }
+
+    /// This form, knowing whether it follows suggestions.
+    fn following(mut self) -> Self {
+        self.following_suggestions = self.follows_suggestions();
+        self
+    }
+
+    /// Whether the ranking, metrics and comparison across groups are what is suggested, and no
+    /// number typed into them was refused, so that they follow suggestions.
+    fn follows_suggestions(&self) -> bool {
+        if self.rejected.iter().any(|(path, _)| is_suggested(path)) {
+            return false;
+        }
+        let mut suggested = self.clone();
+        suggested.apply_suggestions().is_ok()
+            && PhasePlugins::SUGGESTED.iter().all(|field| {
+                suggested.draft.answers().get(field) == self.draft.answers().get(field)
+            })
+    }
+
+    /// The fields of the phase but `except` holding what they are expected to hold, other than
+    /// the format and match format, which the others follow and which follow nothing, and the
+    /// ranking, metrics and comparison across groups, which follow suggestions as one.
+    fn holding(&self, except: Option<&str>) -> Vec<&'static str> {
+        let Some(overrides) = &self.overrides else {
+            return Vec::new();
+        };
+        let irrelevant = irrelevant(&self.draft);
+        expected::fields(&self.draft)
+            .into_iter()
+            .filter(|name| {
+                Some(*name) != except
+                    && ![PhasePlugins::FORMAT, PhasePlugins::MATCH_FORMAT].contains(name)
+                    && !PhasePlugins::SUGGESTED.contains(name)
+            })
+            .filter(|name| {
+                self.draft.answers().get(name).cloned()
+                    == expected::expected(&self.draft, overrides, name, &irrelevant)
+            })
+            .collect()
+    }
+
+    /// Answers the fields of `holding` with what they are expected to hold in `draft`, and
+    /// returns those it changed.
+    fn follow(
+        &self,
+        draft: &mut Draft<PhasePlugins>,
+        holding: &[&'static str],
+    ) -> Result<Vec<&'static str>, ConfigError> {
+        let Some(overrides) = &self.overrides else {
+            return Ok(Vec::new());
+        };
+        let irrelevant = irrelevant(draft);
+        let mut moved = Vec::new();
+        for &name in holding {
+            if let Some(expected) = expected::expected(draft, overrides, name, &irrelevant)
+                && draft.answers().get(name) != Some(&expected)
+            {
+                draft.set(&Path::ROOT.field(name), expected)?;
+                moved.push(name);
+            }
+        }
+        if !moved.is_empty() {
+            *draft = draft.clone().with_defaults()?;
+        }
+        Ok(moved)
     }
 
     /// This form with the numbers typed into it read as `language` writes them, see
@@ -709,7 +839,7 @@ impl PhaseForm {
     }
 
     /// Replaces the ranking, metrics and comparison across groups, including their settings, with
-    /// the suggestions for the other phase fields, and resumes following suggestions. Those fields
+    /// the suggestions for the other phase fields, which they then follow. Those fields
     /// and their rejected numeric input are kept.
     ///
     /// # Errors
@@ -721,6 +851,7 @@ impl PhaseForm {
         self.following_suggestions = true;
         self.rejected.retain(|path| !is_suggested(path));
         self.columns = Columns::new();
+        self.followed = None;
         Ok(())
     }
 
@@ -770,6 +901,7 @@ impl PhaseForm {
         level: Level,
         anyway: &'a [Path],
         elsewhere: &'a [Path],
+        baseline: Option<&'a Config>,
     ) -> Generator<'a, PhasePlugins> {
         Generator {
             draft: &self.draft,
@@ -778,7 +910,7 @@ impl PhaseForm {
             level,
             anyway,
             elsewhere,
-            baseline: self.baseline.as_ref(),
+            baseline,
         }
     }
 
@@ -876,41 +1008,25 @@ impl PhaseForm {
         let issues = completed.build().err().unwrap_or_default();
         let nodes = self.draft.fields();
         let completed_nodes = completed.fields();
-        let mut irrelevant = self.draft.irrelevant();
-        // comparing across divisions only matters with several, and is shown while it compares by
-        // something, so that it can be emptied
-        let answers = self.draft.answers();
-        let one_division = answers
-            .get(PhasePlugins::DIVISIONS)
-            .is_none_or(|divisions| divisions.as_u64() == Some(1));
-        let compares_by_nothing = answers
-            .get(PhasePlugins::ACROSS)
-            .is_none_or(|across| across.as_array().is_none_or(Vec::is_empty));
-        if one_division && compares_by_nothing {
-            irrelevant.push(Path::ROOT.field(PhasePlugins::ACROSS));
-        }
-        // the draw only matters with several divisions, the seeding to a format reading it
-        if one_division {
-            irrelevant.push(Path::ROOT.field(PhasePlugins::DRAW));
-        }
-        let reads_no_seeding = answers
-            .get(PhasePlugins::FORMAT)
-            .and_then(PluginConfig::from_answer)
-            .and_then(|config| config.build::<dyn PhaseFormat>().ok())
-            .is_some_and(|format| !format.reads_seeding());
-        if reads_no_seeding {
-            irrelevant.push(Path::ROOT.field(PhasePlugins::SEEDING));
-        }
+        let irrelevant = irrelevant(&self.draft);
         let whole = Whole {
             completed: &completed_nodes,
             irrelevant: &irrelevant,
         };
-        let generator = self.generator(level, anyway, elsewhere);
+        let baseline = self
+            .overrides
+            .as_ref()
+            .map(|overrides| expected::fitting_all(&self.draft, overrides, &irrelevant));
+        let generator = self.generator(level, anyway, elsewhere, baseline.as_ref());
         let mut fields = generator.fields(&nodes, None, &completed_nodes, &whole);
         let hidden = Hidden {
-            of_template: self.baseline.is_some(),
+            of_template: self.overrides.is_some(),
             ..generator.hidden(&nodes, &whole)
         };
+        let followed = self
+            .followed
+            .as_ref()
+            .map(|moved| self.followed(moved, &generator, &nodes));
         let mut unplaced = Vec::new();
         for issue in &issues {
             let needer = match issue.problem() {
@@ -958,6 +1074,80 @@ impl PhaseForm {
             outdated: self.outdated(),
             level,
             hidden,
+            followed,
+        }
+    }
+
+    /// What `moved` says, the fields that followed the last change, in a view generated by
+    /// `generator` from `nodes`, the fields of the phase: those it shows by name, anywhere, and
+    /// the levels hiding the others.
+    fn followed(
+        &self,
+        moved: &Moved,
+        generator: &Generator<PhasePlugins>,
+        nodes: &[FieldNode],
+    ) -> Followed {
+        let plugin = |field: &str| {
+            self.draft
+                .plugin_at(&Path::ROOT.field(field))
+                .map(|plugin| plugin_arg(plugin.entry))
+        };
+        let cause = match moved.at {
+            Some(field @ (PhasePlugins::FORMAT | PhasePlugins::MATCH_FORMAT)) => {
+                match plugin(field) {
+                    Some(plugin) if field == PhasePlugins::FORMAT => {
+                        Text::new("followed-format").with("plugin", plugin)
+                    }
+                    Some(plugin) => Text::new("followed-match-format").with("plugin", plugin),
+                    None => Text::new("followed-change"),
+                }
+            }
+            _ => Text::new("followed-change"),
+        };
+        let mut shown = Vec::new();
+        let mut hidden: Vec<Level> = Vec::new();
+        for node in nodes
+            .iter()
+            .filter(|node| moved.fields.contains(&node.field.name()))
+        {
+            if generator.shows(node) || generator.elsewhere.contains(&node.path) {
+                shown.push(Text::new("field-label").with(
+                    "field",
+                    Arg::Field {
+                        plugin: None,
+                        name: node.field.name(),
+                        english: node.field.label(),
+                    },
+                ));
+            } else if !hidden.contains(&node.field.level()) {
+                hidden.push(node.field.level());
+            }
+        }
+        hidden.sort();
+        let mut said = Vec::new();
+        if !shown.is_empty() {
+            said.push(
+                Text::new("followed-shown")
+                    .with("cause", cause.clone())
+                    .with("settings", Arg::List(shown)),
+            );
+        }
+        if !hidden.is_empty() {
+            let levels = match hidden.as_slice() {
+                [Level::Expert] => "expert",
+                [_] => "advanced",
+                _ => "both",
+            };
+            said.push(
+                Text::new("followed-hidden")
+                    .with("levels", levels)
+                    .with("cause", cause),
+            );
+        }
+        Followed {
+            at: moved.at.map(|field| Path::ROOT.field(field)),
+            said,
+            show: hidden.first().copied(),
         }
     }
 
@@ -1013,6 +1203,36 @@ fn answered(draft: &Draft<PhasePlugins>, field: &str) -> Vec<&'static str> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// The fields of the phase that do not matter as `draft` answers it: those the draft says (see
+/// [`Draft::irrelevant`]), the draw and the comparison across groups of a phase of one group, the
+/// latter shown while it compares by something, so that it can be emptied, and the seeding of a
+/// format not reading it.
+fn irrelevant(draft: &Draft<PhasePlugins>) -> Vec<Path> {
+    let mut irrelevant = draft.irrelevant();
+    let answers = draft.answers();
+    let one_division = answers
+        .get(PhasePlugins::DIVISIONS)
+        .is_none_or(|divisions| divisions.as_u64() == Some(1));
+    let compares_by_nothing = answers
+        .get(PhasePlugins::ACROSS)
+        .is_none_or(|across| across.as_array().is_none_or(Vec::is_empty));
+    if one_division && compares_by_nothing {
+        irrelevant.push(Path::ROOT.field(PhasePlugins::ACROSS));
+    }
+    if one_division {
+        irrelevant.push(Path::ROOT.field(PhasePlugins::DRAW));
+    }
+    let reads_no_seeding = answers
+        .get(PhasePlugins::FORMAT)
+        .and_then(PluginConfig::from_answer)
+        .and_then(|config| config.build::<dyn PhaseFormat>().ok())
+        .is_some_and(|format| !format.reads_seeding());
+    if reads_no_seeding {
+        irrelevant.push(Path::ROOT.field(PhasePlugins::SEEDING));
+    }
+    irrelevant
 }
 
 fn is_suggested(path: &Path) -> bool {

@@ -2,18 +2,25 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{Editable, FormField, Input, MetricOption, Path, PhaseForm, PluginInput, PluginOption},
+    form::{
+        Editable, Followed, FormField, Input, MetricOption, Path, PhaseForm, PluginInput,
+        PluginOption,
+    },
     i18n::{MetricText, PluginText, Text, Translator},
 };
-use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::config::ConfigError};
+use tournament_engine::{
+    PhaseId, PhasePlugins,
+    plugin_factory::{config::ConfigError, schema::Level},
+};
 
 use super::lists::{MetricsList, OrderedList, UnorderedList};
 use crate::{
+    announcement::Announcement,
     capitalized,
     competition::Ctx,
     components::select::{Select, SelectOption},
     focus::focus_later,
-    i18n::collation_key,
+    i18n::{collation_key, t},
     icons,
     phases::phase_id_text,
     sentence,
@@ -62,21 +69,86 @@ impl EditedForm {
     }
 }
 
+/// The fields `fields` of `form`, and what `followed` its last change, said below the field
+/// changed, or else below them all.
 #[component]
-pub(super) fn Fields(form: EditedForm, fields: Vec<FormField>, disabled: bool) -> Element {
+pub(super) fn Fields(
+    form: EditedForm,
+    fields: Vec<FormField>,
+    disabled: bool,
+    #[props(default)] followed: Option<Followed>,
+) -> Element {
     // the rows compared across divisions show metrics where the phase shows its field comparing
     // them
     let compared = fields
         .iter()
         .any(|field| field.plugin.is_none() && field.name == PhasePlugins::ACROSS);
+    let at = followed
+        .as_ref()
+        .and_then(|followed| followed.at.clone())
+        .filter(|at| fields.iter().any(|field| field.path == *at));
+    let below_all = followed.clone().filter(|_| at.is_none());
+    let fields: Vec<_> = fields
+        .into_iter()
+        .map(|field| {
+            let below = followed
+                .clone()
+                .filter(|_| at.as_ref() == Some(&field.path));
+            // what the others follow
+            let followed_by_others = field.plugin.is_none()
+                && [PhasePlugins::FORMAT, PhasePlugins::MATCH_FORMAT].contains(&field.name);
+            (field, below, followed_by_others)
+        })
+        .collect();
+    let tr = use_context::<Ctx>().translator;
     rsx! {
-        for field in fields {
-            Field {
-                key: "{field.path}",
-                form,
-                field,
-                compared,
-                disabled,
+        for (field , below , followed_by_others) in fields {
+            Fragment { key: "{field.path}",
+                Field {
+                    form,
+                    field,
+                    compared,
+                    disabled,
+                }
+                if followed_by_others {
+                    p { class: "hint", {tr.read().get("followed-hint")} }
+                }
+                if let Some(followed) = below {
+                    FollowedNote { key: "{followed.said:?}", followed }
+                }
+            }
+        }
+        if let Some(followed) = below_all {
+            FollowedNote { key: "{followed.said:?}", followed }
+        }
+    }
+}
+
+/// What `followed` a change of the form, said as it shows and to a screen reader, with the button
+/// showing the level of what the level shown hides.
+#[component]
+fn FollowedNote(followed: Followed) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    let said: Vec<String> = followed.said.iter().map(|text| tr.sentence(text)).collect();
+    let announced = said.join(" ");
+    use_effect(move || ctx.announce(Announcement::Followed(announced.clone())));
+    rsx! {
+        div { class: "notice followed",
+            for (index , text) in said.into_iter().enumerate() {
+                p { key: "{index}", "{text}" }
+            }
+            if let Some(level) = followed.show {
+                button {
+                    r#type: "button",
+                    onclick: move |_| ctx.choose_level(level),
+                    {
+                        t!(
+                            tr, "show-level", level = if level == Level::Expert { "expert" } else {
+                            "advanced" }
+                        )
+                    }
+                }
             }
         }
     }

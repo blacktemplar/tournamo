@@ -341,10 +341,24 @@ fn applying_suggestions_replaces_custom_settings_and_resumes_following() {
     );
 }
 
+/// An existing phase follows suggestions as a new one does while its ranking and scoring are
+/// what its format suggests, and keeps them once they are not, until suggestions are applied.
 #[test]
-fn editing_an_existing_phase_keeps_its_settings_until_suggestions_are_applied() {
+fn an_existing_phase_follows_suggestions_while_its_section_holds_them() {
     let mut session = Session::new("cup");
     session.add_phase(&new_form()).unwrap();
+    let mut form = session.phase_form_to_edit(session.first()).unwrap();
+    assert!(form.view().following_suggestions);
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(
+        items(&form.view(), "ranking"),
+        [LaterFirstLoss::ID, FewerLosses::ID]
+    );
+
+    let mut customized = new_form();
+    customized.remove(&path("ranking[1]")).unwrap();
+    session.edit_phase(session.first(), &customized).unwrap();
     let mut form = session.phase_form_to_edit(session.first()).unwrap();
     assert!(!form.view().following_suggestions);
     let before = form.draft().answers().clone();
@@ -432,19 +446,19 @@ fn a_failed_edit_does_not_stop_following_suggestions() {
     assert_eq!(form.draft().answers(), &before);
 }
 
+/// What follows suggestions is what holds them, however it came to.
 #[test]
-fn returning_to_the_original_value_does_not_resume_following() {
+fn returning_to_the_suggested_value_resumes_following() {
     let mut form = new_form();
-    let original = form.draft().answers().clone();
     form.enter(&path("metrics[1].points_for_win"), "7").unwrap();
-    form.enter(&path("metrics[1].points_for_win"), "1").unwrap();
-    assert_eq!(form.draft().answers(), &original);
     assert!(!form.view().following_suggestions);
+    form.enter(&path("metrics[1].points_for_win"), "1").unwrap();
+    assert!(form.view().following_suggestions);
     form.choose(&path("format"), Some(SingleElimination::ID))
         .unwrap();
     assert_eq!(
-        form.draft().answers().get("metrics"),
-        original.get("metrics")
+        items(&form.view(), "ranking"),
+        [LaterFirstLoss::ID, FewerLosses::ID]
     );
 }
 

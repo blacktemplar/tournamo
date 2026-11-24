@@ -331,7 +331,12 @@ pub(super) fn BasicFieldsOf(
                 }
             }
         }
-        Fields { form: EditedForm::of_phase(form, phase), fields: view.fields, disabled }
+        Fields {
+            form: EditedForm::of_phase(form, phase),
+            fields: view.fields,
+            disabled,
+            followed: view.followed,
+        }
         Issues {
             id: format!("basic-issues-{}", phase_id_text(phase)),
             issues: view.issues,

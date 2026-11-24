@@ -149,6 +149,16 @@ number-range = { $whole ->
         [0] {""}
        *[other] , die ein Vielfaches von { $multiple } ist
     }
+followed-shown = an { $cause } angepasst: { $settings }
+followed-hidden = { $levels ->
+    [expert] die Experteneinstellungen wurden
+    [both] die Einstellungen für Fortgeschrittene und Experten wurden
+   *[advanced] die Einstellungen für Fortgeschrittene wurden
+} an { $cause } angepasst
+followed-format = das Format { $plugin }
+followed-match-format = das Spielformat { $plugin }
+followed-change = die Änderung
+field-label = { $field }
 warning-unranked = ohne Kriterium sind in der Tabelle alle Teilnehmer gleichauf
 warning-lot-decides-cut = die Teilnehmer beiderseits des Schnitts nach Platz { $place } der Anmeldung haben gleiche Wertungszahlen oder keine, daher entscheidet das Los, wer auf welcher Seite ist
 places-in-groups = bei { $groups } Gruppen nebeneinander { $count ->

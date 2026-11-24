@@ -238,9 +238,14 @@ hidden-settings = { $count ->
        *[advanced] Einstellungen für Fortgeschrittene
     }.
 }
-following-suggestions = Reihenfolge der Tabelle und Kennzahlen folgen den Empfehlungen für das Format, bis du sie bearbeitest.
+following-suggestions = Reihenfolge der Tabelle und Kennzahlen folgen den Empfehlungen für das Format, solange sie ihnen entsprechen.
 customized-settings = Deine Reihenfolge der Tabelle und deine Kennzahlen bleiben bei einem Formatwechsel erhalten. Die Empfehlungen zu übernehmen ersetzt sie, und sie folgen wieder dem Format.
 apply-suggested-ranking = Empfehlungen übernehmen
+followed-hint = Einstellungen, die du nicht geändert hast, passen sich daran an.
+show-level = { $level ->
+    [expert] Experteneinstellungen anzeigen
+   *[advanced] Einstellungen für Fortgeschrittene anzeigen
+}
 add-plugin = Hinzufügen
 about = Über { $subject }
 move-up = { $plugin } nach oben schieben

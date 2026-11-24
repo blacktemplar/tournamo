@@ -292,9 +292,16 @@ hidden-settings = { $count ->
        *[advanced] advanced
     } settings.
 }
-following-suggestions = Ranking and scoring follow suggestions for the format until you edit them.
+following-suggestions = Ranking and scoring follow suggestions for the format while they are what it suggests.
 customized-settings = Your ranking and scoring settings are kept when the format changes. Applying suggestions replaces them and resumes automatic updates.
 apply-suggested-ranking = Apply suggested ranking
+# under the format and the match format of a phase
+followed-hint = Settings you have not changed follow it.
+# $level: advanced or expert
+show-level = { $level ->
+    [expert] Show the expert settings
+   *[advanced] Show the advanced settings
+}
 # next to the choice of a plugin added to a list
 add-plugin = Add
 # the button showing what is said about $subject, a plugin or a field

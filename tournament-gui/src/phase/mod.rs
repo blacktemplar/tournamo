@@ -641,6 +641,7 @@ pub(super) fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) 
         outdated,
         level,
         hidden,
+        followed,
         ..
     } = form.read().view_at(*ctx.level.read());
     let outdated = (!outdated.is_empty()).then(|| {
@@ -676,7 +677,12 @@ pub(super) fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) 
                 }
             }
             Entry { form, entry, disabled }
-            Fields { form: EditedForm::new(form), fields, disabled }
+            Fields {
+                form: EditedForm::new(form),
+                fields,
+                disabled,
+                followed,
+            }
             HiddenSettings { id: "hidden-settings", hidden }
             // ranking and scoring follow the suggestions where they are not shown
             if level > Level::Basic {

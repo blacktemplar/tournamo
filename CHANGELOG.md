@@ -30,6 +30,13 @@ later one: a file whose `"format"` changes is migrated, not refused.
   advanced; own phases are set up at advanced. The draw, the seeding and how
   groups are compared show only to experts; below, each phase says how many
   settings it hides that differ from the template or the defaults.
+- **Settings follow the format while unchanged.** A setting that holds what
+  is expected of it, the template's choice while it still fits, else the
+  default, follows a new format; one changed by hand stays. Ranking and
+  scoring follow suggestions whenever they are what is suggested, also for a
+  phase already added or set back by hand, no longer only until first edited.
+  The form says below the format what followed, naming only the settings its
+  level shows, and offers to show the others.
 
 ### Added
 

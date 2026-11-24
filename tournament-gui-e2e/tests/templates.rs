@@ -51,6 +51,32 @@ async fn the_phases_of_a_template_are_changed_before_they_are_added() {
     .await;
 }
 
+/// A new format of a phase of a template moves what followed it; the basic view says only that
+/// the advanced settings did, and shows them on request.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_follows_a_new_format_is_said() {
+    run_in_competition_to_set_up(async |gui| {
+        gui.paste_entrant_names("Alice\nBob\nCarol\nDave").await?;
+        gui.choose_how_played("Groups and knockout").await?;
+
+        gui.choose_in_phase("Knockout", "format", "Double elimination")
+            .await?;
+        let said = "The advanced settings were adjusted to the format double elimination.";
+        gui.expect_followed(&[said]).await?;
+        gui.expect_announcement(said).await?;
+        gui.page.check_accessibility().await?;
+
+        gui.click("Show the advanced settings").await?;
+        gui.expect_template_phases(&[
+            ("Group phase", "Everyone registered"),
+            ("Knockout", "Places 1–4 of Group phase"),
+        ])
+        .await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_template_sets_up_phases_edited_and_played_as_any() {

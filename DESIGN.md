@@ -1159,8 +1159,10 @@ fields) is a quick start: the phases of a whole competition
 of the template by position, and answers to the draft of the phase), which
 applying it adds as ordinary phases. Before they are added, its phases are
 forms (`TemplateForm`), changed as the form of a new phase is: in the basic
-view's layout, or above it each in the dialog of an added phase; "Add phases"
-adds them as they stand, as one action. A form of a later phase knows the
+view's layout, or above it each in its whole form, all shown at once, so that
+nothing is a click away (a summary with a dialog per phase, as for an added
+phase, hid what the form of a new phase shows); "Add phases" adds them as they
+stand, as one action. A form of a later phase knows the
 forms before it as the phases before it (its context, which the form of a new
 phase takes from the phases added), so it takes places of a phase not added
 yet and the teams it sends; the match format and drawn pairs are set across

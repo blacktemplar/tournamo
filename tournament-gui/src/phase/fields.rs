@@ -49,10 +49,16 @@ impl EditedForm {
     }
 
     /// The id of the element of the field at `path`, see [`id`].
-    fn id(self, path: &Path) -> String {
+    pub(super) fn id(self, path: &Path) -> String {
+        self.element(&id(path))
+    }
+
+    /// The id of the element `name` of the form, e.g. `phase-issues`, naming its phase where
+    /// several forms show at once.
+    pub(super) fn element(self, name: &str) -> String {
         match self.of {
-            Some(phase) => format!("{}-{}", phase_id_text(phase), id(path)),
-            None => id(path),
+            Some(phase) => format!("{}-{name}", phase_id_text(phase)),
+            None => name.to_owned(),
         }
     }
 
@@ -318,7 +324,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
                     }
                 } else if is_metrics {
                     MetricsList {
-                        form: form.form,
+                        edited: form,
                         list_id: id.clone(),
                         list,
                         compared,

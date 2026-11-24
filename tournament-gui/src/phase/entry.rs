@@ -2,10 +2,10 @@
 //! from.
 
 use dioxus::prelude::*;
-use tournament_app::form::{End, EntryView, PhaseForm};
+use tournament_app::form::{End, EntryView};
 use tournament_engine::PhaseId;
 
-use super::fields::{Issues, Warnings};
+use super::fields::{EditedForm, Issues, Warnings};
 use crate::{competition::Ctx, i18n::t, icons, phases::phase_id_text};
 
 /// The name of the phase of `form`, and where it takes its entrants from: everyone registered for
@@ -14,8 +14,11 @@ use crate::{competition::Ctx, i18n::t, icons, phases::phase_id_text};
 /// where the lot decides who of the registration is taken; under a source of a phase played in
 /// groups side by side, where its places lie in the groups.
 #[component]
-pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -> Element {
+pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
+    let mut form = edited.form;
+    let element = move |name: &str| edited.element(name);
+    let first_from = format!("#{}", element("source-0-from"));
     let tr = ctx.translator.read();
     // what the phase is called without a name
     let format = form
@@ -55,11 +58,11 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
         // on the grid of the numbers of the plugins' fields, a row each
         div { class: "field number-field phase-name",
             span { class: "number-label",
-                label { r#for: "field-name", {tr.get("phase-name")} }
+                label { r#for: element("field-name"), {tr.get("phase-name")} }
             }
             input {
                 r#type: "text",
-                id: "field-name",
+                id: element("field-name"),
                 autocomplete: "off",
                 value: "{entry.name}",
                 placeholder,
@@ -74,13 +77,13 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                     {crate::capitalized(&tr.get("everyone-registered"))}
                     " "
                     button {
-                        id: "some-places",
+                        id: element("some-places"),
                         r#type: "button",
                         class: "quiet small",
                         disabled,
                         onclick: move |_| {
                             form.write().take_some_places();
-                            crate::focus::focus_later(&["#source-0-from"]);
+                            crate::focus::focus_later(&[&first_from]);
                         },
                         {tr.get("only-some-places")}
                     }
@@ -92,14 +95,16 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                 ul { class: "source-rows",
                     for (index, row) in entry.rows.iter().cloned().enumerate() {
                         li { key: "{index}", class: "source-row",
-                            label { class: "visually-hidden", r#for: "source-{index}",
+                            label {
+                                class: "visually-hidden",
+                                r#for: element(&format!("source-{index}")),
                                 {t!(tr, "source-of", number = index + 1)}
                             }
                             select {
-                                id: "source-{index}",
+                                id: element(&format!("source-{index}")),
                                 disabled,
                                 aria_invalid: row.issue.is_some().then_some("true"),
-                                aria_describedby: "source-{index}-issues",
+                                aria_describedby: element(&format!("source-{index}-issues")),
                                 onchange: move |event| {
                                     let chosen = event.value();
                                     let phase = form
@@ -121,7 +126,7 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                                 }
                             }
                             PlaceField {
-                                form,
+                                form: edited,
                                 index,
                                 end: End::From,
                                 value: row.from.clone(),
@@ -129,7 +134,7 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                                 rejected: row.from_rejected.is_some(),
                             }
                             PlaceField {
-                                form,
+                                form: edited,
                                 index,
                                 end: End::To,
                                 value: row.to.clone(),
@@ -145,7 +150,7 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                                 icons::Trash {}
                             }
                             Issues {
-                                id: "source-{index}-issues",
+                                id: element(&format!("source-{index}-issues")),
                                 issues: row
                                     .from_rejected
                                     .iter()
@@ -155,7 +160,9 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                                     .collect::<Vec<_>>(),
                             }
                             if let Some(in_groups) = &row.in_groups {
-                                p { class: "hint", id: "source-{index}-groups",
+                                p {
+                                    class: "hint",
+                                    id: element(&format!("source-{index}-groups")),
                                     {tr.sentence(in_groups)}
                                 }
                             }
@@ -169,8 +176,8 @@ pub(super) fn Entry(form: Signal<PhaseForm>, entry: EntryView, disabled: bool) -
                     icons::Plus {}
                     {tr.get("add-source")}
                 }
-                Issues { id: "source-issues", issues: entry.issues.clone() }
-                Warnings { id: "source-warnings", warnings: lot_cuts }
+                Issues { id: element("source-issues"), issues: entry.issues.clone() }
+                Warnings { id: element("source-warnings"), warnings: lot_cuts }
             }
         }
     }
@@ -184,7 +191,7 @@ fn choice_value(phase: Option<PhaseId>) -> String {
 /// The first or the last place of the source at `index`, as typed.
 #[component]
 fn PlaceField(
-    form: Signal<PhaseForm>,
+    form: EditedForm,
     index: usize,
     end: End,
     value: String,
@@ -194,9 +201,21 @@ fn PlaceField(
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let (id, label) = match end {
-        End::From => (format!("source-{index}-from"), tr.get("from-place")),
-        End::To => (format!("source-{index}-to"), tr.get("to-place")),
+        End::From => (
+            form.element(&format!("source-{index}-from")),
+            tr.get("from-place"),
+        ),
+        End::To => (
+            form.element(&format!("source-{index}-to")),
+            tr.get("to-place"),
+        ),
     };
+    let described_by = format!(
+        "{} {}",
+        form.element(&format!("source-{index}-issues")),
+        form.element(&format!("source-{index}-groups"))
+    );
+    let mut form = form.form;
     rsx! {
         label { class: "place-field",
             span { {label} }
@@ -210,7 +229,7 @@ fn PlaceField(
                 placeholder: if end == End::To { tr.get("to-last-place") },
                 disabled,
                 aria_invalid: rejected.then_some("true"),
-                aria_describedby: "source-{index}-issues source-{index}-groups",
+                aria_describedby: described_by,
                 onchange: move |event| form.write().enter_place(index, end, &event.value()),
             }
         }

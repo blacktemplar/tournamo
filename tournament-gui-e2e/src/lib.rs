@@ -1451,22 +1451,45 @@ impl Gui {
     }
 
     /// Waits until the phases of a template, before they are added and above the basic level,
-    /// show as `phases`, each its name and where it takes its entrants from, e.g.
-    /// `("Knockout", "Places 1–6 of Group phase")`.
+    /// show the forms of the phases named `names`, in order.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they show instead.
+    pub async fn expect_template_phases(&self, names: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#new-template ol.phases > li > h4"), names)
+            .await?;
+        self.page
+            .expect(
+                By::Css("#new-template ol.phases > li > .phase-form"),
+                |query| query,
+                "the forms of the phases",
+            )
+            .await
+    }
+
+    /// Waits until the field at `path` of the form of the phase named `phase`, one of several
+    /// shown at once, shows the plugin labelled `label` as chosen, as [`Self::expect_chosen`]
+    /// does in the form of a phase.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it shows instead.
-    pub async fn expect_template_phases(&self, phases: &[(&str, &str)]) -> WebDriverResult<()> {
-        let texts: Vec<_> = phases
-            .iter()
-            .flat_map(|(name, from)| [*name, *from])
-            .collect();
+    pub async fn expect_chosen_in_phase(
+        &self,
+        phase: &str,
+        path: &str,
+        label: &str,
+    ) -> WebDriverResult<()> {
+        let id = format!("-{}", field_id(path));
         self.page
             .expect_texts(
-                By::Css(
-                    "#new-template ol.phases > li > h4, #new-template ol.phases > li > p.sources",
-                ),
-                &texts,
+                By::XPath(format!(
+                    "//ol/li[*[self::h3 or self::h4][{}='{phase}']]\
+                     //*[substring(@id, string-length(@id) - string-length('{id}') + 1) = \
+                     '{id}']/span",
+                    without_isolation_marks("normalize-space()")
+                )),
+                &[label],
             )
             .await
     }

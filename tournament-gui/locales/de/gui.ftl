@@ -154,7 +154,6 @@ removed-from-template = Aus der Vorlage entfernt: { $phases }.
 template-phase-number = Phase { $number }
 template-phases = Ihre Phasen
 template-refined = Ändere sie hier so, wie sie gespielt werden sollen, und füge sie dann hinzu; einmal hinzugefügt, kann jede auch geändert oder entfernt werden, und weitere können folgen.
-edit-template-phase-description = Ändere, wie die Phase gespielt wird; sie wird mit den anderen hinzugefügt.
 add-phases = Phasen hinzufügen
 finished = Beendet
 medal-gold = Goldmedaille,

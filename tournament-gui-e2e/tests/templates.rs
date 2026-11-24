@@ -18,7 +18,7 @@ async fn groups_and_knockout(gui: &Gui) -> WebDriverResult<()> {
 }
 
 /// The phases of a template are changed before they are added, as the form of a phase is: in the
-/// basic view, and above it each in its dialog; what is added is what was changed.
+/// basic view, and above it each in its whole form; what is added is what was changed.
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn the_phases_of_a_template_are_changed_before_they_are_added() {
@@ -30,14 +30,9 @@ async fn the_phases_of_a_template_are_changed_before_they_are_added() {
         gui.enter_last_place_in_phase("Knockout", "6").await?;
 
         gui.choose_level("Advanced").await?;
-        gui.expect_template_phases(&[
-            ("Group phase", "Everyone registered"),
-            ("Knockout", "Places 1–6 of Group phase"),
-        ])
-        .await?;
-        gui.click_labelled("Edit phase: Knockout").await?;
+        gui.expect_template_phases(&["Group phase", "Knockout"])
+            .await?;
         gui.toggle("Match for third place").await?;
-        gui.click("Save changes").await?;
         gui.page.check_accessibility().await?;
 
         gui.click("Add phases").await?;
@@ -68,11 +63,10 @@ async fn what_follows_a_new_format_is_said() {
         gui.page.check_accessibility().await?;
 
         gui.click("Show the advanced settings").await?;
-        gui.expect_template_phases(&[
-            ("Group phase", "Everyone registered"),
-            ("Knockout", "Places 1–4 of Group phase"),
-        ])
-        .await
+        gui.expect_template_phases(&["Group phase", "Knockout"])
+            .await?;
+        gui.expect_chosen_in_phase("Knockout", "format", "Double elimination")
+            .await
     })
     .await;
 }

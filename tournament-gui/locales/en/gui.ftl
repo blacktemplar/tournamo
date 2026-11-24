@@ -183,7 +183,6 @@ template-phase-number = phase { $number }
 # below the phases a template adds
 template-phases = Its phases
 template-refined = Change them here as they should be played, then add them; each can also be changed, removed, or followed by more once added.
-edit-template-phase-description = Change how the phase is played; it is added with the others.
 add-phases = Add phases
 # the heading once every match is played
 finished = Finished

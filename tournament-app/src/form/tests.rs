@@ -1317,6 +1317,40 @@ fn a_plugin_moved_or_removed_is_said() {
     assert!(view.marked);
 }
 
+/// Plugins inserted, swapped and removed in one list are each said as they are alone.
+#[test]
+fn plugins_inserted_swapped_and_removed_together_are_each_said() {
+    let mut form = new_form();
+    form.add(&path("ranking"), MoreWins::ID).unwrap();
+    form.move_up(&path("ranking[2]")).unwrap();
+    form.move_up(&path("ranking[1]")).unwrap();
+    form.move_up(&path("ranking[2]")).unwrap();
+    assert_eq!(
+        marks(&form.view(), "ranking"),
+        [
+            (MoreWins::ID, Some(Mark::Added)),
+            (MoreSonnebornBerger::ID, Some(Mark::Moved)),
+            (MorePoints::ID, None)
+        ]
+    );
+
+    form.remove(&path("ranking[2]")).unwrap();
+    let view = form.view();
+    assert_eq!(
+        marks(&view, "ranking"),
+        [
+            (MoreWins::ID, Some(Mark::Added)),
+            (MoreSonnebornBerger::ID, None)
+        ]
+    );
+    let removed: Vec<_> = list(&view, "ranking")
+        .removed
+        .iter()
+        .map(|plugin| plugin.id)
+        .collect();
+    assert_eq!(removed, [MorePoints::ID]);
+}
+
 /// A metric only needed comes with what needs it, which is marked rather than the metric.
 #[test]
 fn a_metric_only_needed_is_not_marked() {

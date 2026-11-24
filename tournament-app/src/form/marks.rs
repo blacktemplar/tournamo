@@ -212,6 +212,15 @@ mod tests {
     }
 
     #[test]
+    fn plugins_inserted_moved_and_removed_leave_the_longest_order_matched() {
+        assert_eq!(
+            in_order(&ids(&["x", "b", "d", "a"]), &ids(&["a", "b", "c", "d"])),
+            [None, Some(1), Some(3), None],
+            "x inserted, a moved down, c removed"
+        );
+    }
+
+    #[test]
     fn of_two_plugins_swapped_one_is_matched() {
         assert_eq!(
             in_order(&ids(&["b", "a"]), &ids(&["a", "b"])),

@@ -243,6 +243,23 @@ show-level = { $level ->
    *[advanced] Einstellungen für Fortgeschrittene anzeigen
 }
 add-plugin = Hinzufügen
+mark-differs = { $baseline ->
+    [template] weicht von der Vorlage ab
+   *[defaults] weicht vom Standardwert ab
+}
+mark-added = { $baseline ->
+    [template] hinzugefügt, nicht in der Vorlage
+   *[defaults] hinzugefügt, nicht empfohlen
+}
+mark-moved = { $baseline ->
+    [template] an anderer Stelle als in der Vorlage
+   *[defaults] an anderer Stelle als empfohlen
+}
+mark-removed = { $baseline ->
+    [template] aus der Vorlage entfernt: { $plugins }
+   *[defaults] aus den Empfehlungen entfernt: { $plugins }
+}
+mark-label = Geändert: { $subject }
 about = Über { $subject }
 move-up = { $plugin } nach oben schieben
 move-down = { $plugin } nach unten schieben

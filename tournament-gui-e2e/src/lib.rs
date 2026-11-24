@@ -1069,6 +1069,17 @@ impl Gui {
         }
     }
 
+    /// Waits until the forms shown mark what differs from what is expected of it, `subjects`, in
+    /// order, each the name of a mark's button, e.g. `"Changed: Points for a win"`.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with the marks they show instead.
+    pub async fn expect_marks(&self, subjects: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_accessible_names(By::Css(".toggletip > button.mark"), subjects)
+            .await
+    }
+
     /// Waits until the list of plugins open shows what the option chosen does.
     ///
     /// # Panics

@@ -65,6 +65,8 @@ async fn what_follows_a_new_format_is_said() {
         gui.click("Show the advanced settings").await?;
         gui.expect_template_phases(&["Group phase", "Knockout"])
             .await?;
+        gui.expect_marks(&["Changed: format"]).await?;
+
         gui.expect_chosen_in_phase("Knockout", "format", "Double elimination")
             .await
     })

@@ -10,7 +10,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use super::*;
 use crate::{
     error::AddTemplateError,
-    form::Editable,
+    form::{Editable, Mark},
     i18n::{Language, Translator},
     session::{Dyp, MatchFormats},
 };
@@ -430,4 +430,32 @@ fn what_followed_a_new_format_is_said_as_far_as_the_level_shows_it() {
         None,
         "nothing followed the last change"
     );
+}
+
+/// A phase of a template marks what differs from the template: its format, a setting changed.
+#[test]
+fn what_differs_from_the_template_is_marked() {
+    let mut knockout = knockout();
+    assert!(!knockout.view().marked);
+
+    knockout
+        .choose(
+            &ConfigPath::ROOT.field(PhasePlugins::SEEDING),
+            Some(SeededAtRandom::ID),
+        )
+        .unwrap();
+    knockout
+        .choose(&format(), Some(DoubleElimination::ID))
+        .unwrap();
+
+    let view = knockout.view();
+    let mark = |name: &str| {
+        view.fields
+            .iter()
+            .find(|field| field.name == name)
+            .and_then(|field| field.mark)
+    };
+    assert_eq!(mark(PhasePlugins::SEEDING), Some(Mark::Differs));
+    assert_eq!(mark(PhasePlugins::FORMAT), Some(Mark::Differs));
+    assert_eq!(mark(PhasePlugins::RANKING), None, "it followed the format");
 }

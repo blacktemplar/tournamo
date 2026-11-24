@@ -1229,3 +1229,109 @@ fn a_phase_of_a_template_counts_what_differs_from_the_template() {
 
 mod columns;
 mod metrics;
+
+/// The marks of the plugins of the list at `path`, by plugin.
+#[track_caller]
+fn marks(view: &FormView, path: &str) -> Vec<(&'static str, Option<Mark>)> {
+    list(view, path)
+        .items
+        .iter()
+        .map(|item| (item.plugin.id, item.mark))
+        .collect()
+}
+
+/// A form as it opens marks nothing; a field answered otherwise than it offers is marked, and the
+/// format of a phase of no template never, as nothing expects one.
+#[test]
+fn a_field_answered_otherwise_than_it_offers_is_marked() {
+    let mut form = new_form();
+    assert!(!form.view().marked);
+
+    form.choose(&path("format"), Some(SingleElimination::ID))
+        .unwrap();
+    assert!(!form.view().marked, "the ranking followed the format");
+
+    form.choose(&path("format"), Some(RoundRobin::ID)).unwrap();
+    form.enter(&path("metrics[1].points_for_win"), "3").unwrap();
+    let view = form.view();
+    assert!(view.marked);
+    assert_eq!(
+        field(&view, "metrics[1].points_for_win").mark,
+        Some(Mark::Differs)
+    );
+    assert_eq!(
+        field(&view, "metrics[1].points_for_draw").mark,
+        None,
+        "as offered"
+    );
+    assert_eq!(
+        marks(&view, "metrics"),
+        [
+            (WinsDrawsLossesCalculator::ID, None),
+            (PointsCalculator::ID, None),
+            (SonnebornBergerCalculator::ID, None)
+        ],
+        "a plugin is not marked for its fields"
+    );
+}
+
+/// In a list whose order matters, a plugin inserted marks only itself, not those after it.
+#[test]
+fn a_plugin_inserted_into_an_ordered_list_marks_only_itself() {
+    let mut form = new_form();
+    form.add(&path("ranking"), MoreWins::ID).unwrap();
+    form.move_up(&path("ranking[2]")).unwrap();
+    form.move_up(&path("ranking[1]")).unwrap();
+
+    assert_eq!(
+        marks(&form.view(), "ranking"),
+        [
+            (MoreWins::ID, Some(Mark::Added)),
+            (MorePoints::ID, None),
+            (MoreSonnebornBerger::ID, None)
+        ]
+    );
+}
+
+/// Of two plugins swapped, one is out of the order expected; a plugin removed is said by the list.
+#[test]
+fn a_plugin_moved_or_removed_is_said() {
+    let mut form = new_form();
+    form.move_up(&path("ranking[1]")).unwrap();
+    assert_eq!(
+        marks(&form.view(), "ranking"),
+        [
+            (MoreSonnebornBerger::ID, Some(Mark::Moved)),
+            (MorePoints::ID, None)
+        ]
+    );
+
+    form.remove(&path("ranking[0]")).unwrap();
+    let view = form.view();
+    let removed: Vec<_> = list(&view, "ranking")
+        .removed
+        .iter()
+        .map(|plugin| plugin.id)
+        .collect();
+    assert_eq!(removed, [MoreSonnebornBerger::ID]);
+    assert!(view.marked);
+}
+
+/// A metric only needed comes with what needs it, which is marked rather than the metric.
+#[test]
+fn a_metric_only_needed_is_not_marked() {
+    let mut form = new_form();
+    form.add(&path("ranking"), MoreBuchholz::ID).unwrap();
+
+    let view = form.view();
+    assert_eq!(
+        marks(&view, "ranking").last(),
+        Some(&(MoreBuchholz::ID, Some(Mark::Added)))
+    );
+    let row = list(&view, "metrics")
+        .metrics
+        .iter()
+        .find(|row| row.item.as_ref().map(|item| item.plugin.id) == Some(BuchholzCalculator::ID))
+        .unwrap();
+    assert_eq!(row.item.as_ref().unwrap().mark, None);
+}

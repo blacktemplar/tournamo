@@ -261,6 +261,7 @@ impl<T: Configurable> Generator<'_, T> {
                     description: field.description(),
                     issues: Vec::new(),
                     warnings: Vec::new(),
+                    mark: None,
                 }
             })
             .collect()
@@ -375,11 +376,13 @@ impl<T: Configurable> Generator<'_, T> {
                         fields: self.fields(&fields, Some(entry.id()), &fields, whole),
                         path: chosen.path.clone(),
                         issues: Vec::new(),
+                        mark: None,
                     }
                 })
                 .collect(),
             metrics: Vec::new(),
             addable: Vec::new(),
+            removed: Vec::new(),
             implied: implied
                 .iter()
                 .map(|plugin| Implied {

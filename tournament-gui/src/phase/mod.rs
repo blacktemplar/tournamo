@@ -24,7 +24,7 @@ pub use self::{
 };
 use self::{
     entry::Entry,
-    fields::{EditedForm, Fields, Issues},
+    fields::{EditedForm, Fields, Issues, OfTemplate},
     summary::Summary,
 };
 use crate::{
@@ -640,6 +640,7 @@ pub(super) fn Form(
         Some(phase) => EditedForm::of_phase(form, phase),
         None => EditedForm::new(form),
     };
+    use_context_provider(|| OfTemplate(form.peek().of_template()));
     let tr = ctx.translator.read();
     let mut update_error = use_signal(|| None::<Text>);
     let FormView {

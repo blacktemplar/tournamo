@@ -301,6 +301,26 @@ show-level = { $level ->
 # next to the choice of a plugin added to a list
 add-plugin = Add
 # the button showing what is said about $subject, a plugin or a field
+# a mark next to a field or a plugin of a list that differs from what is expected of it
+# $baseline: template or defaults
+mark-differs = { $baseline ->
+    [template] differs from the template
+   *[defaults] differs from the default
+}
+mark-added = { $baseline ->
+    [template] added, not in the template
+   *[defaults] added, not suggested
+}
+mark-moved = { $baseline ->
+    [template] in another place than in the template
+   *[defaults] in another place than suggested
+}
+mark-removed = { $baseline ->
+    [template] removed from the template: { $plugins }
+   *[defaults] removed from the suggestions: { $plugins }
+}
+# the name of the button of a mark
+mark-label = Changed: { $subject }
 about = About { $subject }
 # $plugin: a plugin in a list
 move-up = Move { $plugin } up

@@ -49,10 +49,12 @@ use crate::{
 mod edit;
 mod entry;
 mod expected;
+mod marks;
 pub mod metrics;
 pub(crate) mod template;
 
 use edit::{Answering, Generator};
+pub use marks::Mark;
 pub use metrics::{MetricOption, MetricRow};
 pub use template::TemplateForm;
 
@@ -129,6 +131,9 @@ pub struct FormView {
     pub hidden: Hidden,
     /// What followed the last change of the form, if anything did.
     pub followed: Option<Followed>,
+    /// Whether a field shown, however deep, or a plugin of a list is marked, see
+    /// [`FormField::mark`].
+    pub marked: bool,
 }
 
 /// The fields of the phase that followed a change of the form, e.g. the ranking following a new
@@ -277,6 +282,10 @@ pub struct FormField {
     /// What the answer leads to that the operator may not want, although the phase can be played
     /// with it.
     pub warnings: Vec<Text>,
+    /// How it differs from what is expected of it, as the phase of its template overrides it
+    /// while that fits, else as it offers; `None` where it does not, or nothing is expected of
+    /// it, e.g. of the format of a phase of no template.
+    pub mark: Option<Mark>,
 }
 
 /// How a field is answered, with its answer.
@@ -348,6 +357,8 @@ pub struct ListInput {
     /// For the list of metrics of the phase, the metrics that can be added, by label, see
     /// [`PhaseForm::add_metric`]; empty for every other list.
     pub addable: Vec<MetricOption>,
+    /// The plugins expected in it that it has not, see [`FormField::mark`].
+    pub removed: Vec<PluginOption>,
 }
 
 impl ListInput {
@@ -438,6 +449,9 @@ pub struct Item {
     pub fields: Vec<FormField>,
     /// What is wrong with it, to be fixed by removing or moving it.
     pub issues: Vec<Text>,
+    /// Whether it is not expected in the list, or expected elsewhere in its order, see
+    /// [`FormField::mark`]; one expected is not marked, its fields that differ are.
+    pub mark: Option<Mark>,
 }
 
 /// A plugin as a choice of a field.
@@ -709,6 +723,11 @@ impl PhaseForm {
     pub fn compared_with(mut self, answers: Config) -> Self {
         self.overrides = Some(expected::overrides(&self.draft, &answers));
         self
+    }
+
+    /// Whether the form is of a phase of a template, see [`Self::compared_with`].
+    pub fn of_template(&self) -> bool {
+        self.overrides.is_some()
     }
 
     /// This form, knowing whether it follows suggestions.
@@ -1019,6 +1038,12 @@ impl PhaseForm {
             .map(|overrides| expected::fitting_all(&self.draft, overrides, &irrelevant));
         let generator = self.generator(level, anyway, elsewhere, baseline.as_ref());
         let mut fields = generator.fields(&nodes, None, &completed_nodes, &whole);
+        marks::mark(
+            &self.draft,
+            &mut fields,
+            self.draft.answers(),
+            &self.expected_answers(&irrelevant),
+        );
         let hidden = Hidden {
             of_template: self.overrides.is_some(),
             ..generator.hidden(&nodes, &whole)
@@ -1051,6 +1076,26 @@ impl PhaseForm {
             .find(|field| field.path == Path::ROOT.field(PhasePlugins::METRICS))
         {
             metrics.metrics = self.metric_rows(metrics);
+            // a metric only needed comes and goes with what needs it, which is marked instead
+            let needed: Vec<Path> = metrics
+                .metrics
+                .iter()
+                .filter(|row| !row.added)
+                .filter_map(|row| row.item.as_ref().map(|item| item.path.clone()))
+                .collect();
+            for item in metrics
+                .items
+                .iter_mut()
+                .chain(
+                    metrics
+                        .metrics
+                        .iter_mut()
+                        .filter_map(|row| row.item.as_mut()),
+                )
+                .filter(|item| needed.contains(&item.path) && item.mark == Some(Mark::Added))
+            {
+                item.mark = None;
+            }
             metrics.addable = Self::addable_metrics(&metrics.metrics);
         }
         // a phase ranked by nothing is played all the same, with every entrant tied
@@ -1063,6 +1108,7 @@ impl PhaseForm {
         {
             ranking.warnings.push(Text::new("warning-unranked"));
         }
+        let marked = marks::any(&fields);
         FormView {
             fields,
             following_suggestions: self.following_suggestions,
@@ -1075,7 +1121,34 @@ impl PhaseForm {
             level,
             hidden,
             followed,
+            marked,
         }
+    }
+
+    /// What each field of the phase is expected to hold, see [`FormField::mark`]: the override of
+    /// the phase of its template while it fits, else what it offers, the ranking, metrics and
+    /// comparison across groups as suggested; the format only where a template overrides it, as
+    /// nothing else expects one. `irrelevant` are the fields that do not matter.
+    fn expected_answers(&self, irrelevant: &[Path]) -> Config {
+        let none = Config::new();
+        let overrides = self.overrides.as_ref().unwrap_or(&none);
+        let suggested = suggested(self.draft.clone()).ok();
+        let mut expected = Config::new();
+        for name in expected::fields(&self.draft) {
+            let answer = if name == PhasePlugins::FORMAT {
+                overrides.get(name).cloned()
+            } else if PhasePlugins::SUGGESTED.contains(&name) {
+                expected::fitting(&self.draft, overrides, name, irrelevant)
+                    .or_else(|| suggested.as_ref()?.answers().get(name))
+                    .cloned()
+            } else {
+                expected::expected(&self.draft, overrides, name, irrelevant)
+            };
+            if let Some(answer) = answer {
+                expected = expected.with(name, answer);
+            }
+        }
+        expected
     }
 
     /// What `moved` says, the fields that followed the last change, in a view generated by

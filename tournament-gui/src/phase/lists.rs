@@ -10,8 +10,8 @@ use tournament_app::{
 use tournament_engine::Table;
 
 use super::fields::{
-    EditedForm, Fields, Issues, MetricChoice, PluginChoice, in_label_order, metric_description,
-    metric_label, plugin_description, plugin_label,
+    EditedForm, Fields, Issues, MetricChoice, PluginChoice, in_label_order, mark_text,
+    metric_description, metric_label, plugin_description, plugin_label,
 };
 use crate::{
     capitalized,
@@ -128,6 +128,15 @@ fn OrderedItem(
         li {
             span { class: "name", {capitalized(&name)} }
             " "
+            if let Some(mark) = item.mark {
+                Toggletip {
+                    id: "{own}-mark",
+                    subject: name.clone(),
+                    text: mark_text(&tr, mark),
+                    mark: true,
+                }
+                " "
+            }
             About { list, option: item.plugin }
             span { class: "item-buttons",
                 // kept focusable at the end of the list, so that the focus stays on a plugin
@@ -522,6 +531,15 @@ fn MetricNotes(list: String, row: MetricRow) -> Element {
     let tr = ctx.translator.read();
     let about = metric_description(&tr, &row.metric.metric);
     rsx! {
+        if let Some(mark) = row.metric.item.as_ref().and_then(|item| item.mark) {
+            " "
+            Toggletip {
+                id: row.element(&list, "mark"),
+                subject: row.label.clone(),
+                text: mark_text(&tr, mark),
+                mark: true,
+            }
+        }
         if let Some(needed) = &row.needed {
             " "
             span { class: "needed", "{needed}" }
@@ -530,6 +548,7 @@ fn MetricNotes(list: String, row: MetricRow) -> Element {
             " "
             Toggletip { id: row.element(&list, "about"), subject: row.label.clone(), text }
         }
+
         if row.metric.unused {
             " "
             span { class: "warning", {tr.get("metric-unused")} }

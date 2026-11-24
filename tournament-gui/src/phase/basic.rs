@@ -13,7 +13,7 @@ use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::schema::Level};
 
 use super::{
     HiddenSettings,
-    fields::{EditedForm, Fields, Issues},
+    fields::{EditedForm, Fields, Issues, OfTemplate},
 };
 use crate::{competition::Ctx, i18n::t, phases::phase_id_text};
 
@@ -279,6 +279,7 @@ pub(super) fn BasicFieldsOf(
     disabled: bool,
 ) -> Element {
     let ctx = use_context::<Ctx>();
+    use_context_provider(|| OfTemplate(form.peek().of_template()));
     let tr = ctx.translator.read();
     let phase = of;
     let view = form.read().view_basic(basic);

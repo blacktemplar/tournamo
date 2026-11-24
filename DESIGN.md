@@ -1289,6 +1289,40 @@ drift from its log, and a log that no longer replays fails to load.
 A snapshot loads without replay but holds only the current state; a log keeps
 how it came about, so a result reported before a restore can still be undone.
 
+### When each entry was appended
+
+Every entry of the log, undo entries included, records when it was appended:
+`CompetitionStateMachine` keeps `undoable-state-machine`'s entry metadata as an
+`EntryMeta`, its `at` a `Timestamp` (UTC, milliseconds since the Unix epoch,
+written as that number: `"meta": {"at": 1764000000000}`). It is no transition
+data: an undo entry holds no transition, and `Transition::apply` never sees it,
+so replays stay deterministic.
+
+- **The state machine carries it, opaque.** `LogEntry<T, M>` holds whatever the
+  consumer records about an entry; every operation appending one takes it,
+  those of `SessionHistory` too (an action's entries share it, as do the undos
+  `apply_all` appends after a refusal). So the compiler sees that every entry
+  has one, also those the state machine appends itself. The crate stays free of
+  clocks and hashing.
+- **The clock is the app's** (`clock.rs`: `SystemTime` natively, `Date.now()`
+  on wasm, where `SystemTime` panics); `Session` dates each action by it, tests
+  set their own. The engine reads no clock.
+- **Times are only told, never relied on.** The order of the log is the order
+  of what happened; a device's clock may be wrong or go back, and nothing
+  checks that times increase. An entry saved before times were recorded has
+  `"at": null`, which only a converted file holds: `EntryMeta::recorded_at` is
+  the only way to make one.
+- **More of the same kind goes into `EntryMeta`**, e.g. who appended an entry.
+  A hash chain over the log is a matter of the saved form rather (converters
+  rewrite older entries), computed when saving and checked when loading.
+
+Rejected: the time as transition data (an undo has none); times kept next to
+the log by entry id or position (whether every entry has one would rest on
+every path appending, the state machine's own undos among them); the clock in
+the state machine (it would no longer be generic over what is recorded); the
+time as an RFC 3339 string (readable in a file, but a date crate or hand-written
+formatting for nothing the program needs).
+
 ### The competition next to its log
 
 A log replays only as long as every transition and plugin behaves as it did:

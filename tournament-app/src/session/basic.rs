@@ -182,6 +182,7 @@ impl Session {
         field: &str,
         answer: &Value,
     ) -> Result<bool, EditPhasesError> {
+        let meta = self.meta();
         let mut entries = Vec::new();
         for &id in phases {
             if self.answer_of(id, field).as_ref() == Some(answer) {
@@ -212,6 +213,7 @@ impl Session {
                     target,
                     with: edited.into(),
                 },
+                meta,
             ));
         }
         if entries.is_empty() {

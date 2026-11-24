@@ -14,7 +14,8 @@ use std::{collections::HashMap, num::NonZeroU32};
 use plugin_factory::{catalog::AnyAxis, config::Config};
 use tournament_engine::{
     Columns, Competition, CompetitionStateMachine, CompetitionStateMachineExt as _, Division,
-    Match, MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source, StartCompetition,
+    EntryMeta, Match, MatchId, Part, Phase, PhaseId, Seed, SetCompetitionSeed, Source,
+    StartCompetition, Timestamp,
     plugins::{match_format::Template, teams::Teams},
     transitions::{Change, ConflictsError},
     undoable_state_machine::{SessionHistory, StateMachineError, TransitionError},
@@ -23,6 +24,7 @@ use tournament_engine::{
 };
 
 use crate::{
+    clock,
     error::{DoesNotFit, MatchesOfPhase, NoPhase, Refusal, StartError},
     i18n::Language,
     people::People,
@@ -110,6 +112,8 @@ pub struct Session {
     competition_saved: bool,
     /// The language the operator types numbers in, see [`Self::set_language`].
     language: Language,
+    /// The clock dating the entries the session appends to the log, see [`Self::meta`].
+    clock: fn() -> Timestamp,
 }
 
 impl Session {
@@ -122,7 +126,10 @@ impl Session {
         getrandom::fill(&mut seed).expect("the platform must provide randomness");
         let mut machine = CompetitionStateMachine::default();
         machine
-            .apply_new(SetCompetitionSeed::new(Seed::new(seed)).into())
+            .apply_new(
+                SetCompetitionSeed::new(Seed::new(seed)).into(),
+                EntryMeta::recorded_at(clock::now()),
+            )
             .expect("a new competition must accept a seed");
         Self::open(
             CompetitionKey::new(Uuid::new_v4()),
@@ -152,7 +159,20 @@ impl Session {
             saved_changes: 0,
             competition_saved: false,
             language: Language::default(),
+            clock: clock::now,
         }
+    }
+
+    /// What the log records about an entry the session appends now: the time by its clock.
+    fn meta(&self) -> EntryMeta {
+        EntryMeta::recorded_at((self.clock)())
+    }
+
+    /// Dates the entries the session appends from now on by `clock` rather than by the clock of
+    /// the device.
+    #[cfg(test)]
+    pub(crate) fn set_clock(&mut self, clock: fn() -> Timestamp) {
+        self.clock = clock;
     }
 
     /// The number of changes made to the competition, counting the entries of its log and the
@@ -271,8 +291,9 @@ impl Session {
             return Err(needed);
         }
         let start = StartCompetition::new(self.order_by_rating());
+        let meta = self.meta();
         self.history
-            .apply_new(&mut self.machine, start.into())
+            .apply_new(&mut self.machine, start.into(), meta)
             .map_err(|error| {
                 refused(error, StartError::Rejected, |refusal| match refusal {
                     Refusal::Started => Some(StartError::Started),

@@ -7,9 +7,9 @@ use std::{collections::HashSet, num::NonZeroU32};
 use itertools::Itertools;
 use tournament_engine::{
     AddEntrant, AddPhase, Competition, CompetitionStateMachine, CompetitionStateMachineExt,
-    CompetitionTransition, Entrant, EntrantId, MatchId, MatchResult, Origin, PhaseId, PhasePlugins,
-    PhasePluginsBuilder, RankingId, ReportMatchResult, Score, Seed, SetCompetitionSeed, Source,
-    SourceOf, StartCompetition, StartPhase,
+    CompetitionTransition, Entrant, EntrantId, EntryMeta, MatchId, MatchResult, Origin, PhaseId,
+    PhasePlugins, PhasePluginsBuilder, RankingId, ReportMatchResult, Score, Seed,
+    SetCompetitionSeed, Source, SourceOf, StartCompetition, StartPhase,
     plugins::{
         draw::Blocks,
         metrics_calculator::{
@@ -70,18 +70,22 @@ fn knockout() -> PhasePlugins {
 fn registered(entrants: u128) -> CompetitionStateMachine {
     let mut machine = CompetitionStateMachine::default();
     machine
-        .apply_new(SetCompetitionSeed::new(SEED).into())
+        .apply_new(SetCompetitionSeed::new(SEED).into(), EntryMeta::default())
         .unwrap();
     for entrant in 0..entrants {
         let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-        machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
+        machine
+            .apply_new(AddEntrant::new(entrant).into(), EntryMeta::default())
+            .unwrap();
     }
     machine
 }
 
 #[track_caller]
 fn add(machine: &mut CompetitionStateMachine, phase: AddPhase) -> TransitionId {
-    machine.apply_new(phase.into()).expect("the phase is added")
+    machine
+        .apply_new(phase.into(), EntryMeta::default())
+        .expect("the phase is added")
 }
 
 /// The phase `id` of `plugins`, taking its entrants from `sources`.
@@ -118,7 +122,10 @@ fn report_one(machine: &mut CompetitionStateMachine, phase_id: PhaseId) -> Trans
         MatchResult::BWins
     };
     machine
-        .apply_new(ReportMatchResult::new(phase_id, open, result).into())
+        .apply_new(
+            ReportMatchResult::new(phase_id, open, result).into(),
+            EntryMeta::default(),
+        )
         .expect("an open match is reported")
 }
 
@@ -133,7 +140,7 @@ fn play_out(machine: &mut CompetitionStateMachine, phase_id: PhaseId) {
 #[track_caller]
 fn start(machine: &mut CompetitionStateMachine, phase_id: PhaseId) -> TransitionId {
     machine
-        .apply_new(StartPhase::new(phase_id).into())
+        .apply_new(StartPhase::new(phase_id).into(), EntryMeta::default())
         .expect("the phase starts")
 }
 
@@ -199,7 +206,7 @@ fn qualification_then_knockouts() -> CompetitionStateMachine {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     machine
 }
@@ -289,7 +296,7 @@ fn a_phase_is_not_started_before_the_competition_nor_one_of_the_registration() {
     );
 
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
 
     assert_eq!(
@@ -313,7 +320,7 @@ fn a_competition_needs_a_phase_fed_by_the_registration_alone() {
     );
     assert!(
         machine
-            .apply_new(StartCompetition::default().into())
+            .apply_new(StartCompetition::default().into(), EntryMeta::default())
             .is_ok()
     );
 }
@@ -331,7 +338,7 @@ fn started_in(entrants: u128, order: Vec<Vec1<EntrantId>>) -> CompetitionStateMa
         AddPhase::new(phase(QUALIFICATION), round_robin()),
     );
     machine
-        .apply_new(StartCompetition::new(order).into())
+        .apply_new(StartCompetition::new(order).into(), EntryMeta::default())
         .unwrap();
     machine
 }
@@ -419,7 +426,7 @@ fn the_best_of_the_registration_go_straight_to_the_main_phase() {
     );
     let seeded = (0..4).map(|e| vec1![entrant(e)]).collect();
     machine
-        .apply_new(StartCompetition::new(seeded).into())
+        .apply_new(StartCompetition::new(seeded).into(), EntryMeta::default())
         .unwrap();
     assert!(!machine.current().phases()[&phase(MAIN)].is_started());
     assert_eq!(
@@ -509,7 +516,10 @@ fn sources_are_refused_unless_they_take_places_of_earlier_phases_once() {
     ));
     assert!(
         machine
-            .apply_new(adding(vec1![places(phase(QUALIFICATION), 3, None)]).into())
+            .apply_new(
+                adding(vec1![places(phase(QUALIFICATION), 3, None)]).into(),
+                EntryMeta::default()
+            )
             .is_ok()
     );
 }
@@ -526,7 +536,7 @@ fn a_phase_is_added_after_the_start_unless_it_takes_the_registration_alone() {
         )]),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
 
     let registration = Source::new(SourceOf::Registration, place(3), None);
@@ -594,7 +604,7 @@ fn three_layers() -> CompetitionStateMachine {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(QUALIFICATION));
     start(&mut machine, phase(INTERMEDIATE));
@@ -721,8 +731,12 @@ fn a_result_of_a_source_is_not_undone_once_the_next_phase_started() {
         let reported = machine.reported_by(phase(QUALIFICATION), last).unwrap();
         let log_len = machine.log().len();
 
-        let error =
-            machine.undo_match_result(&mut SessionHistory::new(), phase(QUALIFICATION), last);
+        let error = machine.undo_match_result(
+            &mut SessionHistory::new(),
+            phase(QUALIFICATION),
+            last,
+            EntryMeta::default(),
+        );
 
         assert!(matches!(error, Err(UndoMatchResultError::Rejected(_))));
         assert_eq!(machine.log().len(), log_len);
@@ -742,7 +756,11 @@ fn editing_the_first_phase_after_the_second_started_starts_it_with_the_new_stand
     let unranked = PhasePluginsBuilder::new().build().unwrap();
 
     machine
-        .reconfigure_phase(&mut history, AddPhase::new(phase(QUALIFICATION), unranked))
+        .reconfigure_phase(
+            &mut history,
+            AddPhase::new(phase(QUALIFICATION), unranked),
+            EntryMeta::default(),
+        )
         .unwrap()
         .expect("the ranking changed");
 
@@ -765,11 +783,11 @@ fn a_phase_is_reconfigured_by_its_name_sources_and_plugins() {
     };
 
     assert!(matches!(
-        machine.reconfigure_phase(&mut history, upper(8)),
+        machine.reconfigure_phase(&mut history, upper(8), EntryMeta::default()),
         Ok(None)
     ));
     machine
-        .reconfigure_phase(&mut history, upper(4))
+        .reconfigure_phase(&mut history, upper(4), EntryMeta::default())
         .unwrap()
         .expect("the sources changed");
     assert_eq!(
@@ -777,7 +795,11 @@ fn a_phase_is_reconfigured_by_its_name_sources_and_plugins() {
         upper(4).sources()
     );
     machine
-        .reconfigure_phase(&mut history, upper(4).with_name(Some("Upper".to_owned())))
+        .reconfigure_phase(
+            &mut history,
+            upper(4).with_name(Some("Upper".to_owned())),
+            EntryMeta::default(),
+        )
         .unwrap()
         .expect("the name changed");
     assert_eq!(
@@ -792,18 +814,22 @@ fn a_phase_is_removed_unless_it_started_or_another_takes_entrants_from_it() {
     let mut history = SessionHistory::new();
 
     assert!(matches!(
-        machine.remove_phase(&mut history, phase(QUALIFICATION)),
+        machine.remove_phase(&mut history, phase(QUALIFICATION), EntryMeta::default()),
         Err(RemovePhaseError::Started)
     ));
     assert!(matches!(
-        machine.remove_phase(&mut history, phase(99)),
+        machine.remove_phase(&mut history, phase(99), EntryMeta::default()),
         Err(RemovePhaseError::NotAdded)
     ));
-    machine.remove_phase(&mut history, phase(LOWER)).unwrap();
+    machine
+        .remove_phase(&mut history, phase(LOWER), EntryMeta::default())
+        .unwrap();
     assert!(machine.current().phase(&phase(LOWER)).is_none());
 
     // undoing the removal brings it back
-    history.undo_last(&mut machine).unwrap();
+    history
+        .undo_last(&mut machine, EntryMeta::default())
+        .unwrap();
     assert!(machine.current().phase(&phase(LOWER)).is_some());
 
     let mut machine = registered(4);
@@ -820,7 +846,7 @@ fn a_phase_is_removed_unless_it_started_or_another_takes_entrants_from_it() {
         ),
     );
     assert!(matches!(
-        machine.remove_phase(&mut history, phase(QUALIFICATION)),
+        machine.remove_phase(&mut history, phase(QUALIFICATION), EntryMeta::default()),
         Err(RemovePhaseError::InUse(users)) if users == [phase(UPPER)]
     ));
 }
@@ -870,7 +896,7 @@ fn the_rows_left_behind_by_a_cut_through_a_tie_are_placed_after_those_taken_on()
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(QUALIFICATION));
     start(&mut machine, phase(UPPER));
@@ -948,7 +974,7 @@ fn groups_then_a_knockout() -> CompetitionStateMachine {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     machine
 }
@@ -1175,7 +1201,7 @@ fn knockouts_in_blocks_play_for_places_of_their_own() {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(QUALIFICATION));
     let qualified = standings(&machine, phase(QUALIFICATION));
@@ -1239,7 +1265,7 @@ fn two_knockouts_in_blocks_of_the_registration() {
         .unwrap();
     add(&mut machine, AddPhase::new(phase(KNOCKOUT), knockouts));
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     let lots = machine.current().lots().to_vec();
 
@@ -1268,7 +1294,7 @@ fn a_phase_has_no_more_divisions_than_leave_each_the_entrants_its_format_needs()
     let mut machine = registered(5);
     add(&mut machine, AddPhase::new(phase(GROUPS), groups(3)));
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
 
     assert_eq!(
@@ -1357,7 +1383,7 @@ fn dyp_then_a_knockout() -> CompetitionStateMachine {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     machine
 }
@@ -1427,7 +1453,7 @@ fn a_monster_dyp_is_followed_by_a_knockout_of_the_best_with_the_worst() {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(DYP));
     let monster = standings(&machine, phase(DYP));
@@ -1467,7 +1493,7 @@ fn pairs_split_up_play_a_knockout_of_singles_partners_kept_apart() {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(DYP));
     let pairs: Vec<_> = machine.current().phases()[&phase(DYP)]
@@ -1534,7 +1560,7 @@ fn a_field_that_cannot_be_formed_into_its_teams_is_not_started() {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(GROUPS));
 
@@ -1583,7 +1609,7 @@ fn sources_sending_teams_of_different_sizes_are_refused_unless_split_up() {
         Some(NonZeroU32::MIN)
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(DYP));
     start(&mut machine, phase(SINGLES));
@@ -1674,7 +1700,7 @@ fn pairs_then_singles() -> CompetitionStateMachine {
 fn a_pair_left_behind_is_placed_after_every_entrant_of_the_pairs_split_up() {
     let mut machine = pairs_then_singles();
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(DYP));
 
@@ -1709,7 +1735,7 @@ fn entrants_paired_again_are_placed_as_pairs() {
         ),
     );
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     play_out(&mut machine, phase(DYP));
     start(&mut machine, phase(SINGLES));
@@ -1736,14 +1762,20 @@ fn a_phase_whose_start_is_undone_starts_again_with_the_same_field() {
     let field = seeding(&machine, phase(UPPER));
     let mut history = SessionHistory::new();
 
-    machine.unstart_phase(&mut history, phase(UPPER)).unwrap();
+    machine
+        .unstart_phase(&mut history, phase(UPPER), EntryMeta::default())
+        .unwrap();
 
     let upper = &machine.current().phases()[&phase(UPPER)];
     assert!(!upper.is_started());
     assert!(upper.divisions().is_empty());
-    history.undo_last(&mut machine).unwrap();
+    history
+        .undo_last(&mut machine, EntryMeta::default())
+        .unwrap();
     assert!(machine.current().phases()[&phase(UPPER)].is_started());
-    machine.unstart_phase(&mut history, phase(UPPER)).unwrap();
+    machine
+        .unstart_phase(&mut history, phase(UPPER), EntryMeta::default())
+        .unwrap();
     start(&mut machine, phase(UPPER));
     assert_eq!(seeding(&machine, phase(UPPER)), field);
 }
@@ -1754,24 +1786,34 @@ fn undoing_the_start_of_a_phase_of_the_registration_unstarts_the_competition() {
     let matches = pairings(&machine, phase(QUALIFICATION));
 
     machine
-        .unstart_phase(&mut SessionHistory::new(), phase(QUALIFICATION))
+        .unstart_phase(
+            &mut SessionHistory::new(),
+            phase(QUALIFICATION),
+            EntryMeta::default(),
+        )
         .unwrap();
 
     assert!(!machine.current().is_started());
     assert!(!machine.current().phases()[&phase(QUALIFICATION)].is_started());
     let late = Entrant::new(EntrantId::new(Uuid::from_u128(99)));
-    machine.apply_new(AddEntrant::new(late).into()).unwrap();
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(AddEntrant::new(late).into(), EntryMeta::default())
+        .unwrap();
+    machine
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     assert_eq!(machine.current().entrants().len(), 17);
     // without the late entrant, the lots drawn again are the same
     let mut machine = qualification_then_knockouts();
     machine
-        .unstart_phase(&mut SessionHistory::new(), phase(QUALIFICATION))
+        .unstart_phase(
+            &mut SessionHistory::new(),
+            phase(QUALIFICATION),
+            EntryMeta::default(),
+        )
         .unwrap();
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     assert_eq!(pairings(&machine, phase(QUALIFICATION)), matches);
 }
@@ -1781,12 +1823,12 @@ fn the_start_of_a_phase_is_undone_only_without_results_and_later_phases_started(
     let mut machine = qualification_then_knockouts();
     let mut history = SessionHistory::new();
     assert!(matches!(
-        machine.unstart_phase(&mut history, phase(UPPER)),
+        machine.unstart_phase(&mut history, phase(UPPER), EntryMeta::default()),
         Err(UnstartPhaseError::NotStarted)
     ));
     report_one(&mut machine, phase(QUALIFICATION));
     assert!(matches!(
-        machine.unstart_phase(&mut history, phase(QUALIFICATION)),
+        machine.unstart_phase(&mut history, phase(QUALIFICATION), EntryMeta::default()),
         Err(UnstartPhaseError::Played(played)) if played == [phase(QUALIFICATION)]
     ));
     play_out(&mut machine, phase(QUALIFICATION));
@@ -1795,12 +1837,12 @@ fn the_start_of_a_phase_is_undone_only_without_results_and_later_phases_started(
     let log_len = machine.log().len();
 
     assert!(matches!(
-        machine.unstart_phase(&mut history, phase(QUALIFICATION)),
+        machine.unstart_phase(&mut history, phase(QUALIFICATION), EntryMeta::default()),
         Err(UnstartPhaseError::InUse(users)) if users == [phase(UPPER), phase(LOWER)]
     ));
     report_one(&mut machine, phase(UPPER));
     assert!(matches!(
-        machine.unstart_phase(&mut history, phase(UPPER)),
+        machine.unstart_phase(&mut history, phase(UPPER), EntryMeta::default()),
         Err(UnstartPhaseError::Played(played)) if played == [phase(UPPER)]
     ));
     assert_eq!(

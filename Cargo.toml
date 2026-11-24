@@ -81,7 +81,7 @@ tournament-cli = { path = "tournament-cli", default-features = false }
 tournament-engine = { path = "tournament-engine" }
 tower-http = "0.7.1"
 typetag = "0.2.23"
-undoable-state-machine = { git = "https://github.com/blacktemplar/undoable-state-machine", tag = "v0.4.0", features = [
+undoable-state-machine = { git = "https://github.com/blacktemplar/undoable-state-machine", tag = "v0.5.0", features = [
     "serde",
 ] }
 # splits a letter from its accents, so that a search ignores them

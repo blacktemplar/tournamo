@@ -3,9 +3,9 @@ use std::num::NonZeroU32;
 use itertools::Itertools;
 use rand::{RngExt, rng};
 use tournament_engine::{
-    AddEntrant, AddPhase, Competition, CompetitionStateMachine, Entrant, EntrantId, MatchId,
-    MatchResult, NewMatch, PhaseId, PhasePluginsBuilder, Ranking, RemoveEntrant, ReportMatchResult,
-    Score, Seed, SetCompetitionSeed, Standing, Standings, StartCompetition,
+    AddEntrant, AddPhase, Competition, CompetitionStateMachine, Entrant, EntrantId, EntryMeta,
+    MatchId, MatchResult, NewMatch, PhaseId, PhasePluginsBuilder, Ranking, RemoveEntrant,
+    ReportMatchResult, Score, Seed, SetCompetitionSeed, Standing, Standings, StartCompetition,
     plugins::{
         metrics_calculator::{
             Buchholz, BuchholzCalculator, BuchholzOfBuchholz, BuchholzOfBuchholzCalculator,
@@ -93,19 +93,38 @@ fn full_tournament() {
     let seed = Seed::new(rng().random());
     let phase_id = PhaseId::new(Uuid::new_v4());
 
-    sm.apply_new(SetCompetitionSeed::new(seed).into()).unwrap();
-    sm.apply_new(AddEntrant::new(entrant_a.clone()).into())
+    sm.apply_new(SetCompetitionSeed::new(seed).into(), EntryMeta::default())
         .unwrap();
-    sm.apply_new(AddEntrant::new(entrant_b.clone()).into())
-        .unwrap();
-    sm.apply_new(AddEntrant::new(entrant_c.clone()).into())
-        .unwrap();
-    sm.apply_new(AddEntrant::new(entrant_d.clone()).into())
-        .unwrap();
-    sm.apply_new(AddEntrant::new(entrant_e.clone()).into())
-        .unwrap();
-    sm.apply_new(RemoveEntrant::new(entrant_c.id()).into())
-        .unwrap();
+    sm.apply_new(
+        AddEntrant::new(entrant_a.clone()).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(
+        AddEntrant::new(entrant_b.clone()).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(
+        AddEntrant::new(entrant_c.clone()).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(
+        AddEntrant::new(entrant_d.clone()).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(
+        AddEntrant::new(entrant_e.clone()).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(
+        RemoveEntrant::new(entrant_c.id()).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
     let plugins = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
         .add_ranking(LaterFirstLoss)
@@ -116,9 +135,13 @@ fn full_tournament() {
         .add_metric(BuchholzOfBuchholzCalculator)
         .build()
         .unwrap();
-    sm.apply_new(AddPhase::new(phase_id, plugins).into())
+    sm.apply_new(
+        AddPhase::new(phase_id, plugins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
-    sm.apply_new(StartCompetition::default().into()).unwrap();
 
     // asserts for the state after the competition start
     assert!(is_attending(sm.current(), &entrant_a));
@@ -194,11 +217,17 @@ fn full_tournament() {
 
     // now continue the tournament
     // rankings[3] wins against rankings[0]
-    sm.apply_new(ReportMatchResult::new(phase_id, match_0_vs_3_id, MatchResult::BWins).into())
-        .unwrap();
+    sm.apply_new(
+        ReportMatchResult::new(phase_id, match_0_vs_3_id, MatchResult::BWins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
     // rankings[1] wins against rankings[2]
-    sm.apply_new(ReportMatchResult::new(phase_id, match_1_vs_2_id, MatchResult::AWins).into())
-        .unwrap();
+    sm.apply_new(
+        ReportMatchResult::new(phase_id, match_1_vs_2_id, MatchResult::AWins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
 
     // asserts after the first round of single elimination
     let phase = &sm.current().phases().values().next().unwrap().divisions()[0];
@@ -256,8 +285,11 @@ fn full_tournament() {
     assert_eq!(match_3_vs_1.result(), None);
 
     // finish the tournament
-    sm.apply_new(ReportMatchResult::new(phase_id, match_3_vs_1_id, MatchResult::AWins).into())
-        .unwrap();
+    sm.apply_new(
+        ReportMatchResult::new(phase_id, match_3_vs_1_id, MatchResult::AWins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
 
     // final asserts
     let phase = &sm.current().phases().values().next().unwrap().divisions()[0];
@@ -328,7 +360,8 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
     let mut sm = CompetitionStateMachine::default();
     let phase_id = PhaseId::new(Uuid::new_v4());
     for _ in 0..3 {
-        sm.apply_new(AddEntrant::new(entrant()).into()).unwrap();
+        sm.apply_new(AddEntrant::new(entrant()).into(), EntryMeta::default())
+            .unwrap();
     }
     // a round robin
     let plugins = PhasePluginsBuilder::new()
@@ -336,10 +369,14 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
         .add_metric(THREE_ONE.with_points_for_bye(Score::new(3.0)))
         .build()
         .unwrap();
-    sm.apply_new(AddPhase::new(phase_id, plugins).into())
-        .unwrap();
+    sm.apply_new(
+        AddPhase::new(phase_id, plugins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
 
-    sm.apply_new(StartCompetition::default().into()).unwrap();
+    sm.apply_new(StartCompetition::default().into(), EntryMeta::default())
+        .unwrap();
     // the byes scored by each ranking, by the round of its bye
     let byes_scored = |sm: &CompetitionStateMachine| {
         let phase = sm.current().phases()[&phase_id].divisions()[0].data();
@@ -370,8 +407,11 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
         .exactly_one()
         .unwrap()
         .id();
-    sm.apply_new(ReportMatchResult::new(phase_id, first_round, MatchResult::Draw).into())
-        .unwrap();
+    sm.apply_new(
+        ReportMatchResult::new(phase_id, first_round, MatchResult::Draw).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
 
     assert_eq!(byes_scored(&sm), [(1, 1), (2, 1), (3, 0)]);
 }
@@ -382,15 +422,21 @@ fn byes_are_scored_when_their_ranking_reaches_them() {
 fn single_elimination_rejects_a_draw() {
     let mut sm = CompetitionStateMachine::default();
     let phase_id = PhaseId::new(Uuid::new_v4());
-    sm.apply_new(AddEntrant::new(entrant()).into()).unwrap();
-    sm.apply_new(AddEntrant::new(entrant()).into()).unwrap();
+    sm.apply_new(AddEntrant::new(entrant()).into(), EntryMeta::default())
+        .unwrap();
+    sm.apply_new(AddEntrant::new(entrant()).into(), EntryMeta::default())
+        .unwrap();
     let plugins = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
         .build()
         .unwrap();
-    sm.apply_new(AddPhase::new(phase_id, plugins).into())
+    sm.apply_new(
+        AddPhase::new(phase_id, plugins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
-    sm.apply_new(StartCompetition::default().into()).unwrap();
     let final_id = *sm.current().phases()[&phase_id].divisions()[0]
         .data()
         .matches()
@@ -398,7 +444,10 @@ fn single_elimination_rejects_a_draw() {
         .exactly_one()
         .unwrap();
 
-    let draw = sm.apply_new(ReportMatchResult::new(phase_id, final_id, MatchResult::Draw).into());
+    let draw = sm.apply_new(
+        ReportMatchResult::new(phase_id, final_id, MatchResult::Draw).into(),
+        EntryMeta::default(),
+    );
 
     let Err(StateMachineError::Transition(_, error)) = draw else {
         panic!("a draw must not be applicable, got {draw:?}");
@@ -410,6 +459,9 @@ fn single_elimination_rejects_a_draw() {
             .matches()[&final_id]
             .is_finished()
     );
-    sm.apply_new(ReportMatchResult::new(phase_id, final_id, MatchResult::AWins).into())
-        .unwrap();
+    sm.apply_new(
+        ReportMatchResult::new(phase_id, final_id, MatchResult::AWins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
 }

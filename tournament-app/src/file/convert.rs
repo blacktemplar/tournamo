@@ -606,9 +606,16 @@ mod v5 {
 
 /// A phase, added or of the competition, comes from no template.
 mod v6 {
-    use serde_json::{Map, Value};
+    use serde_json::{Map, Value, json};
 
+    /// An entry gets no time; an `AddPhase`, applied or replacing another, comes from no
+    /// template.
     pub(super) fn log_entry(entry: &mut Value) {
+        if let Some(entry) = entry.as_object_mut()
+            && entry.contains_key("id")
+        {
+            entry.entry("meta").or_insert_with(|| json!({ "at": null }));
+        }
         let transition = if entry.pointer("/kind/Apply").is_some() {
             "/kind/Apply/AddPhase"
         } else {
@@ -1352,11 +1359,11 @@ mod tests {
 
         assert_eq!(
             converted_by(v6::log_entry, apply(&added)),
-            apply(&converted)
+            untimed(apply(&converted))
         );
         assert_eq!(
             converted_by(v6::log_entry, replace(&added)),
-            replace(&converted)
+            untimed(replace(&converted))
         );
         let mut competition = of_competition(&added);
         v6::competition(&mut competition);
@@ -1370,8 +1377,25 @@ mod tests {
         });
         assert_eq!(
             converted_by(v6::log_entry, apply(&of_template)),
-            apply(&of_template)
+            untimed(apply(&of_template))
         );
+    }
+
+    /// `entry`, the JSON of a log entry, as of format 6, which records no time of it.
+    fn untimed(mut entry: Value) -> Value {
+        entry["meta"] = json!({ "at": null });
+        entry
+    }
+
+    /// An entry of format 5 was appended at a time no longer known; an undo as well.
+    #[test]
+    fn an_entry_gets_no_time_in_format_6() {
+        let undo = json!({ "id": "undo", "kind": { "Undo": "add" } });
+        let timed = json!({ "id": "undo", "kind": { "Undo": "add" }, "meta": { "at": 1 } });
+
+        assert_eq!(converted_by(v6::log_entry, undo.clone()), untimed(undo));
+        assert_eq!(converted_by(v6::log_entry, timed.clone()), timed);
+        assert_eq!(converted_by(v6::log_entry, json!("entry")), json!("entry"));
     }
 
     /// A started competition of format 4 gets its lots in the order its phase started in, as its

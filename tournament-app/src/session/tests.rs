@@ -63,6 +63,7 @@ mod scale;
 mod storage;
 mod teams;
 mod templates;
+mod times;
 mod undo;
 mod versions;
 mod views;

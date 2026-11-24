@@ -17,10 +17,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt, Decision, EnteredValue, Entrant, EntrantId, FieldKey, Match,
-    MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant,
+    CompetitionStateMachineExt, Decision, EnteredValue, Entrant, EntrantId, EntryMeta, FieldKey,
+    Match, MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant,
     ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
-    StartCompetition, StartPhase, TypeMapValue,
+    StartCompetition, StartPhase, Timestamp, TypeMapValue,
     plugins::{
         draw::{Blocks, Draw, Random, Snake},
         metrics_calculator::{
@@ -71,7 +71,11 @@ impl TypeMapValue for Nickname {}
 fn undo(machine: &mut CompetitionStateMachine, target: TransitionId) -> TransitionId {
     let id = TransitionId::new();
     machine
-        .apply(LogEntry::new(id, LogEntryKind::Undo(target)))
+        .apply(LogEntry::new(
+            id,
+            LogEntryKind::Undo(target),
+            EntryMeta::default(),
+        ))
         .expect("the undo target must exist");
     id
 }
@@ -83,15 +87,20 @@ fn played_competition() -> CompetitionStateMachine {
     let mut machine = CompetitionStateMachine::default();
 
     machine
-        .apply_new(SetCompetitionSeed::new(SEED).into())
+        .apply_new(SetCompetitionSeed::new(SEED).into(), EntryMeta::default())
         .unwrap();
     for entrant in 0..5 {
         let entrant = Entrant::new(entrant_id(entrant))
             .with_annotation(Nickname(format!("entrant {entrant}")));
-        machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
+        machine
+            .apply_new(AddEntrant::new(entrant).into(), EntryMeta::default())
+            .unwrap();
     }
     machine
-        .apply_new(RemoveEntrant::new(entrant_id(4)).into())
+        .apply_new(
+            RemoveEntrant::new(entrant_id(4)).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
     let plugins = PhasePluginsBuilder::new()
         .format(SingleElimination::new())
@@ -104,7 +113,10 @@ fn played_competition() -> CompetitionStateMachine {
         .build()
         .unwrap();
     machine
-        .apply_new(AddPhase::new(phase_id(), plugins).into())
+        .apply_new(
+            AddPhase::new(phase_id(), plugins).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
     machine
         .apply_new(
@@ -113,11 +125,15 @@ fn played_competition() -> CompetitionStateMachine {
                 vec1![entrant_id(0), entrant_id(3)],
             ])
             .into(),
+            EntryMeta::default(),
         )
         .unwrap();
     for match_id in matches_of_round(&machine.current().phases()[&phase_id()], 1) {
         machine
-            .apply_new(ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into())
+            .apply_new(
+                ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into(),
+                EntryMeta::default(),
+            )
             .unwrap();
     }
 
@@ -232,6 +248,7 @@ fn a_phase_of_another_phase_is_added_and_started_under_pinned_tags() {
                 .with_name(Some("Final".to_owned()))
                 .with_sources(sources)
                 .into(),
+            EntryMeta::default(),
         )
         .unwrap();
     while let Some(open) = machine.current().phases()[&phase_id()].divisions()[0]
@@ -241,9 +258,13 @@ fn a_phase_of_another_phase_is_added_and_started_under_pinned_tags() {
         .find(|r#match| !r#match.is_finished())
     {
         let report = ReportMatchResult::new(phase_id(), open.id(), MatchResult::AWins);
-        machine.apply_new(report.into()).unwrap();
+        machine
+            .apply_new(report.into(), EntryMeta::default())
+            .unwrap();
     }
-    let started = machine.apply_new(StartPhase::new(next).into()).unwrap();
+    let started = machine
+        .apply_new(StartPhase::new(next).into(), EntryMeta::default())
+        .unwrap();
 
     let log = serialized_log(&machine);
     let entry = |id| {
@@ -272,8 +293,12 @@ fn a_phase_of_another_phase_is_added_and_started_under_pinned_tags() {
 #[test]
 fn a_transition_is_serialized_as_its_payload_under_its_tag() {
     let mut machine = CompetitionStateMachine::default();
+    let at = Timestamp::from_unix_millis(1_764_000_000_000);
     let seed_id = machine
-        .apply_new(SetCompetitionSeed::new(SEED).into())
+        .apply_new(
+            SetCompetitionSeed::new(SEED).into(),
+            EntryMeta::recorded_at(at),
+        )
         .unwrap();
 
     let log = serialized_log(&machine);
@@ -285,8 +310,33 @@ fn a_transition_is_serialized_as_its_payload_under_its_tag() {
             "kind": {
                 "Apply": { "SetCompetitionSeed": { "seed": SEED } },
             },
+            "meta": { "at": 1_764_000_000_000_i64 },
         }])
     );
+}
+
+/// When an entry was appended, undo entries included, is no part of what it does, so only a log
+/// that keeps it keeps it.
+#[test]
+fn the_time_of_every_entry_round_trips() {
+    let mut machine = CompetitionStateMachine::default();
+    let seeded = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_000_000));
+    let undone = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_060_000));
+    let seed_id = machine
+        .apply_new(SetCompetitionSeed::new(SEED).into(), seeded)
+        .unwrap();
+    machine
+        .apply(LogEntry::new(
+            TransitionId::new(),
+            LogEntryKind::Undo(seed_id),
+            undone,
+        ))
+        .unwrap();
+
+    for restored in [round_trip(&machine), binary_round_trip(&machine)] {
+        let metas: Vec<_> = restored.log().iter().map(|entry| *entry.meta()).collect();
+        assert_eq!(metas, [seeded, undone]);
+    }
 }
 
 /// What a report says of how a match was played reaches the match, through any log format.
@@ -312,6 +362,7 @@ fn a_reported_contest_survives_a_round_trip() {
             )
             .with_part(Part::new().with_value(points, games::count(3, 1)))
             .into(),
+            EntryMeta::default(),
         )
         .unwrap();
     let contest = machine.current().phases()[&games::phase_id()].divisions()[0]
@@ -412,6 +463,7 @@ fn a_reconfigured_phase_round_trips() {
         .reconfigure_phase(
             &mut SessionHistory::new(),
             AddPhase::new(phase_id(), ranked_by_points),
+            EntryMeta::default(),
         )
         .unwrap()
         .expect("the plugins changed");
@@ -514,7 +566,10 @@ fn a_round_tripped_log_can_continue_the_tournament() {
     let final_match = matches_of_round(&machine.current().phases()[&phase_id()], 2)[0];
 
     machine
-        .apply_new(ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins).into())
+        .apply_new(
+            ReportMatchResult::new(phase_id(), final_match, MatchResult::BWins).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
 
     let phase = machine.current().phases()[&phase_id()].divisions()[0].data();

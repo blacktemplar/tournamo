@@ -1,8 +1,9 @@
 //! How many rounds and matches a phase takes, found by playing it out.
 
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, Match, MatchResult, PhaseId,
-    PhasePlugins, ReportMatchResult, Seed, SetCompetitionSeed, StartCompetition,
+    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, EntryMeta, Match,
+    MatchResult, PhaseId, PhasePlugins, ReportMatchResult, Seed, SetCompetitionSeed,
+    StartCompetition, Timestamp,
     plugin_factory::config::{Path, PluginConfig},
     plugins::teams::Keep,
     uuid::Uuid,
@@ -110,27 +111,31 @@ struct Played {
 /// `result`, see [`Session::scale`].
 fn play_out(entrants: usize, plugins: PhasePlugins, result: MatchResult) -> Option<Played> {
     let mut machine = CompetitionStateMachine::default();
+    // any time, since the competition is never saved
+    let meta = EntryMeta::recorded_at(Timestamp::from_unix_millis(0));
     // any seed, since what a format draws does not change how long it takes
     let seed = SetCompetitionSeed::new(Seed::new([0; 12]));
-    machine.apply_new(seed.into()).ok()?;
+    machine.apply_new(seed.into(), meta).ok()?;
     for index in 0..entrants {
         let id = EntrantId::new(Uuid::from_u128(index as u128 + 1));
         machine
-            .apply_new(AddEntrant::new(Entrant::new(id)).into())
+            .apply_new(AddEntrant::new(Entrant::new(id)).into(), meta)
             .ok()?;
     }
     let phase = PhaseId::new(Uuid::nil());
     machine
-        .apply_new(AddPhase::new(phase, plugins).into())
+        .apply_new(AddPhase::new(phase, plugins).into(), meta)
         .ok()?;
-    machine.apply_new(StartCompetition::default().into()).ok()?;
+    machine
+        .apply_new(StartCompetition::default().into(), meta)
+        .ok()?;
     for _ in 0..MOST_MATCHES {
         let open = matches_of(&machine, phase).find(|r#match| r#match.result().is_none());
         let Some(open) = open else {
             return Some(played(&machine, phase, true));
         };
         let report = ReportMatchResult::new(phase, open.id(), result);
-        machine.apply_new(report.into()).ok()?;
+        machine.apply_new(report.into(), meta).ok()?;
     }
     let finished = matches_of(&machine, phase).all(|r#match| r#match.result().is_some());
     Some(played(&machine, phase, finished))

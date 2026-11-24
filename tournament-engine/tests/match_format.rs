@@ -1,7 +1,7 @@
 //! The match format of a phase: what a report has to fit, and what it tallies.
 
 use tournament_engine::{
-    CompetitionStateMachine, Decision, EnteredValue, FieldKey, MatchResult, Part,
+    CompetitionStateMachine, Decision, EnteredValue, EntryMeta, FieldKey, MatchResult, Part,
     ReportMatchResult, ResultReason, Score, Sides,
 };
 #[cfg(target_arch = "wasm32")]
@@ -37,7 +37,11 @@ fn a_report_not_fitting_the_match_format_is_refused() {
         report().with_part(game().with_part(game())),
     ];
     for misfit in misfits {
-        assert!(machine.apply_new(misfit.into()).is_err());
+        assert!(
+            machine
+                .apply_new(misfit.into(), EntryMeta::default())
+                .is_err()
+        );
     }
 
     // a result breaking the rules of a sport fits, though: the referee decides
@@ -47,6 +51,7 @@ fn a_report_not_fitting_the_match_format_is_refused() {
                 .with_value(FieldKey::new("games"), games::count(0, 0))
                 .with_part(game())
                 .into(),
+            EntryMeta::default(),
         )
         .unwrap();
 }
@@ -76,6 +81,7 @@ fn a_decided_match_holds_the_tallies_of_its_rules() {
                 .with_part(game(MatchResult::BWins))
                 .with_part(game(MatchResult::BWins))
                 .into(),
+            EntryMeta::default(),
         )
         .unwrap();
 

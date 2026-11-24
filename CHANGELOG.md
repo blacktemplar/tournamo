@@ -54,6 +54,9 @@ later one: a file whose `"format"` changes is migrated, not refused.
   settings of its format anyone decides, e.g. the rounds; each change is made
   at once. The match format and whether everyone plays in drawn pairs (DYP)
   are set there once for the whole competition.
+- **When each change was made.** Every change of a competition, each result,
+  undo and redo among them, is saved with the time it was made (UTC, by the
+  clock of the device). Changes saved by earlier versions have no time.
 
 ## [0.5.0] - 2026-11-21
 

@@ -33,8 +33,9 @@ impl Session {
     /// apply without it; then nothing more can be undone, while what can be redone stays.
     pub fn undo(&mut self) -> Result<Action, UndoError> {
         let Some(ids) = self.history.next_undo(&self.machine).map(<[_]>::to_vec) else {
+            let meta = self.meta();
             // nothing to undo, or undone elsewhere, which the history fails with and ends at
-            return Err(match self.history.undo_last(&mut self.machine) {
+            return Err(match self.history.undo_last(&mut self.machine, meta) {
                 Err(UndoLastError::NothingToUndo) => UndoError::NothingToUndo,
                 _ => UndoError::ChangedElsewhere,
             });
@@ -64,8 +65,9 @@ impl Session {
                 _ => None,
             })
             .collect();
+        let meta = self.meta();
         self.history
-            .undo_last(&mut self.machine)
+            .undo_last(&mut self.machine, meta)
             .map_err(|_| UndoError::ChangedElsewhere)?;
         if phase.is_some() {
             self.undone_phase = phase;
@@ -83,14 +85,16 @@ impl Session {
     /// apply with it; then nothing more can be redone, while what can be undone stays.
     pub fn redo(&mut self) -> Result<Action, RedoError> {
         let Some(ids) = self.history.next_redo(&self.machine).map(<[_]>::to_vec) else {
+            let meta = self.meta();
             // nothing to redo, or redone elsewhere, which the history fails with and ends at
-            return Err(match self.history.redo_last(&mut self.machine) {
+            return Err(match self.history.redo_last(&mut self.machine, meta) {
                 Err(RedoLastError::NothingToRedo) => RedoError::NothingToRedo,
                 _ => RedoError::ChangedElsewhere,
             });
         };
+        let meta = self.meta();
         self.history
-            .redo_last(&mut self.machine)
+            .redo_last(&mut self.machine, meta)
             .map_err(|_| RedoError::ChangedElsewhere)?;
         Ok(self.action_of(&ids))
     }

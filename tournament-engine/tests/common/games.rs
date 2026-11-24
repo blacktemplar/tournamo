@@ -4,8 +4,8 @@
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
     AddEntrant, AddPhase, CompetitionStateMachine, DivisionData, EnteredValue, Entrant, EntrantId,
-    FieldKey, Match, MatchId, MatchResult, Part, PhaseId, PhasePluginsBuilder, ResultReason, Seed,
-    SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue,
+    EntryMeta, FieldKey, Match, MatchId, MatchResult, Part, PhaseId, PhasePluginsBuilder,
+    ResultReason, Seed, SetCompetitionSeed, Sides, StartCompetition, TypeMap, TypeMapValue,
     plugin_factory::{Plugin, compatibility::Declaration, register},
     plugins::{
         Phrase,
@@ -100,12 +100,13 @@ pub fn phase_id() -> PhaseId {
 pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
     let mut machine = CompetitionStateMachine::default();
     machine
-        .apply_new(SetCompetitionSeed::new(SEED).into())
+        .apply_new(SetCompetitionSeed::new(SEED).into(), EntryMeta::default())
         .unwrap();
     for entrant in 0..2 {
         machine
             .apply_new(
                 AddEntrant::new(Entrant::new(EntrantId::new(Uuid::from_u128(entrant)))).into(),
+                EntryMeta::default(),
             )
             .unwrap();
     }
@@ -114,10 +115,13 @@ pub fn competition_entering_games() -> (CompetitionStateMachine, MatchId) {
         .build()
         .unwrap();
     machine
-        .apply_new(AddPhase::new(phase_id(), plugins).into())
+        .apply_new(
+            AddPhase::new(phase_id(), plugins).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     let open = machine.current().phases()[&phase_id()].divisions()[0]
         .data()

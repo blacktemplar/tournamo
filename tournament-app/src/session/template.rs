@@ -231,6 +231,7 @@ impl Session {
         if !self.competition().phases().is_empty() {
             return Err(AddTemplateError::HasPhases);
         }
+        let meta = self.meta();
         let mut entries = Vec::new();
         for (index, (id, phase)) in form.ids().iter().zip(form.forms()).enumerate() {
             let (name, sources) = phase.entry()?;
@@ -247,6 +248,7 @@ impl Session {
             entries.push(LogEntry::new(
                 TransitionId::new(),
                 LogEntryKind::Apply(added.into()),
+                meta,
             ));
         }
         self.history

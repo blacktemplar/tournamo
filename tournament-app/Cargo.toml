@@ -26,6 +26,10 @@ unicode-normalization.workspace = true
 # are shown with
 uuid = { workspace = true, features = ["v4"] }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# the clock: on wasm, `std::time::SystemTime` panics, and the time comes from JavaScript
+js-sys.workspace = true
+
 [dev-dependencies]
 # plugins of the tests are registered as any plugin is
 typetag.workspace = true

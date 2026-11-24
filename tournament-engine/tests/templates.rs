@@ -8,7 +8,7 @@ use plugin_factory::{
 };
 use tournament_engine::{
     AddEntrant, AddPhase, Competition, CompetitionStateMachine, CompetitionStateMachineExt,
-    Entrant, EntrantId, MatchResult, PhaseId, PhasePlugins, ReportMatchResult, Seed,
+    Entrant, EntrantId, EntryMeta, MatchResult, PhaseId, PhasePlugins, ReportMatchResult, Seed,
     SetCompetitionSeed, Source, SourceOf, StartCompetition, StartPhase,
     plugins::{
         phase_format::{DoubleElimination, RoundRobin},
@@ -52,14 +52,21 @@ fn expand(
 fn set_up(entrants: u128, phases: &[TemplatePhase]) -> CompetitionStateMachine {
     let mut machine = CompetitionStateMachine::default();
     machine
-        .apply_new(SetCompetitionSeed::new(Seed::new(*b"templates!..")).into())
+        .apply_new(
+            SetCompetitionSeed::new(Seed::new(*b"templates!..")).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
     for entrant in 0..entrants {
         let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-        machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
+        machine
+            .apply_new(AddEntrant::new(entrant).into(), EntryMeta::default())
+            .unwrap();
     }
     for phase in expand(machine.current(), phases).unwrap() {
-        machine.apply_new(phase.into()).unwrap();
+        machine
+            .apply_new(phase.into(), EntryMeta::default())
+            .unwrap();
     }
     machine
 }
@@ -67,12 +74,14 @@ fn set_up(entrants: u128, phases: &[TemplatePhase]) -> CompetitionStateMachine {
 /// Starts the competition and plays every phase to its end in order, side A winning every match.
 fn play_through(machine: &mut CompetitionStateMachine) {
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     let phases: Vec<PhaseId> = machine.current().phases().keys().copied().collect();
     for phase_id in phases {
         if !machine.current().phases()[&phase_id].is_started() {
-            machine.apply_new(StartPhase::new(phase_id).into()).unwrap();
+            machine
+                .apply_new(StartPhase::new(phase_id).into(), EntryMeta::default())
+                .unwrap();
         }
         while let Some(open) = machine.current().phases()[&phase_id]
             .divisions()
@@ -82,7 +91,10 @@ fn play_through(machine: &mut CompetitionStateMachine) {
             .map(|r#match| r#match.id())
         {
             machine
-                .apply_new(ReportMatchResult::new(phase_id, open, MatchResult::AWins).into())
+                .apply_new(
+                    ReportMatchResult::new(phase_id, open, MatchResult::AWins).into(),
+                    EntryMeta::default(),
+                )
                 .unwrap();
         }
         assert!(machine.current().phases()[&phase_id].is_finished());
@@ -179,7 +191,7 @@ fn a_phase_remembers_where_in_the_template_it_came_from() {
         .with_name(Some("Finals".to_owned()))
         .with_sources(knockout.sources().clone());
     machine
-        .reconfigure_phase(&mut SessionHistory::new(), renamed)
+        .reconfigure_phase(&mut SessionHistory::new(), renamed, EntryMeta::default())
         .unwrap();
     assert_eq!(origins(&machine), [of_test(0), of_test(1)]);
 }

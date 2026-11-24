@@ -294,8 +294,9 @@ impl Session {
             .with_name(name)
             .with_sources(sources)
             .with_columns(form.columns().clone());
+        let meta = self.meta();
         self.history
-            .apply_new(&mut self.machine, added.into())
+            .apply_new(&mut self.machine, added.into(), meta)
             .map_err(|error| {
                 refused(error, AddPhaseError::Rejected, |refusal| match refusal {
                     Refusal::Sources(refusal) => Some(self.sources_error(refusal).into()),
@@ -354,9 +355,10 @@ impl Session {
             .with_name(name)
             .with_sources(sources)
             .with_columns(form.columns().clone());
+        let meta = self.meta();
         let changed = self
             .machine
-            .reconfigure_phase(&mut self.history, edited.clone())
+            .reconfigure_phase(&mut self.history, edited.clone(), meta)
             .map_err(|error| match error {
                 ReconfigurePhaseError::Rejected(error) => self.edit_refusal(edited, error),
                 ReconfigurePhaseError::NotAdded => {

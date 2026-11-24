@@ -6,8 +6,8 @@ use std::num::NonZeroU32;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, DivisionView, Entrant, EntrantId, Match,
-    MatchResult, NewMatch, PhaseId, PhasePluginsBuilder, RankingId, ReportMatchResult,
+    AddEntrant, AddPhase, CompetitionStateMachine, DivisionView, Entrant, EntrantId, EntryMeta,
+    Match, MatchResult, NewMatch, PhaseId, PhasePluginsBuilder, RankingId, ReportMatchResult,
     StartCompetition,
     plugin_factory::{Plugin, register},
     plugins::{
@@ -78,7 +78,8 @@ fn a_format_pairs_by_the_standings_and_a_replay_pairs_the_same() {
     let mut sm = CompetitionStateMachine::default();
     for entrant in 0..4 {
         let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-        sm.apply_new(AddEntrant::new(entrant).into()).unwrap();
+        sm.apply_new(AddEntrant::new(entrant).into(), EntryMeta::default())
+            .unwrap();
     }
     let plugins = PhasePluginsBuilder::new()
         .format(ByStandings)
@@ -86,9 +87,13 @@ fn a_format_pairs_by_the_standings_and_a_replay_pairs_the_same() {
         .add_metric(WinsDrawsLossesCalculator)
         .build()
         .unwrap();
-    sm.apply_new(AddPhase::new(phase_id(), plugins).into())
+    sm.apply_new(
+        AddPhase::new(phase_id(), plugins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
+    sm.apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
-    sm.apply_new(StartCompetition::default().into()).unwrap();
     let data = sm.current().phases()[&phase_id()].divisions()[0].data();
     let rankings: Vec<_> = data.rankings().keys().copied().collect();
     let [first, second, third, fourth] = rankings[..] else {
@@ -102,8 +107,11 @@ fn a_format_pairs_by_the_standings_and_a_replay_pairs_the_same() {
         .into_iter()
         .zip([MatchResult::AWins, MatchResult::BWins])
     {
-        sm.apply_new(ReportMatchResult::new(phase_id(), r#match, result).into())
-            .unwrap();
+        sm.apply_new(
+            ReportMatchResult::new(phase_id(), r#match, result).into(),
+            EntryMeta::default(),
+        )
+        .unwrap();
     }
 
     // the two winners meet, as do the two losers

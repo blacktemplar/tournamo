@@ -1159,8 +1159,10 @@ fields) is a quick start: the phases of a whole competition
 of the template by position, and answers to the draft of the phase), which
 applying it adds as ordinary phases. Before they are added, its phases are
 forms (`TemplateForm`), changed as the form of a new phase is: in the basic
-view's layout, or above it each in the dialog of an added phase; "Add phases"
-adds them as they stand, as one action. A form of a later phase knows the
+view's layout, or above it each in its whole form, all shown at once, so that
+nothing is a click away (a summary with a dialog per phase, as for an added
+phase, hid what the form of a new phase shows); "Add phases" adds them as they
+stand, as one action. A form of a later phase knows the
 forms before it as the phases before it (its context, which the form of a new
 phase takes from the phases added), so it takes places of a phase not added
 yet and the teams it sends; the match format and drawn pairs are set across
@@ -1192,8 +1194,9 @@ over the catalog expands every template registered and adds its phases.
   is based on the template of its phases while one of them is left
   (`Session::based_on`, which names the phases added besides and those of it
   removed). A phase of a template counts the hidden fields that differ from
-  what its phase of the template answers, those it leaves open from the
-  defaults (`PhaseForm::compared_with`). The template is compared **as it is
+  what is expected of them: the overrides of its phase of the template
+  that still fit, else the defaults (`PhaseForm::compared_with`, see
+  *Expected values, followed while held*). The template is compared **as it is
   now**: its name is what the operator sees, so what is expected of it is
   what it says now, and a template changed for a good reason makes the
   phases it set up earlier differ where they no longer match. Its phases
@@ -1768,14 +1771,42 @@ one owner of the answers. The CLI already descends through the schema as it asks
 questions, discovering children after choosing their plugin; it keeps that walk
 rather than snapshotting fields before they have been chosen.
 
-- **One following/customized state for ranking and scoring**. A new form follows
-  suggestions: changing basic settings (the groups too) replaces ranking,
-  metrics and `across` with defaults and suggestions for those settings.
-  Editing any of the lists or a field within it, including entering invalid
-  numeric text, keeps the whole section from then on. Applying suggestions
-  explicitly replaces the lists and their settings and resumes following. There is no per-field comparison or merging.
-  Existing and undone phases start customized, preserving their configuration.
-  The state belongs to the form and is not saved.
+- **Expected values, followed while held**. Every field of a phase has an
+  expected value: what it offers for the phase as configured (the format's
+  suggestions for ranking, metrics and `across`, else its default), unless
+  the phase of the template it was added as **overrides** it. An override is
+  an answer of the template's phase that differs from what the field offers
+  with the template's own format and match format; an answer the same as
+  that is none, and follows the defaults (a knockout of a template keeping
+  its groups apart keeps them apart as a double elimination, and seeds in
+  order as random rounds, which read no seeding). An override is expected
+  while it fits the phase as configured and matters there (no more issues
+  than what the field offers, the field not irrelevant), else what the field
+  offers. A field holding its expected value follows it when a change moves
+  it; one answered otherwise stays as it is, however it came to differ. The
+  format and match format are what the others follow, and follow nothing.
+  Ranking, metrics and `across` follow as one section, while all three are
+  what is suggested (`PhaseForm::apply_suggestions` makes them so); a number
+  typed into them and refused stops them following. Nothing is stored for
+  it: an existing or undone phase follows as a new one does, and editing a
+  field back to its expected value follows again. The form says what
+  followed its last change (`FormView::followed`) below the field changed,
+  and announces it: the fields its level shows by name, those it hides only
+  by the levels showing them, with a button showing the lowest, so that an
+  operator of the basic view need not know the settings behind it. The
+  format and match format say that settings not changed follow them.
+  Rejected: following per level, while every field of a level holds its
+  expected value (one change of a field freezes the others of its level,
+  keeping e.g. the groups kept apart in random rounds, and looking at a
+  level, which leaves no trace, would not keep it either); a button keeping
+  the settings from before a change (what to keep is rarely all or nothing,
+  so the operator goes through them anyway); naming hidden settings in the
+  basic view (it is for operators who need not know them); templates
+  pinning an answer equal to the default, so that it never follows (no
+  template needs it yet; it may come if following surprises). The GUI has no
+  button applying suggestions: it read as the way back to following, which
+  needs none now; resetting a phase to the defaults of its format and match
+  format may come.
 - **Fields have levels: basic, advanced, expert**. A form at a level shows the
   fields up to it, so what a lower level shows is always part of what a higher
   one shows. A plugin declares the level of each field (`#[plugin(level = ..)]`,
@@ -1793,8 +1824,8 @@ rather than snapshotting fields before they have been chosen.
   setting does not become an advanced one, and an advanced one starts with
   the basic settings and goes on to the details; since nothing hidden is
   forgotten, each view says what it hides that differs. Where hidden
-  fields differ from what the phase of its template answers, or else from
-  what the draft would answer by itself, the form, and each phase of the
+  fields differ from what is expected of them (the overrides of the phase
+  of its template that fit, or else what the draft would answer by itself), the form, and each phase of the
   basic view, says how many and which level shows them all
   (`FormView::hidden`), so that a seeding set by someone else is no surprise;
   a field counts once, whatever its plugins hold. The basic view leaves out
@@ -1826,14 +1857,10 @@ rather than snapshotting fields before they have been chosen.
   their drafts with it builds, the generic form of "the format takes pairs",
   so not for a Monster DYP. A match format that does not fit a phase is
   refused naming the phase, rather than leaving that phase at another one.
-- **Visibility does not imply customization**. The levels expose different
-  fields without changing this state. A template can
-  supply a complete draft; an actual edit takes control of the section. Keeping
-  hidden fields following after customization would require a separate design;
-  the current section-wide state intentionally freezes them too. Suggestion
-  outputs are ranking, metrics and `across`; other basic settings remain
-  inputs, allowing
-  a future match-type axis alongside the format.
+- **Visibility does not change what follows**. The levels expose different
+  fields without changing what they hold or follow. Suggestion outputs are
+  ranking, metrics and `across`; other basic settings remain inputs,
+  allowing a future match-type axis alongside the format.
 - **Implied plugins are shown, not chosen**: added to a copy for the view, never
   to the draft, so they go when nothing needs them.
 - **Issues where they are fixed**, at the deepest field or item their path is in;
@@ -2062,6 +2089,12 @@ entrants, but any number and format.
   them keeping the focus.
 - **What can be clicked looks like a button**: bordered, 44px where the pointer
   is coarse; one primary action per card.
+- **A form shows its fields, little else**: what a field is, the numbers it
+  takes and what follows it are behind the ⓘ by its label; what the plugin
+  chosen does behind an ⓘ in its choice, shown while the pointer is on it or
+  the keyboard's focus, and in the list opened, at the option chosen until
+  another is under the pointer or the focus, which is how a touch screen sees
+  it. A number not taken says why at once, which is enough.
 - **A match is a card**: its number above ("Match 3", with the letter of its
   group), since a number between the names read as a score; below it the two
   sides, each name centred above its button, draw in the middle, columns

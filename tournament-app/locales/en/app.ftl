@@ -184,6 +184,20 @@ number-range = { $whole ->
        *[other] {" "}that is a multiple of { $multiple }
     }
 # what an answer leads to that the operator may not want, although the phase can be played so
+# what followed a change of a phase: the fields holding what was expected of them, e.g. the ranking a new format suggests
+# $cause: followed-format, followed-match-format or followed-change
+followed-shown = adjusted to { $cause }: { $settings }
+# $levels: advanced, expert or both, the levels hiding fields that followed, which are not named
+followed-hidden = { $levels ->
+    [expert] the expert settings were
+    [both] the advanced and expert settings were
+   *[advanced] the advanced settings were
+} adjusted to { $cause }
+followed-format = the format { $plugin }
+followed-match-format = the match format { $plugin }
+followed-change = the change
+# a field of a list of fields
+field-label = { $field }
 warning-unranked = ranked by nothing, every entrant is tied in the standings
 warning-lot-decides-cut = the entrants on both sides of the cut after place { $place } of the registration have equal ratings or none, so the lot decides who is on which side
 # where the places a source takes of a phase played in groups side by side lie in its groups,

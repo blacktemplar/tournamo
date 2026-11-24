@@ -453,18 +453,17 @@ impl Gui {
 
     /// Checks or unchecks the checkbox labelled `label`, e.g. a plugin of the metrics.
     pub async fn toggle(&self, label: &str) -> WebDriverResult<()> {
-        self.driver
+        let checkbox = self
+            .driver
             .query(By::XPath(format!(
                 "//label[{}='{label}']/input[@type='checkbox']",
                 without_isolation_marks("normalize-space()")
             )))
             .and_enabled()
             .first()
-            .await?
-            .click()
             .await?;
-        Page::pause().await;
-        Ok(())
+        // in sight, as it may be under the bar
+        self.click_in_sight(&checkbox).await
     }
 
     /// Waits until the checkbox labelled `label` is checked, if `ticked`, or else unchecked, as the
@@ -1022,6 +1021,68 @@ impl Gui {
         Ok(())
     }
 
+    /// Moves the pointer onto the choice of the field at `path` of the form of the phase, with the
+    /// list closed.
+    pub async fn hover_choice(&self, path: &str) -> WebDriverResult<()> {
+        let trigger = self.driver.query(By::Id(field_id(path))).first().await?;
+        self.scroll_to_middle(&trigger).await?;
+        self.driver
+            .action_chain()
+            .move_to_element_center(&trigger)
+            .perform()
+            .await?;
+        Page::pause().await;
+        Ok(())
+    }
+
+    /// Waits until the choice of the field at `path` of the form of the phase shows what the
+    /// plugin chosen does, `text`, or shows it not for `None`; it is said to a screen reader
+    /// either way.
+    ///
+    /// # Panics
+    /// Panics if it does not in time, with what it shows instead.
+    pub async fn expect_chosen_description(
+        &self,
+        path: &str,
+        text: Option<&str>,
+    ) -> WebDriverResult<()> {
+        let id = format!("{}-chosen", field_id(path));
+        match text {
+            Some(text) => {
+                self.page
+                    .expect(
+                        By::Id(id),
+                        |query| query.with_text(text.to_owned()).and_displayed(),
+                        &format!("what the plugin chosen does shown: {text:?}"),
+                    )
+                    .await
+            }
+            None => {
+                self.page
+                    .expect(
+                        By::Id(id),
+                        |query| query.and_not_displayed(),
+                        "what the plugin chosen does not shown",
+                    )
+                    .await
+            }
+        }
+    }
+
+    /// Waits until the list of plugins open shows what the option chosen does.
+    ///
+    /// # Panics
+    /// Panics if it does not in time.
+    pub async fn expect_chosen_option_described(&self) -> WebDriverResult<()> {
+        self.page
+            .expect(
+                By::Css("[role='option'][aria-selected='true'] .option-description"),
+                |query| query.and_displayed(),
+                "what the option chosen does, in the list open",
+            )
+            .await
+    }
+
     /// Waits until the toggletip shown says `text`, ignoring [`ISOLATION_MARKS`], or until none is
     /// shown for `None`.
     ///
@@ -1283,7 +1344,10 @@ impl Gui {
     /// Panics if it does not in time, with what it shows instead.
     pub async fn expect_chosen(&self, path: &str, label: &str) -> WebDriverResult<()> {
         self.page
-            .expect_texts(By::Css(format!("#{} > span", field_id(path))), &[label])
+            .expect_texts(
+                By::Css(format!("#{} > span:first-child", field_id(path))),
+                &[label],
+            )
             .await
     }
 
@@ -1379,6 +1443,41 @@ impl Gui {
         Ok(())
     }
 
+    /// Chooses the plugin labelled `label` for the field at `path` of the phase named `phase` in
+    /// the basic view, as [`Self::choose_plugin`] does in the form of a phase.
+    pub async fn choose_in_phase(
+        &self,
+        phase: &str,
+        path: &str,
+        label: &str,
+    ) -> WebDriverResult<()> {
+        let id = format!("-{}", field_id(path));
+        let trigger = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol[contains(@class, 'basic')]/li[*[self::h3 or self::h4][{}='{phase}']]\
+                 //*[substring(@id, string-length(@id) - string-length('{id}') + 1) = '{id}']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        self.click_in_sight(&trigger).await?;
+        self.driver
+            .query(By::Css("[role='listbox'][data-state='open']:focus"))
+            .first()
+            .await?;
+        self.choose_option(label).await
+    }
+
+    /// Waits until the forms shown say what followed the last change of each, `texts`, in order,
+    /// a sentence each.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they say instead.
+    pub async fn expect_followed(&self, texts: &[&str]) -> WebDriverResult<()> {
+        self.page.expect_texts(By::Css(".followed p"), texts).await
+    }
+
     /// Enters `text` as the last place the phase named `phase` takes of its first source in the
     /// basic view, e.g. the best 6.
     pub async fn enter_last_place_in_phase(&self, phase: &str, text: &str) -> WebDriverResult<()> {
@@ -1417,22 +1516,45 @@ impl Gui {
     }
 
     /// Waits until the phases of a template, before they are added and above the basic level,
-    /// show as `phases`, each its name and where it takes its entrants from, e.g.
-    /// `("Knockout", "Places 1–6 of Group phase")`.
+    /// show the forms of the phases named `names`, in order.
+    ///
+    /// # Panics
+    /// Panics if they do not in time, with what they show instead.
+    pub async fn expect_template_phases(&self, names: &[&str]) -> WebDriverResult<()> {
+        self.page
+            .expect_texts(By::Css("#new-template ol.phases > li > h4"), names)
+            .await?;
+        self.page
+            .expect(
+                By::Css("#new-template ol.phases > li > .phase-form"),
+                |query| query,
+                "the forms of the phases",
+            )
+            .await
+    }
+
+    /// Waits until the field at `path` of the form of the phase named `phase`, one of several
+    /// shown at once, shows the plugin labelled `label` as chosen, as [`Self::expect_chosen`]
+    /// does in the form of a phase.
     ///
     /// # Panics
     /// Panics if it does not in time, with what it shows instead.
-    pub async fn expect_template_phases(&self, phases: &[(&str, &str)]) -> WebDriverResult<()> {
-        let texts: Vec<_> = phases
-            .iter()
-            .flat_map(|(name, from)| [*name, *from])
-            .collect();
+    pub async fn expect_chosen_in_phase(
+        &self,
+        phase: &str,
+        path: &str,
+        label: &str,
+    ) -> WebDriverResult<()> {
+        let id = format!("-{}", field_id(path));
         self.page
             .expect_texts(
-                By::Css(
-                    "#new-template ol.phases > li > h4, #new-template ol.phases > li > p.sources",
-                ),
-                &texts,
+                By::XPath(format!(
+                    "//ol/li[*[self::h3 or self::h4][{}='{phase}']]\
+                     //*[substring(@id, string-length(@id) - string-length('{id}') + 1) = \
+                     '{id}']/span[1]",
+                    without_isolation_marks("normalize-space()")
+                )),
+                &[label],
             )
             .await
     }

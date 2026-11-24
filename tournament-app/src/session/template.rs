@@ -2,7 +2,7 @@
 
 use plugin_factory::{catalog::AnyAxis, config::Config, schema::Level};
 use tournament_engine::{
-    AddPhase, Columns, Phase, PhaseId, PhasePlugins,
+    AddPhase, Columns, Phase, PhaseId,
     plugins::template::{Template, TemplateError, TemplateOrigin, TemplateProblem},
     undoable_state_machine::{LogEntry, LogEntryKind, TransitionId},
     uuid::Uuid,
@@ -157,7 +157,7 @@ impl Session {
                             problem: TemplateProblem::Answers(error),
                         })
                     })?;
-                let mut form = PhaseForm::new(draft)
+                Ok(PhaseForm::new(draft)
                     .in_language(self.language)
                     .compared_with(phase.answers.clone())
                     .of_phase(
@@ -165,16 +165,7 @@ impl Session {
                         added.name(),
                         added.sources().to_vec(),
                         Columns::new(),
-                    );
-                // ranking and scoring follow the format, as for a new phase, unless the template
-                // says what they are
-                if PhasePlugins::SUGGESTED
-                    .iter()
-                    .all(|field| phase.answers.get(field).is_none())
-                {
-                    _ = form.apply_suggestions();
-                }
-                Ok(form)
+                    ))
             })
             .collect::<Result<_, AddTemplateError>>()?;
         Ok(TemplateForm::new(id, ids, forms))

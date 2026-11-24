@@ -1,6 +1,6 @@
 use plugin_factory::schema::Level;
 use tournament_engine::plugins::{
-    seeding::SeededAtRandom,
+    seeding::{GroupWinnersApart, SeededAtRandom, SeededInOrder},
     teams::RandomPairs,
     template::{GroupsAndKnockout, MonsterDypTemplate, RoundRobinTemplate, Template},
 };
@@ -311,4 +311,123 @@ fn a_competition_opens_at_the_level_it_was_set_up_at() {
     assert_eq!(session.opening_level(), Level::Basic);
 
     assert_eq!(Given::new().added().opening_level(), Level::Advanced);
+}
+
+/// The knockout of the template of groups and a knockout, as a form before it is added, whose
+/// template overrides its seeding: the groups kept apart.
+fn knockout() -> PhaseForm {
+    let session = with_entrants(&["Alice", "Bob", "Carol", "Dave"]);
+    let template = session
+        .template_form(GroupsAndKnockout::ID, &english())
+        .unwrap();
+    template.forms()[1].clone()
+}
+
+fn seeding(form: &PhaseForm) -> Option<String> {
+    form.draft()
+        .answers()
+        .get(PhasePlugins::SEEDING)
+        .and_then(PluginConfig::from_answer)
+        .map(|config| config.plugin().to_owned())
+}
+
+fn format() -> ConfigPath {
+    ConfigPath::ROOT.field(PhasePlugins::FORMAT)
+}
+
+/// What a template overrides stays as the format changes while it fits and matters, follows what
+/// the field offers once it does not, and comes back with a format it matters to.
+#[test]
+fn a_setting_of_a_template_stays_while_it_matters_to_the_format() {
+    let mut knockout = knockout();
+    assert_eq!(seeding(&knockout).as_deref(), Some(GroupWinnersApart::ID));
+
+    knockout
+        .choose(&format(), Some(DoubleElimination::ID))
+        .unwrap();
+    assert_eq!(seeding(&knockout).as_deref(), Some(GroupWinnersApart::ID));
+
+    // random rounds read no seeding
+    knockout.choose(&format(), Some(RandomRounds::ID)).unwrap();
+    assert_eq!(seeding(&knockout).as_deref(), Some(SeededInOrder::ID));
+    assert_eq!(knockout.view_at(Level::Basic).hidden.count, 0);
+
+    knockout
+        .choose(&format(), Some(SingleElimination::ID))
+        .unwrap();
+    assert_eq!(seeding(&knockout).as_deref(), Some(GroupWinnersApart::ID));
+    assert_eq!(knockout.view_at(Level::Basic).hidden.count, 0);
+}
+
+/// A setting the operator changed stays as it is when the format changes, and is said to differ
+/// from the template.
+#[test]
+fn a_setting_changed_by_hand_stays_as_the_format_changes() {
+    let mut knockout = knockout();
+    knockout
+        .choose(
+            &ConfigPath::ROOT.field(PhasePlugins::SEEDING),
+            Some(SeededAtRandom::ID),
+        )
+        .unwrap();
+
+    knockout
+        .choose(&format(), Some(DoubleElimination::ID))
+        .unwrap();
+
+    assert_eq!(seeding(&knockout).as_deref(), Some(SeededAtRandom::ID));
+    let hidden = knockout.view_at(Level::Basic).hidden;
+    assert_eq!((hidden.count, hidden.shown_at), (1, Level::Expert));
+    assert!(hidden.of_template);
+}
+
+/// What followed a new format is named where the view shows it; where it hides it, only the
+/// levels showing it are said, with the lowest to switch to.
+#[test]
+fn what_followed_a_new_format_is_said_as_far_as_the_level_shows_it() {
+    let mut knockout = knockout();
+    knockout
+        .choose(&format(), Some(DoubleElimination::ID))
+        .unwrap();
+    let tr = english();
+    let said = |level| {
+        let followed = knockout.view_at(level).followed.unwrap();
+        let said: Vec<_> = followed
+            .said
+            .iter()
+            .map(|text| tr.sentence(text).replace(['\u{2068}', '\u{2069}'], ""))
+            .collect();
+        (followed.at, said, followed.show)
+    };
+
+    assert_eq!(
+        said(Level::Basic),
+        (
+            Some(format()),
+            vec![
+                "The advanced settings were adjusted to the format double elimination.".to_owned()
+            ],
+            Some(Level::Advanced)
+        )
+    );
+    assert_eq!(
+        said(Level::Expert),
+        (
+            Some(format()),
+            vec![
+                "Adjusted to the format double elimination: order of the standings and metrics."
+                    .to_owned()
+            ],
+            None
+        )
+    );
+
+    knockout
+        .set_bool(&"format.grand_final_reset".parse().unwrap(), false)
+        .unwrap();
+    assert_eq!(
+        knockout.view().followed,
+        None,
+        "nothing followed the last change"
+    );
 }

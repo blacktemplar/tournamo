@@ -43,7 +43,7 @@ help-running-undo = Rückgängig reicht nur so weit zurück, wie die Seite offen
 help-running-byes = Bleibt ein Teilnehmer in einer Runde ohne Gegner, hat er ein Freilos: Er kommt ohne Spiel weiter und erhält, was die Phase dafür vorsieht, z. B. die Punkte für ein Freilos.
 help-formats = Formate und Tabelle
 help-templates = Vorlagen
-help-templates-text = Eine Vorlage richtet einen ganzen Wettbewerb auf einmal ein, solange er keine Phase hat: unter „Wie wird gespielt?“ wählen und die Phasen hinzufügen, die sie zeigt. Es sind gewöhnliche Phasen, jede wie jede Phase änderbar oder entfernbar, z. B. um in mehr Gruppen zu spielen; ein Rückgängig nimmt alle zurück. Eine Vorlage öffnet die einfachen Einstellungen, die nur zeigen, was die meisten Wettbewerbe entscheiden: wie viele weiterkommen, die Gruppen, die Runden, das Spielformat und ob alle in ausgelosten Paaren spielen (DYP); „Fortgeschritten“ und „Experte“ über den Phasen zeigen den Rest.
+help-templates-text = Eine Vorlage richtet einen ganzen Wettbewerb auf einmal ein, solange er keine Phase hat: unter „Wie wird gespielt?“ wählen und die Phasen hinzufügen, die sie zeigt. Es sind gewöhnliche Phasen, jede wie jede Phase änderbar oder entfernbar, z. B. um in mehr Gruppen zu spielen; ein Rückgängig nimmt alle zurück. Eine Vorlage öffnet die einfachen Einstellungen, die nur zeigen, was die meisten Wettbewerbe entscheiden: wie viele weiterkommen, die Gruppen, die Runden, das Spielformat und ob alle in ausgelosten Paaren spielen (DYP); „Fortgeschritten“ und „Experte“ über den Phasen zeigen den Rest. Einstellungen, die du nicht geändert hast, passen sich einem neuen Format an, z. B. die Reihenfolge der Tabelle, und was die Vorlage gewählt hat, bleibt, solange es passt; eine Einstellung, die du geändert hast, bleibt, wie sie ist. Unter dem Format sagt die Phase, was sich angepasst hat.
 help-standings = Die Reihenfolge der Tabelle
 help-standings-text = Die Tabelle vergleicht die Teilnehmer nach den Kriterien ihrer Reihenfolge, eines nach dem anderen: Das erste entscheidet, das zweite nur zwischen Teilnehmern, die nach dem ersten gleich sind, und so weiter, z. B. mehr Punkte, dann eine höhere Sonneborn-Berger-Wertung, eine Feinwertung zugunsten derer, die gegen starke Gegner gepunktet haben. Ein Kriterium vergleicht eine Kennzahl, eine Zahl, die für jeden Teilnehmer aus den Ergebnissen berechnet wird, etwa die Punkte; die Kennzahlen, die ein Kriterium braucht, werden mit ihm berechnet. Weitere Kennzahlen lassen sich berechnen und anzeigen, ohne nach ihnen zu reihen. Das „i“ neben einer kurzen Spaltenüberschrift wie SB sagt, was die Spalte zählt; alle Kriterien und Kennzahlen sind unten erklärt.
 help-columns-text = Eine Tabelle zeigt die Kennzahlen, nach denen sie gereiht ist, und die, aus denen diese berechnet werden, z. B. gereiht nach Punkten auch die Siege, Unentschieden und Niederlagen, für die es die Punkte gibt. Vergleicht eine Phase mehrere Gruppen, zeigen die verglichenen Zeilen, wonach sie verglichen werden. Die Kennzahlen einer Phase sind die, nach denen sie gereiht ist, die, die diese brauchen, und die unter „Kennzahl hinzufügen“ hinzugefügten; eine benötigte Kennzahl kommt und geht mit dem, was sie braucht, eine hinzugefügte bleibt, bis sie entfernt wird. Ein Kästchen mit umrandetem Häkchen ist nach dieser Regel angezeigt; mit einem Klick wird die Kennzahl trotzdem angezeigt oder ausgeblendet, in den Gruppentabellen oder im Vergleich. Das lässt sich jederzeit ändern, auch während die Phase gespielt wird.
@@ -154,7 +154,6 @@ removed-from-template = Aus der Vorlage entfernt: { $phases }.
 template-phase-number = Phase { $number }
 template-phases = Ihre Phasen
 template-refined = Ändere sie hier so, wie sie gespielt werden sollen, und füge sie dann hinzu; einmal hinzugefügt, kann jede auch geändert oder entfernt werden, und weitere können folgen.
-edit-template-phase-description = Ändere, wie die Phase gespielt wird; sie wird mit den anderen hinzugefügt.
 add-phases = Phasen hinzufügen
 finished = Beendet
 medal-gold = Goldmedaille,
@@ -238,9 +237,11 @@ hidden-settings = { $count ->
        *[advanced] Einstellungen für Fortgeschrittene
     }.
 }
-following-suggestions = Reihenfolge der Tabelle und Kennzahlen folgen den Empfehlungen für das Format, bis du sie bearbeitest.
-customized-settings = Deine Reihenfolge der Tabelle und deine Kennzahlen bleiben bei einem Formatwechsel erhalten. Die Empfehlungen zu übernehmen ersetzt sie, und sie folgen wieder dem Format.
-apply-suggested-ranking = Empfehlungen übernehmen
+followed-hint = Einstellungen, die du nicht geändert hast, passen sich daran an.
+show-level = { $level ->
+    [expert] Experteneinstellungen anzeigen
+   *[advanced] Einstellungen für Fortgeschrittene anzeigen
+}
 add-plugin = Hinzufügen
 about = Über { $subject }
 move-up = { $plugin } nach oben schieben

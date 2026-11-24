@@ -10,7 +10,7 @@ use tournament_app::{
 use tournament_engine::Table;
 
 use super::fields::{
-    EditedForm, Fields, Issues, MetricChoice, PluginChoice, id, in_label_order, metric_description,
+    EditedForm, Fields, Issues, MetricChoice, PluginChoice, in_label_order, metric_description,
     metric_label, plugin_description, plugin_label,
 };
 use crate::{
@@ -39,10 +39,7 @@ pub(super) fn OrderedList(
     let implied = implied(&tr, &list.implied);
     let options = in_label_order(&tr, &list.options);
     // the plugin added, at the end, or the list adding another one
-    let added = format!(
-        "#{}-remove",
-        self::id(&path.clone().index(list.items.len()))
-    );
+    let added = format!("#{}-remove", form.id(&path.clone().index(list.items.len())));
     let add_trigger = format!("#{id}-add");
     rsx! {
         ol { class: "plugin-list", id: "{id}",
@@ -112,7 +109,7 @@ fn OrderedItem(
     let (up, down, remove) = (item.path.clone(), item.path.clone(), item.path.clone());
     // the button of the item at `index`, by its position
     let button = move |index: usize, button: &str| {
-        format!("#{}-{button}", id(&list_path.clone().index(index)))
+        format!("#{}-{button}", form.id(&list_path.clone().index(index)))
     };
     // moving it moves its element, which loses the focus, to the position it is moved to
     let (moved_up, moved_down) = (
@@ -126,7 +123,7 @@ fn OrderedItem(
         after_removal.push(button(before, "remove"));
     }
     after_removal.push(format!("#{list}-add"));
-    let own = id(&item.path);
+    let own = form.id(&item.path);
     rsx! {
         li {
             span { class: "name", {capitalized(&name)} }
@@ -182,7 +179,7 @@ fn OrderedItem(
                 }
             }
             Fields { form, fields: item.fields, disabled }
-            Issues { id: "{id(&item.path)}-issues", issues: item.issues }
+            Issues { id: "{own}-issues", issues: item.issues }
         }
     }
 }
@@ -311,7 +308,7 @@ pub(super) fn UnorderedList(
                     About { list: list_id.clone(), option: entry.option }
                     if let SetState::Chosen(item) = entry.state {
                         Fields { form, fields: item.fields, disabled }
-                        Issues { id: "{id(&item.path)}-issues", issues: item.issues }
+                        Issues { id: "{form.id(&item.path)}-issues", issues: item.issues }
                     }
                 }
             }
@@ -353,12 +350,13 @@ enum SetState {
 /// that can be added.
 #[component]
 pub(super) fn MetricsList(
-    form: Signal<PhaseForm>,
+    edited: EditedForm,
     list_id: String,
     list: ListInput,
     compared: bool,
     disabled: bool,
 ) -> Element {
+    let form = edited.form;
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let rows: Vec<MetricRow> = list
@@ -402,7 +400,7 @@ pub(super) fn MetricsList(
                         }
                         MetricNotes { list: list_id.clone(), row: row.clone() }
                         RemoveMetric { form, list: list_id.clone(), row: row.clone(), disabled }
-                        MetricDetails { form, list: list_id.clone(), row, disabled }
+                        MetricDetails { form: edited, list: list_id.clone(), row, disabled }
                     }
                 }
             }
@@ -450,7 +448,7 @@ pub(super) fn MetricsList(
                     if row.has_details() {
                         tr { class: "metric-fields",
                             td { colspan: "3",
-                                MetricDetails { form, list: list_id.clone(), row, disabled }
+                                MetricDetails { form: edited, list: list_id.clone(), row, disabled }
                             }
                         }
                     }
@@ -572,7 +570,7 @@ fn RemoveMetric(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled:
 /// Who calculates the metric of `row` where several can, and the fields and issues of its
 /// calculator.
 #[component]
-fn MetricDetails(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled: bool) -> Element {
+fn MetricDetails(form: EditedForm, list: String, row: MetricRow, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let tr = ctx.translator.read();
     let metric = row.metric.metric.id;
@@ -596,7 +594,7 @@ fn MetricDetails(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled
                     placeholder: tr.get("choose-plugin"),
                     disabled,
                     on_change: move |chosen: String| {
-                        _ = form.write().choose_provider(metric, &chosen);
+                        _ = form.form.write().choose_provider(metric, &chosen);
                         focus_later(&[&trigger]);
                     },
                     for (index, option) in providers.into_iter().enumerate() {
@@ -606,8 +604,8 @@ fn MetricDetails(form: Signal<PhaseForm>, list: String, row: MetricRow, disabled
             }
         }
         if let Some(item) = row.metric.item {
-            Fields { form: EditedForm::new(form), fields: item.fields, disabled }
-            Issues { id: "{id(&item.path)}-issues", issues: item.issues }
+            Fields { form, fields: item.fields, disabled }
+            Issues { id: "{form.id(&item.path)}-issues", issues: item.issues }
         }
     }
 }

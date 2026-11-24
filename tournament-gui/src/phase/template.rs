@@ -4,30 +4,19 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{PhaseForm, TemplateForm},
+    form::TemplateForm,
     i18n::{Message as _, PluginText},
     session::Session,
-    view::{PhaseName, SourceRow},
 };
 use tournament_engine::plugin_factory::schema::Level;
 
 use super::{
-    DiscardChanges, Form, NewPhase,
+    Form, NewPhase,
     basic::{BasicFieldsOf, CompetitionSettings, Phases},
-    fields::Issues,
     focus_first_issue,
-    summary::{self, Summary},
-    use_discarding,
 };
 use crate::{
-    announcement::Announcement,
-    capitalized,
-    competition::Ctx,
-    components::dialog::{Dialog, DialogDescription, DialogTitle},
-    focus::focus_later,
-    i18n::t,
-    icons,
-    phases::sources_named,
+    announcement::Announcement, capitalized, competition::Ctx, focus::focus_later, i18n::t,
     sentence,
 };
 
@@ -189,8 +178,8 @@ fn TemplateSetup(id: &'static str) -> Element {
     }
 }
 
-/// The phase at `index` of `template`: in the basic view's layout if `basic`, else as an added
-/// phase is summed up, with the button editing it in a dialog. It edits a copy of its form, which
+/// The phase at `index` of `template`: in the basic view's layout if `basic`, else its whole form
+/// at the level shown. It edits a copy of its form, which
 /// it hands back to the template after every change, and takes anew once the other forms change
 /// it (see [`TemplateForm::revision`]).
 #[component]
@@ -230,128 +219,13 @@ fn TemplatePhase(
                 disabled,
             }
         } else {
-            TemplatePhaseSummary {
-                template,
+            Form {
                 form,
-                index,
                 disabled,
+                level_choice: false,
+                of: id,
             }
         }
-    }
-}
-
-/// The phase at `index` of `template` as an added phase is summed up: where its entrants come
-/// from, how it is played, and the button editing `form`, its copy, in a dialog.
-#[component]
-fn TemplatePhaseSummary(
-    template: Signal<TemplateForm>,
-    form: Signal<PhaseForm>,
-    index: usize,
-    disabled: bool,
-) -> Element {
-    let ctx = use_context::<Ctx>();
-    let tr = ctx.translator.read();
-    let view = form.read().view();
-    let columns = summary::columns(&tr, &view);
-    let sources: Vec<_> = form.read().sources().iter().map(SourceRow::of).collect();
-    let names: Vec<_> = (0..template.read().forms().len())
-        .map(|earlier| {
-            (
-                template.read().ids()[earlier],
-                template.read().name(earlier),
-            )
-        })
-        .collect();
-    let name = template.read().name(index);
-    rsx! {
-        p { class: "sources",
-            {
-                sources_named(
-                    &tr,
-                    &sources,
-                    |id| names.iter().find(|(of, _)| *of == id).map(|(_, name)| name),
-                )
-            }
-        }
-        Summary { fields: view.summary(), columns }
-        Issues {
-            id: format!("template-issues-{index}"),
-            issues: view.issues.clone(),
-        }
-        if !disabled {
-            div { class: "phase-actions",
-                EditFormDialog { form, name }
-            }
-        }
-    }
-}
-
-/// The button editing `form`, the form of the phase `name`, in a dialog, and the dialog: saving
-/// puts the form edited in its place.
-#[component]
-fn EditFormDialog(form: Signal<PhaseForm>, name: PhaseName) -> Element {
-    let ctx = use_context::<Ctx>();
-    // the copy edited while the dialog is open, and the form as it opened
-    let mut editing = use_signal(|| None::<(Signal<PhaseForm>, PhaseForm)>);
-    let discarding = use_discarding();
-    let mut close = move || {
-        editing.set(None);
-        discarding.keep_editing();
-    };
-    let tr = ctx.translator.read();
-    let edited = editing.read().as_ref().map(|(form, _)| *form);
-    rsx! {
-        button {
-            r#type: "button",
-            aria_label: t!(tr, "edit-phase-named", phase = tr.phase_name(&name)),
-            onclick: move |_| {
-                let opened = form.peek().clone();
-                editing.set(Some((Signal::new(opened.clone()), opened)));
-                focus_later(&["#field-format"]);
-            },
-            icons::Pencil {}
-            {tr.get("edit-phase")}
-        }
-        Dialog {
-            open: Some(edited.is_some()),
-            on_open_change: move |open: bool| {
-                if !open {
-                    let changed = editing
-                        .peek()
-                        .as_ref()
-                        .is_some_and(|(form, opened)| form.peek().changed_since(opened));
-                    discarding.close_asked(changed, close);
-                }
-            },
-            DialogTitle { {tr.get("edit-phase-title")} }
-            DialogDescription { {tr.get("edit-template-phase-description")} }
-            if let Some(edited) = edited {
-                form {
-                    id: "edit-phase",
-                    class: "dialog-form",
-                    onsubmit: move |event| {
-                        event.prevent_default();
-                        if !edited.read().view().complete {
-                            focus_first_issue("edit-phase");
-                            return;
-                        }
-                        let mut form = form;
-                        form.set(edited.peek().clone());
-                        close();
-                    },
-                    Form { form: edited, disabled: false, level_choice: true }
-                    div { class: "dialog-buttons",
-                        button { class: "primary", r#type: "submit", {tr.get("save-changes")} }
-                        button {
-                            r#type: "button",
-                            onclick: move |_| close(),
-                            {tr.get("cancel")}
-                        }
-                    }
-                }
-            }
-        }
-        DiscardChanges { discarding, on_discard: move |()| close() }
     }
 }
 

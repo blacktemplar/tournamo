@@ -627,20 +627,28 @@ fn UnstartPhase(phase: PhaseId) -> Element {
 
 /// The fields of `form` at the level the operator chose, which they change unless `disabled`,
 /// with what is wrong with the answers as a whole, and the choice of the level if `level_choice`.
+/// The ids of its elements name the phase `of`, where several forms show at once.
 #[component]
-pub(super) fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) -> Element {
+pub(super) fn Form(
+    form: Signal<PhaseForm>,
+    disabled: bool,
+    level_choice: bool,
+    #[props(default)] of: Option<PhaseId>,
+) -> Element {
     let ctx = use_context::<Ctx>();
+    let edited = match of {
+        Some(phase) => EditedForm::of_phase(form, phase),
+        None => EditedForm::new(form),
+    };
     let tr = ctx.translator.read();
-    let mut error = use_signal(|| None::<Text>);
     let mut update_error = use_signal(|| None::<Text>);
     let FormView {
         fields,
         issues,
-        following_suggestions,
         entry,
         outdated,
-        level,
         hidden,
+        followed,
         ..
     } = form.read().view_at(*ctx.level.read());
     let outdated = (!outdated.is_empty()).then(|| {
@@ -662,50 +670,28 @@ pub(super) fn Form(form: Signal<PhaseForm>, disabled: bool, level_choice: bool) 
             }
             if let Some(outdated) = outdated {
                 div { class: "notice",
-                    p { id: "outdated-plugins", "{outdated}" }
+                    p { id: edited.element("outdated-plugins"), "{outdated}" }
                     button {
                         r#type: "button",
                         disabled,
-                        aria_describedby: "outdated-plugins",
+                        aria_describedby: edited.element("outdated-plugins"),
                         onclick: move |_| update_error.set(update(form)),
                         {tr.get("update-plugins")}
                     }
                     if let Some(error) = update_error() {
-                        Issues { id: "update-issues", issues: vec![error] }
+                        Issues { id: edited.element("update-issues"), issues: vec![error] }
                     }
                 }
             }
-            Entry { form, entry, disabled }
-            Fields { form: EditedForm::new(form), fields, disabled }
-            HiddenSettings { id: "hidden-settings", hidden }
-            // ranking and scoring follow the suggestions where they are not shown
-            if level > Level::Basic {
-                p { role: "status",
-                    if following_suggestions {
-                        {tr.get("following-suggestions")}
-                    } else {
-                        {tr.get("customized-settings")}
-                    }
-                }
-                button {
-                    r#type: "button",
-                    disabled,
-                    aria_disabled: following_suggestions,
-                    onclick: move |_| {
-                        if !disabled && !form.read().view().following_suggestions {
-                            let applied = form.write().apply_suggestions();
-                            error.set(applied.err().map(|error| {
-                                PhaseDraftError::Configuration(error).text()
-                            }));
-                        }
-                    },
-                    {tr.get("apply-suggested-ranking")}
-                }
+            Entry { edited, entry, disabled }
+            Fields {
+                form: edited,
+                fields,
+                disabled,
+                followed,
             }
-            if let Some(error) = error() {
-                Issues { id: "suggestion-issues", issues: vec![error] }
-            }
-            Issues { id: "phase-issues", issues }
+            HiddenSettings { id: edited.element("hidden-settings"), hidden }
+            Issues { id: edited.element("phase-issues"), issues }
         }
     }
 }

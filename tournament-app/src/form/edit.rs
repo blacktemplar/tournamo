@@ -226,8 +226,8 @@ pub(super) struct Generator<'a, T> {
     /// The fields shown elsewhere, neither among the fields nor counted as hidden, e.g. the match
     /// format the basic view shows for every phase at once.
     pub(super) elsewhere: &'a [Path],
-    /// What a hidden field is compared with where it answers it, e.g. the answers of the phase of
-    /// a template; elsewhere what the field offers.
+    /// What a hidden field is compared with where it answers it, e.g. the overrides of the phase
+    /// of a template that fit; elsewhere what the field offers.
     pub(super) baseline: Option<&'a Config>,
 }
 
@@ -418,7 +418,7 @@ impl<T: Configurable> Generator<'_, T> {
     }
 
     /// Whether the enumerated field is shown at the level, or anyway.
-    fn shows(&self, node: &FieldNode) -> bool {
+    pub(super) fn shows(&self, node: &FieldNode) -> bool {
         node.field.level() <= self.level || self.anyway.contains(&node.path)
     }
 

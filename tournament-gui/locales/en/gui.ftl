@@ -58,7 +58,7 @@ help-running-undo = Undo goes back only as far as the page was open: reloading t
 help-running-byes = Where a round leaves an entrant without an opponent, the entrant has a bye: it moves on without a match and scores as the phase says, e.g. the points for a bye.
 help-formats = Formats and standings
 help-templates = Templates
-help-templates-text = A template sets up a whole competition at once, while it has no phase: choose it under “How is it played?” and add the phases it shows. They are ordinary phases, each changed or removed as any phase, e.g. to play in more groups; one undo takes all of them back. A template opens the basic settings, which show only what most competitions decide: how many go on, the groups, the rounds, the match format and whether everyone plays in drawn pairs (DYP); “Advanced” and “Expert” above the phases show the rest.
+help-templates-text = A template sets up a whole competition at once, while it has no phase: choose it under “How is it played?” and add the phases it shows. They are ordinary phases, each changed or removed as any phase, e.g. to play in more groups; one undo takes all of them back. A template opens the basic settings, which show only what most competitions decide: how many go on, the groups, the rounds, the match format and whether everyone plays in drawn pairs (DYP); “Advanced” and “Expert” above the phases show the rest. Settings you have not changed follow a new format, e.g. the order of the standings, and what the template chose stays while it still fits; a setting you changed stays as it is. Below the format, the phase says what followed it.
 help-standings = The order of the standings
 help-standings-text = The standings compare the entrants by the criteria of their order in turn: the first decides, the second only between entrants the first leaves tied, and so on, e.g. more points, then more Sonneborn-Berger, a tie break favouring those who scored against strong opponents. A criterion compares a metric, a number calculated for each entrant from the results, such as the points; the metrics a criterion needs are calculated with it. Further metrics can be calculated and shown without ranking by them. The “i” next to a short column header, such as SB, says what the column counts; every criterion and metric is explained below.
 help-columns-text = A table of standings shows the metrics it is ranked by and those they are calculated from, e.g. ranked by points also the wins, draws and losses the points are scored for. Where a phase compares several groups, the rows compared show what they are compared by. The metrics of a phase are those it is ranked by, those these need, and those added under “Add metric”; a metric needed comes and goes with what needs it, one added stays until it is removed. A box with an outlined tick is shown by this rule; tick or untick it to show or hide the metric anyway, in the group tables or in the comparison. This can be changed at any time, also while the phase is played.
@@ -183,7 +183,6 @@ template-phase-number = phase { $number }
 # below the phases a template adds
 template-phases = Its phases
 template-refined = Change them here as they should be played, then add them; each can also be changed, removed, or followed by more once added.
-edit-template-phase-description = Change how the phase is played; it is added with the others.
 add-phases = Add phases
 # the heading once every match is played
 finished = Finished
@@ -292,9 +291,13 @@ hidden-settings = { $count ->
        *[advanced] advanced
     } settings.
 }
-following-suggestions = Ranking and scoring follow suggestions for the format until you edit them.
-customized-settings = Your ranking and scoring settings are kept when the format changes. Applying suggestions replaces them and resumes automatic updates.
-apply-suggested-ranking = Apply suggested ranking
+# under the format and the match format of a phase
+followed-hint = Settings you have not changed follow it.
+# $level: advanced or expert
+show-level = { $level ->
+    [expert] Show the expert settings
+   *[advanced] Show the advanced settings
+}
 # next to the choice of a plugin added to a list
 add-plugin = Add
 # the button showing what is said about $subject, a plugin or a field

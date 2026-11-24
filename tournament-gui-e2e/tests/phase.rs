@@ -658,6 +658,9 @@ async fn what_differs_from_the_defaults_is_marked() {
             .await?;
         gui.hover_labelled("Changed: more wins").await?;
         gui.expect_toggletip(Some("Added, not suggested.")).await?;
+        gui.hover_labelled("Changed: points for a win").await?;
+        gui.expect_toggletip(Some("Differs from the default: 1."))
+            .await?;
         gui.page.check_accessibility().await
     })
     .await;

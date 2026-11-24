@@ -167,14 +167,8 @@ phases = Phasen
 remove-phase = Phase entfernen
 edit-phase-named = Phase bearbeiten: { $phase }
 remove-phase-named = Phase entfernen: { $phase }
-everyone-registered = alle Angemeldeten
 only-some-places = Nur einige Plätze
 registration = die Anmeldung
-every-place-of = alle Plätze aus „{ $phase }“
-places-of = Plätze { $from }–{ $to } aus „{ $phase }“
-places-from-of = Plätze ab { $from } aus „{ $phase }“
-registration-places = Plätze { $from }–{ $to } der Anmeldung
-registration-places-from = Plätze ab { $from } der Anmeldung
 phase-scale = Mit { $entrants } Teilnehmern dauert die Phase { $rounds } mit { $matches }.
 phase-scale-teams = Mit { $entrants } Teilnehmern in { $teams } Teams dauert die Phase { $rounds } mit { $matches }.
 scale-rounds = { $count ->
@@ -247,13 +241,17 @@ mark-differs = { $baseline ->
     [template] weicht von der Vorlage ab
    *[defaults] weicht vom Standardwert ab
 }
+mark-differs-from = { $baseline ->
+    [template] weicht von der Vorlage ab: { $value }
+   *[defaults] weicht vom Standardwert ab: { $value }
+}
 mark-added = { $baseline ->
     [template] hinzugefügt, nicht in der Vorlage
    *[defaults] hinzugefügt, nicht empfohlen
 }
 mark-moved = { $baseline ->
-    [template] an anderer Stelle als in der Vorlage
-   *[defaults] an anderer Stelle als empfohlen
+    [template] verschoben; in der Vorlage an Stelle { $place }
+   *[defaults] verschoben; empfohlen an Stelle { $place }
 }
 mark-removed = { $baseline ->
     [template] aus der Vorlage entfernt: { $plugins }

@@ -98,9 +98,21 @@ async fn what_differs_from_the_template_is_marked() {
             "Changed: Source 1",
         ];
         gui.expect_marks(&basic).await?;
-        gui.hover_labelled("Changed: match format").await?;
-        gui.expect_toggletip(Some("Differs from the template."))
-            .await?;
+        for (mark, says) in [
+            (
+                "Changed: match format",
+                "Differs from the template: winner only.",
+            ),
+            (basic[1], "Differs from the template: off."),
+            ("Changed: format", "Differs from the template: round robin."),
+            (
+                "Changed: Source 1",
+                "Differs from the template: places 1–4 of Group phase.",
+            ),
+        ] {
+            gui.hover_labelled(mark).await?;
+            gui.expect_toggletip(Some(says)).await?;
+        }
         gui.page.check_accessibility().await?;
 
         gui.choose_level("Advanced").await?;
@@ -110,7 +122,7 @@ async fn what_differs_from_the_template_is_marked() {
         gui.expect_template_phases(&["Group phase", "Finals"])
             .await?;
         gui.click_labelled("Changed: Name").await?;
-        gui.expect_toggletip(Some("Differs from the template."))
+        gui.expect_toggletip(Some("Differs from the template: “Knockout”."))
             .await?;
 
         gui.choose_level("Basic").await?;

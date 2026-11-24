@@ -178,7 +178,7 @@ fn Field(form: EditedForm, field: FormField, compared: bool, disabled: bool) -> 
     }
     let description = (!about_text.is_empty()).then(|| about_text.join(" "));
     let marked = match (&field.mark, &field.input) {
-        (Some(mark), _) => Some(mark_text(&tr, *mark)),
+        (Some(mark), _) => Some(mark_text(&tr, mark)),
         (None, Input::List(list)) if !list.removed.is_empty() => Some(t!(
             tr,
             "mark-removed",
@@ -644,7 +644,7 @@ pub(super) fn MarkDot(id: String, subject: String, mark: Option<Mark>) -> Elemen
             Toggletip {
                 id,
                 subject,
-                text: mark_text(&tr, mark),
+                text: mark_text(&tr, &mark),
                 mark: true,
             }
         }
@@ -652,13 +652,16 @@ pub(super) fn MarkDot(id: String, subject: String, mark: Option<Mark>) -> Elemen
 }
 
 /// What `mark` says of a field or a plugin of a list, see [`Mark`].
-pub(super) fn mark_text(tr: &Translator, mark: Mark) -> String {
-    let key = match mark {
-        Mark::Differs => "mark-differs",
-        Mark::Added => "mark-added",
-        Mark::Moved => "mark-moved",
+pub(super) fn mark_text(tr: &Translator, mark: &Mark) -> String {
+    let text = match mark {
+        Mark::Differs(None) => Text::new("mark-differs"),
+        Mark::Differs(Some(value)) => {
+            Text::new("mark-differs-from").with("value", Arg::Text(Box::new(value.clone())))
+        }
+        Mark::Added => Text::new("mark-added"),
+        Mark::Moved(place) => Text::new("mark-moved").with("place", *place),
     };
-    tr.text(&Text::new(key).with("baseline", baseline()))
+    tr.text(&text.with("baseline", baseline()))
 }
 
 /// What is wrong, as a list with the id `id`, which the inputs it is about name as their

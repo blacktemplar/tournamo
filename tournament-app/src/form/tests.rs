@@ -1232,11 +1232,16 @@ mod metrics;
 
 /// The marks of the plugins of the list at `path`, by plugin.
 #[track_caller]
+/// What `mark` says, see [`Mark::said`].
+fn said(mark: Option<&Mark>) -> Option<String> {
+    mark.map(Mark::said)
+}
+
 fn marks(view: &FormView, path: &str) -> Vec<(&'static str, Option<Mark>)> {
     list(view, path)
         .items
         .iter()
-        .map(|item| (item.plugin.id, item.mark))
+        .map(|item| (item.plugin.id, item.mark.clone()))
         .collect()
 }
 
@@ -1256,8 +1261,8 @@ fn a_field_answered_otherwise_than_it_offers_is_marked() {
     let view = form.view();
     assert!(view.marked);
     assert_eq!(
-        field(&view, "metrics[1].points_for_win").mark,
-        Some(Mark::Differs)
+        said(field(&view, "metrics[1].points_for_win").mark.as_ref()),
+        Some("differs: 1".to_owned())
     );
     assert_eq!(
         field(&view, "metrics[1].points_for_draw").mark,
@@ -1301,7 +1306,7 @@ fn a_plugin_moved_or_removed_is_said() {
     assert_eq!(
         marks(&form.view(), "ranking"),
         [
-            (MoreSonnebornBerger::ID, Some(Mark::Moved)),
+            (MoreSonnebornBerger::ID, Some(Mark::Moved(2))),
             (MorePoints::ID, None)
         ]
     );
@@ -1329,7 +1334,7 @@ fn plugins_inserted_swapped_and_removed_together_are_each_said() {
         marks(&form.view(), "ranking"),
         [
             (MoreWins::ID, Some(Mark::Added)),
-            (MoreSonnebornBerger::ID, Some(Mark::Moved)),
+            (MoreSonnebornBerger::ID, Some(Mark::Moved(2))),
             (MorePoints::ID, None)
         ]
     );

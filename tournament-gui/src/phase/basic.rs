@@ -125,8 +125,16 @@ pub(super) fn CompetitionSettings(phases: Phases, disabled: bool) -> Element {
     let error = use_signal(|| None::<Text>);
     use_context_provider(|| OfTemplate(phases.of_template(ctx)));
     let match_formats = phases.match_formats(ctx);
-    let dyp_mark = phases.dyp_differs(ctx).then_some(Mark::Differs);
     let dyp = phases.dyp(ctx);
+    // a checkbox differing has the other state expected
+    let dyp_mark = phases.dyp_differs(ctx).then(|| {
+        let expected = if dyp == Some(Dyp::On) {
+            "value-off"
+        } else {
+            "value-on"
+        };
+        Mark::Differs(Some(Text::new(expected)))
+    });
     let tr = ctx.translator.read();
     rsx! {
         div { class: "competition-settings",
@@ -347,7 +355,7 @@ pub(super) fn BasicFieldsOf(
                     MarkDot {
                         id: format!("basic-source-{}-{index}-mark", phase_id_text(phase)),
                         subject: t!(tr, "source-of", number = index + 1),
-                        mark: row.mark,
+                        mark: row.mark.clone(),
                     }
                     if let Some(rejected) = &row.to_rejected {
                         " "

@@ -9,18 +9,76 @@ use plugin_factory::{
 use tournament_engine::PhasePlugins;
 
 use super::{FormField, Input, ListInput, PluginOption};
+use crate::i18n::{Arg, Text};
 
 /// How a field shown, or a plugin of a list, differs from what is expected of it, see
 /// [`FormField::mark`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Mark {
-    /// Answered otherwise; for a field taking a plugin, another plugin chosen. A field whose
-    /// plugin is the one expected is not marked, the fields of the plugin that differ are.
-    Differs,
+    /// Answered otherwise, than with what it says if anything, e.g. "3" or the label of the
+    /// plugin expected; for a field taking a plugin, another plugin chosen. A field whose plugin
+    /// is the one expected is not marked, the fields of the plugin that differ are.
+    Differs(Option<Text>),
     /// A plugin of a list that is not expected in it.
     Added,
-    /// A plugin of a list whose order matters, expected in it, but elsewhere in its order.
-    Moved,
+    /// A plugin of a list whose order matters, expected in it, but elsewhere in its order: at
+    /// this place, from 1.
+    Moved(usize),
+}
+
+#[cfg(test)]
+impl Mark {
+    /// The mark in plain English for tests: `differs: <what was expected>`, `added`, or
+    /// `moved: <place>`.
+    pub(crate) fn said(&self) -> String {
+        match self {
+            Self::Differs(None) => "differs".to_owned(),
+            Self::Differs(Some(value)) => {
+                format!(
+                    "differs: {}",
+                    crate::i18n::Translator::plain_english().text(value)
+                )
+            }
+            Self::Added => "added".to_owned(),
+            Self::Moved(place) => format!("moved: {place}"),
+        }
+    }
+}
+
+/// What `value`, an answer of a field taking `input`, says, e.g. "3", "on" or "not set"; `None`
+/// for a plugin or a list, which [`plugin_said`] says.
+fn said(input: &Input, value: &Value) -> Option<Text> {
+    match input {
+        Input::Optional { .. } if value.is_null() => Some(Text::new("value-none")),
+        Input::Optional { inner, .. } => said(inner, value),
+        Input::Bool(_) => value
+            .as_bool()
+            .map(|on| Text::new(if on { "value-on" } else { "value-off" })),
+        Input::Integer { .. } | Input::Decimal { .. } => value
+            .as_f64()
+            .map(|number| Text::new("value-number").with("number", number)),
+        Input::Plugin(_) | Input::List(_) => None,
+    }
+}
+
+/// What the plugin `id` of the field at `path` says, its label; "not set" for `None`.
+fn plugin_said(
+    draft: &Draft<PhasePlugins>,
+    path: &plugin_factory::config::Path,
+    id: Option<&str>,
+) -> Option<Text> {
+    let Some(id) = id else {
+        return Some(Text::new("value-none"));
+    };
+    let entry = draft.field_at(path)?.field.kind().axis()?.entry(id)?;
+    let plugin = PluginOption::of(entry, false);
+    Some(Text::new("value-plugin").with(
+        "plugin",
+        Arg::Plugin {
+            id: plugin.id,
+            english: plugin.label,
+        },
+    ))
 }
 
 /// Marks `fields`, the fields of `draft` or of a plugin of it, answered by `current`, where they
@@ -73,7 +131,11 @@ fn mark_field(
                 config.as_ref().map(|config| config.plugin().to_owned())
             };
             if id(&current) != id(&expected) {
-                field.mark = Some(Mark::Differs);
+                field.mark = Some(Mark::Differs(plugin_said(
+                    draft,
+                    &field.path,
+                    id(&expected).as_deref(),
+                )));
             } else if let (Some(chosen), Some(current), Some(expected)) =
                 (&mut plugin.chosen, current, expected)
             {
@@ -88,7 +150,7 @@ fn mark_field(
         Input::List(list) => mark_list(draft, &field.path, list, current, expected),
         _ => {
             if current.unwrap_or(&Value::Null) != expected {
-                field.mark = Some(Mark::Differs);
+                field.mark = Some(Mark::Differs(said(&field.input, expected)));
             }
         }
     }
@@ -132,8 +194,14 @@ fn mark_list(
                 current[index].config(),
                 expected[at].config(),
             ),
-            None if expected_ids.contains(&current_ids[index]) => item.mark = Some(Mark::Moved),
-            None => item.mark = Some(Mark::Added),
+            None => {
+                item.mark = Some(
+                    match expected_ids.iter().position(|id| *id == current_ids[index]) {
+                        Some(at) => Mark::Moved(at + 1),
+                        None => Mark::Added,
+                    },
+                );
+            }
         }
     }
     let axis = draft

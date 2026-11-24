@@ -453,10 +453,17 @@ fn what_differs_from_the_template_is_marked() {
         view.fields
             .iter()
             .find(|field| field.name == name)
-            .and_then(|field| field.mark)
+            .and_then(|field| field.mark.as_ref())
+            .map(Mark::said)
     };
-    assert_eq!(mark(PhasePlugins::SEEDING), Some(Mark::Differs));
-    assert_eq!(mark(PhasePlugins::FORMAT), Some(Mark::Differs));
+    assert_eq!(
+        mark(PhasePlugins::SEEDING).as_deref(),
+        Some("differs: groups kept apart")
+    );
+    assert_eq!(
+        mark(PhasePlugins::FORMAT).as_deref(),
+        Some("differs: single elimination")
+    );
     assert_eq!(mark(PhasePlugins::RANKING), None, "it followed the format");
 }
 
@@ -476,8 +483,12 @@ fn a_format_the_template_leaves_as_offered_is_marked_once_changed() {
     template.set_match_format(&groups).unwrap();
     for form in template.forms() {
         assert_eq!(
-            form.match_format_field(Level::Basic).unwrap().mark,
-            Some(Mark::Differs)
+            form.match_format_field(Level::Basic)
+                .unwrap()
+                .mark
+                .map(|mark| mark.said())
+                .as_deref(),
+            Some("differs: winner only")
         );
     }
 
@@ -490,7 +501,10 @@ fn a_format_the_template_leaves_as_offered_is_marked_once_changed() {
         .iter()
         .find(|field| field.name == PhasePlugins::FORMAT)
         .unwrap();
-    assert_eq!(format.mark, Some(Mark::Differs));
+    assert_eq!(
+        format.mark.as_ref().map(Mark::said).as_deref(),
+        Some("differs: round robin")
+    );
 }
 
 /// Drawn pairs differ from a template playing without them, before and after it is added, and
@@ -527,7 +541,11 @@ fn the_name_and_sources_changed_differ_from_the_template() {
     let mut knockout = template.forms()[1].clone();
     let entry = knockout.entry_view();
     assert_eq!(
-        (entry.name_mark, entry.sources_mark, entry.rows[0].mark),
+        (
+            entry.name_mark,
+            entry.sources_mark,
+            entry.rows[0].mark.clone()
+        ),
         (None, None, None)
     );
     assert!(!knockout.view().marked);
@@ -535,8 +553,14 @@ fn the_name_and_sources_changed_differ_from_the_template() {
     knockout.set_name("Finals");
     knockout.enter_place(0, End::To, "2");
     let entry = knockout.entry_view();
-    assert_eq!(entry.name_mark, Some(Mark::Differs));
-    assert_eq!(entry.rows[0].mark, Some(Mark::Differs));
+    assert_eq!(
+        entry.name_mark.map(|mark| mark.said()).as_deref(),
+        Some("differs: “Knockout”")
+    );
+    assert_eq!(
+        entry.rows[0].mark.as_ref().map(Mark::said).as_deref(),
+        Some("differs: places 1–4 of Group phase")
+    );
     assert!(knockout.view().marked);
 
     let ids = session.add_template_form(&template).unwrap();
@@ -553,6 +577,10 @@ fn the_name_and_sources_changed_differ_from_the_template() {
     knockout.enter_place(0, End::To, "2");
     knockout.add_source();
     let entry = knockout.entry_view();
-    assert_eq!(entry.rows[0].mark, Some(Mark::Differs));
+    assert_eq!(
+        entry.rows[0].mark.as_ref().map(Mark::said).as_deref(),
+        Some("differs: places 1–4 of Group phase"),
+        "taking places of the phase added as the group phase"
+    );
     assert_eq!(entry.rows[1].mark, Some(Mark::Added));
 }

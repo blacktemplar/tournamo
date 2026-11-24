@@ -411,6 +411,35 @@ impl PhaseForm {
         };
     }
 
+    /// What `source` says, e.g. "places 1–4 of Group phase"; `None` if it takes places of a
+    /// phase not before this one.
+    fn source_said(&self, source: &Source) -> Option<Text> {
+        let (from, to) = (source.from(), source.to());
+        let everyone = from.get() == 1 && to.is_none();
+        Some(match source.of() {
+            SourceOf::Registration => match to {
+                _ if everyone => Text::new("everyone-registered"),
+                Some(to) => Text::new("registration-places")
+                    .with("from", from)
+                    .with("to", to),
+                None => Text::new("registration-places-from").with("from", from),
+            },
+            SourceOf::Phase(id) => {
+                let (_, name) = self
+                    .context
+                    .earlier
+                    .iter()
+                    .find(|(phase, _)| *phase == id)?;
+                let text = match to {
+                    _ if everyone => Text::new("every-place-of"),
+                    Some(to) => Text::new("places-of").with("from", from).with("to", to),
+                    None => Text::new("places-from-of").with("from", from),
+                };
+                text.with("phase", name.clone())
+            }
+        })
+    }
+
     /// What the form shows of the name and the sources.
     pub fn entry_view(&self) -> EntryView {
         let everyone_registered = self.is_first();
@@ -451,7 +480,7 @@ impl PhaseForm {
                     );
                     let mark = expected.map(|expected| match expected.sources.get(index) {
                         Some(expected) if expected == source => None,
-                        Some(_) => Some(Mark::Differs),
+                        Some(expected) => Some(Mark::Differs(self.source_said(expected))),
                         None => Some(Mark::Added),
                     });
                     SourceRowView {
@@ -484,17 +513,35 @@ impl PhaseForm {
             }
             _ => Vec::new(),
         };
-        let differs = |differs: bool| differs.then_some(Mark::Differs);
         EntryView {
             name_mark: expected
-                .and_then(|expected| differs(self.entry.name.trim() != expected.name.trim())),
-            sources_mark: expected.and_then(|expected| {
-                differs(if everyone_registered {
-                    self.entry.sources != expected.sources
-                } else {
-                    self.entry.sources.len() < expected.sources.len()
+                .filter(|expected| self.entry.name.trim() != expected.name.trim())
+                .map(|expected| {
+                    Mark::Differs(Some(match expected.name.trim() {
+                        "" => Text::new("value-no-name"),
+                        name => Text::new("value-name").with("name", name),
+                    }))
+                }),
+            sources_mark: expected
+                .filter(|expected| {
+                    if everyone_registered {
+                        self.entry.sources != expected.sources
+                    } else {
+                        self.entry.sources.len() < expected.sources.len()
+                    }
                 })
-            }),
+                .map(|expected| {
+                    let said: Option<Vec<Text>> = expected
+                        .sources
+                        .iter()
+                        .map(|source| self.source_said(source))
+                        .collect();
+                    Mark::Differs(
+                        said.map(|said| {
+                            Text::new("value-sources").with("sources", Arg::List(said))
+                        }),
+                    )
+                }),
             name: self.entry.name.clone(),
             number: self.context.number,
             everyone_registered,

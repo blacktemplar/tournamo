@@ -43,7 +43,7 @@ later one: a file whose `"format"` changes is migrated, not refused.
   the numbers a field takes are said behind the ⓘ of its label.
 - **What differs is marked.** A setting that differs from the template, or
   for a phase of no template from the default, has a dot next to it that
-  says so, the name, places taken and drawn pairs of a phase of a template
+  says so and what the template or the default has, the name, places taken and drawn pairs of a phase of a template
   too; a criterion added marks only itself, not those after it, and one
   removed is named at its list.
 

@@ -62,7 +62,7 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
                 MarkDot {
                     id: element("field-name-mark"),
                     subject: tr.get("phase-name"),
-                    mark: entry.name_mark,
+                    mark: entry.name_mark.clone(),
                 }
             }
             input {
@@ -82,7 +82,7 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
                     MarkDot {
                         id: element("sources-mark"),
                         subject: tr.get("entrants-from"),
-                        mark: entry.sources_mark,
+                        mark: entry.sources_mark.clone(),
                     }
                 }
                 span { class: "answer",
@@ -108,7 +108,7 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
                     MarkDot {
                         id: element("sources-mark"),
                         subject: tr.get("entrants-from"),
-                        mark: entry.sources_mark,
+                        mark: entry.sources_mark.clone(),
                     }
                 }
                 ul { class: "source-rows",
@@ -122,7 +122,7 @@ pub(super) fn Entry(edited: EditedForm, entry: EntryView, disabled: bool) -> Ele
                             MarkDot {
                                 id: element(&format!("source-{index}-mark")),
                                 subject: t!(tr, "source-of", number = index + 1),
-                                mark: row.mark,
+                                mark: row.mark.clone(),
                             }
                             select {
                                 id: element(&format!("source-{index}")),

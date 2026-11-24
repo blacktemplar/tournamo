@@ -215,3 +215,21 @@ issue-fitting = { $issue }; bei { $field } { $count ->
         [one] passt
        *[other] passen
     } { $choices }
+
+# where a phase takes its entrants from
+everyone-registered = alle Angemeldeten
+every-place-of = alle Plätze aus „{ $phase }“
+places-of = Plätze { $from }–{ $to } aus „{ $phase }“
+places-from-of = Plätze ab { $from } aus „{ $phase }“
+registration-places = Plätze { $from }–{ $to } der Anmeldung
+registration-places-from = Plätze ab { $from } der Anmeldung
+
+# what a setting was expected to hold, said where it differs
+value-none = nicht festgelegt
+value-on = ein
+value-off = aus
+value-number = { $number }
+value-plugin = { $plugin }
+value-name = „{ $name }“
+value-no-name = kein Name
+value-sources = { $sources }

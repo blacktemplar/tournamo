@@ -128,7 +128,7 @@ fn OrderedItem(
         li {
             span { class: "name", {capitalized(&name)} }
             " "
-            if let Some(mark) = item.mark {
+            if let Some(mark) = &item.mark {
                 Toggletip {
                     id: "{own}-mark",
                     subject: name.clone(),
@@ -531,12 +531,12 @@ fn MetricNotes(list: String, row: MetricRow) -> Element {
     let tr = ctx.translator.read();
     let about = metric_description(&tr, &row.metric.metric);
     rsx! {
-        if let Some(mark) = row.metric.item.as_ref().and_then(|item| item.mark) {
+        if let Some(mark) = row.metric.item.as_ref().and_then(|item| item.mark.clone()) {
             " "
             Toggletip {
                 id: row.element(&list, "mark"),
                 subject: row.label.clone(),
-                text: mark_text(&tr, mark),
+                text: mark_text(&tr, &mark),
                 mark: true,
             }
         }

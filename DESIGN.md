@@ -1809,8 +1809,9 @@ rather than snapshotting fields before they have been chosen.
   format may come.
 - **What differs is marked**: a field shown that differs from its expected
   value gets a dot in the accent (`FormField::mark`), whose toggletip says
-  what it differs from, the template or the default, on hover, focus or a
-  tap. Not a star, which reads as mandatory. No legend below the form: it
+  what it differs from, the template or the default, and what that has
+  (a number, on or off, the label of a plugin, a name, a source; a plugin
+  moved, the place it has there), on hover, focus or a tap. Not a star, which reads as mandatory. No legend below the form: it
   came and went with the first mark, moving what is below it, e.g. the
   button adding the phase, away from under a click. A
   field taking a plugin is marked for another plugin; for the one expected,

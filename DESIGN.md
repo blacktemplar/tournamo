@@ -1821,7 +1821,12 @@ rather than snapshotting fields before they have been chosen.
   marked, its fields that differ are; one not expected is "added"; one
   expected and gone is named at the list's label. A metric only needed is
   not marked: what needs it is. The format of a phase of no template is
-  never marked, as nothing expects one. A hidden field is counted in
+  never marked, as nothing expects one; that of a phase of a template, and
+  its match format, are expected as the template has them even where it
+  leaves them as offered, since they follow nothing. The name and sources
+  are marked against those of the template's phase (a source by position;
+  fewer sources mark the label), and drawn pairs where the teams of a phase
+  they set differ. A hidden field is counted in
   `FormView::hidden` as before. Rejected: comparing lists by position (an
   insertion marked everything after it).
 - **Fields have levels: basic, advanced, expert**. A form at a level shows the

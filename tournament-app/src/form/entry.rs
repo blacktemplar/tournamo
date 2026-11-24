@@ -10,7 +10,7 @@ use tournament_engine::{
     vec1::Vec1,
 };
 
-use super::PhaseForm;
+use super::{Mark, PhaseForm};
 use crate::{
     error::SourcesError,
     i18n::{Arg, Text},
@@ -166,6 +166,15 @@ pub(crate) struct Entry {
     pub(crate) some_places: bool,
 }
 
+/// The name and sources the phase of a template has, which a form of it is expected to keep, see
+/// [`EntryView::name_mark`].
+#[derive(Debug, Clone)]
+pub(crate) struct Expected {
+    /// Empty for no name.
+    pub(crate) name: String,
+    pub(crate) sources: Vec<Source>,
+}
+
 impl Default for Entry {
     /// No name, taking every entrant registered.
     fn default() -> Self {
@@ -190,6 +199,12 @@ pub enum End {
 pub struct EntryView {
     /// The name as typed.
     pub name: String,
+    /// How the name differs from that of the phase of the template the phase was added as; a
+    /// phase of no template is expected to have none of its own, so its name is never marked.
+    pub name_mark: Option<Mark>,
+    /// How the sources differ from those of the phase of the template as a whole: fewer than it
+    /// has, or none to choose where it takes some places only.
+    pub sources_mark: Option<Mark>,
     /// The number of the phase, which with the label of its format is what it is called without a
     /// name, see [`PhaseName`].
     pub number: usize,
@@ -214,6 +229,9 @@ pub struct SourceRowView {
     pub from: String,
     /// Its last place as typed, or as taken; empty for the last place there is.
     pub to: String,
+    /// How it differs from the source at its position of the phase of the template the phase was
+    /// added as: [`Mark::Differs`], or [`Mark::Added`] past its sources.
+    pub mark: Option<Mark>,
     /// Why what was typed for the first place was not taken.
     pub from_rejected: Option<Text>,
     /// Why what was typed for the last place was not taken.
@@ -396,6 +414,7 @@ impl PhaseForm {
     /// What the form shows of the name and the sources.
     pub fn entry_view(&self) -> EntryView {
         let everyone_registered = self.is_first();
+        let expected = self.expected_entry.as_ref();
         let choices = std::iter::once(SourceChoice {
             phase: None,
             name: None,
@@ -430,7 +449,13 @@ impl PhaseForm {
                         ),
                         |(entered, problem)| (entered, Some(problem)),
                     );
+                    let mark = expected.map(|expected| match expected.sources.get(index) {
+                        Some(expected) if expected == source => None,
+                        Some(_) => Some(Mark::Differs),
+                        None => Some(Mark::Added),
+                    });
                     SourceRowView {
+                        mark: mark.flatten(),
                         of: match source.of() {
                             SourceOf::Registration => None,
                             SourceOf::Phase(id) => Some(id),
@@ -459,7 +484,17 @@ impl PhaseForm {
             }
             _ => Vec::new(),
         };
+        let differs = |differs: bool| differs.then_some(Mark::Differs);
         EntryView {
+            name_mark: expected
+                .and_then(|expected| differs(self.entry.name.trim() != expected.name.trim())),
+            sources_mark: expected.and_then(|expected| {
+                differs(if everyone_registered {
+                    self.entry.sources != expected.sources
+                } else {
+                    self.entry.sources.len() < expected.sources.len()
+                })
+            }),
             name: self.entry.name.clone(),
             number: self.context.number,
             everyone_registered,

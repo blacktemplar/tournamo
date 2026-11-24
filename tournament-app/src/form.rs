@@ -31,7 +31,7 @@ use plugin_factory::{
     schema::{Configurable, DecimalRange, IntegerRange, Level, NumberRange},
 };
 use tournament_engine::{
-    Columns, PhasePlugins, SourceOf, Table,
+    Columns, PhasePlugins, Source, SourceOf, Table,
     entities::columns::{self, Rule},
     plugins::{
         metrics_calculator::{MetricEntry, MetricsCalculator},
@@ -82,6 +82,9 @@ pub struct PhaseForm {
     /// What the phase of the template it was added as answers otherwise than its fields offer,
     /// see [`Self::compared_with`].
     overrides: Option<Config>,
+    /// The name and sources of the phase of the template it was added as, see
+    /// [`Self::expecting_entry`].
+    expected_entry: Option<entry::Expected>,
     /// What followed the last change, see [`FormView::followed`].
     followed: Option<Moved>,
 }
@@ -131,8 +134,8 @@ pub struct FormView {
     pub hidden: Hidden,
     /// What followed the last change of the form, if anything did.
     pub followed: Option<Followed>,
-    /// Whether a field shown, however deep, or a plugin of a list is marked, see
-    /// [`FormField::mark`].
+    /// Whether a field shown, however deep, a plugin of a list, the name or a source is marked,
+    /// see [`FormField::mark`] and [`EntryView::name_mark`].
     pub marked: bool,
 }
 
@@ -708,6 +711,7 @@ impl PhaseForm {
             columns: Columns::new(),
             language: Language::default(),
             overrides: None,
+            expected_entry: None,
             followed: None,
         }
         .following()
@@ -722,6 +726,15 @@ impl PhaseForm {
     #[must_use]
     pub fn compared_with(mut self, answers: Config) -> Self {
         self.overrides = Some(expected::overrides(&self.draft, &answers));
+        self
+    }
+
+    /// This form expecting the phase to be named `name`, empty for no name, and to take its
+    /// entrants from `sources`, as the phase of the template it was added as is, see
+    /// [`EntryView::name_mark`].
+    #[must_use]
+    pub(crate) fn expecting_entry(mut self, name: String, sources: Vec<Source>) -> Self {
+        self.expected_entry = Some(entry::Expected { name, sources });
         self
     }
 
@@ -811,7 +824,7 @@ impl PhaseForm {
         mut self,
         context: Context,
         name: Option<&str>,
-        sources: Vec<tournament_engine::Source>,
+        sources: Vec<Source>,
         columns: Columns,
     ) -> Self {
         self.context = context;
@@ -1108,7 +1121,11 @@ impl PhaseForm {
         {
             ranking.warnings.push(Text::new("warning-unranked"));
         }
-        let marked = marks::any(&fields);
+        let entry = self.entry_view();
+        let marked = marks::any(&fields)
+            || entry.name_mark.is_some()
+            || entry.sources_mark.is_some()
+            || entry.rows.iter().any(|row| row.mark.is_some());
         FormView {
             fields,
             following_suggestions: self.following_suggestions,
@@ -1116,7 +1133,7 @@ impl PhaseForm {
                 && self.rejected.is_empty()
                 && self.sources_issue().is_none(),
             issues: unplaced,
-            entry: self.entry_view(),
+            entry,
             outdated: self.outdated(),
             level,
             hidden,
@@ -1125,30 +1142,50 @@ impl PhaseForm {
         }
     }
 
-    /// What each field of the phase is expected to hold, see [`FormField::mark`]: the override of
-    /// the phase of its template while it fits, else what it offers, the ranking, metrics and
-    /// comparison across groups as suggested; the format only where a template overrides it, as
-    /// nothing else expects one. `irrelevant` are the fields that do not matter.
+    /// What each field of the phase is expected to hold, see [`Self::expected_answer`].
     fn expected_answers(&self, irrelevant: &[Path]) -> Config {
+        let suggested = suggested(self.draft.clone()).ok();
+        expected::fields(&self.draft)
+            .into_iter()
+            .filter_map(|name| {
+                self.expected_answer(name, irrelevant, suggested.as_ref())
+                    .map(|answer| (name, answer))
+            })
+            .fold(Config::new(), |expected, (name, answer)| {
+                expected.with(name, answer)
+            })
+    }
+
+    /// What the field `name` of the phase is expected to hold, see [`FormField::mark`]: the
+    /// override of the phase of its template while it fits, else what it offers, the ranking,
+    /// metrics and comparison across groups as `suggested`, the draft with the suggestions
+    /// applied; the format only where it is of a template, as nothing else expects one.
+    /// `irrelevant` are the fields that do not matter.
+    fn expected_answer(
+        &self,
+        name: &str,
+        irrelevant: &[Path],
+        suggested: Option<&Draft<PhasePlugins>>,
+    ) -> Option<Value> {
         let none = Config::new();
         let overrides = self.overrides.as_ref().unwrap_or(&none);
-        let suggested = suggested(self.draft.clone()).ok();
-        let mut expected = Config::new();
-        for name in expected::fields(&self.draft) {
-            let answer = if name == PhasePlugins::FORMAT {
-                overrides.get(name).cloned()
-            } else if PhasePlugins::SUGGESTED.contains(&name) {
-                expected::fitting(&self.draft, overrides, name, irrelevant)
-                    .or_else(|| suggested.as_ref()?.answers().get(name))
-                    .cloned()
-            } else {
-                expected::expected(&self.draft, overrides, name, irrelevant)
-            };
-            if let Some(answer) = answer {
-                expected = expected.with(name, answer);
-            }
+        if name == PhasePlugins::FORMAT {
+            overrides.get(name).cloned()
+        } else if PhasePlugins::SUGGESTED.contains(&name) {
+            expected::fitting(&self.draft, overrides, name, irrelevant)
+                .or_else(|| suggested?.answers().get(name))
+                .cloned()
+        } else {
+            expected::expected(&self.draft, overrides, name, irrelevant)
         }
-        expected
+    }
+
+    /// Whether the field `name` of the phase, one other than the ranking, metrics and comparison
+    /// across groups, holds anything other than what it is expected to, see [`FormField::mark`];
+    /// for a screen showing it elsewhere, e.g. the teams as whether pairs are drawn.
+    pub fn differs(&self, name: &str) -> bool {
+        self.expected_answer(name, &irrelevant(&self.draft), None)
+            .is_some_and(|expected| self.draft.answers().get(name) != Some(&expected))
     }
 
     /// What `moved` says, the fields that followed the last change, in a view generated by

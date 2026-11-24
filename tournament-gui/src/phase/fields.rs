@@ -632,6 +632,25 @@ pub(super) fn baseline() -> &'static str {
     }
 }
 
+/// The dot saying how `subject` differs from what is expected of it, see [`Mark`]; nothing if
+/// `mark` is `None`. `id` is that of its text, unique on the page.
+#[component]
+pub(super) fn MarkDot(id: String, subject: String, mark: Option<Mark>) -> Element {
+    let ctx = use_context::<Ctx>();
+    let tr = ctx.translator.read();
+    rsx! {
+        if let Some(mark) = mark {
+            " "
+            Toggletip {
+                id,
+                subject,
+                text: mark_text(&tr, mark),
+                mark: true,
+            }
+        }
+    }
+}
+
 /// What `mark` says of a field or a plugin of a list, see [`Mark`].
 pub(super) fn mark_text(tr: &Translator, mark: Mark) -> String {
     let key = match mark {

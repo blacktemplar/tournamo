@@ -73,6 +73,54 @@ async fn what_follows_a_new_format_is_said() {
     .await;
 }
 
+/// What is changed from a template is marked wherever it is changed, before and after the phases
+/// are added: the settings of the whole competition, a format the template leaves as offered, the
+/// places taken, the name.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn what_differs_from_the_template_is_marked() {
+    const DYP: &str = "Draw your partner (DYP): the entrants play in pairs drawn by lot";
+    run_in_competition_to_set_up(async |gui| {
+        gui.paste_entrant_names("Alice\nBob\nCarol\nDave\nEve\nFrank\nGrace\nHeidi")
+            .await?;
+        gui.choose_how_played("Groups and knockout").await?;
+        gui.expect_marks(&[]).await?;
+
+        gui.choose_plugin("match_format", "Best of games").await?;
+        gui.toggle(DYP).await?;
+        gui.choose_in_phase("Group phase", "format", "Double elimination")
+            .await?;
+        gui.enter_last_place_in_phase("Knockout", "2").await?;
+        let basic = [
+            "Changed: match format",
+            &format!("Changed: {DYP}"),
+            "Changed: format",
+            "Changed: Source 1",
+        ];
+        gui.expect_marks(&basic).await?;
+        gui.hover_labelled("Changed: match format").await?;
+        gui.expect_toggletip(Some("Differs from the template."))
+            .await?;
+        gui.page.check_accessibility().await?;
+
+        gui.choose_level("Advanced").await?;
+        gui.expect_template_phases(&["Group phase", "Knockout"])
+            .await?;
+        gui.rename_in_phase("Knockout", "Finals").await?;
+        gui.expect_template_phases(&["Group phase", "Finals"])
+            .await?;
+        gui.click_labelled("Changed: Name").await?;
+        gui.expect_toggletip(Some("Differs from the template."))
+            .await?;
+
+        gui.choose_level("Basic").await?;
+        gui.click("Add phases").await?;
+        gui.expect_announcement("2 phases are added.").await?;
+        gui.expect_marks(&basic).await
+    })
+    .await;
+}
+
 #[tokio::test]
 #[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
 async fn a_template_sets_up_phases_edited_and_played_as_any() {

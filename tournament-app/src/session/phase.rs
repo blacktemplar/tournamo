@@ -157,6 +157,10 @@ impl Session {
                     Some(answers) => form.compared_with(answers),
                     None => form,
                 };
+                let form = match self.template_entry(phase) {
+                    Some((name, sources)) => form.expecting_entry(name, sources),
+                    None => form,
+                };
                 form.of_phase(
                     context,
                     phase.name(),

@@ -4,7 +4,7 @@
 
 use dioxus::prelude::*;
 use tournament_app::{
-    form::{BasicFields, End, PhaseForm, TemplateForm},
+    form::{BasicFields, End, Mark, PhaseForm, TemplateForm},
     i18n::{Message as _, Text},
     session::{Dyp, MatchFormats},
     view::PhaseName,
@@ -13,7 +13,7 @@ use tournament_engine::{PhaseId, PhasePlugins, plugin_factory::schema::Level};
 
 use super::{
     HiddenSettings,
-    fields::{EditedForm, Fields, Issues, OfTemplate},
+    fields::{EditedForm, Fields, Issues, MarkDot, OfTemplate},
 };
 use crate::{competition::Ctx, i18n::t, phases::phase_id_text};
 
@@ -68,6 +68,26 @@ impl Phases {
         }
     }
 
+    /// Whether they are of a template, which what differs is compared with, see [`OfTemplate`].
+    fn of_template(self, ctx: Ctx) -> bool {
+        match self {
+            Self::Added => ctx
+                .session
+                .peek()
+                .based_on(&ctx.translator.peek())
+                .is_some(),
+            Self::Template(_) => true,
+        }
+    }
+
+    /// Whether their teams differ from what is expected of them, see [`Self::dyp`].
+    fn dyp_differs(self, ctx: Ctx) -> bool {
+        match self {
+            Self::Added => ctx.session.read().dyp_differs(),
+            Self::Template(template) => template.read().dyp_differs(),
+        }
+    }
+
     /// Sets the match format `form` answers on them; why not, if refused, for `error` to show
     /// where the session does not.
     fn set_match_format(self, ctx: Ctx, form: &PhaseForm, mut error: Signal<Option<Text>>) {
@@ -103,7 +123,9 @@ impl Phases {
 pub(super) fn CompetitionSettings(phases: Phases, disabled: bool) -> Element {
     let ctx = use_context::<Ctx>();
     let error = use_signal(|| None::<Text>);
+    use_context_provider(|| OfTemplate(phases.of_template(ctx)));
     let match_formats = phases.match_formats(ctx);
+    let dyp_mark = phases.dyp_differs(ctx).then_some(Mark::Differs);
     let dyp = phases.dyp(ctx);
     let tr = ctx.translator.read();
     rsx! {
@@ -147,6 +169,7 @@ pub(super) fn CompetitionSettings(phases: Phases, disabled: bool) -> Element {
                             " "
                             {tr.get("dyp")}
                         }
+                        MarkDot { id: "dyp-mark", subject: tr.get("dyp"), mark: dyp_mark }
                     }
                 },
                 None => rsx! {},
@@ -320,6 +343,11 @@ pub(super) fn BasicFieldsOf(
                                 None => tr.get("basic-of-registration"),
                             }
                         }
+                    }
+                    MarkDot {
+                        id: format!("basic-source-{}-{index}-mark", phase_id_text(phase)),
+                        subject: t!(tr, "source-of", number = index + 1),
+                        mark: row.mark,
                     }
                     if let Some(rejected) = &row.to_rejected {
                         " "

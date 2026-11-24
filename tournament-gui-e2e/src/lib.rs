@@ -1510,6 +1510,27 @@ impl Gui {
         Ok(())
     }
 
+    /// Names the phase named `phase`, one of several forms shown at once, `name` instead.
+    pub async fn rename_in_phase(&self, phase: &str, name: &str) -> WebDriverResult<()> {
+        let input = self
+            .driver
+            .query(By::XPath(format!(
+                "//ol/li[*[self::h3 or self::h4][{}='{phase}']]\
+                 //input[substring(@id, string-length(@id) - string-length('-field-name') + 1) \
+                 = '-field-name']",
+                without_isolation_marks("normalize-space()")
+            )))
+            .first()
+            .await?;
+        self.scroll_to_middle(&input).await?;
+        input.send_keys(Key::Control + "a").await?;
+        input.send_keys(name).await?;
+        Page::pause().await;
+        input.send_keys(Key::Tab).await?;
+        Page::pause().await;
+        Ok(())
+    }
+
     /// Waits until the choice of how a competition without phases is played is shown, if
     /// `shown`, or else gone.
     ///

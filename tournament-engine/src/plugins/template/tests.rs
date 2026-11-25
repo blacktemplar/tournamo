@@ -4,7 +4,7 @@ use uuid::Uuid;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use super::*;
-use crate::CompetitionStateMachine;
+use crate::{CompetitionStateMachine, EntryMeta};
 
 /// A test over the catalog, so that it covers every template registered.
 #[test]
@@ -29,7 +29,7 @@ fn every_template_expands_into_phases_added_one_after_the_other() {
         assert_eq!(phases.len(), template.phases().len(), "{}", entry.id());
         for phase in phases {
             machine
-                .apply_new(phase.into())
+                .apply_new(phase.into(), EntryMeta::default())
                 .unwrap_or_else(|error| panic!("a phase of {} is added: {error}", entry.id()));
         }
     }

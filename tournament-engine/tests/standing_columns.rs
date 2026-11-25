@@ -5,7 +5,7 @@ use plugin_factory::{Phrase, Plugin, PluginType, catalog::AnyAxis, compatibility
 use serde::{Deserialize, Serialize};
 use tournament_engine::{
     AddEntrant, AddPhase, Bye, Columns, CompetitionStateMachine, CompetitionStateMachineExt,
-    DivisionData, Entrant, EntrantId, Match, MatchResult, Phase, PhaseId, PhasePlugins,
+    DivisionData, Entrant, EntrantId, EntryMeta, Match, MatchResult, Phase, PhaseId, PhasePlugins,
     PhasePluginsBuilder, RankingId, ReportMatchResult, Score, Seed, SetCompetitionSeed,
     StartCompetition, Table,
     entities::columns::{Rule, by_rule},
@@ -63,13 +63,20 @@ fn groups() -> PhasePlugins {
 fn with_phase(phase: AddPhase) -> CompetitionStateMachine {
     let mut machine = CompetitionStateMachine::default();
     machine
-        .apply_new(SetCompetitionSeed::new(Seed::new(*b"columns-test")).into())
+        .apply_new(
+            SetCompetitionSeed::new(Seed::new(*b"columns-test")).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
     for entrant in 0..4 {
         let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-        machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
+        machine
+            .apply_new(AddEntrant::new(entrant).into(), EntryMeta::default())
+            .unwrap();
     }
-    machine.apply_new(phase.into()).unwrap();
+    machine
+        .apply_new(phase.into(), EntryMeta::default())
+        .unwrap();
     machine
 }
 
@@ -207,12 +214,15 @@ fn columns_keep_only_what_differs_from_the_rule() {
 fn the_columns_of_a_phase_with_results_change_without_a_conflict() {
     let mut machine = with_phase(AddPhase::new(phase_id(), groups()));
     machine
-        .apply_new(StartCompetition::default().into())
+        .apply_new(StartCompetition::default().into(), EntryMeta::default())
         .unwrap();
     let division = &phase(&machine).divisions()[0];
     let first = division.data().matches().values().next().unwrap().id();
     machine
-        .apply_new(ReportMatchResult::new(phase_id(), first, MatchResult::AWins).into())
+        .apply_new(
+            ReportMatchResult::new(phase_id(), first, MatchResult::AWins).into(),
+            EntryMeta::default(),
+        )
         .unwrap();
     let mut history = SessionHistory::new();
     let columns = showing(Columns::new(), WDL, Table::Division, false);
@@ -221,6 +231,7 @@ fn the_columns_of_a_phase_with_results_change_without_a_conflict() {
         .reconfigure_phase(
             &mut history,
             AddPhase::new(phase_id(), groups()).with_columns(columns.clone()),
+            EntryMeta::default(),
         )
         .unwrap()
         .expect("the columns changed");
@@ -233,7 +244,8 @@ fn the_columns_of_a_phase_with_results_change_without_a_conflict() {
     assert!(matches!(
         machine.reconfigure_phase(
             &mut history,
-            AddPhase::new(phase_id(), groups()).with_columns(columns)
+            AddPhase::new(phase_id(), groups()).with_columns(columns),
+            EntryMeta::default()
         ),
         Ok(None)
     ));

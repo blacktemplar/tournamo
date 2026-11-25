@@ -809,6 +809,7 @@ fn what_does_not_replay_into_a_competition_is_not_loaded() {
     let undo_of_nothing = serde_json::json!({
         "id": Uuid::from_u128(2),
         "kind": { "Undo": Uuid::from_u128(3) },
+        "meta": { "at": null },
     });
     write(serde_json::json!([seed, undo_of_nothing]));
     assert!(matches!(

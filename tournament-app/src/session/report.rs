@@ -114,8 +114,9 @@ impl Session {
         let (index, division, _) = self.match_of(phase, id).ok_or(ReportError::UnknownMatch)?;
         let matches_before = division.data().matches().len();
         let report = ReportMatchResult::of(phase, id, contest).ok_or(ReportError::Undecided)?;
+        let meta = self.meta();
         self.history
-            .apply_new(&mut self.machine, report.into())
+            .apply_new(&mut self.machine, report.into(), meta)
             .map_err(|error| {
                 refused(error, ReportError::Rejected, |refusal| match refusal {
                     Refusal::MatchFinished => Some(ReportError::AlreadyFinished),
@@ -157,8 +158,9 @@ impl Session {
         };
         let row = self.match_row(phase, index, division, r#match);
         let matches_before = division.data().matches().len();
+        let meta = self.meta();
         self.machine
-            .undo_match_result(&mut self.history, phase, id)
+            .undo_match_result(&mut self.history, phase, id, meta)
             .map_err(|error| match error {
                 UndoMatchResultError::NotReported => UndoReportError::NotReported,
                 UndoMatchResultError::Rejected(_) => self.undo_refusal(phase, id),
@@ -242,8 +244,9 @@ impl Session {
         }
         let report = || ReportMatchResult::of(phase, id, form.report());
         let replacement = report().ok_or(EditReportError::Undecided)?;
+        let meta = self.meta();
         self.machine
-            .replace_match_result(&mut self.history, replacement)
+            .replace_match_result(&mut self.history, replacement, meta)
             .map_err(|error| match error {
                 ReplaceMatchResultError::NotReported => EditReportError::NotReported,
                 ReplaceMatchResultError::Refused(error) => match Refusal::of(&error) {

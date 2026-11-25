@@ -4214,6 +4214,7 @@ dependencies = [
  "fluent-syntax",
  "getrandom 0.4.3",
  "indexmap",
+ "js-sys",
  "plugin-factory",
  "serde",
  "serde_json",
@@ -4584,8 +4585,8 @@ dependencies = [
 
 [[package]]
 name = "undoable-state-machine"
-version = "0.4.0"
-source = "git+https://github.com/blacktemplar/undoable-state-machine?tag=v0.4.0#b42be9a7805387cc6a1ed5a8c5c3f8f69a502d67"
+version = "0.5.0"
+source = "git+https://github.com/blacktemplar/undoable-state-machine?tag=v0.5.0#d321d588fc57e661c7a39add1c466fe69cc9d89c"
 dependencies = [
  "serde",
  "uuid",

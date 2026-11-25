@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use tournament_engine::{
-    Competition, CompetitionStateMachine, CompetitionTransition, map::IdAble as _,
+    Competition, CompetitionStateMachine, CompetitionTransition, EntryMeta, map::IdAble as _,
     undoable_state_machine::LogEntry, uuid::Uuid,
 };
 
@@ -236,4 +236,4 @@ async fn read<S: Storage>(storage: &S, key: CompetitionKey) -> Result<Stored, Lo
 }
 
 /// A stored record as a session reads it: the entries of its log, not replayed yet.
-type Record = File<Vec<LogEntry<CompetitionTransition>>, People>;
+type Record = File<Vec<LogEntry<CompetitionTransition, EntryMeta>>, People>;

@@ -11,6 +11,7 @@
 //!
 //! The crate builds for WebAssembly, where the GUI runs it.
 
+mod clock;
 pub mod error;
 pub mod file;
 pub mod form;

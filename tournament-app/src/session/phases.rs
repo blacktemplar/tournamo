@@ -235,8 +235,9 @@ impl Session {
         {
             return Err(refusal);
         }
+        let meta = self.meta();
         self.history
-            .apply_new(&mut self.machine, StartPhase::new(id).into())
+            .apply_new(&mut self.machine, StartPhase::new(id).into(), meta)
             .map_err(|error| {
                 let error = rejection(error);
                 match error.downcast_ref::<Engine>() {
@@ -361,8 +362,9 @@ impl Session {
         if let Some(refusal) = self.remove_phase_refusal(id) {
             return Err(refusal);
         }
+        let meta = self.meta();
         self.machine
-            .remove_phase(&mut self.history, id)
+            .remove_phase(&mut self.history, id, meta)
             .map_err(|error| match error {
                 EngineRemovePhaseError::NotAdded => RemovePhaseError::NoSuchPhase,
                 EngineRemovePhaseError::Started => RemovePhaseError::Started,
@@ -398,8 +400,9 @@ impl Session {
         if self.phase(id).is_none() {
             return Err(UnstartPhaseError::NoSuchPhase);
         }
+        let meta = self.meta();
         self.machine
-            .unstart_phase(&mut self.history, id)
+            .unstart_phase(&mut self.history, id, meta)
             .map_err(|error| self.unstart_phase_error(error))?;
         Ok(())
     }

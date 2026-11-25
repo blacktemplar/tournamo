@@ -102,10 +102,12 @@ impl Session {
             .iter()
             .map(|_| EntrantId::new(Uuid::new_v4()))
             .collect();
+        let meta = self.meta();
         let entries = ids.iter().map(|id| {
             LogEntry::new(
                 TransitionId::new(),
                 LogEntryKind::Apply(AddEntrant::new(Entrant::new(*id)).into()),
+                meta,
             )
         });
         // All names are checked first. The engine accepts adding the first entrant exactly when it
@@ -204,8 +206,9 @@ impl Session {
     /// # Errors
     /// Returns an error if there is no such entrant, or the competition has started.
     pub fn remove_entrant(&mut self, id: EntrantId) -> Result<(), RemoveEntrantError> {
+        let meta = self.meta();
         self.history
-            .apply_new(&mut self.machine, RemoveEntrant::new(id).into())
+            .apply_new(&mut self.machine, RemoveEntrant::new(id).into(), meta)
             .map_err(|error| {
                 refused(
                     error,

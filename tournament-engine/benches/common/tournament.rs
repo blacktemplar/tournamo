@@ -9,8 +9,8 @@ use std::sync::LazyLock;
 use itertools::Itertools;
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use tournament_engine::{
-    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, MatchId, MatchResult,
-    PhaseId, PhasePluginsBuilder, ReportMatchResult, Score, Seed, SetCompetitionSeed,
+    AddEntrant, AddPhase, CompetitionStateMachine, Entrant, EntrantId, EntryMeta, MatchId,
+    MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult, Score, Seed, SetCompetitionSeed,
     StartCompetition,
     plugins::{metrics_calculator::*, phase_format::RandomRounds},
     uuid::Uuid,
@@ -75,11 +75,15 @@ fn reporting_schedule(sm: &CompetitionStateMachine) -> Vec<(MatchId, MatchResult
 /// Buchholz of Buchholz, starts the competition and finally reports the result of every match.
 pub fn run_tournament(entrants: usize) -> CompetitionStateMachine {
     let mut sm = CompetitionStateMachine::default();
-    sm.apply_new(SetCompetitionSeed::new(SEED).into()).unwrap();
+    sm.apply_new(SetCompetitionSeed::new(SEED).into(), EntryMeta::default())
+        .unwrap();
     for _ in 0..entrants {
         let id = EntrantId::new(Uuid::new_v4());
-        sm.apply_new(AddEntrant::new(Entrant::new(id)).into())
-            .unwrap();
+        sm.apply_new(
+            AddEntrant::new(Entrant::new(id)).into(),
+            EntryMeta::default(),
+        )
+        .unwrap();
     }
     let plugins = PhasePluginsBuilder::new()
         .format(RandomRounds::new(ROUNDS))
@@ -95,14 +99,21 @@ pub fn run_tournament(entrants: usize) -> CompetitionStateMachine {
         .add_metric(BuchholzOfBuchholzCalculator)
         .build()
         .unwrap();
-    sm.apply_new(AddPhase::new(phase_id(), plugins).into())
-        .unwrap();
+    sm.apply_new(
+        AddPhase::new(phase_id(), plugins).into(),
+        EntryMeta::default(),
+    )
+    .unwrap();
     // this creates the rankings, initializes all metrics and schedules the matches of all rounds
-    sm.apply_new(StartCompetition::default().into()).unwrap();
+    sm.apply_new(StartCompetition::default().into(), EntryMeta::default())
+        .unwrap();
     // every single result updates all metrics
     for (match_id, result) in reporting_schedule(&sm) {
-        sm.apply_new(ReportMatchResult::new(phase_id(), match_id, result).into())
-            .unwrap();
+        sm.apply_new(
+            ReportMatchResult::new(phase_id(), match_id, result).into(),
+            EntryMeta::default(),
+        )
+        .unwrap();
     }
     sm
 }

@@ -15,6 +15,7 @@ use crate::{
 
 pub mod add_entrant;
 pub mod add_phase;
+pub mod entry_meta;
 pub mod remove_entrant;
 pub mod report_match_result;
 pub mod set_competition_seed;
@@ -23,6 +24,7 @@ pub mod start_phase;
 
 pub use add_entrant::{AddEntrant, AddEntrantError};
 pub use add_phase::{AddPhase, AddPhaseError};
+pub use entry_meta::{EntryMeta, Timestamp};
 pub use remove_entrant::{RemoveEntrant, RemoveEntrantError};
 pub use report_match_result::{ReportMatchResult, ReportMatchResultError};
 pub use set_competition_seed::SetCompetitionSeed;
@@ -102,7 +104,8 @@ from_transitions!(
     StartPhase
 );
 
-/// The state machine of a competition, driven by transitions that can be persisted.
+/// The state machine of a competition, driven by transitions that can be persisted, each entry of
+/// its log recording when it was appended ([`EntryMeta`]).
 ///
 /// Serializes as its append-only log, undo entries included. Deserializing replays that log and
 /// recomputes [`StateMachine::current`] from it rather than reading a stored copy, so a log that
@@ -110,7 +113,7 @@ from_transitions!(
 ///
 /// This is the persistence path that keeps the history and therefore undo and redo. The other one
 /// is a snapshot of [`StateMachine::current`] alone, which is smaller and cheaper to load.
-pub type CompetitionStateMachine = StateMachine<Competition, CompetitionTransition>;
+pub type CompetitionStateMachine = StateMachine<Competition, CompetitionTransition, EntryMeta>;
 
 /// A transition that only applies before the competition starts was applied after it started.
 #[derive(Debug, Error)]
@@ -241,6 +244,8 @@ pub enum ConflictsError {
 /// is all [`CompetitionStateMachine`] itself takes; finding those entries, and what a change of
 /// them would conflict with.
 ///
+/// Each of them appending an entry to the log takes the [`EntryMeta`] of that entry.
+///
 /// A transition is applied by [`StateMachine::apply_new`], or, as an action of a session, by
 /// [`SessionHistory::apply_new`], so that [`SessionHistory::undo_last`] and
 /// [`SessionHistory::redo_last`] undo and redo it. A [`SetCompetitionSeed`] is better applied
@@ -262,6 +267,7 @@ pub trait CompetitionStateMachineExt {
     /// # Examples
     /// ```
     /// # use tournament_engine::{
+    /// #     EntryMeta, Timestamp,
     /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
     /// #     EntrantId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult, Seed,
     /// #     SetCompetitionSeed, StartCompetition,
@@ -269,14 +275,15 @@ pub trait CompetitionStateMachineExt {
     /// # };
     /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
     /// # let mut machine = CompetitionStateMachine::default();
-    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into())?;
+    /// # let meta = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_000_000));
+    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into(), meta)?;
     /// # for entrant in 0..4 {
     /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-    /// #     machine.apply_new(AddEntrant::new(entrant).into())?;
+    /// #     machine.apply_new(AddEntrant::new(entrant).into(), meta)?;
     /// # }
     /// # let plugins = PhasePluginsBuilder::new().build()?;
-    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition::default().into())?;
+    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into(), meta)?;
+    /// # machine.apply_new(StartCompetition::default().into(), meta)?;
     /// // a round robin between four entrants, with the first and the last match reported
     /// let matches: Vec<_> = machine.current().phases()[&phase_id].divisions()[0]
     ///     .data()
@@ -287,11 +294,12 @@ pub trait CompetitionStateMachineExt {
     /// for index in [0, 5] {
     ///     machine.apply_new(
     ///         ReportMatchResult::new(phase_id, matches[index], MatchResult::AWins).into(),
+    ///         meta,
     ///     )?;
     /// }
     ///
     /// let mut history = SessionHistory::new();
-    /// machine.undo_match_result(&mut history, phase_id, matches[0])?;
+    /// machine.undo_match_result(&mut history, phase_id, matches[0], meta)?;
     ///
     /// let phase = machine.current().phases()[&phase_id].divisions()[0].data();
     /// assert_eq!(phase.matches()[&matches[0]].result(), None);
@@ -306,6 +314,7 @@ pub trait CompetitionStateMachineExt {
         history: &mut SessionHistory,
         phase_id: PhaseId,
         match_id: MatchId,
+        meta: EntryMeta,
     ) -> Result<TransitionId, UndoMatchResultError>;
 
     /// Replaces the result reported for the match of `report` by `report`, as an action of the
@@ -328,6 +337,7 @@ pub trait CompetitionStateMachineExt {
     /// # Examples
     /// ```
     /// # use tournament_engine::{
+    /// #     EntryMeta, Timestamp,
     /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
     /// #     EntrantId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult, Seed,
     /// #     SetCompetitionSeed, StartCompetition,
@@ -335,14 +345,15 @@ pub trait CompetitionStateMachineExt {
     /// # };
     /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
     /// # let mut machine = CompetitionStateMachine::default();
-    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into())?;
+    /// # let meta = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_000_000));
+    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into(), meta)?;
     /// # for entrant in 0..4 {
     /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-    /// #     machine.apply_new(AddEntrant::new(entrant).into())?;
+    /// #     machine.apply_new(AddEntrant::new(entrant).into(), meta)?;
     /// # }
     /// # let plugins = PhasePluginsBuilder::new().build()?;
-    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition::default().into())?;
+    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into(), meta)?;
+    /// # machine.apply_new(StartCompetition::default().into(), meta)?;
     /// // a round robin between four entrants, its first match won by A
     /// let first = *machine.current().phases()[&phase_id].divisions()[0]
     ///     .data()
@@ -350,11 +361,14 @@ pub trait CompetitionStateMachineExt {
     ///     .keys()
     ///     .next()
     ///     .expect("a round robin has matches");
-    /// machine.apply_new(ReportMatchResult::new(phase_id, first, MatchResult::AWins).into())?;
+    /// machine.apply_new(
+    ///     ReportMatchResult::new(phase_id, first, MatchResult::AWins).into(),
+    ///     meta,
+    /// )?;
     ///
     /// let mut history = SessionHistory::new();
     /// let won_by_b = ReportMatchResult::new(phase_id, first, MatchResult::BWins);
-    /// machine.replace_match_result(&mut history, won_by_b)?;
+    /// machine.replace_match_result(&mut history, won_by_b, meta)?;
     ///
     /// let result = |machine: &CompetitionStateMachine| {
     ///     machine.current().phases()[&phase_id].divisions()[0]
@@ -363,7 +377,7 @@ pub trait CompetitionStateMachineExt {
     ///         .result()
     /// };
     /// assert_eq!(result(&machine), Some(MatchResult::BWins));
-    /// history.undo_last(&mut machine)?;
+    /// history.undo_last(&mut machine, meta)?;
     /// assert_eq!(result(&machine), Some(MatchResult::AWins));
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -371,6 +385,7 @@ pub trait CompetitionStateMachineExt {
         &mut self,
         history: &mut SessionHistory,
         report: ReportMatchResult,
+        meta: EntryMeta,
     ) -> Result<Option<TransitionId>, ReplaceMatchResultError>;
 
     /// Reconfigures the phase `phase.id()` as if it had been added by `phase`, as an action of
@@ -395,6 +410,7 @@ pub trait CompetitionStateMachineExt {
     /// # Examples
     /// ```
     /// # use tournament_engine::{
+    /// #     EntryMeta, Timestamp,
     /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
     /// #     EntrantId, PhaseId, PhasePluginsBuilder, Seed, SetCompetitionSeed, StartCompetition,
     /// #     plugin_factory::config::PluginConfig, plugins::phase_format::RandomRounds,
@@ -402,14 +418,15 @@ pub trait CompetitionStateMachineExt {
     /// # };
     /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
     /// # let mut machine = CompetitionStateMachine::default();
-    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into())?;
+    /// # let meta = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_000_000));
+    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into(), meta)?;
     /// # for entrant in 0..4 {
     /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-    /// #     machine.apply_new(AddEntrant::new(entrant).into())?;
+    /// #     machine.apply_new(AddEntrant::new(entrant).into(), meta)?;
     /// # }
     /// # let plugins = PhasePluginsBuilder::new().build()?;
-    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition::default().into())?;
+    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into(), meta)?;
+    /// # machine.apply_new(StartCompetition::default().into(), meta)?;
     /// // a started round robin, changed into two random rounds of it
     /// let competition = machine.current();
     /// let phase = &competition.phases()[&phase_id];
@@ -424,7 +441,7 @@ pub trait CompetitionStateMachineExt {
     ///     .expect("the plugins fit together");
     ///
     /// let mut history = SessionHistory::new();
-    /// machine.reconfigure_phase(&mut history, AddPhase::new(phase_id, plugins))?;
+    /// machine.reconfigure_phase(&mut history, AddPhase::new(phase_id, plugins), meta)?;
     ///
     /// // the phase was started in its new format: two rounds of two matches
     /// let phase = &machine.current().phases()[&phase_id];
@@ -435,7 +452,7 @@ pub trait CompetitionStateMachineExt {
     /// assert_eq!(phase.divisions()[0].data().matches().len(), 4);
     ///
     /// // undoing the reconfiguration plays the phase as a round robin again
-    /// history.undo_last(&mut machine)?;
+    /// history.undo_last(&mut machine, meta)?;
     /// let phase = &machine.current().phases()[&phase_id];
     /// assert_eq!(format!("{:?}", phase.plugins().format()), "RoundRobin");
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -444,6 +461,7 @@ pub trait CompetitionStateMachineExt {
         &mut self,
         history: &mut SessionHistory,
         phase: AddPhase,
+        meta: EntryMeta,
     ) -> Result<Option<TransitionId>, ReconfigurePhaseError>;
 
     /// Removes the phase `phase_id` by undoing the [`AddPhase`] in effect that added it, as an
@@ -459,6 +477,7 @@ pub trait CompetitionStateMachineExt {
         &mut self,
         history: &mut SessionHistory,
         phase_id: PhaseId,
+        meta: EntryMeta,
     ) -> Result<TransitionId, RemovePhaseError>;
 
     /// Undoes the start of the phase `phase_id` by undoing the transition in effect that started
@@ -480,6 +499,7 @@ pub trait CompetitionStateMachineExt {
         &mut self,
         history: &mut SessionHistory,
         phase_id: PhaseId,
+        meta: EntryMeta,
     ) -> Result<TransitionId, UnstartPhaseError>;
 
     /// The id of the log entry in effect that started the phase `phase_id`, which
@@ -516,6 +536,7 @@ pub trait CompetitionStateMachineExt {
     /// # Examples
     /// ```
     /// # use tournament_engine::{
+    /// #     EntryMeta, Timestamp,
     /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
     /// #     EntrantId, MatchId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult,
     /// #     Seed, SetCompetitionSeed, StartCompetition,
@@ -525,16 +546,17 @@ pub trait CompetitionStateMachineExt {
     /// # };
     /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
     /// # let mut machine = CompetitionStateMachine::default();
-    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into())?;
+    /// # let meta = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_000_000));
+    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into(), meta)?;
     /// # for entrant in 0..4 {
     /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-    /// #     machine.apply_new(AddEntrant::new(entrant).into())?;
+    /// #     machine.apply_new(AddEntrant::new(entrant).into(), meta)?;
     /// # }
     /// # let plugins = PhasePluginsBuilder::new()
     /// #     .format(SingleElimination::new())
     /// #     .build()?;
-    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into())?;
-    /// # machine.apply_new(StartCompetition::default().into())?;
+    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into(), meta)?;
+    /// # machine.apply_new(StartCompetition::default().into(), meta)?;
     /// # let matches = |machine: &CompetitionStateMachine| -> Vec<MatchId> {
     /// #     let phase = &machine.current().phases()[&phase_id];
     /// #     phase.divisions()[0].data().matches().keys().copied().collect()
@@ -542,10 +564,10 @@ pub trait CompetitionStateMachineExt {
     /// // a knockout between four entrants: both semifinals reported, then the final
     /// let semifinals = matches(&machine);
     /// let report = |match_id, result| ReportMatchResult::new(phase_id, match_id, result).into();
-    /// let first = machine.apply_new(report(semifinals[0], MatchResult::AWins))?;
-    /// machine.apply_new(report(semifinals[1], MatchResult::AWins))?;
+    /// let first = machine.apply_new(report(semifinals[0], MatchResult::AWins), meta)?;
+    /// machine.apply_new(report(semifinals[1], MatchResult::AWins), meta)?;
     /// let r#final = matches(&machine)[2];
-    /// let final_reported = machine.apply_new(report(r#final, MatchResult::BWins))?;
+    /// let final_reported = machine.apply_new(report(r#final, MatchResult::BWins), meta)?;
     ///
     /// // without the first semifinal, the final is not played
     /// assert_eq!(
@@ -567,12 +589,13 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         history: &mut SessionHistory,
         phase_id: PhaseId,
         match_id: MatchId,
+        meta: EntryMeta,
     ) -> Result<TransitionId, UndoMatchResultError> {
         let target = self
             .reported_by(phase_id, match_id)
             .ok_or(UndoMatchResultError::NotReported)?;
         let id = TransitionId::new();
-        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
+        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target), meta))?;
         Ok(id)
     }
 
@@ -580,6 +603,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         &mut self,
         history: &mut SessionHistory,
         report: ReportMatchResult,
+        meta: EntryMeta,
     ) -> Result<Option<TransitionId>, ReplaceMatchResultError> {
         let target = self
             .reported_by(report.phase_id(), report.match_id())
@@ -595,7 +619,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         history
             .apply(
                 self,
-                LogEntry::new(id, LogEntryKind::Replace { target, with }),
+                LogEntry::new(id, LogEntryKind::Replace { target, with }, meta),
             )
             .map_err(|error| match error {
                 // the state machine names a replacement that does not apply by the replacing entry
@@ -611,6 +635,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         &mut self,
         history: &mut SessionHistory,
         phase: AddPhase,
+        meta: EntryMeta,
     ) -> Result<Option<TransitionId>, ReconfigurePhaseError> {
         let target = self
             .added_by(phase.id())
@@ -632,7 +657,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         let with = phase.with_template(template).into();
         history.apply(
             self,
-            LogEntry::new(id, LogEntryKind::Replace { target, with }),
+            LogEntry::new(id, LogEntryKind::Replace { target, with }, meta),
         )?;
         Ok(Some(id))
     }
@@ -641,6 +666,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         &mut self,
         history: &mut SessionHistory,
         phase_id: PhaseId,
+        meta: EntryMeta,
     ) -> Result<TransitionId, RemovePhaseError> {
         let target = self.added_by(phase_id).ok_or(RemovePhaseError::NotAdded)?;
         let competition = self.current();
@@ -665,7 +691,7 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
             return Err(RemovePhaseError::InUse(users));
         }
         let id = TransitionId::new();
-        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
+        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target), meta))?;
         Ok(id)
     }
 
@@ -673,10 +699,11 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         &mut self,
         history: &mut SessionHistory,
         phase_id: PhaseId,
+        meta: EntryMeta,
     ) -> Result<TransitionId, UnstartPhaseError> {
         let target = self.started_by(phase_id)?;
         let id = TransitionId::new();
-        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target)))?;
+        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target), meta))?;
         Ok(id)
     }
 
@@ -830,7 +857,11 @@ mod tests {
     fn undo(machine: &mut CompetitionStateMachine, target: TransitionId) -> TransitionId {
         let id = TransitionId::new();
         machine
-            .apply(LogEntry::new(id, LogEntryKind::Undo(target)))
+            .apply(LogEntry::new(
+                id,
+                LogEntryKind::Undo(target),
+                EntryMeta::default(),
+            ))
             .expect("the undo must be accepted");
         id
     }
@@ -864,18 +895,26 @@ mod tests {
     fn started(entrants: u128, plugins: PhasePluginsBuilder) -> CompetitionStateMachine {
         let mut machine = CompetitionStateMachine::default();
         machine
-            .apply_new(SetCompetitionSeed::new(Seed::new(*b"undo-test!!!")).into())
+            .apply_new(
+                SetCompetitionSeed::new(Seed::new(*b"undo-test!!!")).into(),
+                EntryMeta::default(),
+            )
             .unwrap();
         for entrant in 0..entrants {
             let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
-            machine.apply_new(AddEntrant::new(entrant).into()).unwrap();
+            machine
+                .apply_new(AddEntrant::new(entrant).into(), EntryMeta::default())
+                .unwrap();
         }
         let plugins = plugins.build().unwrap();
         machine
-            .apply_new(AddPhase::new(phase_id(), plugins).into())
+            .apply_new(
+                AddPhase::new(phase_id(), plugins).into(),
+                EntryMeta::default(),
+            )
             .unwrap();
         machine
-            .apply_new(StartCompetition::default().into())
+            .apply_new(StartCompetition::default().into(), EntryMeta::default())
             .unwrap();
         machine
     }
@@ -905,7 +944,10 @@ mod tests {
     #[track_caller]
     fn report(machine: &mut CompetitionStateMachine, match_id: MatchId) -> TransitionId {
         machine
-            .apply_new(ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into())
+            .apply_new(
+                ReportMatchResult::new(phase_id(), match_id, MatchResult::AWins).into(),
+                EntryMeta::default(),
+            )
             .expect("the match must be reportable")
     }
 
@@ -935,12 +977,19 @@ mod tests {
         let mut machine = CompetitionStateMachine::default();
         let plugins = PhasePluginsBuilder::new().build().unwrap();
         machine
-            .apply_new(AddPhase::new(phase_id(), plugins.clone()).into())
+            .apply_new(
+                AddPhase::new(phase_id(), plugins.clone()).into(),
+                EntryMeta::default(),
+            )
             .unwrap();
 
         let second = AddPhase::new(PhaseId::new(Uuid::from_u128(2)), plugins);
 
-        assert!(machine.apply_new(second.into()).is_err());
+        assert!(
+            machine
+                .apply_new(second.into(), EntryMeta::default())
+                .is_err()
+        );
         assert_eq!(machine.current().phases().len(), 1);
     }
 
@@ -953,11 +1002,11 @@ mod tests {
         report(&mut machine, first);
         let mut history = SessionHistory::new();
         machine
-            .undo_match_result(&mut history, phase_id(), first)
+            .undo_match_result(&mut history, phase_id(), first, EntryMeta::default())
             .unwrap();
 
         history
-            .undo_last(&mut machine)
+            .undo_last(&mut machine, EntryMeta::default())
             .expect("the undo of the result is an action of the session");
 
         assert_eq!(result_of(&machine, first), Some(MatchResult::AWins));
@@ -975,7 +1024,12 @@ mod tests {
         report(&mut machine, second);
 
         machine
-            .undo_match_result(&mut SessionHistory::new(), phase_id(), first)
+            .undo_match_result(
+                &mut SessionHistory::new(),
+                phase_id(),
+                first,
+                EntryMeta::default(),
+            )
             .expect("the report of the first semifinal must be undoable");
 
         assert_eq!(result_of(&machine, first), None);
@@ -993,7 +1047,12 @@ mod tests {
         let open = matches(&machine)[0];
 
         let error = machine
-            .undo_match_result(&mut SessionHistory::new(), phase_id(), open)
+            .undo_match_result(
+                &mut SessionHistory::new(),
+                phase_id(),
+                open,
+                EntryMeta::default(),
+            )
             .expect_err("an open match must not be undoable");
 
         assert!(matches!(error, UndoMatchResultError::NotReported));
@@ -1006,12 +1065,12 @@ mod tests {
         report(&mut machine, first);
         let mut history = SessionHistory::new();
         machine
-            .undo_match_result(&mut history, phase_id(), first)
+            .undo_match_result(&mut history, phase_id(), first, EntryMeta::default())
             .unwrap();
         let log_len = machine.log().len();
 
         let error = machine
-            .undo_match_result(&mut history, phase_id(), first)
+            .undo_match_result(&mut history, phase_id(), first, EntryMeta::default())
             .expect_err("an undone report must not be undoable again");
 
         assert!(matches!(error, UndoMatchResultError::NotReported));
@@ -1034,7 +1093,12 @@ mod tests {
         assert_eq!(result_of(&machine, first), Some(MatchResult::AWins));
 
         let id = machine
-            .undo_match_result(&mut SessionHistory::new(), phase_id(), first)
+            .undo_match_result(
+                &mut SessionHistory::new(),
+                phase_id(),
+                first,
+                EntryMeta::default(),
+            )
             .unwrap();
 
         assert_eq!(result_of(&machine, first), None);
@@ -1059,7 +1123,12 @@ mod tests {
         let log_len = machine.log().len();
 
         let error = machine
-            .undo_match_result(&mut SessionHistory::new(), phase_id(), semifinals[0])
+            .undo_match_result(
+                &mut SessionHistory::new(),
+                phase_id(),
+                semifinals[0],
+                EntryMeta::default(),
+            )
             .expect_err("the final depends on the semifinal, so undoing it must be rejected");
 
         assert!(matches!(error, UndoMatchResultError::Rejected(_)));
@@ -1102,10 +1171,14 @@ mod tests {
             panic!("a knockout between four entrants starts with two semifinals");
         };
         for semifinal in [first, second] {
-            machine.apply_new(scored(semifinal, 3, 1).into()).unwrap();
+            machine
+                .apply_new(scored(semifinal, 3, 1).into(), EntryMeta::default())
+                .unwrap();
         }
         let r#final = matches(&machine)[2];
-        machine.apply_new(scored(r#final, 3, 0).into()).unwrap();
+        machine
+            .apply_new(scored(r#final, 3, 0).into(), EntryMeta::default())
+            .unwrap();
         (machine, [first, second], r#final)
     }
 
@@ -1117,16 +1190,18 @@ mod tests {
         let mut history = SessionHistory::new();
 
         machine
-            .replace_match_result(&mut history, scored(first, 3, 2))
+            .replace_match_result(&mut history, scored(first, 3, 2), EntryMeta::default())
             .expect("the same winner keeps the final as it was played");
 
         assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
         assert_eq!(score_of(&machine, r#final), Some(Sides::new(3, 0)));
         history
-            .undo_last(&mut machine)
+            .undo_last(&mut machine, EntryMeta::default())
             .expect("the replacement is an action of the session");
         assert_eq!(score_of(&machine, first), Some(Sides::new(3, 1)));
-        history.redo_last(&mut machine).unwrap();
+        history
+            .redo_last(&mut machine, EntryMeta::default())
+            .unwrap();
         assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
     }
 
@@ -1136,14 +1211,16 @@ mod tests {
         let (mut machine, [first, _], _) = final_played();
         let mut history = SessionHistory::new();
         machine
-            .replace_match_result(&mut history, scored(first, 3, 2))
+            .replace_match_result(&mut history, scored(first, 3, 2), EntryMeta::default())
             .unwrap();
         machine
-            .replace_match_result(&mut history, scored(first, 3, 0))
+            .replace_match_result(&mut history, scored(first, 3, 0), EntryMeta::default())
             .unwrap();
         assert_eq!(score_of(&machine, first), Some(Sides::new(3, 0)));
 
-        history.undo_last(&mut machine).unwrap();
+        history
+            .undo_last(&mut machine, EntryMeta::default())
+            .unwrap();
 
         assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
     }
@@ -1156,7 +1233,11 @@ mod tests {
         let log_len = machine.log().len();
 
         let error = machine
-            .replace_match_result(&mut SessionHistory::new(), scored(first, 1, 3))
+            .replace_match_result(
+                &mut SessionHistory::new(),
+                scored(first, 1, 3),
+                EntryMeta::default(),
+            )
             .expect_err("the final was played by the winner reported");
 
         assert!(matches!(error, ReplaceMatchResultError::Rejected(_)));
@@ -1185,6 +1266,7 @@ mod tests {
             .replace_match_result(
                 &mut SessionHistory::new(),
                 ReportMatchResult::new(phase_id(), first, MatchResult::Draw),
+                EntryMeta::default(),
             )
             .expect_err("a knockout takes no draw");
 
@@ -1203,7 +1285,11 @@ mod tests {
         let log_len = machine.log().len();
 
         let replaced = machine
-            .replace_match_result(&mut SessionHistory::new(), scored(first, 3, 1))
+            .replace_match_result(
+                &mut SessionHistory::new(),
+                scored(first, 3, 1),
+                EntryMeta::default(),
+            )
             .unwrap();
 
         assert_eq!(replaced, None);
@@ -1219,6 +1305,7 @@ mod tests {
             .replace_match_result(
                 &mut SessionHistory::new(),
                 ReportMatchResult::new(phase_id(), open, MatchResult::AWins),
+                EntryMeta::default(),
             )
             .expect_err("an open match has no result to replace");
 
@@ -1242,6 +1329,7 @@ mod tests {
             .reconfigure_phase(
                 &mut SessionHistory::new(),
                 AddPhase::new(phase_id(), with_record.clone()),
+                EntryMeta::default(),
             )
             .unwrap()
             .expect("the plugins changed");
@@ -1276,7 +1364,8 @@ mod tests {
         assert!(matches!(
             machine.reconfigure_phase(
                 &mut SessionHistory::new(),
-                AddPhase::new(phase_id(), unchanged)
+                AddPhase::new(phase_id(), unchanged),
+                EntryMeta::default()
             ),
             Ok(None)
         ));
@@ -1291,7 +1380,8 @@ mod tests {
         assert!(matches!(
             machine.reconfigure_phase(
                 &mut SessionHistory::new(),
-                AddPhase::new(unknown, PhasePluginsBuilder::new().build().unwrap())
+                AddPhase::new(unknown, PhasePluginsBuilder::new().build().unwrap()),
+                EntryMeta::default()
             ),
             Err(ReconfigurePhaseError::NotAdded)
         ));
@@ -1314,6 +1404,7 @@ mod tests {
         let result = machine.reconfigure_phase(
             &mut SessionHistory::new(),
             AddPhase::new(phase_id(), monster_dyp),
+            EntryMeta::default(),
         );
 
         assert!(matches!(result, Err(ReconfigurePhaseError::Rejected(_))));
@@ -1330,15 +1421,19 @@ mod tests {
             .unwrap();
         let mut history = SessionHistory::new();
         machine
-            .reconfigure_phase(&mut history, AddPhase::new(phase_id(), monster_dyp.clone()))
+            .reconfigure_phase(
+                &mut history,
+                AddPhase::new(phase_id(), monster_dyp.clone()),
+                EntryMeta::default(),
+            )
             .unwrap();
 
         history
-            .undo_last(&mut machine)
+            .undo_last(&mut machine, EntryMeta::default())
             .expect("the reconfiguration is in effect");
         assert_eq!(config(&machine), knockout);
         history
-            .redo_last(&mut machine)
+            .redo_last(&mut machine, EntryMeta::default())
             .expect("the reconfiguration was undone last");
 
         assert_eq!(config(&machine), monster_dyp.config());
@@ -1356,14 +1451,18 @@ mod tests {
             .build()
             .unwrap();
         machine
-            .reconfigure_phase(&mut history, AddPhase::new(phase_id(), monster_dyp))
+            .reconfigure_phase(
+                &mut history,
+                AddPhase::new(phase_id(), monster_dyp),
+                EntryMeta::default(),
+            )
             .unwrap();
         // the teams of a Monster DYP are pairs, so the knockout never schedules this match
         let first = matches(&machine)[0];
         report(&mut machine, first);
         let log_len = machine.log().len();
 
-        let result = history.undo_last(&mut machine);
+        let result = history.undo_last(&mut machine, EntryMeta::default());
 
         assert!(matches!(
             result,
@@ -1383,7 +1482,12 @@ mod tests {
 
         assert_eq!(machine.conflicts_of(Change::Undo(first)).unwrap(), []);
         machine
-            .undo_match_result(&mut SessionHistory::new(), phase_id(), semifinals[0])
+            .undo_match_result(
+                &mut SessionHistory::new(),
+                phase_id(),
+                semifinals[0],
+                EntryMeta::default(),
+            )
             .expect("no reported result depends on the semifinal");
     }
 
@@ -1403,7 +1507,12 @@ mod tests {
         assert_eq!(machine.log().len(), log_len, "the log must stay unchanged");
         assert_eq!(result_of(&machine, semifinals[0]), Some(MatchResult::AWins));
         assert!(matches!(
-            machine.undo_match_result(&mut SessionHistory::new(), phase_id(), semifinals[0]),
+            machine.undo_match_result(
+                &mut SessionHistory::new(),
+                phase_id(),
+                semifinals[0],
+                EntryMeta::default()
+            ),
             Err(UndoMatchResultError::Rejected(_))
         ));
     }

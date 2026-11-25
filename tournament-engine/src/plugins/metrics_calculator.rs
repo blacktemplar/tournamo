@@ -103,6 +103,9 @@ impl OldMetrics {
 /// [`CalculatesMetric`]: super::facts::CalculatesMetric
 ///
 /// A calculator may keep state as a [`PhaseFormat`](super::phase_format::PhaseFormat) does.
+///
+/// The metrics a calculator calculates must not depend on the order in which the results were
+/// reported and the byes reached: the same results and byes give the same metrics in any order.
 #[axis]
 pub trait MetricsCalculator: Plugin + DynClone {
     /// The value every ranking of a phase starts out with, whose type is the metric this
@@ -201,6 +204,9 @@ dyn_clone::clone_trait_object!(MetricsCalculator);
 ///
 /// register_calculator!(MatchesPlayedCalculator);
 /// ```
+///
+/// As every [`MetricsCalculator`], it calculates the same metrics whatever the order in which the
+/// results were reported and the byes reached.
 pub trait Calculator: Debug + Clone {
     /// The metric this calculator calculates.
     type Metric: Metric;
@@ -643,5 +649,190 @@ mod tests {
         assert_eq!(shown(-3.0), "\u{2212}3");
         assert_eq!(shown(-0.5), "\u{2212}0.5");
         assert_eq!(shown(0.0), "0");
+    }
+
+    mod order {
+        use plugin_factory::catalog::PluginEntry;
+        use rand::{SeedableRng, rngs::StdRng, seq::SliceRandom};
+        #[cfg(target_arch = "wasm32")]
+        use wasm_bindgen_test::wasm_bindgen_test as test;
+
+        use super::*;
+        use crate::{
+            entities::{
+                Division, DivisionBuilder, MatchResult,
+                details::{EnteredValue, Part, Sides},
+            },
+            plugins::{
+                match_format::{BestOf, SCORE},
+                metrics_calculator::{
+                    round_of_elimination::Eliminates,
+                    test_utils::{
+                        AnnotatedMatchSpec, ByeSpec, match_id, phase_with_annotated_matches,
+                    },
+                },
+                tests::UNORDERABLE,
+            },
+            type_map::TypeMap,
+        };
+
+        /// A match of [`SCENARIO`]: its round, its teams as indices of rankings, and the score of
+        /// each game played.
+        type Played = (
+            u32,
+            &'static [usize],
+            &'static [usize],
+            &'static [(u16, u16)],
+        );
+
+        /// Six players playing wins, draws and losses, alone and in pairs, some knocked out (see
+        /// [`ELIMINATIONS`]), some with byes in between (see [`BYES`]).
+        const SCENARIO: [Played; 8] = [
+            (1, &[0], &[1], &[(21, 10), (15, 21), (21, 18)]),
+            (1, &[2], &[3], &[(21, 19), (19, 21)]),
+            (2, &[0, 2], &[4, 5], &[(12, 21), (17, 21)]),
+            (2, &[1], &[3], &[(21, 3), (21, 5)]),
+            (3, &[0], &[5], &[(10, 21), (21, 23)]),
+            (3, &[1], &[4], &[(21, 11), (11, 21)]),
+            (4, &[3], &[2], &[(21, 7), (7, 21), (21, 20)]),
+            (4, &[4], &[1], &[(20, 22), (19, 21)]),
+        ];
+
+        /// The matches of [`SCENARIO`] that knock someone out, by their index: one player twice,
+        /// in a draw nobody.
+        const ELIMINATIONS: [(usize, Eliminates); 5] = [
+            (2, Eliminates::Loser),
+            (3, Eliminates::Only(Team::B)),
+            (4, Eliminates::Loser),
+            (5, Eliminates::Loser),
+            (7, Eliminates::Only(Team::A)),
+        ];
+
+        const BYES: [ByeSpec; 5] = [(1, 4), (1, 5), (3, 2), (3, 3), (4, 0)];
+
+        /// `calculator` with every calculator of a metric it reads, however far back, each
+        /// configured with the answers its fields offer.
+        fn with_what_it_reads(calculator: &'static PluginEntry) -> Vec<Box<dyn MetricsCalculator>> {
+            let mut needed = vec![calculator];
+            let mut index = 0;
+            while let Some(entry) = needed.get(index) {
+                let read = MetricEntry::all()
+                    .into_iter()
+                    .filter(|metric| metric.is_required_by(entry))
+                    .map(|metric| metric.calculators()[0])
+                    .filter(|calculator| needed.iter().all(|entry| entry.id() != calculator.id()))
+                    .collect::<Vec<_>>();
+                needed.extend(read);
+                index += 1;
+            }
+            needed
+                .iter()
+                .map(|entry| {
+                    entry
+                        .default_config()
+                        .build::<dyn MetricsCalculator>()
+                        .unwrap()
+                })
+                .collect()
+        }
+
+        /// The division of [`SCENARIO`] calculating `calculators`, its results reported in
+        /// `order`, the indices of its matches.
+        fn played(calculators: &[Box<dyn MetricsCalculator>], order: &[usize]) -> Division {
+            let builder = calculators.iter().fold(
+                DivisionBuilder::new()
+                    .match_format(BestOf::new(3))
+                    .add_players(6),
+                |builder, calculator| builder.add_boxed_metric(calculator.clone()),
+            );
+            let matches: Vec<AnnotatedMatchSpec> = SCENARIO
+                .iter()
+                .enumerate()
+                .map(|(index, (round, a, b, _))| {
+                    let mut annotations = TypeMap::new();
+                    for (_, eliminates) in ELIMINATIONS.iter().filter(|(at, _)| *at == index) {
+                        annotations.insert(*eliminates);
+                    }
+                    ((*round, a.to_vec(), b.to_vec()), annotations)
+                })
+                .collect();
+            let mut division = phase_with_annotated_matches(builder, matches, BYES.to_vec());
+            for &index in order {
+                let (round, a, b, games) = SCENARIO[index];
+                division.report_match(match_id(&division, round, a, b), entered(games));
+            }
+            division
+        }
+
+        /// A match of `games`, decided by who won more of them, as each game is by its score.
+        fn entered(games: &[(u16, u16)]) -> Part {
+            let won =
+                |side: MatchResult| games.iter().filter(|(a, b)| decided(a, b) == side).count();
+            games.iter().fold(
+                Part::new()
+                    .with_decision(decided(&won(MatchResult::AWins), &won(MatchResult::BWins))),
+                |part, (a, b)| {
+                    let score =
+                        Sides::new(Some(EnteredValue::Count(*a)), Some(EnteredValue::Count(*b)));
+                    part.with_part(
+                        Part::new()
+                            .with_decision(decided(a, b))
+                            .with_value(SCORE, score),
+                    )
+                },
+            )
+        }
+
+        /// The result of `a` against `b`, the more winning.
+        fn decided<T: Ord>(a: &T, b: &T) -> MatchResult {
+            match a.cmp(b) {
+                Ordering::Greater => MatchResult::AWins,
+                Ordering::Less => MatchResult::BWins,
+                Ordering::Equal => MatchResult::Draw,
+            }
+        }
+
+        /// The metrics of every ranking of `division`, as saved.
+        fn metrics_of(division: &Division) -> Vec<(RankingId, serde_json::Value)> {
+            division
+                .data()
+                .rankings()
+                .values()
+                .map(|ranking| {
+                    (
+                        ranking.id(),
+                        serde_json::to_value(ranking.metrics()).unwrap(),
+                    )
+                })
+                .collect()
+        }
+
+        /// A calculator's metrics are the same whatever order the results come in, so that they
+        /// can be calculated again from the matches as the division keeps them.
+        #[test]
+        fn the_metrics_do_not_depend_on_the_order_results_are_reported_in() {
+            let forward: Vec<usize> = (0..SCENARIO.len()).collect();
+            let backward: Vec<usize> = forward.iter().rev().copied().collect();
+            let mut shuffled = forward.clone();
+            shuffled.shuffle(&mut StdRng::seed_from_u64(16));
+            let orders = [("backward", backward), ("shuffled", shuffled)];
+
+            for entry in AnyAxis::of::<dyn MetricsCalculator>().entries() {
+                if UNORDERABLE.contains(&entry.id()) {
+                    continue;
+                }
+                let calculators = with_what_it_reads(entry);
+                let expected = metrics_of(&played(&calculators, &forward));
+
+                for (name, order) in &orders {
+                    assert_eq!(
+                        metrics_of(&played(&calculators, order)),
+                        expected,
+                        "{} reported {name} ({order:?})",
+                        entry.id()
+                    );
+                }
+            }
+        }
     }
 }

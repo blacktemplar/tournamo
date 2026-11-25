@@ -131,19 +131,22 @@ fn every_ranking_of_a_losing_team_is_knocked_out() {
 }
 
 #[test]
-fn a_ranking_that_is_already_out_keeps_the_round_it_was_knocked_out_in() {
-    let mut phase = phase_with(
-        2,
-        vec![
-            eliminating_the_loser((1, vec![0], vec![1])),
-            eliminating_the_loser((2, vec![0], vec![1])),
-        ],
-    );
+fn a_ranking_knocked_out_twice_is_out_since_the_earlier_round_whichever_came_first() {
+    for rounds in [[1, 2], [2, 1]] {
+        let mut phase = phase_with(
+            2,
+            vec![
+                eliminating_the_loser((1, vec![0], vec![1])),
+                eliminating_the_loser((2, vec![0], vec![1])),
+            ],
+        );
 
-    report(&mut phase, 1, MatchResult::AWins);
-    report(&mut phase, 2, MatchResult::AWins);
+        for round in rounds {
+            report(&mut phase, round, MatchResult::AWins);
+        }
 
-    assert_eq!(metric_of(&phase, 1), out_in(1));
+        assert_eq!(metric_of(&phase, 1), out_in(1), "reported in {rounds:?}");
+    }
 }
 
 #[test]

@@ -324,6 +324,15 @@ calculator owns. A calculator depending on another (Buchholz on points) reads
 the pre-update values through `OldMetrics::of::<M>()` and the new ones in
 `DivisionData`, which is why calculators run in dependency order.
 
+**The order of the results does not matter.** Whatever the order in which the
+results were reported and the byes reached, the same results and byes give a
+calculator the same metrics (a ranking knocked out twice is out since the
+earlier round, not since the one reported first). So the metrics of a division
+can be calculated again from its matches and byes as it keeps them, e.g. after
+a result was corrected in place (issue 16), without remembering the order they
+counted in. A test plays a schedule in several orders with every registered
+calculator, each with the calculators of the metrics it reads.
+
 **A calculator states its metric as a type.** It implements `Calculator`, whose
 associated `Metric` (with its `Default` as the starting value) is what
 `after_match` and `after_bye` return, and registers with

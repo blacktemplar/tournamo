@@ -723,6 +723,10 @@ macro_rules! calculates_nothing {
 calculates_nothing!(CircularCalculator, Circular);
 calculates_nothing!(Cycling, Cycled);
 
+/// The calculators that no phase can run, as they read each other's metrics, which only exist to
+/// test that.
+pub(crate) const UNORDERABLE: [&str; 2] = [CircularCalculator::ID, Cycling::ID];
+
 #[test]
 fn calculators_requiring_each_other_cannot_be_ordered() {
     let built = PhasePluginsBuilder::new()

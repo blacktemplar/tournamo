@@ -128,8 +128,13 @@ impl PhasePluginsBuilder {
     }
 
     /// Calculates the metric of `calculator` as well.
-    pub fn add_metric(mut self, calculator: impl MetricsCalculator) -> Self {
-        self.metrics.push(Box::new(calculator));
+    pub fn add_metric(self, calculator: impl MetricsCalculator) -> Self {
+        self.add_boxed_metric(Box::new(calculator))
+    }
+
+    /// Calculates the metric of `calculator` as well, see [`Self::add_metric`].
+    pub fn add_boxed_metric(mut self, calculator: Box<dyn MetricsCalculator>) -> Self {
+        self.metrics.push(calculator);
         self
     }
 

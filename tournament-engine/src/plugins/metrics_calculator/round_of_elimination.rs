@@ -122,14 +122,14 @@ impl Calculator for RoundOfEliminationCalculator {
         r#match
             .rankings_of(loser)
             .iter()
-            // a ranking that is already out stays out since the round it was knocked out in
-            .filter(|r_id| {
-                let eliminated = phase_data.rankings()[*r_id].metric::<RoundOfElimination>();
-                eliminated.unwrap().0.is_none()
-            })
-            .map(|r_id| {
-                let eliminated = RoundOfElimination(Some(r#match.round()));
-                (*r_id, eliminated)
+            // a ranking knocked out twice is out since the earlier round, whichever result came
+            // first
+            .filter_map(|r_id| {
+                let out = phase_data.rankings()[r_id].metric::<RoundOfElimination>();
+                let earlier = out.unwrap().0.filter(|round| *round <= r#match.round());
+                earlier
+                    .is_none()
+                    .then(|| (*r_id, RoundOfElimination(Some(r#match.round()))))
             })
             .collect()
     }

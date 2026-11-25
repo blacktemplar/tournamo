@@ -69,6 +69,12 @@ impl DivisionBuilder {
         self
     }
 
+    /// Calculates the metric of `calculator` as well, see [`Self::add_metric`].
+    pub fn add_boxed_metric(mut self, calculator: Box<dyn MetricsCalculator>) -> Self {
+        self.plugins = self.plugins.add_boxed_metric(calculator);
+        self
+    }
+
     /// Enters the results of matches by `format`, see [`PhasePluginsBuilder::match_format`].
     pub fn match_format(mut self, format: impl MatchFormat) -> Self {
         self.plugins = self.plugins.match_format(format);

@@ -1,10 +1,14 @@
 //! Reporting results and taking them back.
 
 use tournament_engine::{
-    CompetitionStateMachineExt as _, CompetitionTransition, Division, Match, MatchId, MatchResult,
-    Part, PhaseId, ReportMatchResult,
+    CompetitionStateMachineExt as _, CompetitionTransition, CorrectMatchResult, Division, Match,
+    MatchId, MatchResult, Part, PhaseId, ReportMatchResult,
     plugins::match_format::Template,
-    transitions::{Change, ConflictsError, ReplaceMatchResultError, UndoMatchResultError},
+    transitions::{
+        Change, ConflictsError, CorrectMatchResultError, CorrectionError, ReplaceMatchResultError,
+        ReportMatchResultError, UndoMatchResultError,
+    },
+    undoable_state_machine::Transition as _,
 };
 
 use super::{Session, UndoneReport, refused};
@@ -227,7 +231,8 @@ impl Session {
     /// Replaces the result of the finished match of `form`, see [`Self::edit_form`], by the one
     /// entered into it, as one action: undoing it brings the result before back. Every later
     /// result stays as long as it still applies, e.g. with the winner of the match unchanged. A
-    /// result entered as it was reported changes nothing, and is no action.
+    /// result entered as it was reported changes nothing, and is no action. A match corrected in
+    /// place before ([`Self::correct_report`]) is corrected in place again.
     ///
     /// # Errors
     /// Returns an error if the phase has not started, has no such match, the match has no result,
@@ -242,6 +247,9 @@ impl Session {
         if form.has_rejected() {
             return Err(EditReportError::NotTaken);
         }
+        if !self.machine.corrected_by(phase, id).is_empty() {
+            return self.correct_report(form);
+        }
         let report = || ReportMatchResult::of(phase, id, form.report());
         let replacement = report().ok_or(EditReportError::Undecided)?;
         let meta = self.meta();
@@ -249,6 +257,7 @@ impl Session {
             .replace_match_result(&mut self.history, replacement, meta)
             .map_err(|error| match error {
                 ReplaceMatchResultError::NotReported => EditReportError::NotReported,
+                ReplaceMatchResultError::Corrected => unreachable!("corrected in place above"),
                 ReplaceMatchResultError::Refused(error) => match Refusal::of(&error) {
                     Some(Refusal::DrawNotAllowed) => EditReportError::DrawNotAllowed,
                     _ => EditReportError::Rejected(error),
@@ -275,6 +284,60 @@ impl Session {
         let (index, division, r#match) = self.match_of(phase, id).expect("still scheduled");
         Ok(Edited {
             row: self.match_row(phase, index, division, r#match),
+        })
+    }
+
+    /// Corrects the result of the finished match of `form`, see [`Self::edit_form`], in place to
+    /// the one entered into it, as one action: undoing it brings the result before back. Unlike
+    /// [`Self::edit_report`], everything after the match stays as it is, even where it would not
+    /// have been with the result entered, e.g. the matches scheduled and played, or a phase taking
+    /// entrants from its phase, started with the field it had; the standings count the result
+    /// entered. Meant for a result whose edit was refused, see [`Self::correctable`]. A result
+    /// entered as it is changes nothing, and is no action.
+    ///
+    /// # Errors
+    /// Returns an error if the phase has not started, has no such match, the match has no result,
+    /// anything typed into the form was not taken ([`ResultForm::enter`]), the result neither says
+    /// nor suggests who won or is a draw the format does not take, or the format keeps who won
+    /// the match and the result entered changes that ([`EditReportError::NotAccepted`]).
+    pub fn correct_report(&mut self, form: &ResultForm) -> Result<Edited, EditReportError> {
+        let (phase, id) = (form.phase(), form.match_id());
+        self.finished_match(phase, id)?;
+        if form.has_rejected() {
+            return Err(EditReportError::NotTaken);
+        }
+        let report =
+            ReportMatchResult::of(phase, id, form.report()).ok_or(EditReportError::Undecided)?;
+        let meta = self.meta();
+        self.machine
+            .correct_match_result(&mut self.history, report, meta)
+            .map_err(|error| match error {
+                CorrectionError::NotReported => EditReportError::NotReported,
+                CorrectionError::Refused(error) => match error.downcast_ref() {
+                    Some(CorrectMatchResultError::NotAccepted) => EditReportError::NotAccepted,
+                    Some(CorrectMatchResultError::Report(
+                        ReportMatchResultError::DrawNotAllowed,
+                    )) => EditReportError::DrawNotAllowed,
+                    _ => EditReportError::Rejected(error),
+                },
+            })?;
+        let (index, division, r#match) = self.match_of(phase, id).expect("still scheduled");
+        Ok(Edited {
+            row: self.match_row(phase, index, division, r#match),
+        })
+    }
+
+    /// Whether the result entered into `form` would be taken by [`Self::correct_report`], i.e.
+    /// whether to offer correcting the match in place once [`Self::edit_report`] refused it.
+    pub fn correctable(&self, form: &ResultForm) -> bool {
+        let (phase, id) = (form.phase(), form.match_id());
+        if form.has_rejected() || self.finished_match(phase, id).is_err() {
+            return false;
+        }
+        ReportMatchResult::of(phase, id, form.report()).is_some_and(|report| {
+            CorrectMatchResult::new(report)
+                .check_applicable(self.machine.current())
+                .is_ok()
         })
     }
 

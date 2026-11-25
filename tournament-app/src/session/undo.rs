@@ -115,6 +115,16 @@ impl Session {
     fn action_of(&self, ids: &[TransitionId]) -> Action {
         match ids {
             [id] => self.action_of_entry(*id),
+            // reopening a corrected match undoes its corrections, newest first, then its report: it
+            // is shown as it was before, corrected last
+            [first, ..]
+                if matches!(
+                    self.machine.entry(*first).map(|entry| entry.kind()),
+                    Some(LogEntryKind::Undo(_))
+                ) =>
+            {
+                self.action_of_entry(*first)
+            }
             _ => {
                 let actions = ids.iter().map(|id| self.action_of_entry(*id));
                 let mut entrants = Vec::new();
@@ -189,6 +199,10 @@ impl Session {
                 CompetitionTransition::ReportMatchResult(report) => {
                     Action::Report(reported(report))
                 }
+                // corrected in place, which the operator chose after the edit was refused
+                CompetitionTransition::CorrectMatchResult(correction) => {
+                    Action::EditResult(reported(correction.report()))
+                }
                 CompetitionTransition::SetCompetitionSeed(_) => {
                     unreachable!("the seed is applied outside the history")
                 }
@@ -205,6 +219,10 @@ impl Session {
             LogEntryKind::Undo(target) => match self.applied(*target) {
                 Some(CompetitionTransition::ReportMatchResult(report)) => {
                     Action::Reopen(reported(report))
+                }
+                // undone with the report, as reopening a corrected match does
+                Some(CompetitionTransition::CorrectMatchResult(correction)) => {
+                    Action::Reopen(reported(correction.report()))
                 }
                 Some(CompetitionTransition::AddPhase(added)) => {
                     Action::RemovePhase(self.added_phase_name(*target, added))

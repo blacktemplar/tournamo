@@ -1,7 +1,8 @@
 //! The dialog entering a result, or editing one reported: every part with the values of each side
 //! and its result, the one the values suggest. Overriding it is rare, so a result is chosen only
 //! after asking to override, except for a part that only a choice decides, and the dialog opens
-//! overriding where a result is chosen already, e.g. that of a result edited.
+//! overriding where a result is chosen already, e.g. that of a result edited. An edit refused for
+//! what came after the match is offered as a correction of the match alone, keeping the rest.
 
 use dioxus::prelude::*;
 use tournament_app::{
@@ -39,6 +40,8 @@ pub fn EnterResult(
     // the form while the dialog is open
     let mut entering = use_signal(|| None::<ResultForm>);
     let mut error = use_signal(|| None::<Text>);
+    // what was entered when the edit was refused, if the match can be corrected in place to it
+    let mut correctable = use_signal(|| None::<ResultForm>);
     // whether results may be chosen against those the values suggest
     let mut overriding = use_signal(|| false);
     let tr = ctx.translator.read();
@@ -94,6 +97,7 @@ pub fn EnterResult(
                 };
                 if let Ok(form) = form {
                     error.set(None);
+                    correctable.set(None);
                     // a result chosen already, e.g. that of a result edited, shows as chosen
                     overriding.set(form.is_chosen());
                     entering.set(Some(form));
@@ -133,7 +137,14 @@ pub fn EnterResult(
                                 ctx.announce(announcement);
                                 move_focus(focus, after_report);
                             }
-                            Err(refused) => error.set(Some(refused)),
+                            Err(refused) => {
+                                error.set(Some(refused));
+                                correctable
+                                    .set(
+                                        (edit && ctx.session.peek().correctable(&form))
+                                            .then(|| form.clone()),
+                                    );
+                            }
                         }
                     },
                     ResultPart {
@@ -147,6 +158,38 @@ pub fn EnterResult(
                     p { class: "error", role: "alert",
                         if let Some(error) = error() {
                             {tr.sentence(&error)}
+                        }
+                    }
+                    // only for the result the edit was refused for, not one changed since
+                    if correctable
+                        .read()
+                        .as_ref()
+                        .zip(entering.read().as_ref())
+                        .is_some_and(|(refused, form)| refused.enters_as(form))
+                    {
+                        div { class: "correct-in-place",
+                            p { id: "correct-in-place-hint", {tr.get("correct-result-hint")} }
+                            button {
+                                r#type: "button",
+                                aria_describedby: "correct-in-place-hint",
+                                onclick: move |_| {
+                                    let Some(form) = entering.read().clone() else {
+                                        return;
+                                    };
+                                    match ctx.try_act(|session| session.correct_report(&form)) {
+                                        Ok(edited) => {
+                                            entering.set(None);
+                                            ctx.announce(Announcement::Edited(edited));
+                                            move_focus(focus, after_report);
+                                        }
+                                        Err(refused) => {
+                                            error.set(Some(refused));
+                                            correctable.set(None);
+                                        }
+                                    }
+                                },
+                                {tr.get("correct-result")}
+                            }
                         }
                     }
                     div { class: "dialog-buttons",

@@ -147,6 +147,7 @@ error-edit-does-not-fit = { $count ->
         [one] changed this way, the result of match { $numbers } no longer fits; reopen that match first
        *[other] changed this way, the results of matches { $numbers } no longer fit; reopen those matches first
     }
+error-correction-not-accepted = the format keeps who won this match, so it can be corrected only with the same winner; reopen the later matches first
 error-nothing-to-undo = there is nothing to undo
 error-nothing-to-redo = there is nothing to redo
 error-undo-changed-elsewhere = a change made elsewhere since keeps this from being undone, so nothing more can be undone

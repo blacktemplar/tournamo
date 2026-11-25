@@ -15,6 +15,7 @@ use crate::{
 
 pub mod add_entrant;
 pub mod add_phase;
+pub mod correct_match_result;
 pub mod entry_meta;
 pub mod remove_entrant;
 pub mod report_match_result;
@@ -24,6 +25,7 @@ pub mod start_phase;
 
 pub use add_entrant::{AddEntrant, AddEntrantError};
 pub use add_phase::{AddPhase, AddPhaseError};
+pub use correct_match_result::{CorrectMatchResult, CorrectMatchResultError};
 pub use entry_meta::{EntryMeta, Timestamp};
 pub use remove_entrant::{RemoveEntrant, RemoveEntrantError};
 pub use report_match_result::{ReportMatchResult, ReportMatchResultError};
@@ -56,6 +58,7 @@ pub enum CompetitionTransition {
     StartCompetition(StartCompetition),
     ReportMatchResult(ReportMatchResult),
     StartPhase(StartPhase),
+    CorrectMatchResult(CorrectMatchResult),
 }
 
 /// `$body` with `$transition` bound to the transition `$self`, a `CompetitionTransition`, holds,
@@ -70,6 +73,7 @@ macro_rules! with_transition {
             Self::StartCompetition($transition) => $body,
             Self::ReportMatchResult($transition) => $body,
             Self::StartPhase($transition) => $body,
+            Self::CorrectMatchResult($transition) => $body,
         }
     };
 }
@@ -101,7 +105,8 @@ from_transitions!(
     AddPhase,
     StartCompetition,
     ReportMatchResult,
-    StartPhase
+    StartPhase,
+    CorrectMatchResult
 );
 
 /// The state machine of a competition, driven by transitions that can be persisted, each entry of
@@ -157,6 +162,21 @@ pub enum ReplaceMatchResultError {
     /// the replaced one. The error names the change that would no longer apply.
     #[error(transparent)]
     Rejected(StateMachineError),
+    /// The result was corrected in place since it was reported, so it can only be corrected
+    /// again, see [`CompetitionStateMachineExt::correct_match_result`].
+    #[error("the result was corrected in place")]
+    Corrected,
+}
+
+/// Why the result reported for a match could not be corrected in place.
+#[derive(Debug, Error)]
+pub enum CorrectionError {
+    #[error("no result that is in effect was reported for this match")]
+    NotReported,
+    /// The correction does not apply, see [`CorrectMatchResultError`], e.g. a draw in a match
+    /// format without draws, or another winner of a knockout's match.
+    #[error(transparent)]
+    Refused(TransitionError),
 }
 
 /// Why a phase could not be reconfigured.
@@ -209,7 +229,9 @@ pub enum UnstartPhaseError {
 /// A change to the log that is not made, for [`CompetitionStateMachineExt::conflicts_of`].
 #[derive(Debug, Clone, Copy)]
 pub enum Change<'a> {
-    /// Undoing the [`LogEntryKind::Apply`] with this id.
+    /// Undoing the [`LogEntryKind::Apply`] with this id; for a [`ReportMatchResult`], with every
+    /// [`CorrectMatchResult`] of its match, as [`CompetitionStateMachineExt::undo_match_result`]
+    /// does.
     Undo(TransitionId),
     /// Replacing the transition of the [`LogEntryKind::Apply`] `target` by `with`.
     Replace {
@@ -253,8 +275,9 @@ pub enum ConflictsError {
 pub trait CompetitionStateMachineExt {
     /// Undoes the result reported for the match `match_id` of the phase `phase_id` by undoing the
     /// latest log entry that is still in effect and reported it, as an action of the session of
-    /// `history`, and returns the id of the undo entry appended for that. Undoing that action, see
-    /// [`SessionHistory::undo_last`], brings the result back.
+    /// `history`, and returns the id of the undo entry appended for that. Every
+    /// [`CorrectMatchResult`] of the match in effect is undone before it, in the same action.
+    /// Undoing that action, see [`SessionHistory::undo_last`], brings the result back.
     ///
     /// This reaches back arbitrarily far: changes made after the report stay in effect, as long as
     /// none of them depends on it.
@@ -329,6 +352,7 @@ pub trait CompetitionStateMachineExt {
     ///
     /// # Errors
     /// Returns [`ReplaceMatchResultError::NotReported`] if no report for that match is in effect,
+    /// [`ReplaceMatchResultError::Corrected`] if a [`CorrectMatchResult`] of it is in effect,
     /// [`ReplaceMatchResultError::Refused`] if `report` does not apply in its place, and
     /// [`ReplaceMatchResultError::Rejected`] if a later change in the log does not apply after it
     /// ([`Self::conflicts_of`] names the results among those). In either case neither the log nor
@@ -387,6 +411,71 @@ pub trait CompetitionStateMachineExt {
         report: ReportMatchResult,
         meta: EntryMeta,
     ) -> Result<Option<TransitionId>, ReplaceMatchResultError>;
+
+    /// Corrects the result of the finished match of `report` in place to `report`, as an action
+    /// of the session of `history`, and returns the id of the entry appended for that: a
+    /// [`CorrectMatchResult`]. Unlike [`Self::replace_match_result`], nothing is replayed: what was
+    /// scheduled and reported after the match stays as it is, even where it would not have been
+    /// with the corrected result. Undoing that action, see [`SessionHistory::undo_last`], brings
+    /// the result before back.
+    ///
+    /// Returns `None`, leaving the log unchanged, if `report` enters the match as it is (see
+    /// [`Part::is_entered_as`](crate::Part::is_entered_as)).
+    ///
+    /// # Errors
+    /// Returns [`CorrectionError::NotReported`] if no report for that match is in effect, and
+    /// [`CorrectionError::Refused`] if the correction does not apply, see
+    /// [`CorrectMatchResult`]. In either case neither the log nor `history` changes.
+    ///
+    /// # Examples
+    /// ```
+    /// # use tournament_engine::{
+    /// #     EntryMeta, Timestamp,
+    /// #     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt, Entrant,
+    /// #     EntrantId, MatchResult, PhaseId, PhasePluginsBuilder, ReportMatchResult, Seed,
+    /// #     SetCompetitionSeed, StartCompetition, Team,
+    /// #     plugins::metrics_calculator::{WinsDrawsLosses, WinsDrawsLossesCalculator},
+    /// #     undoable_state_machine::SessionHistory, uuid::Uuid,
+    /// # };
+    /// # let phase_id = PhaseId::new(Uuid::from_u128(1));
+    /// # let mut machine = CompetitionStateMachine::default();
+    /// # let meta = EntryMeta::recorded_at(Timestamp::from_unix_millis(1_764_000_000_000));
+    /// # machine.apply_new(SetCompetitionSeed::new(Seed::new(*b"doc-test!!!!")).into(), meta)?;
+    /// # for entrant in 0..4 {
+    /// #     let entrant = Entrant::new(EntrantId::new(Uuid::from_u128(entrant)));
+    /// #     machine.apply_new(AddEntrant::new(entrant).into(), meta)?;
+    /// # }
+    /// # let plugins = PhasePluginsBuilder::new()
+    /// #     .add_metric(WinsDrawsLossesCalculator)
+    /// #     .build()?;
+    /// # machine.apply_new(AddPhase::new(phase_id, plugins).into(), meta)?;
+    /// # machine.apply_new(StartCompetition::default().into(), meta)?;
+    /// // a round robin between four entrants, its first match won by A
+    /// let first = &machine.current().phases()[&phase_id].divisions()[0]
+    ///     .data()
+    ///     .matches()[0];
+    /// let (first, b) = (first.id(), first.rankings_of(Team::B)[0]);
+    /// machine.apply_new(
+    ///     ReportMatchResult::new(phase_id, first, MatchResult::AWins).into(),
+    ///     meta,
+    /// )?;
+    ///
+    /// let mut history = SessionHistory::new();
+    /// let won_by_b = ReportMatchResult::new(phase_id, first, MatchResult::BWins);
+    /// machine.correct_match_result(&mut history, won_by_b, meta)?;
+    ///
+    /// // the standings count the corrected result
+    /// let division = machine.current().phases()[&phase_id].divisions()[0].data();
+    /// let winner = &division.rankings()[&b];
+    /// assert_eq!(winner.metric::<WinsDrawsLosses>().unwrap().wins, 1);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    fn correct_match_result(
+        &mut self,
+        history: &mut SessionHistory,
+        report: ReportMatchResult,
+        meta: EntryMeta,
+    ) -> Result<Option<TransitionId>, CorrectionError>;
 
     /// Reconfigures the phase `phase.id()` as if it had been added by `phase`, as an action of
     /// the session of `history`, and returns the id of the entry appended for that: a
@@ -516,6 +605,10 @@ pub trait CompetitionStateMachineExt {
     /// [`Self::undo_match_result`] undoes. `None` if there is none.
     fn reported_by(&self, phase_id: PhaseId, match_id: MatchId) -> Option<TransitionId>;
 
+    /// The ids of the [`CorrectMatchResult`] entries in effect for the match `match_id` of the
+    /// phase `phase_id`, in log order: empty if its result was not corrected in place.
+    fn corrected_by(&self, phase_id: PhaseId, match_id: MatchId) -> Vec<TransitionId>;
+
     /// The id of the [`AddPhase`] entry in effect that added the phase `phase_id`, which
     /// [`Self::reconfigure_phase`] replaces. `None` if there is none.
     fn added_by(&self, phase_id: PhaseId) -> Option<TransitionId>;
@@ -594,8 +687,15 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         let target = self
             .reported_by(phase_id, match_id)
             .ok_or(UndoMatchResultError::NotReported)?;
-        let id = TransitionId::new();
-        history.apply(self, LogEntry::new(id, LogEntryKind::Undo(target), meta))?;
+        let corrections = self.corrected_by(phase_id, match_id);
+        let undos: Vec<_> = corrections
+            .into_iter()
+            .rev()
+            .chain([target])
+            .map(|target| LogEntry::new(TransitionId::new(), LogEntryKind::Undo(target), meta))
+            .collect();
+        let id = undos.last().expect("the report is undone").id();
+        history.apply_all(self, undos)?;
         Ok(id)
     }
 
@@ -608,6 +708,12 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         let target = self
             .reported_by(report.phase_id(), report.match_id())
             .ok_or(ReplaceMatchResultError::NotReported)?;
+        if !self
+            .corrected_by(report.phase_id(), report.match_id())
+            .is_empty()
+        {
+            return Err(ReplaceMatchResultError::Corrected);
+        }
         if let Some(CompetitionTransition::ReportMatchResult(reported)) =
             self.effective_transition(target)
             && reported.contest().is_entered_as(report.contest())
@@ -627,6 +733,40 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
                     ReplaceMatchResultError::Refused(error)
                 }
                 error => ReplaceMatchResultError::Rejected(error),
+            })?;
+        Ok(Some(id))
+    }
+
+    fn correct_match_result(
+        &mut self,
+        history: &mut SessionHistory,
+        report: ReportMatchResult,
+        meta: EntryMeta,
+    ) -> Result<Option<TransitionId>, CorrectionError> {
+        let (phase_id, match_id) = (report.phase_id(), report.match_id());
+        if self.reported_by(phase_id, match_id).is_none() {
+            return Err(CorrectionError::NotReported);
+        }
+        let current = self
+            .current()
+            .phase(&phase_id)
+            .and_then(|phase| phase.division_of(&match_id))
+            .map(|(_, division)| division.data().matches()[&match_id].contest());
+        if current.is_some_and(|contest| contest.is_entered_as(report.contest())) {
+            return Ok(None);
+        }
+        let id = TransitionId::new();
+        let correction = CorrectMatchResult::new(report).into();
+        history
+            .apply(
+                self,
+                LogEntry::new(id, LogEntryKind::Apply(correction), meta),
+            )
+            .map_err(|error| match error {
+                StateMachineError::Transition(_, error) => CorrectionError::Refused(error),
+                error => {
+                    unreachable!("a new entry appended is refused only by its transition: {error}")
+                }
             })?;
         Ok(Some(id))
     }
@@ -780,6 +920,23 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
         })
     }
 
+    fn corrected_by(&self, phase_id: PhaseId, match_id: MatchId) -> Vec<TransitionId> {
+        let mut corrections: Vec<_> = self
+            .rev_in_effect_applied()
+            .filter_map(|(id, transition)| {
+                matches!(
+                    transition,
+                    CompetitionTransition::CorrectMatchResult(correction)
+                        if (correction.report().phase_id(), correction.report().match_id())
+                            == (phase_id, match_id)
+                )
+                .then_some(id)
+            })
+            .collect();
+        corrections.reverse();
+        corrections
+    }
+
     fn added_by(&self, phase_id: PhaseId) -> Option<TransitionId> {
         // a replacement of an `AddPhase` made by `reconfigure_phase` adds the same phase, so the
         // transition that runs in place of the entry adds it, whether replaced or not
@@ -794,9 +951,16 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
 
     fn conflicts_of(&self, change: Change<'_>) -> Result<Vec<Conflict>, ConflictsError> {
         let (Change::Undo(target) | Change::Replace { target, .. }) = change;
-        if self.effective_transition(target).is_none() {
+        let Some(changed) = self.effective_transition(target) else {
             return Err(ConflictsError::NotInEffect);
-        }
+        };
+        // undoing a report undoes the corrections of its match with it
+        let reopened = match (change, changed) {
+            (Change::Undo(_), CompetitionTransition::ReportMatchResult(report)) => {
+                Some((report.phase_id(), report.match_id()))
+            }
+            _ => None,
+        };
         // as `StateMachine` replays its log, but with `change` made, and skipping each report that
         // does not apply rather than stopping there: the matches it would have scheduled are
         // missing then, so the reports depending on it are skipped as well
@@ -812,8 +976,20 @@ impl CompetitionStateMachineExt for CompetitionStateMachine {
                 Change::Replace { with, .. } if entry.id() == target => with,
                 _ => transition,
             };
+            if let CompetitionTransition::CorrectMatchResult(correction) = transition
+                && reopened
+                    == Some((
+                        correction.report().phase_id(),
+                        correction.report().match_id(),
+                    ))
+            {
+                continue;
+            }
             if let Err(error) = transition.check_applicable(&competition) {
-                let CompetitionTransition::ReportMatchResult(report) = transition else {
+                let (CompetitionTransition::ReportMatchResult(report)
+                | CompetitionTransition::CorrectMatchResult(CorrectMatchResult(report))) =
+                    transition
+                else {
                     return Err(ConflictsError::Other(entry.id(), error));
                 };
                 conflicts.push(Conflict {
@@ -1310,6 +1486,182 @@ mod tests {
             .expect_err("an open match has no result to replace");
 
         assert!(matches!(error, ReplaceMatchResultError::NotReported));
+    }
+
+    /// The metrics of every ranking of the phase, as saved.
+    fn metrics_of(machine: &CompetitionStateMachine) -> Vec<serde_json::Value> {
+        machine.current().phases()[&phase_id()].divisions()[0]
+            .data()
+            .rankings()
+            .values()
+            .map(|ranking| serde_json::to_value(ranking.metrics()).unwrap())
+            .collect()
+    }
+
+    /// A round robin between four entrants counting wins, draws and losses, every match won by
+    /// side A but the first one, reported `first`.
+    fn round_robin_played(first: MatchResult) -> CompetitionStateMachine {
+        let mut machine = started(
+            4,
+            PhasePluginsBuilder::new().add_metric(WinsDrawsLossesCalculator),
+        );
+        let opener = matches(&machine)[0];
+        machine
+            .apply_new(
+                ReportMatchResult::new(phase_id(), opener, first).into(),
+                EntryMeta::default(),
+            )
+            .unwrap();
+        play_out(&mut machine);
+        machine
+    }
+
+    /// A result corrected in place counts as if it had been reported so.
+    #[test]
+    fn a_corrected_result_counts_as_if_it_had_been_reported_so() {
+        let mut machine = round_robin_played(MatchResult::AWins);
+        let opener = matches(&machine)[0];
+        let log_len = machine.log().len();
+
+        machine
+            .correct_match_result(
+                &mut SessionHistory::new(),
+                ReportMatchResult::new(phase_id(), opener, MatchResult::Draw),
+                EntryMeta::default(),
+            )
+            .expect("a round robin takes any correction");
+
+        assert_eq!(machine.log().len(), log_len + 1);
+        assert_eq!(result_of(&machine, opener), Some(MatchResult::Draw));
+        assert_eq!(
+            metrics_of(&machine),
+            metrics_of(&round_robin_played(MatchResult::Draw))
+        );
+    }
+
+    /// Undoing a correction brings back the result before, and its metrics.
+    #[test]
+    fn a_correction_is_undone_like_any_action() {
+        let mut machine = round_robin_played(MatchResult::AWins);
+        let opener = matches(&machine)[0];
+        let before = metrics_of(&machine);
+        let mut history = SessionHistory::new();
+        machine
+            .correct_match_result(
+                &mut history,
+                ReportMatchResult::new(phase_id(), opener, MatchResult::BWins),
+                EntryMeta::default(),
+            )
+            .unwrap();
+
+        history
+            .undo_last(&mut machine, EntryMeta::default())
+            .unwrap();
+
+        assert_eq!(result_of(&machine, opener), Some(MatchResult::AWins));
+        assert_eq!(metrics_of(&machine), before);
+    }
+
+    /// Another winner of a semifinal would leave the bracket saying the other one moved on.
+    #[test]
+    fn a_knockout_takes_a_correction_keeping_the_winner_only() {
+        let (mut machine, [first, _], r#final) = final_played();
+        let mut history = SessionHistory::new();
+
+        let error = machine
+            .correct_match_result(&mut history, scored(first, 1, 3), EntryMeta::default())
+            .expect_err("the winner of the semifinal moved on");
+        let CorrectionError::Refused(error) = error else {
+            panic!("the correction itself does not apply: {error:?}");
+        };
+        assert!(matches!(
+            error.downcast_ref(),
+            Some(CorrectMatchResultError::NotAccepted)
+        ));
+        machine
+            .correct_match_result(&mut history, scored(first, 3, 2), EntryMeta::default())
+            .expect("the winner stays");
+
+        assert_eq!(score_of(&machine, first), Some(Sides::new(3, 2)));
+        assert_eq!(score_of(&machine, r#final), Some(Sides::new(3, 0)));
+    }
+
+    #[test]
+    fn an_open_match_has_no_result_to_correct() {
+        let mut machine = knockout();
+        let open = matches(&machine)[0];
+
+        let error = machine
+            .correct_match_result(
+                &mut SessionHistory::new(),
+                ReportMatchResult::new(phase_id(), open, MatchResult::AWins),
+                EntryMeta::default(),
+            )
+            .expect_err("an open match has no result to correct");
+
+        assert!(matches!(error, CorrectionError::NotReported));
+    }
+
+    #[test]
+    fn a_result_corrected_to_what_it_is_is_not_corrected() {
+        let (mut machine, [first, _], _) = final_played();
+        let log_len = machine.log().len();
+
+        let corrected = machine
+            .correct_match_result(
+                &mut SessionHistory::new(),
+                scored(first, 3, 1),
+                EntryMeta::default(),
+            )
+            .unwrap();
+
+        assert_eq!(corrected, None);
+        assert_eq!(machine.log().len(), log_len);
+    }
+
+    /// Reopening a corrected match undoes its report and its corrections as one action, which
+    /// conflicts with nothing on their account.
+    #[test]
+    fn reopening_a_corrected_match_undoes_its_corrections_with_it() {
+        let mut machine = round_robin_played(MatchResult::AWins);
+        let opener = matches(&machine)[0];
+        let mut history = SessionHistory::new();
+        machine
+            .correct_match_result(
+                &mut history,
+                ReportMatchResult::new(phase_id(), opener, MatchResult::BWins),
+                EntryMeta::default(),
+            )
+            .unwrap();
+        let report = machine.reported_by(phase_id(), opener).unwrap();
+        assert_eq!(machine.conflicts_of(Change::Undo(report)).unwrap(), []);
+
+        machine
+            .undo_match_result(&mut history, phase_id(), opener, EntryMeta::default())
+            .expect("the corrections are undone first");
+
+        assert_eq!(result_of(&machine, opener), None);
+        assert_eq!(machine.corrected_by(phase_id(), opener), []);
+        history
+            .undo_last(&mut machine, EntryMeta::default())
+            .unwrap();
+        assert_eq!(result_of(&machine, opener), Some(MatchResult::BWins));
+    }
+
+    /// Replacing the report of a corrected match would replay the correction after it.
+    #[test]
+    fn a_corrected_result_is_not_replaced() {
+        let (mut machine, [first, _], _) = final_played();
+        let mut history = SessionHistory::new();
+        machine
+            .correct_match_result(&mut history, scored(first, 3, 2), EntryMeta::default())
+            .unwrap();
+
+        let error = machine
+            .replace_match_result(&mut history, scored(first, 3, 0), EntryMeta::default())
+            .expect_err("the match was corrected");
+
+        assert!(matches!(error, ReplaceMatchResultError::Corrected));
     }
 
     /// A reconfigured phase is played as if it had been added that way, so the results of the

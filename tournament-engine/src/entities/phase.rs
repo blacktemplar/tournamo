@@ -373,6 +373,19 @@ impl Phase {
             .expect("a division holds the match");
         self.divisions[index].report(match_id, entered, highest);
     }
+
+    /// Corrects the finished match `match_id` in place, see [`Division::correct`], its division's
+    /// metrics calculated anew by the calculators as configured for the phase.
+    ///
+    /// # Panics
+    /// Panics if no division holds the match, or as [`Division::correct`] does.
+    pub(crate) fn correct_match(&mut self, match_id: MatchId, entered: Part) {
+        let (index, _) = self
+            .division_of(&match_id)
+            .expect("a division holds the match");
+        let calculators = self.plugins.metrics().clone();
+        self.divisions[index].correct(match_id, entered, calculators);
+    }
 }
 
 impl<'de> Deserialize<'de> for Phase {

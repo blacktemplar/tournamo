@@ -653,6 +653,12 @@ impl ResultForm {
         }
     }
 
+    /// Whether `other` enters what this form does, e.g. to tell whether a refusal of one still
+    /// holds for the other.
+    pub fn enters_as(&self, other: &ResultForm) -> bool {
+        self.report().is_entered_as(&other.report())
+    }
+
     /// The match as entered, with its decision, if it says or suggests one, the parts after the
     /// last one with anything entered left out: what is reported.
     pub(crate) fn report(&self) -> Part {

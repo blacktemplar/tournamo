@@ -221,3 +221,16 @@ button.match-details:hover {
 .reported-outcome {
   margin: 0;
 }
+
+/* offered once an edit was refused: the correction of the match alone, under why */
+.correct-in-place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.correct-in-place p {
+  flex: 1 1 20rem;
+  margin: 0;
+}

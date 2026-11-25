@@ -8,6 +8,7 @@ use crate::{
     form::{Editable as _, End},
     i18n::Text,
     people::Rating,
+    result_form::ResultForm,
     view::{Advance, Advancing, Cut, PhaseState, SourceProgress, SourceRow},
 };
 
@@ -88,6 +89,89 @@ fn an_edit_names_the_results_of_a_later_phase_it_does_not_fit() {
         "changed this way, the phase does not fit the result of match 7 of Final, which it sends \
          entrants to; reopen that match first"
     );
+}
+
+/// The entrants of the overall standings of the phase `phase`, best first.
+fn standing(session: &Session, phase: PhaseId) -> Vec<String> {
+    session
+        .overall_standings(phase)
+        .unwrap()
+        .rows
+        .iter()
+        .flat_map(|row| names(&row.entrants).into_iter().map(str::to_owned))
+        .collect()
+}
+
+/// The qualification of [`qualification_and_final`] played by name, so that Alice and Bob reach the
+/// final, which is played, and the form editing the result of Bob against Carol, entered as won by
+/// Carol, which would have sent Carol to the final instead.
+fn bob_beaten_after_the_final() -> (Session, ResultForm) {
+    let mut session = qualification_and_final();
+    session.start().unwrap();
+    let qualification = session.first();
+    play_out_by_name(&mut session, qualification);
+    let r#final = phase(&session, 2);
+    session.start_phase(r#final).unwrap();
+    play_out(&mut session, r#final);
+    let bob_carol = matches(&session)
+        .into_iter()
+        .find(|row| {
+            let mut both = names(&row.a);
+            both.extend(names(&row.b));
+            both.sort_unstable();
+            both == ["Bob", "Carol"]
+        })
+        .unwrap();
+    let carol = if names(&bob_carol.a) == ["Carol"] {
+        MatchResult::AWins
+    } else {
+        MatchResult::BWins
+    };
+    let mut form = session.edit_form(qualification, bob_carol.id).unwrap();
+    form.choose(&[], Some(carol));
+    (session, form)
+}
+
+/// A result of a phase whose next phase has started is corrected in place: the standings count
+/// it, while the next phase keeps the entrants it started with and what they played.
+#[test]
+fn a_result_is_corrected_in_place_keeping_the_next_phase_as_it_started() {
+    let (mut session, form) = bob_beaten_after_the_final();
+    let (qualification, r#final) = (session.first(), phase(&session, 2));
+    let finalists = standing(&session, r#final);
+    assert!(
+        session.edit_report(&form).is_err(),
+        "Carol would reach the final"
+    );
+    assert!(session.correctable(&form));
+
+    let corrected = session.correct_report(&form).unwrap();
+
+    assert_eq!(corrected.row.result, form.view().root.result);
+    assert_eq!(standing(&session, qualification)[..2], ["Alice", "Carol"]);
+    assert_eq!(standing(&session, r#final), finalists);
+    assert_eq!(session.undo().unwrap(), Action::EditResult(corrected.row));
+    assert_eq!(standing(&session, qualification)[..2], ["Alice", "Bob"]);
+}
+
+/// Once corrected in place, a result is corrected in place on every edit, without being refused
+/// again; it is reopened only as any result of the phase would be.
+#[test]
+fn a_corrected_result_is_corrected_in_place_again() {
+    let (mut session, form) = bob_beaten_after_the_final();
+    let qualification = session.first();
+    session.correct_report(&form).unwrap();
+    let mut again = session.edit_form(qualification, form.match_id()).unwrap();
+    again.choose(&[], Some(MatchResult::Draw));
+
+    let edited = session.edit_report(&again).unwrap();
+
+    assert_eq!(edited.row.result, Some(MatchResult::Draw));
+    // a phase taking entrants from the qualification has started, so it is not reopened
+    assert!(matches!(
+        session.undo_report(qualification, form.match_id()),
+        Err(UndoReportError::PhaseStarted(_))
+    ));
 }
 
 #[test]

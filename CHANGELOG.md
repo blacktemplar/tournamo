@@ -49,6 +49,11 @@ later one: a file whose `"format"` changes is migrated, not refused.
 
 ### Added
 
+- **Correcting a result in place.** Where editing a result is refused because
+  later results would no longer fit, e.g. a result of a phase whose next phase
+  has started, the dialog offers to correct the match alone: everything after
+  it stays as it is, and the standings count the corrected result. A knockout
+  takes such a correction only with the same winner.
 - **The basic view.** At level basic, the setup shows each phase with only its format, where its entrants come
   from (how many go on, editable), its groups where they matter, and the few
   settings of its format anyone decides, e.g. the rounds; each change is made

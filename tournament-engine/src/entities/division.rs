@@ -1,6 +1,7 @@
 use std::{any::Any, num::NonZeroU32};
 
 use itertools::Itertools;
+use plugin_factory::schema::DependencyOrderedSet;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use vec1::Vec1;
@@ -178,6 +179,13 @@ impl<'a> DivisionView<'a> {
     pub fn standings(&self) -> Standings<'a> {
         Standings::new(self.ranker.rank(self.data))
     }
+}
+
+/// A finished match or a reached bye, counted again by [`Division::recount`].
+#[derive(Debug, Clone, Copy)]
+enum Counted {
+    Match(MatchId),
+    Bye(ByeId),
 }
 
 impl Division {
@@ -390,6 +398,84 @@ impl Division {
             .collect();
         self.reach_byes(candidates);
         self.schedule(highest);
+    }
+
+    /// Corrects the finished match `match_id` in place to what was `entered` for it: its decision,
+    /// values and parts, as its [contest](Match::contest), keeping everything scheduled. The
+    /// metrics are calculated anew by `calculators`, as configured for the phase, over every
+    /// finished match and reached bye, see [`Self::recount`].
+    ///
+    /// # Panics
+    /// Panics if the match is not finished, or `entered` has no decision.
+    pub(crate) fn correct(
+        &mut self,
+        match_id: MatchId,
+        entered: Part,
+        calculators: DependencyOrderedSet<dyn MetricsCalculator>,
+    ) {
+        assert!(
+            entered.decision().is_some(),
+            "a correction decides its match"
+        );
+        let r#match = self.data.matches.get_mut(&match_id).unwrap();
+        assert!(r#match.is_finished());
+        r#match.contest.enter(entered);
+        let tallies = self
+            .plugins
+            .match_format()
+            .tally(&self.data, &self.data.matches[&match_id]);
+        self.data.matches.get_mut(&match_id).unwrap().tallies = tallies;
+        self.recount(calculators);
+    }
+
+    /// Calculates every metric anew by `calculators`: from its default value, as if every finished
+    /// match was reported and every reached bye reached again, round by round, a round's matches
+    /// before its byes. As the metrics do not depend on the order results come in (see
+    /// [`MetricsCalculator`]), they are those the results and byes give.
+    fn recount(&mut self, calculators: DependencyOrderedSet<dyn MetricsCalculator>) {
+        self.plugins.set_metrics(calculators);
+        for ranking in self.data.rankings.values_mut() {
+            ranking.played_matches.clear();
+        }
+        self.initialize_metrics();
+        let mut counted: Vec<_> = self
+            .data
+            .matches
+            .values()
+            .filter(|r#match| r#match.is_finished())
+            .map(|r#match| (r#match.round(), Counted::Match(r#match.id())))
+            .chain(
+                self.data
+                    .byes
+                    .values()
+                    .filter(|bye| bye.reached)
+                    .map(|bye| (bye.round(), Counted::Bye(bye.id()))),
+            )
+            .collect();
+        // stable, so the matches of a round keep their order, before its byes
+        counted.sort_by_key(|(round, _)| *round);
+        for (_, counted) in counted {
+            match counted {
+                Counted::Match(match_id) => {
+                    for ranking_id in self.data.matches[&match_id].rankings() {
+                        let ranking = self.data.rankings.get_mut(ranking_id).unwrap();
+                        ranking.played_matches.push(match_id);
+                    }
+                    self.update_metrics(|metrics_calculator, data, old_metrics| {
+                        metrics_calculator.update_after_match_result(
+                            data,
+                            &data.matches[&match_id],
+                            old_metrics,
+                        )
+                    });
+                }
+                Counted::Bye(bye_id) => {
+                    self.update_metrics(|metrics_calculator, data, old_metrics| {
+                        metrics_calculator.update_after_bye(data, &data.byes[&bye_id], old_metrics)
+                    });
+                }
+            }
+        }
     }
 
     /// Runs every metrics calculator, in order, through `updates_of` and stores the metrics it

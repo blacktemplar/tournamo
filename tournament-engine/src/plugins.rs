@@ -411,6 +411,12 @@ impl PhasePlugins {
     pub(crate) fn metrics_mut(&mut self) -> impl Iterator<Item = &mut dyn MetricsCalculator> {
         self.metrics.iter_mut()
     }
+
+    /// Calculates the metrics by `metrics` from now on, in place of the calculators and their
+    /// state so far.
+    pub(crate) fn set_metrics(&mut self, metrics: DependencyOrderedSet<dyn MetricsCalculator>) {
+        self.metrics = metrics;
+    }
 }
 
 /// What the plugins of this crate declare, i.e. the facts they provide to and require of their

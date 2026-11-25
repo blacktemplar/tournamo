@@ -4,7 +4,10 @@ use dyn_clone::DynClone;
 use plugin_factory::{Plugin, axis, compatibility, config::PluginConfig};
 
 use crate::{
-    entities::{Bye, DivisionView, NewMatch},
+    entities::{
+        Bye, DivisionData, DivisionView, Match, NewMatch,
+        details::{Decision, Part},
+    },
     plugins::{
         Phrase,
         facts::NoDraws,
@@ -117,6 +120,19 @@ pub trait PhaseFormat: Plugin + DynClone {
     /// who know the formats.
     fn has_basic_divisions(&self) -> bool {
         false
+    }
+
+    /// Whether the finished match `match` of `phase` may be corrected in place to `corrected`,
+    /// keeping everything scheduled after it as it is, see
+    /// [`CorrectMatchResult`](crate::CorrectMatchResult): the format's state stays as it was, so a
+    /// format whose state depends on the result has to refuse a correction that changes it.
+    ///
+    /// By default one keeping the [result](crate::MatchResult) of the match, since a format may
+    /// keep who won, as a knockout does with who moved on. A format keeping nothing of the results,
+    /// e.g. one scheduling every round at the start, accepts any.
+    fn accepts_correction(&self, phase: &DivisionData, r#match: &Match, corrected: &Part) -> bool {
+        let _ = phase;
+        r#match.result() == corrected.decision().map(Decision::result)
     }
 }
 

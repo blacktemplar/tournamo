@@ -1521,9 +1521,36 @@ since `MatchId`s come from content. No new transition and nothing new saved.
   itself (a draw where the format allows none) or that a later entry does not
   apply after (another winner of a semifinal whose final is played);
   `conflicts_of(Change::Replace { .. })` names the results in the way.
-- *Planned* (issue 16): correcting a result in place, keeping the later
-  results as played even where they no longer follow from it, offered once a
-  replacement was refused.
+
+**Correcting in place** (`CompetitionStateMachineExt::correct_match_result`,
+the transition `CorrectMatchResult`, saved as the `ReportMatchResult` it
+holds): the match gets the corrected decision, values and parts, and nothing
+else changes. Matches scheduled and reported after it stay as they are, even
+where the format would have scheduled otherwise, and so does a phase started
+from its phase, with the field it started with. Offered only once a
+replacement was refused (`Session::correctable`), e.g. for a result of a phase
+whose next phase has started.
+
+- **The metrics are calculated anew** (`Division::recount`): every calculator,
+  a fresh copy of the phase's as configured, starts from its default and counts
+  every finished match and reached bye again, round by round, matches before
+  byes. Since a calculator's metrics do not depend on the order results come
+  in (*Metrics*), that is what the results give, and nothing of the order is
+  saved. Calculators need nothing new.
+- **The format is asked** (`PhaseFormat::accepts_correction`), since its state
+  stays as it was: by default it accepts a correction keeping who won, as a
+  knockout must, which keeps who moved on; the formats drawing every round at
+  the start accept any.
+- **One logged transition**, an action like any other: undoing it replays the
+  log without it. Reopening a corrected match undoes its corrections with its
+  report, as one action; replacing its report is refused, since the
+  corrections would replay after it, so a corrected match is corrected in place
+  again. A dry run (`conflicts_of`) treats a correction that no longer applies
+  like a report.
+- Rejected: storing the order results and byes counted in, to count them again
+  in it (a change of what is saved, for what the order independence of the
+  calculators gives for free); a hook on every calculator to take a result
+  back.
 
 ### Changing a phase after it was added
 

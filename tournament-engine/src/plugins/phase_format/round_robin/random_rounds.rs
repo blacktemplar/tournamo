@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::DivisionView,
+    entities::{DivisionData, DivisionView, Match, details::Part},
     plugins::{
         metrics_calculator::{
             buchholz::{
@@ -56,6 +56,11 @@ impl PhaseFormat for RandomRounds {
     /// Every round is drawn by lot, whatever order the entrants start in.
     fn reads_seeding(&self) -> bool {
         false
+    }
+
+    /// Every round is scheduled at the start, whatever the results.
+    fn accepts_correction(&self, _: &DivisionData, _: &Match, _: &Part) -> bool {
+        true
     }
 
     /// Ranked by points, then Buchholz, Sonneborn-Berger and Buchholz of Buchholz, and showing the

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use vec1::vec1;
 
 use crate::{
-    entities::{Bye, DivisionView, NewMatch},
+    entities::{Bye, DivisionData, DivisionView, Match, NewMatch, details::Part},
     plugins::{
         facts::EntrantsPerRanking,
         metrics_calculator::{
@@ -91,6 +91,11 @@ impl PhaseFormat for MonsterDyp {
 
     fn min_entrants(&self) -> usize {
         4
+    }
+
+    /// Every round is scheduled at the start, whatever the results.
+    fn accepts_correction(&self, _: &DivisionData, _: &Match, _: &Part) -> bool {
+        true
     }
 
     fn create_new_matches(&mut self, phase: &DivisionView<'_>) -> Schedule {

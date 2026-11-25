@@ -102,6 +102,49 @@ async fn a_result_is_not_reopened_once_the_next_phase_started() {
     .await;
 }
 
+/// A result of a phase whose next phase has started and been played is refused as an edit, since
+/// another entrant would have reached the final; corrected in place, it keeps the final as played.
+#[tokio::test]
+#[ignore = "needs Chrome and the page built by dx; run by the gui-e2e hook"]
+async fn a_result_is_corrected_in_place_once_the_next_phase_started() {
+    run_in_new_competition(async |gui| {
+        for name in ["Alice", "Bob", "Carol"] {
+            gui.add_entrant(name).await?;
+        }
+        gui.choose_format("Round robin").await?;
+        gui.click("Add phase").await?;
+        gui.open_new_phase("Final").await?;
+        gui.choose_format("Single elimination").await?;
+        gui.enter_place(0, "to", "2").await?;
+        gui.click("Add phase").await?;
+        gui.click("Start").await?;
+        // Alice and Bob go on
+        gui.win_playable_in_order(&["Alice", "Bob", "Carol"])
+            .await?;
+        gui.click("Start Final").await?;
+        gui.win_playable_in_order(&["Alice", "Bob"]).await?;
+        gui.go_to_phase("1 · Round robin").await?;
+        gui.show_by_round().await?;
+
+        gui.click_in_match_between("Bob", "Carol", "Edit result of match")
+            .await?;
+        gui.choose_result("Result: Match", "Carol wins").await?;
+        gui.save_in_dialog().await?;
+        gui.expect_dialog_error(
+            "Changed this way, the result of match 4 no longer fits; reopen that match first.",
+        )
+        .await?;
+        gui.page.check_accessibility().await?;
+        gui.correct_in_dialog().await?;
+
+        gui.expect_no_dialog().await?;
+        gui.expect_standings(&["Alice", "Carol", "Bob"]).await?;
+        gui.go_to_phase("Final").await?;
+        gui.expect_standings(&["Alice", "Bob"]).await
+    })
+    .await;
+}
+
 /// The start waits while the form of a further phase is open, so that what was entered in it is
 /// not lost, until the phase is added or the form discarded.
 #[tokio::test]

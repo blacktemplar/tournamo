@@ -356,6 +356,15 @@ impl Competition {
             .report_match(match_id, entered, &mut self.highest_number);
     }
 
+    /// Corrects the finished match `match_id` of the phase `phase_id` in place, see
+    /// [`Phase::correct_match`].
+    pub(crate) fn correct_match(&mut self, phase_id: PhaseId, match_id: MatchId, entered: Part) {
+        self.phases
+            .get_mut(&phase_id)
+            .expect("the phase exists")
+            .correct_match(match_id, entered);
+    }
+
     /// The slot the overall standings of the phase `phase_id` start at, see [`Self::slots`];
     /// `None` if there is no such phase.
     fn first_slot(&self, phase_id: &PhaseId) -> Option<NonZeroU32> {

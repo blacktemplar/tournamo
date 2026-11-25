@@ -4,7 +4,7 @@ use undoable_state_machine::{Transition, TransitionError};
 
 use crate::{
     entities::{
-        Annotated, Competition, MatchId, MatchResult, PhaseId,
+        Annotated, Competition, Division, Match, MatchId, MatchResult, PhaseId,
         details::{Decision, EnteredValue, FieldKey, Part, Sides, Values},
     },
     plugins::match_format::Misfit,
@@ -76,6 +76,26 @@ impl ReportMatchResult {
     /// What is reported for the match: its decision, values and parts.
     pub fn contest(&self) -> &Part {
         &self.contest
+    }
+}
+
+impl ReportMatchResult {
+    /// Fails unless what this reports fits `match` of `division`: a draw only where the format
+    /// allows draws, and what was entered only as the match format takes it.
+    pub(super) fn check_fits(
+        &self,
+        division: &Division,
+        r#match: &Match,
+    ) -> Result<(), ReportMatchResultError> {
+        if self.match_result() == MatchResult::Draw && !division.format().allows_draws() {
+            return Err(ReportMatchResultError::DrawNotAllowed);
+        }
+        division
+            .match_format()
+            .template(division.data(), r#match)
+            .root
+            .check(&self.contest)?;
+        Ok(())
     }
 }
 
@@ -153,15 +173,7 @@ impl Transition<Competition> for ReportMatchResult {
         if r#match.is_finished() {
             return Err(Box::new(ReportMatchResultError::MatchAlreadyFinished));
         }
-        if self.match_result() == MatchResult::Draw && !division.format().allows_draws() {
-            return Err(Box::new(ReportMatchResultError::DrawNotAllowed));
-        }
-        division
-            .match_format()
-            .template(division.data(), r#match)
-            .root
-            .check(&self.contest)
-            .map_err(ReportMatchResultError::from)?;
+        self.check_fits(division, r#match)?;
         Ok(())
     }
 

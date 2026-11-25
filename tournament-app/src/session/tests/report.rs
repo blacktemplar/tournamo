@@ -234,6 +234,46 @@ fn an_edit_later_results_no_longer_fit_names_them() {
     assert_eq!(session.changes(), changes, "nothing changed");
 }
 
+/// A knockout keeps who moved on, so another winner of a semifinal is not corrected in place
+/// either.
+#[test]
+fn a_knockout_is_corrected_in_place_keeping_its_winners_only() {
+    let mut session = knockout_played();
+    let id = numbered(&session, 1);
+    let mut form = session.edit_form(session.first(), id).unwrap();
+    let count = |count| Some(EnteredValue::Count(count));
+    form.enter_scores(&[Sides::new(count(1), count(3))])
+        .unwrap();
+
+    assert!(!session.correctable(&form));
+    assert!(matches!(
+        session.correct_report(&form),
+        Err(EditReportError::NotAccepted)
+    ));
+}
+
+/// Reopening a match corrected in place takes back its result and its corrections as one action,
+/// which undoing brings back as corrected.
+#[test]
+fn a_corrected_match_is_reopened_as_one_action() {
+    let mut session = Given::new()
+        .match_format(PluginConfig::of::<Scored>())
+        .started();
+    let first = numbered(&session, 1);
+    session.report_entered(session.all(), "1 3-1").unwrap();
+    let mut form = session.edit_form(session.first(), first).unwrap();
+    let count = |count| Some(EnteredValue::Count(count));
+    form.enter_scores(&[Sides::new(count(1), count(3))])
+        .unwrap();
+    session.correct_report(&form).unwrap();
+
+    session.undo_report(session.first(), first).unwrap();
+
+    assert_eq!(scores_of(&session, 1), [], "the match is open");
+    assert!(matches!(session.undo().unwrap(), Action::Reopen(_)));
+    assert_eq!(scores_of(&session, 1), [Sides::new(count(1), count(3))]);
+}
+
 /// Without later results in the way, an edit changes who won, and who plays on.
 #[test]
 fn an_edit_changes_who_won() {

@@ -21,8 +21,8 @@ use tournament_engine::{
         teams::{BestWithWorst, RandomPairs, Split},
     },
     transitions::{
-        AddPhaseError, Change, ConflictsError, RemovePhaseError, StartCompetitionError,
-        StartPhaseError, UndoMatchResultError, UnstartPhaseError,
+        AddPhaseError, Change, ConflictsError, RemovePhaseError, ReplaceMatchResultError,
+        StartCompetitionError, StartPhaseError, UndoMatchResultError, UnstartPhaseError,
     },
     undoable_state_machine::{SessionHistory, Transition, TransitionId},
     uuid::Uuid,
@@ -745,6 +745,50 @@ fn a_result_of_a_source_is_not_undone_once_the_next_phase_started() {
             Err(ConflictsError::Other(entry, _)) if entry == started
         ));
     }
+}
+
+/// A result of a finished phase corrected in place changes its standings, but not the field the
+/// next phase started with, nor what was played there, which replacing the result would.
+#[test]
+fn a_result_of_a_source_is_corrected_in_place_once_the_next_phase_started() {
+    let mut machine = qualification_then_knockouts();
+    play_out(&mut machine, phase(QUALIFICATION));
+    start(&mut machine, phase(UPPER));
+    play_out(&mut machine, phase(UPPER));
+    let qualified = standings(&machine, phase(QUALIFICATION));
+    let field = seeding(&machine, phase(UPPER));
+    // the match between the eighth and the ninth, the last to qualify and the first not to
+    let division = &machine.current().phases()[&phase(QUALIFICATION)].divisions()[0];
+    let entrant = |ranking: &RankingId| division.data().rankings()[ranking].entrants()[0];
+    let at_the_cut = division
+        .data()
+        .matches()
+        .values()
+        .find(|r#match| {
+            let entrants: HashSet<_> = r#match.rankings().map(entrant).collect();
+            entrants == HashSet::from([qualified[7], qualified[8]])
+        })
+        .unwrap();
+    let reversed = match at_the_cut.result() {
+        Some(MatchResult::AWins) => MatchResult::BWins,
+        _ => MatchResult::AWins,
+    };
+    let at_the_cut = at_the_cut.id();
+    let mut history = SessionHistory::new();
+    let report = || ReportMatchResult::new(phase(QUALIFICATION), at_the_cut, reversed);
+    assert!(matches!(
+        machine.replace_match_result(&mut history, report(), EntryMeta::default()),
+        Err(ReplaceMatchResultError::Rejected(_))
+    ));
+
+    machine
+        .correct_match_result(&mut history, report(), EntryMeta::default())
+        .expect("a round robin takes any correction");
+
+    let corrected = standings(&machine, phase(QUALIFICATION));
+    assert_eq!(corrected[7..9], [qualified[8], qualified[7]]);
+    assert_eq!(seeding(&machine, phase(UPPER)), field);
+    assert!(machine.current().phases()[&phase(UPPER)].is_finished());
 }
 
 #[test]

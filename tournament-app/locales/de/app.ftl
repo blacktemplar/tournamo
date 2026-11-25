@@ -119,6 +119,7 @@ error-edit-does-not-fit = { $count ->
         [one] so geändert passt das Ergebnis von Spiel { $numbers } nicht mehr; zuerst muss Spiel { $numbers } wieder geöffnet werden
        *[other] so geändert passen die Ergebnisse der Spiele { $numbers } nicht mehr; zuerst müssen die Spiele { $numbers } wieder geöffnet werden
     }
+error-correction-not-accepted = das Format hält fest, wer dieses Spiel gewonnen hat, daher kann es nur mit demselben Sieger korrigiert werden; zuerst müssen die späteren Spiele wieder geöffnet werden
 error-nothing-to-undo = es gibt nichts rückgängig zu machen
 error-nothing-to-redo = es gibt nichts wiederherzustellen
 error-undo-changed-elsewhere = eine inzwischen anderswo gemachte Änderung verhindert, dass dies rückgängig gemacht wird, daher kann nichts mehr rückgängig gemacht werden

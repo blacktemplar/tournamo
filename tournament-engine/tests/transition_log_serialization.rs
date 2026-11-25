@@ -17,10 +17,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tournament_engine::{
     AddEntrant, AddPhase, Annotated, Competition, CompetitionStateMachine,
-    CompetitionStateMachineExt, Decision, EnteredValue, Entrant, EntrantId, EntryMeta, FieldKey,
-    Match, MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder, RemoveEntrant,
-    ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source, SourceOf,
-    StartCompetition, StartPhase, Timestamp, TypeMapValue,
+    CompetitionStateMachineExt, CorrectMatchResult, Decision, EnteredValue, Entrant, EntrantId,
+    EntryMeta, FieldKey, Match, MatchId, MatchResult, Part, Phase, PhaseId, PhasePluginsBuilder,
+    RemoveEntrant, ReportMatchResult, ResultReason, Score, Seed, SetCompetitionSeed, Sides, Source,
+    SourceOf, StartCompetition, StartPhase, Timestamp, TypeMapValue,
     plugins::{
         draw::{Blocks, Draw, Random, Snake},
         metrics_calculator::{
@@ -285,6 +285,37 @@ fn a_phase_of_another_phase_is_added_and_started_under_pinned_tags() {
     assert_eq!(
         entry(started),
         json!({ "StartPhase": { "phase_id": next } })
+    );
+    assert_current_is(&round_trip(&machine), machine.current());
+    assert_current_is(&binary_round_trip(&machine), machine.current());
+}
+
+/// A result corrected in place is saved as the report it is corrected to, under its pinned tag,
+/// and replays into the competition it was corrected in.
+#[test]
+fn a_correction_is_saved_as_its_report_under_its_pinned_tag() {
+    let mut machine = played_competition();
+    let corrected = matches_of_round(&machine.current().phases()[&phase_id()], 1)[0];
+    let reported = machine.reported_by(phase_id(), corrected).unwrap();
+    let report = ReportMatchResult::new(phase_id(), corrected, MatchResult::AWins);
+    let correction = machine
+        .apply_new(CorrectMatchResult::new(report).into(), EntryMeta::default())
+        .unwrap();
+
+    let log = serialized_log(&machine);
+    let entry = |id| {
+        log.as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["id"] == json!(id))
+            .unwrap()["kind"]["Apply"]
+            .clone()
+    };
+
+    // corrected to what was reported, so saved as the report is
+    assert_eq!(
+        entry(correction)["CorrectMatchResult"],
+        entry(reported)["ReportMatchResult"]
     );
     assert_current_is(&round_trip(&machine), machine.current());
     assert_current_is(&binary_round_trip(&machine), machine.current());

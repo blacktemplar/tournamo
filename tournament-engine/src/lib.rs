@@ -21,8 +21,8 @@ pub use plugins::PhasePluginsBuilder;
 pub use score::Score;
 pub use transitions::{
     AddEntrant, AddPhase, CompetitionStateMachine, CompetitionStateMachineExt,
-    CompetitionTransition, EntryMeta, RemoveEntrant, ReportMatchResult, SetCompetitionSeed,
-    StartCompetition, StartPhase, Timestamp,
+    CompetitionTransition, CorrectMatchResult, EntryMeta, RemoveEntrant, ReportMatchResult,
+    SetCompetitionSeed, StartCompetition, StartPhase, Timestamp,
 };
 pub use type_map::{TypeMap, TypeMapValue};
 // the crates the API of this one is written in, so that a user does not have to depend on them

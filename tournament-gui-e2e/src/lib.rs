@@ -922,6 +922,107 @@ impl Gui {
         self.click_in_sight(&button).await
     }
 
+    /// Clicks the button labelled `label`, e.g. `"Edit result of match"` (a prefix of the label),
+    /// of the match between `a` and `b`, either way round, while the matches are shown by round:
+    /// in the first round that has it, chosen in turn, whichever round, sides and number the draw
+    /// gave it.
+    ///
+    /// # Panics
+    /// Panics if no round has such a match.
+    pub async fn click_in_match_between(
+        &self,
+        a: &str,
+        b: &str,
+        label: &str,
+    ) -> WebDriverResult<()> {
+        let side = |name: &str| {
+            format!(
+                "span[contains(@class, 'side')][{}='{name}']",
+                without_isolation_marks("normalize-space()")
+            )
+        };
+        let button = By::XPath(format!(
+            "//*[@id='match-list']/li[contains(@class, 'match')][{}][{}]//button[starts-with({}, \
+             '{label}')]",
+            side(a),
+            side(b),
+            without_isolation_marks("@aria-label")
+        ));
+        let rounds = self
+            .driver
+            .find_all(By::Css("select#round option"))
+            .await?
+            .len();
+        for round in 1..=rounds {
+            self.driver
+                .find(By::Css(format!("select#round option:nth-child({round})")))
+                .await?
+                .click()
+                .await?;
+            Page::pause().await;
+            if let Some(found) = self
+                .driver
+                .find_all(button.clone())
+                .await?
+                .into_iter()
+                .next()
+            {
+                return self.click_in_sight(&found).await;
+            }
+        }
+        panic!("no round has a match between {a} and {b} with a button labelled {label:?}");
+    }
+
+    /// Clicks "Correct anyway" in the dialog of a result whose edit was refused.
+    pub async fn correct_in_dialog(&self) -> WebDriverResult<()> {
+        self.click_in_dialog_button("Correct anyway").await
+    }
+
+    /// Shows the matches playable now and reports each, as it comes up, won by whichever of its
+    /// sides `order` names first, until none is playable: results decided by who plays, whatever
+    /// pairings, sides and numbers the draw gave the matches.
+    ///
+    /// # Panics
+    /// Panics if `order` names neither side of a match.
+    pub async fn win_playable_in_order(&self, order: &[&str]) -> WebDriverResult<()> {
+        let playable = self
+            .driver
+            .query(By::XPath(
+                "//*[@aria-label='Matches shown']/button[starts-with(normalize-space(), 'Playable \
+                 now')]",
+            ))
+            .first()
+            .await?;
+        self.click_in_sight(&playable).await?;
+        let open = By::Css("#match-list li.match:not(.finished)");
+        while let Some(r#match) = self.driver.find_all(open.clone()).await?.into_iter().next() {
+            let number = r#match.find(By::Css(".number")).await?.text().await?;
+            let mut sides = Vec::new();
+            for side in r#match.find_all(By::Css(".side")).await? {
+                sides.push(side.text().await?.replace(ISOLATION_MARKS, ""));
+            }
+            let winner = order
+                .iter()
+                .find(|name| sides.iter().any(|side| side == *name))
+                .unwrap_or_else(|| panic!("{order:?} names neither of {sides:?}"));
+            let button = r#match
+                .find(By::XPath(format!(
+                    ".//button[{}='{winner} wins']",
+                    without_isolation_marks("@aria-label")
+                )))
+                .await?;
+            self.click_in_sight(&button).await?;
+            self.driver
+                .query(By::XPath(format!(
+                    "//*[@id='match-list']/li[contains(@class, 'match') and not(contains(@class, \
+                     'finished'))][.//*[@class='number']='{number}']"
+                )))
+                .wait_until_gone()
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Clicks `element` once it is scrolled into the middle of the window, as an operator looks
     /// at what they click: WebDriver would click it where it is if it is in the window at all, even
     /// under the bar staying on top.

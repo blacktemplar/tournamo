@@ -466,6 +466,9 @@ pub enum EditReportError {
     /// A phase taking entrants from the phase of the match has started, and would take others
     /// with the result entered; undoing its start allows the edit.
     PhaseStarted(PhaseName),
+    /// The format of the match keeps who won it, e.g. who moved on in a knockout, so it cannot be
+    /// corrected in place to another winner.
+    NotAccepted,
     /// The engine refused the result for a reason this crate does not know.
     Rejected(TransitionError),
 }
@@ -980,6 +983,7 @@ impl Message for EditReportError {
             Self::PhaseStarted(phase) => {
                 Text::new("error-later-phase-started").with("phase", phase.clone())
             }
+            Self::NotAccepted => Text::new("error-correction-not-accepted"),
             Self::Rejected(error) => rejected(error),
         }
     }

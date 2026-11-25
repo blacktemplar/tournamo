@@ -590,7 +590,8 @@ fn games(session: &mut Session) {
 }
 
 /// Entrants pasted with ratings, some without, then the template of groups and a knockout, in
-/// three groups: played with draws, then the knockout of the best of them, played to the end.
+/// three groups: played with draws, then the knockout of the best of them, played to the end, and
+/// then a result of the groups corrected in place.
 fn groups_then_knockout(session: &mut Session) {
     let pasted = session
         .add_entrants(
@@ -618,6 +619,14 @@ fn groups_then_knockout(session: &mut Session) {
         &[MatchResult::BWins, MatchResult::AWins],
         usize::MAX,
     );
+    let first = session
+        .round(MatchesOf::phase(groups), round(1))
+        .unwrap()
+        .matches[0]
+        .id;
+    let mut form = session.edit_form(groups, first).unwrap();
+    form.choose(&[], Some(MatchResult::BWins));
+    session.correct_report(&form).unwrap();
     assert_eq!(session.competition().phases()[&groups].divisions().len(), 3);
     assert!(finished(session, knockout));
 }

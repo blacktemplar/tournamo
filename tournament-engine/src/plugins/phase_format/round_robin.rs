@@ -4,7 +4,7 @@ use plugin_factory::{Plugin, config::PluginConfig, register};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    entities::DivisionView,
+    entities::{DivisionData, DivisionView, Match, details::Part},
     plugins::{
         metrics_calculator::{
             buchholz::{MoreSonnebornBerger, SonnebornBergerCalculator},
@@ -67,6 +67,11 @@ impl PhaseFormat for RoundRobin {
     }
 
     fn has_basic_divisions(&self) -> bool {
+        true
+    }
+
+    /// Every round is scheduled at the start, whatever the results.
+    fn accepts_correction(&self, _: &DivisionData, _: &Match, _: &Part) -> bool {
         true
     }
 }
